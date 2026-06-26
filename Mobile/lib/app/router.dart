@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rankup_education/features/ai_assistant/presentation/pages/ai_assistant_page.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
+import 'package:rankup_education/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:rankup_education/features/authentication/presentation/pages/login_page.dart';
 import 'package:rankup_education/features/authentication/presentation/pages/splash_page.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
@@ -19,12 +20,11 @@ import 'package:rankup_education/features/teacher_dashboard/presentation/pages/t
 import 'package:rankup_education/features/worksheets/presentation/pages/worksheets_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authControllerProvider);
-  final isAuthenticated = authState.user != null;
-
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: '/',
     redirect: (context, state) {
+      final authState = ref.read(authControllerProvider);
+      final isAuthenticated = authState.user != null;
       final location = state.uri.path;
       final isAuthRoute = location == '/login' || location == '/';
 
@@ -96,6 +96,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  ref
+    ..listen<AuthState>(authControllerProvider, (_, __) => router.refresh())
+    ..onDispose(router.dispose);
+
+  return router;
 });
 
 String _dashboardPath(UserRole role) {
@@ -142,81 +148,86 @@ class _RoleShell extends ConsumerWidget {
 List<_NavDestination> _destinationsFor(UserRole role) {
   return switch (role) {
     UserRole.student => const [
-      _NavDestination('Home', '/student', Icons.home_outlined, Icons.home),
-      _NavDestination('Learn', '/quizzes', Icons.school_outlined, Icons.school),
-      _NavDestination(
-        'AI',
-        '/ai-assistant',
-        Icons.auto_awesome_outlined,
-        Icons.auto_awesome,
-      ),
-      _NavDestination(
-        'Ranks',
-        '/rankings',
-        Icons.leaderboard_outlined,
-        Icons.leaderboard,
-      ),
-      _NavDestination(
-        'Profile',
-        '/profile',
-        Icons.person_outline,
-        Icons.person,
-      ),
-    ],
+        _NavDestination('Home', '/student', Icons.home_outlined, Icons.home),
+        _NavDestination(
+          'Learn',
+          '/quizzes',
+          Icons.school_outlined,
+          Icons.school,
+        ),
+        _NavDestination(
+          'AI',
+          '/ai-assistant',
+          Icons.auto_awesome_outlined,
+          Icons.auto_awesome,
+        ),
+        _NavDestination(
+          'Ranks',
+          '/rankings',
+          Icons.leaderboard_outlined,
+          Icons.leaderboard,
+        ),
+        _NavDestination(
+          'Profile',
+          '/profile',
+          Icons.person_outline,
+          Icons.person,
+        ),
+      ],
     UserRole.parent => const [
-      _NavDestination('Home', '/parent', Icons.home_outlined, Icons.home),
-      _NavDestination(
-        'Children',
-        '/reports',
-        Icons.family_restroom_outlined,
-        Icons.family_restroom,
-      ),
-      _NavDestination(
-        'Messages',
-        '/messages',
-        Icons.chat_bubble_outline,
-        Icons.chat_bubble,
-      ),
-      _NavDestination(
-        'Reports',
-        '/rankings',
-        Icons.assessment_outlined,
-        Icons.assessment,
-      ),
-      _NavDestination(
-        'Profile',
-        '/profile',
-        Icons.person_outline,
-        Icons.person,
-      ),
-    ],
+        _NavDestination('Home', '/parent', Icons.home_outlined, Icons.home),
+        _NavDestination(
+          'Children',
+          '/reports',
+          Icons.family_restroom_outlined,
+          Icons.family_restroom,
+        ),
+        _NavDestination(
+          'Messages',
+          '/messages',
+          Icons.chat_bubble_outline,
+          Icons.chat_bubble,
+        ),
+        _NavDestination(
+          'Reports',
+          '/rankings',
+          Icons.assessment_outlined,
+          Icons.assessment,
+        ),
+        _NavDestination(
+          'Profile',
+          '/profile',
+          Icons.person_outline,
+          Icons.person,
+        ),
+      ],
     UserRole.teacher => const [
-      _NavDestination('Home', '/teacher', Icons.home_outlined, Icons.home),
-      _NavDestination(
-        'Classes',
-        '/reports',
-        Icons.groups_outlined,
-        Icons.groups,
-      ),
-      _NavDestination(
-        'Activities',
-        '/quizzes',
-        Icons.assignment_outlined,
-        Icons.assignment,
-      ),
-      _NavDestination(
-        'Messages',
-        '/messages',
-        Icons.chat_bubble_outline,
-        Icons.chat_bubble,
-      ),
-      _NavDestination(
-        'Profile',
-        '/profile',
-        Icons.person_outline,
-        Icons.person,
-      ),
-    ],
+        _NavDestination('Home', '/teacher', Icons.home_outlined, Icons.home),
+        _NavDestination(
+          'Classes',
+          '/reports',
+          Icons.groups_outlined,
+          Icons.groups,
+        ),
+        _NavDestination(
+          'Activities',
+          '/quizzes',
+          Icons.assignment_outlined,
+          Icons.assignment,
+        ),
+        _NavDestination(
+          'Messages',
+          '/messages',
+          Icons.chat_bubble_outline,
+          Icons.chat_bubble,
+        ),
+        _NavDestination(
+          'Profile',
+          '/profile',
+          Icons.person_outline,
+          Icons.person,
+        ),
+      ],
   };
 }
 

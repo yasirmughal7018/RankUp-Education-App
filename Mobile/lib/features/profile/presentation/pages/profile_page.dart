@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
 class ProfilePage extends ConsumerWidget {

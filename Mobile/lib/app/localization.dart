@@ -9,7 +9,7 @@ class AppLocalizations {
 
   static const supportedLocales = [Locale('en'), Locale('ur')];
 
-  static const localizationsDelegates = [
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = [
     _AppLocalizationsDelegate(),
     GlobalMaterialLocalizations.delegate,
     GlobalCupertinoLocalizations.delegate,
@@ -35,17 +35,17 @@ class AppLocalizations {
       'reports': 'Reports',
     },
     'ur': {
-      'appName': 'رینک اپ ایجوکیشن',
-      'login': 'لاگ ان',
-      'student': 'طالب علم',
-      'parent': 'والدین',
-      'teacher': 'استاد',
-      'dashboard': 'ڈیش بورڈ',
-      'learn': 'سیکھیں',
-      'rankings': 'درجہ بندی',
-      'profile': 'پروفائل',
-      'messages': 'پیغامات',
-      'reports': 'رپورٹس',
+      'appName': 'RankUp Education',
+      'login': 'Login',
+      'student': 'Talib Ilm',
+      'parent': 'Walidain',
+      'teacher': 'Ustad',
+      'dashboard': 'Dashboard',
+      'learn': 'Seekhain',
+      'rankings': 'Darja Bandi',
+      'profile': 'Profile',
+      'messages': 'Paighamat',
+      'reports': 'Reports',
     },
   };
 
