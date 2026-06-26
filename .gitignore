@@ -1,0 +1,11 @@
+.vs/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local environment files
+.env
+.env.*
+!.env.example
