@@ -13,12 +13,16 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _identifierController = TextEditingController(text: 'demo');
   final _passwordController = TextEditingController(text: 'password');
+  final _otpController = TextEditingController();
+
   UserRole _selectedRole = UserRole.student;
+  _LoginMode _mode = _LoginMode.password;
 
   @override
   void dispose() {
     _identifierController.dispose();
     _passwordController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -70,6 +74,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  SegmentedButton<_LoginMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: _LoginMode.password,
+                        label: Text('Password'),
+                        icon: Icon(Icons.lock_outline),
+                      ),
+                      ButtonSegment(
+                        value: _LoginMode.otp,
+                        label: Text('OTP'),
+                        icon: Icon(Icons.sms_outlined),
+                      ),
+                    ],
+                    selected: {_mode},
+                    onSelectionChanged: (selection) {
+                      setState(() => _mode = selection.first);
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: _identifierController,
                     decoration: const InputDecoration(
@@ -78,13 +101,27 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Password or PIN',
-                      prefixIcon: Icon(Icons.lock_outline),
-                    ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: _mode == _LoginMode.password
+                        ? TextField(
+                            key: const ValueKey('password-field'),
+                            controller: _passwordController,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Password or PIN',
+                              prefixIcon: Icon(Icons.lock_outline),
+                            ),
+                          )
+                        : TextField(
+                            key: const ValueKey('otp-field'),
+                            controller: _otpController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'OTP code',
+                              prefixIcon: Icon(Icons.pin_outlined),
+                            ),
+                          ),
                   ),
                   if (authState.errorMessage != null) ...[
                     const SizedBox(height: 12),
@@ -93,17 +130,38 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       style: TextStyle(color: theme.colorScheme.error),
                     ),
                   ],
+                  if (authState.successMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      authState.successMessage!,
+                      style: TextStyle(color: theme.colorScheme.primary),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: authState.isLoading ? null : _login,
+                    onPressed: authState.isLoading ? null : _submit,
                     icon: authState.isLoading
                         ? const SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.login),
-                    label: const Text('Login'),
+                    label: Text(
+                      _mode == _LoginMode.password ? 'Login' : 'Verify OTP',
+                    ),
                   ),
+                  const SizedBox(height: 8),
+                  if (_mode == _LoginMode.otp)
+                    OutlinedButton.icon(
+                      onPressed: authState.isLoading ? null : _requestOtp,
+                      icon: const Icon(Icons.sms_outlined),
+                      label: const Text('Send OTP'),
+                    )
+                  else
+                    TextButton(
+                      onPressed: authState.isLoading ? null : _forgotPassword,
+                      child: const Text('Forgot password?'),
+                    ),
                 ],
               ),
             ),
@@ -113,7 +171,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  Future<void> _login() {
+  Future<void> _submit() {
+    if (_mode == _LoginMode.otp) {
+      return ref
+          .read(authControllerProvider.notifier)
+          .verifyOtp(
+            identifier: _identifierController.text.trim(),
+            code: _otpController.text.trim(),
+            role: _selectedRole,
+          );
+    }
+
     return ref
         .read(authControllerProvider.notifier)
         .login(
@@ -121,6 +189,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           password: _passwordController.text,
           role: _selectedRole,
         );
+  }
+
+  Future<void> _requestOtp() {
+    return ref
+        .read(authControllerProvider.notifier)
+        .requestOtp(
+          identifier: _identifierController.text.trim(),
+          role: _selectedRole,
+        );
+  }
+
+  Future<void> _forgotPassword() {
+    return ref
+        .read(authControllerProvider.notifier)
+        .requestPasswordReset(identifier: _identifierController.text.trim());
   }
 
   IconData _iconForRole(UserRole role) {
@@ -131,3 +214,5 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     };
   }
 }
+
+enum _LoginMode { password, otp }

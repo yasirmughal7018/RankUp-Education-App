@@ -10,6 +10,8 @@ abstract class TokenStore {
 
   Future<String?> readRefreshToken();
 
+  Future<bool> get hasTokens;
+
   Future<void> saveTokens({
     required String accessToken,
     required String refreshToken,
@@ -31,6 +33,16 @@ class SecureTokenStore implements TokenStore {
 
   @override
   Future<String?> readRefreshToken() => _storage.read(key: _refreshTokenKey);
+
+  @override
+  Future<bool> get hasTokens async {
+    final accessToken = await readAccessToken();
+    final refreshToken = await readRefreshToken();
+    return accessToken != null &&
+        accessToken.isNotEmpty &&
+        refreshToken != null &&
+        refreshToken.isNotEmpty;
+  }
 
   @override
   Future<void> saveTokens({

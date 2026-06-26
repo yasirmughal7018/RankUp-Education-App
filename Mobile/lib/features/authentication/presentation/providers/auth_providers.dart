@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/api/api_client.dart';
 import 'package:rankup_education/core/storage/token_store.dart';
+import 'package:rankup_education/features/authentication/data/datasources/auth_local_datasource.dart';
 import 'package:rankup_education/features/authentication/data/datasources/auth_remote_datasource.dart';
 import 'package:rankup_education/features/authentication/data/repositories/api_auth_repository.dart';
 import 'package:rankup_education/features/authentication/data/repositories/mock_auth_repository.dart';
@@ -18,6 +20,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 
   return ApiAuthRepository(
     AuthRemoteDataSource(ref.watch(dioProvider)),
+    const AuthLocalDataSource(FlutterSecureStorage()),
     tokenStore,
   );
 });

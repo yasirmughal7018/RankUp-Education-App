@@ -1,3 +1,5 @@
+import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
+
 class QuizSummary {
   const QuizSummary({
     required this.id,
@@ -6,6 +8,8 @@ class QuizSummary {
     required this.grade,
     required this.questionCount,
     required this.points,
+    required this.status,
+    this.dueAt,
   });
 
   final String id;
@@ -14,4 +18,6 @@ class QuizSummary {
   final String grade;
   final int questionCount;
   final int points;
+  final QuizStatus status;
+  final DateTime? dueAt;
 }

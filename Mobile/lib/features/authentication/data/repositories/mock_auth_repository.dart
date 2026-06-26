@@ -27,6 +27,39 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> requestOtp({
+    required String identifier,
+    required UserRole role,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+
+  @override
+  Future<AuthSession> verifyOtp({
+    required String identifier,
+    required String code,
+    required UserRole role,
+  }) {
+    return login(identifier: identifier, password: code, role: role);
+  }
+
+  @override
+  Future<void> requestPasswordReset({required String identifier}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+
+  @override
+  Future<AuthSession> refreshSession() async {
+    final session = _session ?? AuthSessionModel.mock(UserRole.student);
+    _session = session;
+    await _tokenStore.saveTokens(
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    );
+    return session;
+  }
+
+  @override
   Future<void> logout() async {
     _session = null;
     await _tokenStore.clear();

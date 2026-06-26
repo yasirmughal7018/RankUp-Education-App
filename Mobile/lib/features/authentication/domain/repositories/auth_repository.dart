@@ -8,6 +8,18 @@ abstract class AuthRepository {
     required UserRole role,
   });
 
+  Future<void> requestOtp({required String identifier, required UserRole role});
+
+  Future<AuthSession> verifyOtp({
+    required String identifier,
+    required String code,
+    required UserRole role,
+  });
+
+  Future<void> requestPasswordReset({required String identifier});
+
+  Future<AuthSession> refreshSession();
+
   Future<void> logout();
 
   Future<AuthSession?> restoreSession();

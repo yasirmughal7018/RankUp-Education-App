@@ -15,6 +15,10 @@ class AuthenticationException extends AppException {
   const AuthenticationException(super.message);
 }
 
+class AuthorizationException extends AppException {
+  const AuthorizationException(super.message);
+}
+
 class ValidationException extends AppException {
   const ValidationException(super.message, this.errors);
 

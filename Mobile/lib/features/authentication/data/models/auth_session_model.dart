@@ -1,4 +1,5 @@
-import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
+import 'package:rankup_education/features/authentication/data/models/app_user_model.dart';
+import 'package:rankup_education/features/authentication/data/models/auth_tokens_model.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
@@ -8,6 +9,18 @@ class AuthSessionModel extends AuthSession {
     required super.accessToken,
     required super.refreshToken,
   });
+
+  factory AuthSessionModel.fromJson(Map<String, dynamic> json) {
+    final userJson = _readMap(json, ['user', 'profile', 'account']);
+    final tokenJson = _readMap(json, ['tokens', 'token']);
+    final tokens = AuthTokensModel.fromJson({...json, ...tokenJson});
+
+    return AuthSessionModel(
+      user: AppUserModel.fromJson(userJson),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    );
+  }
 
   factory AuthSessionModel.mock(UserRole role) {
     final permissions = switch (role) {
@@ -33,7 +46,7 @@ class AuthSessionModel extends AuthSession {
     };
 
     return AuthSessionModel(
-      user: AppUser(
+      user: AppUserModel(
         id: 'mock-${role.name}-001',
         name: '${role.label} Demo',
         role: role,
@@ -46,4 +59,15 @@ class AuthSessionModel extends AuthSession {
       refreshToken: 'mock-refresh-token',
     );
   }
+}
+
+Map<String, dynamic> _readMap(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+  }
+
+  return json;
 }
