@@ -12,6 +12,7 @@ Flutter mobile app architecture for RankUp Education. The app targets Android an
 - Offline synchronization placeholder
 - Notification service placeholder
 - English and Urdu localization foundation
+- Common username/password login with backend-driven role routing
 - Mock authentication for Student, Parent, and Teacher dashboards
 - Starter tests
 
@@ -39,10 +40,13 @@ Supported values: `development`, `test`, `staging`, and `production`.
 
 ## Mock Login
 
-Use the role selector on the login screen to enter the app as:
+The mobile app uses one common login form. Enter a demo username to open a
+role-specific dashboard:
 
-- Student
-- Parent
-- Teacher
+- `student-demo` opens the Student dashboard.
+- `parent-demo` opens the Parent dashboard.
+- `teacher-demo` opens the Teacher dashboard.
 
-When backend APIs are ready, replace `MockAuthRepository` with an API-backed repository in `lib/features/authentication/data/repositories`.
+The app does not support mobile registration or OTP login. Accounts are created
+by the school admin. In API mode, the backend validates the username/password
+and returns the authenticated user's role in the login response.

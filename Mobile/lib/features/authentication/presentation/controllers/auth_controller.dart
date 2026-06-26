@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
-import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
 class AuthState {
@@ -29,9 +28,8 @@ class AuthState {
       user: clearUser ? null : user ?? this.user,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
-      successMessage: clearSuccess
-          ? null
-          : successMessage ?? this.successMessage,
+      successMessage:
+          clearSuccess ? null : successMessage ?? this.successMessage,
     );
   }
 }
@@ -54,7 +52,6 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> login({
     required String identifier,
     required String password,
-    required UserRole role,
   }) async {
     state = state.copyWith(
       isLoading: true,
@@ -65,68 +62,8 @@ class AuthController extends StateNotifier<AuthState> {
       final session = await _repository.login(
         identifier: identifier,
         password: password,
-        role: role,
       );
       state = state.copyWith(user: session.user, isLoading: false);
-    } on Exception catch (error) {
-      state = state.copyWith(isLoading: false, errorMessage: error.toString());
-    }
-  }
-
-  Future<void> requestOtp({
-    required String identifier,
-    required UserRole role,
-  }) async {
-    state = state.copyWith(
-      isLoading: true,
-      clearError: true,
-      clearSuccess: true,
-    );
-    try {
-      await _repository.requestOtp(identifier: identifier, role: role);
-      state = state.copyWith(
-        isLoading: false,
-        successMessage: 'OTP sent successfully.',
-      );
-    } on Exception catch (error) {
-      state = state.copyWith(isLoading: false, errorMessage: error.toString());
-    }
-  }
-
-  Future<void> verifyOtp({
-    required String identifier,
-    required String code,
-    required UserRole role,
-  }) async {
-    state = state.copyWith(
-      isLoading: true,
-      clearError: true,
-      clearSuccess: true,
-    );
-    try {
-      final session = await _repository.verifyOtp(
-        identifier: identifier,
-        code: code,
-        role: role,
-      );
-      state = state.copyWith(user: session.user, isLoading: false);
-    } on Exception catch (error) {
-      state = state.copyWith(isLoading: false, errorMessage: error.toString());
-    }
-  }
-
-  Future<void> requestPasswordReset({required String identifier}) async {
-    state = state.copyWith(
-      isLoading: true,
-      clearError: true,
-      clearSuccess: true,
-    );
-    try {
-      await _repository.requestPasswordReset(identifier: identifier);
-      state = state.copyWith(
-        isLoading: false,
-        successMessage: 'Password reset instructions sent.',
-      );
     } on Exception catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.toString());
     }

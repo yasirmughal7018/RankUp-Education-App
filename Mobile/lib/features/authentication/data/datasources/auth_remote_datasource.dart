@@ -7,7 +7,6 @@ import 'package:rankup_education/features/authentication/data/models/auth_sessio
 import 'package:rankup_education/features/authentication/data/models/auth_tokens_model.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
-import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
 class AuthRemoteDataSource {
   const AuthRemoteDataSource(this._dio);
@@ -17,39 +16,10 @@ class AuthRemoteDataSource {
   Future<AuthSession> login({
     required String identifier,
     required String password,
-    required UserRole role,
   }) async {
     return _requestSession(
       '/auth/login',
-      data: {'identifier': identifier, 'password': password, 'role': role.name},
-    );
-  }
-
-  Future<void> requestOtp({
-    required String identifier,
-    required UserRole role,
-  }) async {
-    await _requestVoid(
-      '/auth/otp/request',
-      data: {'identifier': identifier, 'role': role.name},
-    );
-  }
-
-  Future<AuthSession> verifyOtp({
-    required String identifier,
-    required String code,
-    required UserRole role,
-  }) {
-    return _requestSession(
-      '/auth/otp/verify',
-      data: {'identifier': identifier, 'code': code, 'role': role.name},
-    );
-  }
-
-  Future<void> requestPasswordReset({required String identifier}) {
-    return _requestVoid(
-      '/auth/password/forgot',
-      data: {'identifier': identifier},
+      data: {'username': identifier, 'password': password},
     );
   }
 

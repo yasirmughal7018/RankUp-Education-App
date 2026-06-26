@@ -14,9 +14,9 @@ class MockAuthRepository implements AuthRepository {
   Future<AuthSession> login({
     required String identifier,
     required String password,
-    required UserRole role,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 350));
+    final role = _roleFromIdentifier(identifier);
     final session = AuthSessionModel.mock(role);
     _session = session;
     await _tokenStore.saveTokens(
@@ -24,28 +24,6 @@ class MockAuthRepository implements AuthRepository {
       refreshToken: session.refreshToken,
     );
     return session;
-  }
-
-  @override
-  Future<void> requestOtp({
-    required String identifier,
-    required UserRole role,
-  }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-  }
-
-  @override
-  Future<AuthSession> verifyOtp({
-    required String identifier,
-    required String code,
-    required UserRole role,
-  }) {
-    return login(identifier: identifier, password: code, role: role);
-  }
-
-  @override
-  Future<void> requestPasswordReset({required String identifier}) async {
-    await Future<void>.delayed(const Duration(milliseconds: 250));
   }
 
   @override
@@ -72,7 +50,22 @@ class MockAuthRepository implements AuthRepository {
       return null;
     }
 
-    _session ??= AuthSessionModel.mock(UserRole.student);
-    return _session;
+    return _session ??= AuthSessionModel.mock(UserRole.student);
   }
+}
+
+UserRole _roleFromIdentifier(String identifier) {
+  final normalized = identifier.trim().toLowerCase();
+
+  if (normalized.startsWith('parent') || normalized.startsWith('par-')) {
+    return UserRole.parent;
+  }
+
+  if (normalized.startsWith('teacher') ||
+      normalized.startsWith('teach') ||
+      normalized.startsWith('tch-')) {
+    return UserRole.teacher;
+  }
+
+  return UserRole.student;
 }
