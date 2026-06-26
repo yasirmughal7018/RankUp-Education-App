@@ -34,6 +34,34 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> requestPasswordReset({required String identifier}) {
+    return _remoteDataSource.requestPasswordReset(identifier: identifier);
+  }
+
+  @override
+  Future<void> requestAccountAccess({
+    required String fullName,
+    required String mobileNumber,
+    required String emailAddress,
+    required String userType,
+    required String schoolCampusName,
+    required String studentOrEmployeeId,
+    required String adminTarget,
+    required String reasonMessage,
+  }) {
+    return _remoteDataSource.requestAccountAccess(
+      fullName: fullName,
+      mobileNumber: mobileNumber,
+      emailAddress: emailAddress,
+      userType: userType,
+      schoolCampusName: schoolCampusName,
+      studentOrEmployeeId: studentOrEmployeeId,
+      adminTarget: adminTarget,
+      reasonMessage: reasonMessage,
+    );
+  }
+
+  @override
   Future<AuthSession> refreshSession() async {
     final refreshToken = await _tokenStore.readRefreshToken();
     if (refreshToken == null || refreshToken.isEmpty) {

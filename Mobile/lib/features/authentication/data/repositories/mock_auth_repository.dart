@@ -16,14 +16,33 @@ class MockAuthRepository implements AuthRepository {
     required String password,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 350));
-    final role = _roleFromIdentifier(identifier);
-    final session = AuthSessionModel.mock(role);
+    final account = _findDemoAccount(identifier, password);
+    final session = AuthSessionModel.mock(account.role);
     _session = session;
     await _tokenStore.saveTokens(
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
     );
     return session;
+  }
+
+  @override
+  Future<void> requestPasswordReset({required String identifier}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+
+  @override
+  Future<void> requestAccountAccess({
+    required String fullName,
+    required String mobileNumber,
+    required String emailAddress,
+    required String userType,
+    required String schoolCampusName,
+    required String studentOrEmployeeId,
+    required String adminTarget,
+    required String reasonMessage,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
   }
 
   @override
@@ -54,18 +73,49 @@ class MockAuthRepository implements AuthRepository {
   }
 }
 
-UserRole _roleFromIdentifier(String identifier) {
+class _DemoAccount {
+  const _DemoAccount({
+    required this.username,
+    required this.password,
+    required this.role,
+  });
+
+  final String username;
+  final String password;
+  final UserRole role;
+}
+
+const _demoAccounts = [
+  _DemoAccount(
+    username: 'student-demo',
+    password: 'password',
+    role: UserRole.student,
+  ),
+  _DemoAccount(
+    username: 'parent-demo',
+    password: 'password',
+    role: UserRole.parent,
+  ),
+  _DemoAccount(
+    username: 'teacher-demo',
+    password: 'password',
+    role: UserRole.teacher,
+  ),
+];
+
+_DemoAccount _findDemoAccount(String identifier, String password) {
   final normalized = identifier.trim().toLowerCase();
+  final normalizedPassword = password.trim();
 
-  if (normalized.startsWith('parent') || normalized.startsWith('par-')) {
-    return UserRole.parent;
+  for (final account in _demoAccounts) {
+    if (account.username == normalized &&
+        account.password == normalizedPassword) {
+      return account;
+    }
   }
 
-  if (normalized.startsWith('teacher') ||
-      normalized.startsWith('teach') ||
-      normalized.startsWith('tch-')) {
-    return UserRole.teacher;
-  }
-
-  return UserRole.student;
+  throw const FormatException(
+    'Invalid demo username or password. Use student-demo, parent-demo, or '
+    'teacher-demo with password.',
+  );
 }

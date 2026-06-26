@@ -23,6 +23,38 @@ class AuthRemoteDataSource {
     );
   }
 
+  Future<void> requestPasswordReset({required String identifier}) {
+    return _requestVoid(
+      '/auth/password-reset/request',
+      data: {'username': identifier},
+    );
+  }
+
+  Future<void> requestAccountAccess({
+    required String fullName,
+    required String mobileNumber,
+    required String emailAddress,
+    required String userType,
+    required String schoolCampusName,
+    required String studentOrEmployeeId,
+    required String adminTarget,
+    required String reasonMessage,
+  }) {
+    return _requestVoid(
+      '/account-requests',
+      data: {
+        'fullName': fullName,
+        'mobileNumber': mobileNumber,
+        'emailAddress': emailAddress,
+        'userType': userType,
+        'schoolCampusName': schoolCampusName,
+        'studentOrEmployeeId': studentOrEmployeeId,
+        'adminTarget': adminTarget,
+        'reasonMessage': reasonMessage,
+      },
+    );
+  }
+
   Future<AuthTokensModel> refreshToken({required String refreshToken}) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(

@@ -69,6 +69,58 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> requestPasswordReset({required String identifier}) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      await _repository.requestPasswordReset(identifier: identifier);
+      state = state.copyWith(
+        isLoading: false,
+        successMessage: 'Password reset request sent to admin.',
+      );
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+    }
+  }
+
+  Future<void> requestAccountAccess({
+    required String fullName,
+    required String mobileNumber,
+    required String emailAddress,
+    required String userType,
+    required String schoolCampusName,
+    required String studentOrEmployeeId,
+    required String adminTarget,
+    required String reasonMessage,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      await _repository.requestAccountAccess(
+        fullName: fullName,
+        mobileNumber: mobileNumber,
+        emailAddress: emailAddress,
+        userType: userType,
+        schoolCampusName: schoolCampusName,
+        studentOrEmployeeId: studentOrEmployeeId,
+        adminTarget: adminTarget,
+        reasonMessage: reasonMessage,
+      );
+      state = state.copyWith(
+        isLoading: false,
+        successMessage: 'Account request sent to $adminTarget.',
+      );
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+    }
+  }
+
   Future<void> refreshSession() async {
     state = state.copyWith(
       isLoading: true,

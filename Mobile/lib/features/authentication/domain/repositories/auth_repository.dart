@@ -6,6 +6,19 @@ abstract class AuthRepository {
     required String password,
   });
 
+  Future<void> requestPasswordReset({required String identifier});
+
+  Future<void> requestAccountAccess({
+    required String fullName,
+    required String mobileNumber,
+    required String emailAddress,
+    required String userType,
+    required String schoolCampusName,
+    required String studentOrEmployeeId,
+    required String adminTarget,
+    required String reasonMessage,
+  });
+
   Future<AuthSession> refreshSession();
 
   Future<void> logout();

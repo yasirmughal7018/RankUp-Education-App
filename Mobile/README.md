@@ -41,12 +41,21 @@ Supported values: `development`, `test`, `staging`, and `production`.
 ## Mock Login
 
 The mobile app uses one common login form. Enter a demo username to open a
-role-specific dashboard:
+role-specific dashboard. Mock repositories are enabled by default, so the app
+uses local dummy data until the real API is connected.
 
-- `student-demo` opens the Student dashboard.
-- `parent-demo` opens the Parent dashboard.
-- `teacher-demo` opens the Teacher dashboard.
+| User | Username / ID | Password | Result |
+| --- | --- | --- | --- |
+| Student Demo | `student-demo` | `password` | Opens the Student dashboard |
+| Parent Demo | `parent-demo` | `password` | Opens the Parent dashboard |
+| Teacher Demo | `teacher-demo` | `password` | Opens the Teacher dashboard |
 
 The app does not support mobile registration or OTP login. Accounts are created
 by the school admin. In API mode, the backend validates the username/password
 and returns the authenticated user's role in the login response.
+
+The login screen also includes admin-assisted actions:
+
+- `Forgot password?` sends a reset request to the account admin.
+- `Request account access` sends a new-account request to the School Admin or
+  Portal Admin for manual review.
