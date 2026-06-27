@@ -79,20 +79,20 @@ ThemeData _buildTheme(ColorScheme colorScheme) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(48),
+        minimumSize: const Size(64, 48),
         shape: RoundedRectangleBorder(borderRadius: borderRadius),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(46),
+        minimumSize: const Size(64, 46),
         shape: RoundedRectangleBorder(borderRadius: borderRadius),
         side: BorderSide(color: colorScheme.outlineVariant),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        minimumSize: const Size.fromHeight(44),
+        minimumSize: const Size(44, 44),
         shape: RoundedRectangleBorder(borderRadius: borderRadius),
       ),
     ),

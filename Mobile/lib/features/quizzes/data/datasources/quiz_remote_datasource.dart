@@ -53,7 +53,7 @@ List<QuizSummaryModel> _readQuizList(Object? payload) {
   }
 
   return items
-      .whereType<Map>()
-      .map((item) => QuizSummaryModel.fromJson(Map<String, dynamic>.from(item)))
+      .whereType<Map<String, dynamic>>()
+      .map(QuizSummaryModel.fromJson)
       .toList();
 }

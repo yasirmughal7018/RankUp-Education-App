@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RankUp Education Mobile App - Login Screen Functionality</title>
+  <style>
+    :root {
+      --ink: #0b2545;
+      --blue: #2e74b5;
+      --muted: #53606d;
+      --border: #d9e1ea;
+      --fill: #f4f6f9;
+      --table: #f2f4f7;
+    }
+    body {
+      margin: 0;
+      color: #17212b;
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      background: #ffffff;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      color: var(--ink);
+      font-size: 34px;
+      line-height: 1.15;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    h2 {
+      color: var(--blue);
+      margin: 30px 0 10px;
+      font-size: 23px;
+    }
+    ul, ol { padding-left: 24px; }
+    li { margin: 5px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 22px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+    th {
+      background: var(--table);
+      text-align: left;
+      color: var(--ink);
+    }
+    .note {
+      background: var(--fill);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    code {
+      background: #eef3f8;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+    @media print {
+      main { padding: 24px; }
+      h2 { break-after: avoid; }
+      table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>RankUp Education Mobile App</h1>
+      <p class="subtitle">Login Screen Functionality Brief | Generated June 27, 2026</p>
+    </header>
+    <section><h2>Executive Summary</h2><ul><li>One common login screen is used for Student, Parent, and Teacher users.</li><li>Users enter only Username or ID and Password.</li><li>The app does not show role buttons on the login form.</li><li>Role detection happens after authentication through the AppUser.role value.</li><li>No mobile registration and no OTP login/registration flow are implemented.</li><li>Password reset and account access are admin-request workflows.</li><li>Current development builds use mock repositories by default.</li></ul></section><section><h2>Login Screen UI</h2><table><thead><tr><th>Area</th><th>Implemented behavior</th></tr></thead><tbody><tr><td>Branding</td><td>RankUp Education title with workspace premium icon.</td></tr><tr><td>Subtitle</td><td>Students, parents and teachers in one learning system.</td></tr><tr><td>Username / ID</td><td>Editable text field with badge icon, suggestions disabled, no autocorrect, and next action.</td></tr><tr><td>Password</td><td>Editable obscured password field with lock icon and done action.</td></tr><tr><td>Login</td><td>Filled button, disabled while loading, with progress indicator during auth.</td></tr><tr><td>Forgot password?</td><td>Opens password reset bottom sheet.</td></tr><tr><td>Request account access</td><td>Opens account access request bottom sheet.</td></tr><tr><td>Admin notice</td><td>Explains that accounts are created by school admin and admin handles access/password reset.</td></tr></tbody></table></section><section><h2>Single Login And Role Detection Flow</h2><ol><li>User enters Username or ID and Password.</li><li>LoginPage calls AuthController.login.</li><li>The selected repository authenticates using mock data or the real API.</li><li>The repository returns AuthSession with AppUser.role.</li><li>AuthController stores the user in AuthState.</li><li>GoRouter refreshes and redirects by role.</li></ol><table><thead><tr><th>Role</th><th>Redirect path</th><th>Dashboard</th></tr></thead><tbody><tr><td>Student</td><td>/student</td><td>StudentDashboardPage</td></tr><tr><td>Parent</td><td>/parent</td><td>ParentDashboardPage</td></tr><tr><td>Teacher</td><td>/teacher</td><td>TeacherDashboardPage</td></tr></tbody></table></section><section><h2>Demo Credentials</h2><table><thead><tr><th>User type</th><th>Username</th><th>Password</th><th>Detected role</th></tr></thead><tbody><tr><td>Student</td><td>student-demo</td><td>password</td><td>student</td></tr><tr><td>Parent</td><td>parent-demo</td><td>password</td><td>parent</td></tr><tr><td>Teacher</td><td>teacher-demo</td><td>password</td><td>teacher</td></tr></tbody></table><p class="note"><strong>Mock behavior:</strong> USE_MOCKS defaults to true, so these accounts work in development until real API mode is enabled.</p></section><section><h2>Backend Authentication Contract</h2><table><thead><tr><th>Operation</th><th>Endpoint</th><th>Payload</th></tr></thead><tbody><tr><td>Login</td><td>POST /auth/login</td><td>{ username, password }</td></tr><tr><td>Password reset request</td><td>POST /auth/password-reset/request</td><td>{ username }</td></tr><tr><td>Account access request</td><td>POST /account-requests</td><td>{ fullName, mobileNumber, emailAddress, userType, schoolCampusName, studentOrEmployeeId, adminTarget, reasonMessage }</td></tr><tr><td>Refresh token</td><td>POST /auth/token/refresh</td><td>{ refreshToken }</td></tr><tr><td>Current user</td><td>GET /auth/me</td><td>Uses saved access token to resolve current user.</td></tr><tr><td>Logout</td><td>POST /auth/logout</td><td>Clears remote session if available, then local tokens and cached user.</td></tr></tbody></table></section><section><h2>Password Reset Flow</h2><ul><li>Forgot password? opens a bottom sheet.</li><li>Username or ID is required.</li><li>Submitting calls requestPasswordReset(identifier).</li><li>Real API mode posts to /auth/password-reset/request.</li><li>Mock mode simulates the operation with a short delay.</li><li>Success message: Password reset request sent to admin.</li><li>No OTP verification is implemented.</li></ul></section><section><h2>Request Account Access Flow</h2><table><thead><tr><th>Field</th><th>Required</th><th>Notes</th></tr></thead><tbody><tr><td>Full Name</td><td>Yes</td><td>Non-empty validation.</td></tr><tr><td>Mobile Number</td><td>Yes</td><td>Phone keyboard and non-empty validation.</td></tr><tr><td>Email Address</td><td>No</td><td>Email keyboard; no format validation currently.</td></tr><tr><td>User Type</td><td>Yes</td><td>Student, Parent, or Teacher.</td></tr><tr><td>School / Campus Name</td><td>No</td><td>Free text.</td></tr><tr><td>Student ID / Employee ID</td><td>No</td><td>Free text.</td></tr><tr><td>Send Request to</td><td>Yes</td><td>School Admin or Portal Admin.</td></tr><tr><td>Reason / Message</td><td>No</td><td>Multi-line text field.</td></tr></tbody></table></section><section><h2>Validation, Security, And Feedback</h2><ul><li>Login fields are editable and keyboard-enabled.</li><li>Password reset and account request required fields show Required when empty.</li><li>Auth operations use loading, success, and error states.</li><li>Password text is obscured.</li><li>Autocorrect and suggestions are disabled for login fields.</li><li>Unauthenticated protected routes redirect to /login.</li><li>Tokens are stored through TokenStore in API mode.</li></ul></section><section><h2>Implementation References</h2><table><thead><tr><th>File</th><th>Responsibility</th></tr></thead><tbody><tr><td>Mobile/lib/features/authentication/presentation/pages/login_page.dart</td><td>Login UI and bottom sheets.</td></tr><tr><td>Mobile/lib/features/authentication/presentation/controllers/auth_controller.dart</td><td>Auth state and operations.</td></tr><tr><td>Mobile/lib/features/authentication/presentation/providers/auth_providers.dart</td><td>Repository selection.</td></tr><tr><td>Mobile/lib/features/authentication/data/repositories/mock_auth_repository.dart</td><td>Demo accounts.</td></tr><tr><td>Mobile/lib/features/authentication/data/datasources/auth_remote_datasource.dart</td><td>API endpoints.</td></tr><tr><td>Mobile/lib/features/authentication/data/repositories/api_auth_repository.dart</td><td>API auth lifecycle and token persistence.</td></tr><tr><td>Mobile/lib/app/router.dart</td><td>Role redirects.</td></tr><tr><td>Mobile/test/widget_test.dart</td><td>Widget coverage for visible/editable login fields.</td></tr></tbody></table></section><section><h2>Anomalies And Gaps Found</h2><ul><li>Mock restoreSession returns a Student session if a token exists but the in-memory mock session is gone.</li><li>Email and mobile fields do not yet enforce format validation.</li><li>Password reset and account access are request-only flows; they do not complete account creation or password change in the app.</li><li>Unknown role values currently parse as student; backend role validation should be strict.</li><li>SystemChannels.textInput.show is used as an emulator keyboard workaround and should be monitored on real devices.</li></ul></section><section><h2>Recommended Next Improvements</h2><ul><li>Persist mock user role or clear mock tokens on app restart.</li><li>Add backend contract tests before disabling USE_MOCKS.</li><li>Add optional email/mobile validation if needed by the admin workflow.</li><li>Move login strings into localization for English and Urdu.</li><li>Consider adding a password visibility toggle if users request it.</li></ul></section>
+  </main>
+</body>
+</html>
