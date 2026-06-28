@@ -1258,7 +1258,8 @@ List<LocalQuestionRow> questionsForQuiz(String quizId) {
       .where((mapping) => mapping.quizId == quizId)
       .toList()
     ..sort(
-        (first, second) => first.displayOrder.compareTo(second.displayOrder));
+      (first, second) => first.displayOrder.compareTo(second.displayOrder),
+    );
 
   return [
     for (final mapping in mappings)
@@ -1293,8 +1294,6 @@ QuizSummary _toQuizSummary(LocalQuizRow row) {
     grade: row.className,
     topic: row.topic,
     curriculum: 'National Curriculum',
-    book: '',
-    chapter: '',
     learningObjective: row.topic,
     difficulty: row.difficultyLevel,
     questionCount: _mappedQuestionCount(row.id, row.totalQuestions),

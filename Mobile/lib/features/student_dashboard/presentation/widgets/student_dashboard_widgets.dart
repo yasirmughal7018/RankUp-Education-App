@@ -122,10 +122,11 @@ class LevelRankCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _toneColor(context, DashboardTone.gold).withOpacity(0.14),
+        color: _toneColor(context, DashboardTone.gold).withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: _toneColor(context, DashboardTone.gold).withOpacity(0.28),
+          color:
+              _toneColor(context, DashboardTone.gold).withValues(alpha: 0.28),
         ),
       ),
       child: Column(
@@ -133,8 +134,10 @@ class LevelRankCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _ToneIcon(
-                  icon: Icons.emoji_events_outlined, tone: DashboardTone.gold),
+              const _ToneIcon(
+                icon: Icons.emoji_events_outlined,
+                tone: DashboardTone.gold,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -235,7 +238,10 @@ class QuickStatStrip extends StatelessWidget {
                   Row(
                     children: [
                       _ToneIcon(
-                          icon: stat.icon, tone: stat.tone, compact: true),
+                        icon: stat.icon,
+                        tone: stat.tone,
+                        compact: true,
+                      ),
                       const Spacer(),
                       Text(
                         stat.value,
@@ -246,8 +252,10 @@ class QuickStatStrip extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
-                  Text(stat.title,
-                      style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    stat.title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                   Text(
                     stat.subtitle,
                     maxLines: 1,
@@ -344,9 +352,9 @@ class AiRecommendationCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.28)),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,8 +582,10 @@ class StreakCalendarCard extends StatelessWidget {
               final complete = streak.completedWeekdays[index];
               return Column(
                 children: [
-                  Text(days[index],
-                      style: Theme.of(context).textTheme.labelSmall),
+                  Text(
+                    days[index],
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
                   const SizedBox(height: 6),
                   CircleAvatar(
                     radius: 14,
@@ -626,8 +636,10 @@ class ResultCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(result.title,
-                    style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  result.title,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 Text('${result.topic} - Score: ${result.scorePercent}%'),
                 Text('+${result.points} points - ${result.statusLabel}'),
               ],
@@ -839,8 +851,10 @@ class DashboardErrorState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline,
-                  color: Theme.of(context).colorScheme.error),
+              Icon(
+                Icons.error_outline,
+                color: Theme.of(context).colorScheme.error,
+              ),
               const SizedBox(height: 12),
               Text(message, textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -871,10 +885,12 @@ class DashboardSkeleton extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SkeletonBox(width: 180, height: 18),
+              const _SkeletonBox(width: 180, height: 18),
               const SizedBox(height: 12),
               _SkeletonBox(
-                  width: double.infinity, height: index == 0 ? 88 : 48),
+                width: double.infinity,
+                height: index == 0 ? 88 : 48,
+              ),
             ],
           ),
         );
@@ -939,7 +955,7 @@ class _ToneIcon extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, color: color, size: compact ? 18 : 22),
@@ -961,7 +977,7 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

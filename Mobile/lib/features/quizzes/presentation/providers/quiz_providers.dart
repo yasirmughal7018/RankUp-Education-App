@@ -19,5 +19,5 @@ final quizRepositoryProvider = Provider<QuizRepository>((ref) {
 
 final quizzesControllerProvider =
     StateNotifierProvider<QuizzesController, QuizzesState>((ref) {
-      return QuizzesController(ref.watch(quizRepositoryProvider));
-    });
+  return QuizzesController(ref.watch(quizRepositoryProvider));
+});

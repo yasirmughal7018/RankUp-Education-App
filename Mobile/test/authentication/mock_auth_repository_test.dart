@@ -59,8 +59,8 @@ class _MemoryTokenStore implements TokenStore {
 
   @override
   Future<bool> get hasTokens async {
-    return _accessToken?.isNotEmpty == true &&
-        _refreshToken?.isNotEmpty == true;
+    return (_accessToken?.isNotEmpty ?? false) &&
+        (_refreshToken?.isNotEmpty ?? false);
   }
 
   @override

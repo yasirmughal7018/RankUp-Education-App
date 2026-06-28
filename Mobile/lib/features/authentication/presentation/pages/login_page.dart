@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -64,9 +64,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     enableSuggestions: false,
                     enabled: true,
                     keyboardType: TextInputType.text,
-                    readOnly: false,
                     showCursor: true,
-                    textCapitalization: TextCapitalization.none,
                     textInputAction: TextInputAction.next,
                     onTap: _showSoftKeyboard,
                   ),
@@ -82,7 +80,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     enableSuggestions: false,
                     enabled: true,
                     keyboardType: TextInputType.visiblePassword,
-                    readOnly: false,
                     showCursor: true,
                     textInputAction: TextInputAction.done,
                     onTap: _showSoftKeyboard,

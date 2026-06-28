@@ -5,7 +5,9 @@ import 'package:rankup_education/features/student_dashboard/domain/repositories/
 
 class ApiStudentDashboardRepository implements StudentDashboardRepository {
   const ApiStudentDashboardRepository(
-      this._remoteDataSource, this._localDataSource);
+    this._remoteDataSource,
+    this._localDataSource,
+  );
 
   final StudentDashboardRemoteDataSource _remoteDataSource;
   final StudentDashboardLocalDataSource _localDataSource;

@@ -25,24 +25,24 @@ class AuthSessionModel extends AuthSession {
   factory AuthSessionModel.mock(UserRole role) {
     final permissions = switch (role) {
       UserRole.student => [
-        'dashboard.view',
-        'quiz.attempt',
-        'worksheet.submit',
-        'message.send',
-      ],
+          'dashboard.view',
+          'quiz.attempt',
+          'worksheet.submit',
+          'message.send',
+        ],
       UserRole.parent => [
-        'dashboard.view',
-        'child.view',
-        'goal.create',
-        'message.send',
-      ],
+          'dashboard.view',
+          'child.view',
+          'goal.create',
+          'message.send',
+        ],
       UserRole.teacher => [
-        'dashboard.view',
-        'quiz.create',
-        'worksheet.review',
-        'attendance.mark',
-        'message.send',
-      ],
+          'dashboard.view',
+          'quiz.create',
+          'worksheet.review',
+          'attendance.mark',
+          'message.send',
+        ],
     };
 
     return AuthSessionModel(

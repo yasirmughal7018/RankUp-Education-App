@@ -31,7 +31,7 @@ class QuizRemoteDataSource {
 
       final apiResponse = ApiResponse<List<QuizSummaryModel>>.fromJson(
         data,
-        (payload) => _readQuizList(payload),
+        _readQuizList,
       );
 
       if (!apiResponse.success) {

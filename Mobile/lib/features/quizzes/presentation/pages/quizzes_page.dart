@@ -723,7 +723,8 @@ class _QuizCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                            '${quiz.subject} - ${_fallback(quiz.topic, quiz.grade)}'),
+                          '${quiz.subject} - ${_fallback(quiz.topic, quiz.grade)}',
+                        ),
                       ],
                     ),
                   ),
@@ -808,34 +809,44 @@ class _QuizDetailsView extends StatelessWidget {
           title: 'Quiz Information',
           children: [
             _DetailRow(
-                label: 'Type',
-                value: _fallback(quiz.quizType, 'Practice Quiz')),
+              label: 'Type',
+              value: _fallback(quiz.quizType, 'Practice Quiz'),
+            ),
             _DetailRow(
-                label: 'Curriculum',
-                value: _fallback(quiz.curriculum, 'School Curriculum')),
+              label: 'Curriculum',
+              value: _fallback(quiz.curriculum, 'School Curriculum'),
+            ),
             _DetailRow(label: 'Class', value: quiz.grade),
             _DetailRow(label: 'Subject / Topic', value: _subjectTopic(quiz)),
             _DetailRow(
-                label: 'Chapter',
-                value: _fallback(quiz.chapter, 'Not specified')),
+              label: 'Chapter',
+              value: _fallback(quiz.chapter, 'Not specified'),
+            ),
             _DetailRow(
               label: 'Learning objective',
               value: _fallback(
-                  quiz.learningObjective, 'Practice assigned learning outcome'),
+                quiz.learningObjective,
+                'Practice assigned learning outcome',
+              ),
             ),
             _DetailRow(
-                label: 'Questions', value: quiz.questionCount.toString()),
+              label: 'Questions',
+              value: quiz.questionCount.toString(),
+            ),
             _DetailRow(
-                label: 'Marks',
-                value: quiz.totalMarks == 0
-                    ? 'Not specified'
-                    : quiz.totalMarks.toString()),
+              label: 'Marks',
+              value: quiz.totalMarks == 0
+                  ? 'Not specified'
+                  : quiz.totalMarks.toString(),
+            ),
             _DetailRow(
-                label: 'Start',
-                value: _dateLabel(quiz.startAt, fallback: 'Available now')),
+              label: 'Start',
+              value: _dateLabel(quiz.startAt, fallback: 'Available now'),
+            ),
             _DetailRow(
-                label: 'End',
-                value: _dateLabel(quiz.dueAt, fallback: 'No end date')),
+              label: 'End',
+              value: _dateLabel(quiz.dueAt, fallback: 'No end date'),
+            ),
             _DetailRow(label: 'Created by', value: _createdByLabel(quiz)),
           ],
         ),
@@ -1252,14 +1263,17 @@ class _SubmissionConfirmationView extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 _DetailRow(
-                    label: 'Answered',
-                    value: '$answeredCount of ${quiz.questionCount}'),
+                  label: 'Answered',
+                  value: '$answeredCount of ${quiz.questionCount}',
+                ),
                 _DetailRow(
                   label: 'Marked for review',
                   value: markedCount.toString(),
                 ),
-                _DetailRow(
-                    label: 'Result status', value: 'Under Teacher Review'),
+                const _DetailRow(
+                  label: 'Result status',
+                  value: 'Under Teacher Review',
+                ),
                 const SizedBox(height: 12),
                 Text(
                   quiz.reviewAvailable
@@ -1507,11 +1521,13 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
     final matchesType =
         _typeFilter.isEmpty || quiz.quizType.startsWith(_typeFilter);
     final matchesFrom = _dateRange == null ||
-        !date.isBefore(DateTime(
-          _dateRange!.start.year,
-          _dateRange!.start.month,
-          _dateRange!.start.day,
-        ));
+        !date.isBefore(
+          DateTime(
+            _dateRange!.start.year,
+            _dateRange!.start.month,
+            _dateRange!.start.day,
+          ),
+        );
     final matchesTo = _dateRange == null ||
         date.isBefore(
           DateTime(
@@ -1844,8 +1860,9 @@ class _HeroQuizHeader extends StatelessWidget {
               _StatusChip(label: studentQuizStatus(quiz), status: quiz.status),
               _InfoChip(icon: Icons.subject_outlined, label: quiz.subject),
               _InfoChip(
-                  icon: Icons.topic_outlined,
-                  label: _fallback(quiz.topic, 'Mixed topics')),
+                icon: Icons.topic_outlined,
+                label: _fallback(quiz.topic, 'Mixed topics'),
+              ),
               _InfoChip(
                 icon: Icons.schedule_outlined,
                 label: quiz.timeLimitMinutes == null
@@ -1968,7 +1985,10 @@ class _AnswerOption extends StatelessWidget {
                 : Theme.of(context).colorScheme.outlineVariant,
           ),
           color: selected
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.45)
+              ? Theme.of(context)
+                  .colorScheme
+                  .primaryContainer
+                  .withValues(alpha: 0.45)
               : null,
         ),
         child: Row(
@@ -2055,7 +2075,7 @@ class _QuizTypeIcon extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(Icons.quiz_outlined, color: color),
@@ -2086,7 +2106,7 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -2164,15 +2184,15 @@ class _QuizSkeleton extends StatelessWidget {
     return Column(
       children: [
         for (var index = 0; index < 3; index++) ...[
-          Card(
+          const Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _SkeletonBox(width: 180, height: 18),
-                  const SizedBox(height: 12),
-                  const _SkeletonBox(width: double.infinity, height: 58),
+                  SizedBox(height: 12),
+                  _SkeletonBox(width: double.infinity, height: 58),
                 ],
               ),
             ),
@@ -2216,8 +2236,10 @@ class _ErrorPanel extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Icon(Icons.error_outline,
-                color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 12),

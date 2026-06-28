@@ -38,8 +38,7 @@ final dioProvider = Provider<Dio>((ref) {
         handler.next(options);
       },
       onError: (error, handler) async {
-        final shouldRefresh =
-            error.response?.statusCode == 401 &&
+        final shouldRefresh = error.response?.statusCode == 401 &&
             error.requestOptions.extra['skipAuthRefresh'] != true;
 
         if (!shouldRefresh) {

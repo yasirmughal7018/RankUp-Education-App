@@ -89,19 +89,19 @@ class StudentDashboardModel {
         ),
       ],
       todayActivities: [
-        LearningActivityModel(
+        const LearningActivityModel(
           id: 'activity-1',
           title: 'Mathematics Quiz',
           subject: 'Mathematics',
           topic: 'Fractions',
           activityType: 'Quiz',
           dueLabel: 'Due Today',
-          progressPercent: 0.0,
+          progressPercent: 0,
           actionLabel: 'Start',
           tone: DashboardTone.blue,
           icon: Icons.calculate_outlined,
         ),
-        LearningActivityModel(
+        const LearningActivityModel(
           id: 'activity-2',
           title: 'Science Worksheet',
           subject: 'Science',
@@ -113,14 +113,14 @@ class StudentDashboardModel {
           tone: DashboardTone.amber,
           icon: Icons.science_outlined,
         ),
-        LearningActivityModel(
+        const LearningActivityModel(
           id: 'activity-3',
           title: 'English Practice',
           subject: 'English',
           topic: 'Grammar Revision',
           activityType: 'AI Recommended',
           dueLabel: '15 minutes',
-          progressPercent: 0.0,
+          progressPercent: 0,
           actionLabel: 'Start Practice',
           tone: DashboardTone.purple,
           icon: Icons.auto_awesome_outlined,
