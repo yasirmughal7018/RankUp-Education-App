@@ -84,6 +84,26 @@ class QuizzesController extends StateNotifier<QuizzesState> {
       state = state.copyWith(isLoading: false, errorMessage: error.toString());
     }
   }
+
+  Future<void> updateQuiz(QuizSummary updatedQuiz) async {
+    final allQuizzes = [
+      for (final quiz in state.allQuizzes)
+        if (quiz.id == updatedQuiz.id) updatedQuiz else quiz,
+    ];
+
+    state = state.copyWith(
+      allQuizzes: allQuizzes,
+      quizzes: _applyLocalFilters(
+        allQuizzes,
+        search: state.search,
+        quizType: state.quizType,
+        status: state.status,
+        dateFilter: state.dateFilter,
+      ),
+    );
+
+    await _repository.updateQuiz(updatedQuiz);
+  }
 }
 
 List<QuizSummary> _applyLocalFilters(

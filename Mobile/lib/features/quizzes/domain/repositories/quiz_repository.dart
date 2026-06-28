@@ -6,4 +6,6 @@ abstract class QuizRepository {
     String? subject,
     String? grade,
   });
+
+  Future<void> updateQuiz(QuizSummary quiz);
 }

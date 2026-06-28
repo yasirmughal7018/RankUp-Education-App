@@ -19,4 +19,9 @@ class ApiQuizRepository implements QuizRepository {
       grade: grade,
     );
   }
+
+  @override
+  Future<void> updateQuiz(QuizSummary quiz) async {
+    // Real API persistence will be wired when the backend endpoint is ready.
+  }
 }

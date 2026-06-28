@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
+import 'package:rankup_education/features/quizzes/data/local/quiz_local_memory.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
@@ -19,8 +20,9 @@ class QuizzesPage extends ConsumerStatefulWidget {
 
 class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   final _searchController = TextEditingController();
-  final Set<int> _answeredQuestions = {0};
+  final Set<int> _answeredQuestions = {};
   final Set<int> _markedQuestions = {};
+  final Map<int, Set<String>> _selectedOptionAnswers = {};
   Timer? _attemptTimer;
 
   _QuizView _view = _QuizView.list;
@@ -102,15 +104,19 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
             quiz: _selectedQuiz!,
             questionIndex: _questionIndex,
             answeredQuestions: _answeredQuestions,
+            selectedOptionAnswers: _selectedOptionAnswers,
             markedQuestions: _markedQuestions,
             saveStatus: _saveStatus,
             remainingTime: _remainingTime,
-            onAnswerChanged: _answerCurrentQuestion,
+            onOptionSelected: _answerOptionQuestion,
+            onTextAnswerChanged: _answerTextQuestion,
             onPrevious: _previousQuestion,
             onNext: _nextQuestion,
             onJumpToQuestion: _jumpToQuestion,
             onToggleMark: _toggleMarkForReview,
-            onSubmit: _submitAttempt,
+            onSubmit: () {
+              unawaited(_submitAttempt());
+            },
           ),
         _QuizView.submitted => _SubmissionConfirmationView(
             quiz: _selectedQuiz!,
@@ -182,9 +188,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
 
     setState(() {
       _questionIndex = 0;
-      _answeredQuestions
-        ..clear()
-        ..add(0);
+      _answeredQuestions.clear();
+      _selectedOptionAnswers.clear();
       _markedQuestions.clear();
       _saveStatus = 'Answer autosaved just now';
       _remainingTime =
@@ -202,7 +207,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
 
         if (remaining <= const Duration(seconds: 1)) {
           setState(() => _remainingTime = Duration.zero);
-          _submitAttempt(autoSubmitted: true);
+          unawaited(_submitAttempt(autoSubmitted: true));
           return;
         }
 
@@ -213,9 +218,28 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     }
   }
 
-  void _submitAttempt({bool autoSubmitted = false}) {
+  Future<void> _submitAttempt({bool autoSubmitted = false}) async {
+    final quiz = _selectedQuiz;
+    if (quiz == null) {
+      return;
+    }
+
+    final submittedQuiz = quiz.copyWith(
+      status: QuizStatus.completed,
+      resultStatus: autoSubmitted ? 'AI Review' : 'Under Teacher Review',
+      reviewAvailable: true,
+    );
+
     _stopAttemptTimer();
+    await ref
+        .read(quizzesControllerProvider.notifier)
+        .updateQuiz(submittedQuiz);
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
+      _selectedQuiz = submittedQuiz;
       _saveStatus = autoSubmitted
           ? 'Time ended. Quiz submitted automatically.'
           : 'Quiz submitted';
@@ -228,9 +252,42 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     _attemptTimer = null;
   }
 
-  void _answerCurrentQuestion() {
+  void _answerOptionQuestion(String answer, int questionTypeId) {
     setState(() {
-      _answeredQuestions.add(_questionIndex);
+      final selected = _selectedOptionAnswers.putIfAbsent(
+        _questionIndex,
+        () => <String>{},
+      );
+
+      if (questionTypeId == 41) {
+        if (selected.contains(answer)) {
+          selected.remove(answer);
+        } else {
+          selected.add(answer);
+        }
+      } else {
+        selected
+          ..clear()
+          ..add(answer);
+      }
+
+      if (selected.isEmpty) {
+        _answeredQuestions.remove(_questionIndex);
+      } else {
+        _answeredQuestions.add(_questionIndex);
+      }
+
+      _saveStatus = 'Answer autosaved just now';
+    });
+  }
+
+  void _answerTextQuestion(String answer) {
+    setState(() {
+      if (answer.trim().isEmpty) {
+        _answeredQuestions.remove(_questionIndex);
+      } else {
+        _answeredQuestions.add(_questionIndex);
+      }
       _saveStatus = 'Answer autosaved just now';
     });
   }
@@ -706,7 +763,7 @@ class _QuizCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Result: ${_resultLabel(quiz)}',
+                      'Result: ${_studentQuizResultLabel(quiz)}',
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
@@ -868,10 +925,12 @@ class _QuizAttemptView extends StatelessWidget {
     required this.quiz,
     required this.questionIndex,
     required this.answeredQuestions,
+    required this.selectedOptionAnswers,
     required this.markedQuestions,
     required this.saveStatus,
     required this.remainingTime,
-    required this.onAnswerChanged,
+    required this.onOptionSelected,
+    required this.onTextAnswerChanged,
     required this.onPrevious,
     required this.onNext,
     required this.onJumpToQuestion,
@@ -882,10 +941,12 @@ class _QuizAttemptView extends StatelessWidget {
   final QuizSummary quiz;
   final int questionIndex;
   final Set<int> answeredQuestions;
+  final Map<int, Set<String>> selectedOptionAnswers;
   final Set<int> markedQuestions;
   final String saveStatus;
   final Duration? remainingTime;
-  final VoidCallback onAnswerChanged;
+  final void Function(String answer, int questionTypeId) onOptionSelected;
+  final ValueChanged<String> onTextAnswerChanged;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final ValueChanged<int> onJumpToQuestion;
@@ -976,32 +1037,45 @@ class _QuizAttemptView extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                 ),
-                const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.image_outlined),
-                      SizedBox(width: 8),
-                      Expanded(child: Text('Media attachment placeholder')),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 14),
-                for (final option in question.options) ...[
-                  _AnswerOption(
-                    label: option,
-                    selected: answeredQuestions.contains(questionIndex) &&
-                        option == question.options.first,
-                    onTap: onAnswerChanged,
+                if (question.options.isEmpty)
+                  TextField(
+                    minLines: question.questionTypeId == 44 ? 4 : 1,
+                    maxLines: question.questionTypeId == 44 ? 6 : 1,
+                    decoration: InputDecoration(
+                      hintText: question.questionTypeId == 44
+                          ? 'Write your descriptive answer'
+                          : 'Type your answer',
+                      helperText:
+                          'Model answer is hidden until after submission.',
+                    ),
+                    textInputAction: question.questionTypeId == 44
+                        ? TextInputAction.newline
+                        : TextInputAction.done,
+                    onChanged: onTextAnswerChanged,
+                  )
+                else
+                  for (final option in question.options) ...[
+                    _AnswerOption(
+                      label: option,
+                      selected: selectedOptionAnswers[questionIndex]?.contains(
+                            option,
+                          ) ??
+                          false,
+                      multipleSelection: question.questionTypeId == 41,
+                      onTap: () => onOptionSelected(
+                        option,
+                        question.questionTypeId,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                if (question.hint.isNotEmpty && question.options.isEmpty) ...[
+                  const SizedBox(height: 10),
+                  _InfoChip(
+                    icon: Icons.lightbulb_outline,
+                    label: 'Hint: ${question.hint}',
                   ),
-                  const SizedBox(height: 8),
                 ],
                 if (quiz.hintsAllowed) ...[
                   const SizedBox(height: 8),
@@ -1302,7 +1376,7 @@ class _ReviewQuestionCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(question.prompt),
             const SizedBox(height: 8),
-            Text('Your answer: ${question.options.first}'),
+            Text('Your answer: ${_reviewAnswerLabel(question)}'),
             Text('Explanation: ${question.explanation}'),
             const SizedBox(height: 8),
             const Text('Teacher feedback: Keep practicing similar questions.'),
@@ -1870,11 +1944,13 @@ class _AnswerOption extends StatelessWidget {
   const _AnswerOption({
     required this.label,
     required this.selected,
+    required this.multipleSelection,
     required this.onTap,
   });
 
   final String label;
   final bool selected;
+  final bool multipleSelection;
   final VoidCallback onTap;
 
   @override
@@ -1898,7 +1974,14 @@ class _AnswerOption extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_off),
+              multipleSelection
+                  ? selected
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank
+                  : selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+            ),
             const SizedBox(width: 10),
             Expanded(child: Text(label)),
           ],
@@ -2153,30 +2236,57 @@ class _ErrorPanel extends StatelessWidget {
 class _SampleQuestion {
   const _SampleQuestion({
     required this.prompt,
+    required this.questionTypeId,
     required this.options,
     required this.explanation,
+    required this.hint,
   });
 
   final String prompt;
+  final int questionTypeId;
   final List<String> options;
   final String explanation;
+  final String hint;
 }
 
 _SampleQuestion _sampleQuestion(QuizSummary quiz, int index) {
-  final topic = _fallback(quiz.topic, quiz.subject);
+  final mappedQuestions = questionsForQuiz(quiz.id);
+  if (index < mappedQuestions.length) {
+    final question = mappedQuestions[index];
+    final options = optionsForQuestion(question.id)
+        .map((option) => option.optionText)
+        .toList(growable: false);
+
+    return _SampleQuestion(
+      prompt: 'Q${index + 1}. ${question.questionText}',
+      questionTypeId: question.questionTypeId,
+      options: options,
+      explanation: question.explanation,
+      hint: question.hint,
+    );
+  }
+
   final number = index + 1;
 
   return _SampleQuestion(
-    prompt: 'Q$number. Which answer best matches the concept: $topic?',
-    options: [
-      'Option A - strongest answer',
-      'Option B - partially correct',
-      'Option C - unrelated',
-      'Option D - needs more information',
-    ],
-    explanation:
-        'The strongest answer connects directly to the learning objective for $topic.',
+    prompt: 'Q$number. No local-memory question is mapped for this quiz.',
+    questionTypeId: 44,
+    options: const [],
+    explanation: 'No question explanation is available.',
+    hint: '',
   );
+}
+
+String _reviewAnswerLabel(_SampleQuestion question) {
+  if (question.options.isNotEmpty) {
+    return question.options.first;
+  }
+
+  if (question.questionTypeId == 44) {
+    return 'Submitted descriptive answer pending review';
+  }
+
+  return 'Submitted text answer';
 }
 
 List<String> _instructionsFor(QuizSummary quiz) {
@@ -2259,6 +2369,51 @@ String _resultLabel(QuizSummary quiz) {
     return '${quiz.resultPercent}% - ${quiz.resultStatus}';
   }
   return quiz.resultStatus.isEmpty ? 'Not Started' : quiz.resultStatus;
+}
+
+String _studentQuizResultLabel(QuizSummary quiz) {
+  final now = DateTime.now();
+  final resultStatus = quiz.resultStatus.trim();
+  final normalizedStatus = resultStatus.toLowerCase().replaceAll(' ', '');
+
+  if (quiz.status == QuizStatus.upcoming ||
+      (quiz.startAt != null && quiz.startAt!.isAfter(now))) {
+    return '-';
+  }
+
+  if (quiz.dueAt != null &&
+      quiz.dueAt!.isBefore(now) &&
+      normalizedStatus == 'notstarted') {
+    return '-';
+  }
+
+  if (quiz.resultPercent != null &&
+      (normalizedStatus == 'reviewed' ||
+          normalizedStatus == 'completed' ||
+          normalizedStatus == 'reviewcompleted')) {
+    return '${quiz.resultPercent}%';
+  }
+
+  if (normalizedStatus == 'submitted') {
+    return 'Under Teacher Review';
+  }
+
+  if (normalizedStatus == 'autosubmitted') {
+    return 'AI Review';
+  }
+
+  if (normalizedStatus == 'underteacherreview' ||
+      normalizedStatus == 'aireview' ||
+      normalizedStatus == 'teacherreview' ||
+      normalizedStatus == 'pendingteacherreview') {
+    return resultStatus;
+  }
+
+  if (normalizedStatus == 'inprogress') {
+    return 'In Progress';
+  }
+
+  return resultStatus.isEmpty ? 'Not Started' : resultStatus;
 }
 
 String _dateLabel(DateTime? value, {required String fallback}) {
