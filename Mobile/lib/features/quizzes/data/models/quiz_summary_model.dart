@@ -23,6 +23,7 @@ class QuizSummaryModel extends QuizSummary {
     super.attemptLimit,
     super.startAt,
     super.dueAt,
+    super.completedAt,
     super.instructions,
     super.navigationMode,
     super.answersCanBeChanged,
@@ -64,6 +65,7 @@ class QuizSummaryModel extends QuizSummary {
       ),
       startAt: _readDate(json, ['startAt', 'startDate']),
       dueAt: _readDate(json, ['dueAt', 'endAt', 'deadline']),
+      completedAt: _readDate(json, ['completedAt', 'submittedAt']),
       instructions: _readStringList(json, ['instructions']),
       navigationMode: _readString(
         json,

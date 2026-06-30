@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
@@ -114,29 +115,26 @@ List<QuizSummary> _applyLocalFilters(
   required String dateFilter,
 }) {
   final now = DateTime.now();
-  final monthStart = now.subtract(const Duration(days: 30));
+  final selectedDateFilter = dateFilter.isEmpty ? 'All' : dateFilter;
 
   return quizzes.where((quiz) {
     final date = quiz.dueAt ?? quiz.startAt ?? now;
     final query = search.trim().toLowerCase();
     final searchableText =
         '${quiz.title} ${quiz.subject} ${quiz.topic}'.toLowerCase();
-    final inCurrentWindow = !date.isBefore(monthStart);
     final matchesSearch = query.isEmpty || searchableText.contains(query);
     final matchesType = quizType.isEmpty || quiz.quizType.startsWith(quizType);
     final matchesStatus = status.isEmpty || _studentStatus(quiz, now) == status;
-    final matchesDate = switch (dateFilter) {
+    final matchesDate = switch (selectedDateFilter) {
       'Today' => _isSameDay(date, now),
-      'Current Week' => _isInCurrentWeek(date, now),
+      'Yesterday' => _isSameDay(date, now.subtract(const Duration(days: 1))),
+      'Last 7 days' => _isWithinPastDays(date, now, 7),
+      'Last 15 days' => _isWithinPastDays(date, now, 15),
       'Upcoming' => date.isAfter(now),
       _ => true,
     };
 
-    return inCurrentWindow &&
-        matchesSearch &&
-        matchesType &&
-        matchesStatus &&
-        matchesDate;
+    return matchesSearch && matchesType && matchesStatus && matchesDate;
   }).toList();
 }
 
@@ -146,12 +144,12 @@ bool _isSameDay(DateTime left, DateTime right) {
       left.day == right.day;
 }
 
-bool _isInCurrentWeek(DateTime date, DateTime now) {
+bool _isWithinPastDays(DateTime date, DateTime now, int days) {
   final startOfToday = DateTime(now.year, now.month, now.day);
-  final weekStart = startOfToday.subtract(Duration(days: now.weekday - 1));
-  final weekEnd = weekStart.add(const Duration(days: 7));
+  final windowStart = startOfToday.subtract(Duration(days: days - 1));
+  final tomorrow = startOfToday.add(const Duration(days: 1));
 
-  return !date.isBefore(weekStart) && date.isBefore(weekEnd);
+  return !date.isBefore(windowStart) && date.isBefore(tomorrow);
 }
 
 String studentQuizStatus(QuizSummary quiz, [DateTime? currentTime]) {
@@ -159,9 +157,10 @@ String studentQuizStatus(QuizSummary quiz, [DateTime? currentTime]) {
 }
 
 String _studentStatus(QuizSummary quiz, DateTime now) {
-  if (quiz.status.name == 'completed' ||
-      quiz.resultPercent != null ||
-      quiz.resultStatus.toLowerCase() == 'reviewed') {
+  final normalizedResultStatus =
+      quiz.resultStatus.toLowerCase().replaceAll(' ', '');
+
+  if (quiz.resultPercent != null || normalizedResultStatus == 'reviewed') {
     return 'Completed';
   }
 
@@ -169,9 +168,23 @@ String _studentStatus(QuizSummary quiz, DateTime now) {
     return 'Expired';
   }
 
-  if (quiz.resultStatus.toLowerCase().replaceAll(' ', '') == 'inprogress') {
+  if (normalizedResultStatus == 'underteacherreview' ||
+      normalizedResultStatus == 'aireview' ||
+      normalizedResultStatus == 'teacherreview' ||
+      normalizedResultStatus == 'pendingteacherreview' ||
+      normalizedResultStatus == 'submitted' ||
+      normalizedResultStatus == 'autosubmitted') {
+    return 'Under Review';
+  }
+
+  if (normalizedResultStatus == 'inprogress') {
     return 'InProgress';
   }
 
-  return 'Not Started';
+  if (quiz.status == QuizStatus.upcoming ||
+      (quiz.startAt != null && quiz.startAt!.isAfter(now))) {
+    return 'Upcoming';
+  }
+
+  return 'Not Attempted';
 }

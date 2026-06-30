@@ -23,13 +23,14 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   final Set<int> _answeredQuestions = {};
   final Set<int> _markedQuestions = {};
   final Map<int, Set<String>> _selectedOptionAnswers = {};
+  final Map<int, String> _textAnswers = {};
   Timer? _attemptTimer;
 
   _QuizView _view = _QuizView.list;
   QuizSummary? _selectedQuiz;
   String _quizType = '';
   String _status = '';
-  String _dateFilter = '';
+  String _dateFilter = 'All';
   int _questionIndex = 0;
   String _saveStatus = 'All answers saved';
   Duration? _remainingTime;
@@ -129,6 +130,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
           ),
         _QuizView.review => _QuizReviewView(
             quiz: _selectedQuiz!,
+            selectedOptionAnswers: _selectedOptionAnswers,
+            textAnswers: _textAnswers,
             onBackToList: () => setState(() => _view = _QuizView.list),
           ),
         _QuizView.history => _AttemptHistoryView(
@@ -169,7 +172,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
       _searchController.clear();
       _quizType = '';
       _status = '';
-      _dateFilter = '';
+      _dateFilter = 'All';
     });
     _load();
   }
@@ -183,13 +186,22 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   }
 
   void _startAttempt() {
-    final timeLimitMinutes = _selectedQuiz?.timeLimitMinutes;
+    final selectedQuiz = _selectedQuiz;
+    if (selectedQuiz == null ||
+        studentQuizStatus(selectedQuiz) == 'Expired' ||
+        selectedQuiz.status == QuizStatus.upcoming ||
+        studentQuizStatus(selectedQuiz) == 'Completed') {
+      return;
+    }
+
+    final timeLimitMinutes = selectedQuiz.timeLimitMinutes;
     _stopAttemptTimer();
 
     setState(() {
       _questionIndex = 0;
       _answeredQuestions.clear();
       _selectedOptionAnswers.clear();
+      _textAnswers.clear();
       _markedQuestions.clear();
       _saveStatus = 'Answer autosaved just now';
       _remainingTime =
@@ -227,6 +239,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     final submittedQuiz = quiz.copyWith(
       status: QuizStatus.completed,
       resultStatus: autoSubmitted ? 'AI Review' : 'Under Teacher Review',
+      completedAt: DateTime.now(),
       reviewAvailable: true,
     );
 
@@ -284,8 +297,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   void _answerTextQuestion(String answer) {
     setState(() {
       if (answer.trim().isEmpty) {
+        _textAnswers.remove(_questionIndex);
         _answeredQuestions.remove(_questionIndex);
       } else {
+        _textAnswers[_questionIndex] = answer;
         _answeredQuestions.add(_questionIndex);
       }
       _saveStatus = 'Answer autosaved just now';
@@ -511,7 +526,9 @@ class _FilterPanel extends StatelessWidget {
                       '',
                       'Expired',
                       'Completed',
-                      'Not Started',
+                      'Under Review',
+                      'Not Attempted',
+                      'Upcoming',
                       'InProgress',
                     ],
                     onChanged: onStatusChanged,
@@ -521,9 +538,11 @@ class _FilterPanel extends StatelessWidget {
                     label: 'Date',
                     value: dateFilter,
                     values: const [
-                      '',
+                      'All',
                       'Today',
-                      'Current Week',
+                      'Yesterday',
+                      'Last 7 days',
+                      'Last 15 days',
                       'Upcoming',
                     ],
                     onChanged: onDateFilterChanged,
@@ -697,6 +716,7 @@ class _QuizCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final expired = _isExpiredQuiz(quiz);
 
     return Card(
       child: InkWell(
@@ -757,23 +777,31 @@ class _QuizCard extends StatelessWidget {
                     icon: Icons.event_available_outlined,
                     label: _dateLabel(quiz.dueAt, fallback: 'No due date'),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Result: ${_studentQuizResultLabel(quiz)}',
-                      style: theme.textTheme.bodySmall,
+                  if (quiz.completedAt != null)
+                    _InfoChip(
+                      icon: Icons.check_circle_outline,
+                      label:
+                          'Completed ${_dateLabel(quiz.completedAt, fallback: '')}',
                     ),
-                  ),
-                  FilledButton(
-                    onPressed: onOpen,
-                    child: Text(_primaryActionLabel(quiz)),
-                  ),
                 ],
               ),
+              if (!expired) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Result: ${_studentQuizResultLabel(quiz)}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                    FilledButton(
+                      onPressed: onOpen,
+                      child: Text(_primaryActionLabel(quiz)),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -797,7 +825,9 @@ class _QuizDetailsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canStart = quiz.status != QuizStatus.completed &&
+    final studentStatus = studentQuizStatus(quiz);
+    final canStart = studentStatus != 'Completed' &&
+        studentStatus != 'Expired' &&
         quiz.status != QuizStatus.upcoming;
 
     return ListView(
@@ -847,6 +877,11 @@ class _QuizDetailsView extends StatelessWidget {
               label: 'End',
               value: _dateLabel(quiz.dueAt, fallback: 'No end date'),
             ),
+            if (quiz.completedAt != null)
+              _DetailRow(
+                label: 'Completed',
+                value: _dateLabel(quiz.completedAt, fallback: 'Not completed'),
+              ),
             _DetailRow(label: 'Created by', value: _createdByLabel(quiz)),
           ],
         ),
@@ -908,7 +943,9 @@ class _QuizDetailsView extends StatelessWidget {
           FilledButton.icon(
             onPressed: quiz.reviewAvailable ? onReview : null,
             icon: const Icon(Icons.rate_review_outlined),
-            label: const Text('Review Answers'),
+            label: Text(
+              _isReviewComplete(quiz) ? 'Review Answers' : 'View Review Status',
+            ),
           )
         else
           FilledButton.icon(
@@ -1270,15 +1307,13 @@ class _SubmissionConfirmationView extends StatelessWidget {
                   label: 'Marked for review',
                   value: markedCount.toString(),
                 ),
-                const _DetailRow(
+                _DetailRow(
                   label: 'Result status',
-                  value: 'Under Teacher Review',
+                  value: _studentQuizResultLabel(quiz),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  quiz.reviewAvailable
-                      ? 'Objective answers may be checked automatically. Teacher or AI feedback can appear later.'
-                      : 'Review is locked until the result is published.',
+                const Text(
+                  'Your attempt was submitted successfully. Score, correct answers, and feedback will appear after review is completed.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
@@ -1286,7 +1321,7 @@ class _SubmissionConfirmationView extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: onReview,
                     icon: const Icon(Icons.rate_review_outlined),
-                    label: const Text('Review Permitted Answers'),
+                    label: const Text('View Review Status'),
                   ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -1304,13 +1339,22 @@ class _SubmissionConfirmationView extends StatelessWidget {
 }
 
 class _QuizReviewView extends StatelessWidget {
-  const _QuizReviewView({required this.quiz, required this.onBackToList});
+  const _QuizReviewView({
+    required this.quiz,
+    required this.selectedOptionAnswers,
+    required this.textAnswers,
+    required this.onBackToList,
+  });
 
   final QuizSummary quiz;
+  final Map<int, Set<String>> selectedOptionAnswers;
+  final Map<int, String> textAnswers;
   final VoidCallback onBackToList;
 
   @override
   Widget build(BuildContext context) {
+    final reviewComplete = _isReviewComplete(quiz);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
@@ -1330,17 +1374,30 @@ class _QuizReviewView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  quiz.reviewAvailable
-                      ? 'Correct answers, explanations, and feedback are visible when permitted by quiz settings.'
-                      : 'This quiz does not allow review until results are published.',
+                  reviewComplete
+                      ? 'Reviewed answers, explanations, and feedback are available for this quiz.'
+                      : 'Your attempt has been submitted. Answers and feedback will appear after AI and teacher review are completed.',
                 ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
-        for (var index = 0; index < 3; index++) ...[
-          _ReviewQuestionCard(index: index, quiz: quiz),
+        if (!reviewComplete) ...[
+          _ReviewFeedbackSection(quiz: quiz),
+          const SizedBox(height: 12),
+        ] else ...[
+          _ReviewFeedbackSection(quiz: quiz),
+          const SizedBox(height: 12),
+        ],
+        for (var index = 0; index < quiz.questionCount; index++) ...[
+          _ReviewQuestionCard(
+            index: index,
+            quiz: quiz,
+            selectedAnswers: selectedOptionAnswers[index] ?? const <String>{},
+            textAnswer: textAnswers[index] ?? '',
+            reviewComplete: reviewComplete,
+          ),
           const SizedBox(height: 12),
         ],
         FilledButton.icon(
@@ -1354,15 +1411,29 @@ class _QuizReviewView extends StatelessWidget {
 }
 
 class _ReviewQuestionCard extends StatelessWidget {
-  const _ReviewQuestionCard({required this.index, required this.quiz});
+  const _ReviewQuestionCard({
+    required this.index,
+    required this.quiz,
+    required this.selectedAnswers,
+    required this.textAnswer,
+    required this.reviewComplete,
+  });
 
   final int index;
   final QuizSummary quiz;
+  final Set<String> selectedAnswers;
+  final String textAnswer;
+  final bool reviewComplete;
 
   @override
   Widget build(BuildContext context) {
     final question = _sampleQuestion(quiz, index);
-    final correct = index != 2;
+    final answerState = _answerReviewState(
+      question,
+      selectedAnswers: selectedAnswers,
+      textAnswer: textAnswer,
+      reviewComplete: reviewComplete,
+    );
 
     return Card(
       child: Padding(
@@ -1380,25 +1451,134 @@ class _ReviewQuestionCard extends StatelessWidget {
                         ),
                   ),
                 ),
-                _InfoChip(
-                  icon:
-                      correct ? Icons.check_circle_outline : Icons.info_outline,
-                  label: correct ? 'Correct' : 'Needs review',
-                ),
+                _AnswerResultChip(state: answerState),
               ],
             ),
             const SizedBox(height: 8),
             Text(question.prompt),
             const SizedBox(height: 8),
-            Text('Your answer: ${_reviewAnswerLabel(question)}'),
-            Text('Explanation: ${question.explanation}'),
-            const SizedBox(height: 8),
-            const Text('Teacher feedback: Keep practicing similar questions.'),
-            const Text(
-              'AI feedback: Review the topic notes before the next attempt.',
+            Text(
+              'Your answer: ${_reviewAnswerLabel(
+                question,
+                selectedAnswers: selectedAnswers,
+                textAnswer: textAnswer,
+              )}',
+            ),
+            if (reviewComplete && question.correctAnswers.isNotEmpty)
+              Text('Correct answer: ${question.correctAnswers.join(', ')}'),
+            if (reviewComplete) Text('Explanation: ${question.explanation}'),
+            if (reviewComplete) ...[
+              const SizedBox(height: 8),
+              Text('Feedback: ${answerState.feedback}'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewFeedbackSection extends StatelessWidget {
+  const _ReviewFeedbackSection({required this.quiz});
+
+  final QuizSummary quiz;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Review feedback',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            _FeedbackTile(
+              icon: Icons.auto_awesome_outlined,
+              title: 'AI Feedback',
+              message: _aiFeedbackMessage(quiz),
+            ),
+            const SizedBox(height: 10),
+            _FeedbackTile(
+              icon: Icons.person_search_outlined,
+              title: 'Teacher Feedback',
+              message: _teacherFeedbackMessage(quiz),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FeedbackTile extends StatelessWidget {
+  const _FeedbackTile({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              Text(message),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnswerResultChip extends StatelessWidget {
+  const _AnswerResultChip({required this.state});
+
+  final _AnswerReviewState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: state.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(state.icon, size: 14, color: state.color),
+          const SizedBox(width: 5),
+          Text(
+            state.label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: state.color,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -2094,7 +2274,10 @@ class _StatusChip extends StatelessWidget {
     final color = switch (label) {
       'Expired' => Theme.of(context).colorScheme.error,
       'Completed' => Theme.of(context).colorScheme.outline,
+      'Under Review' => const Color(0xFF7C3AED),
       'InProgress' => const Color(0xFF2563EB),
+      'Upcoming' => const Color(0xFFD97706),
+      'Not Attempted' => const Color(0xFF16A34A),
       _ => switch (status) {
           QuizStatus.assigned => const Color(0xFF2563EB),
           QuizStatus.available => const Color(0xFF16A34A),
@@ -2260,6 +2443,7 @@ class _SampleQuestion {
     required this.prompt,
     required this.questionTypeId,
     required this.options,
+    required this.correctAnswers,
     required this.explanation,
     required this.hint,
   });
@@ -2267,15 +2451,34 @@ class _SampleQuestion {
   final String prompt;
   final int questionTypeId;
   final List<String> options;
+  final List<String> correctAnswers;
   final String explanation;
   final String hint;
+}
+
+class _AnswerReviewState {
+  const _AnswerReviewState({
+    required this.label,
+    required this.color,
+    required this.icon,
+    required this.feedback,
+  });
+
+  final String label;
+  final Color color;
+  final IconData icon;
+  final String feedback;
 }
 
 _SampleQuestion _sampleQuestion(QuizSummary quiz, int index) {
   final mappedQuestions = questionsForQuiz(quiz.id);
   if (index < mappedQuestions.length) {
     final question = mappedQuestions[index];
-    final options = optionsForQuestion(question.id)
+    final optionRows = optionsForQuestion(question.id);
+    final options =
+        optionRows.map((option) => option.optionText).toList(growable: false);
+    final correctAnswers = optionRows
+        .where((option) => option.isCorrect)
         .map((option) => option.optionText)
         .toList(growable: false);
 
@@ -2283,6 +2486,7 @@ _SampleQuestion _sampleQuestion(QuizSummary quiz, int index) {
       prompt: 'Q${index + 1}. ${question.questionText}',
       questionTypeId: question.questionTypeId,
       options: options,
+      correctAnswers: correctAnswers,
       explanation: question.explanation,
       hint: question.hint,
     );
@@ -2294,21 +2498,100 @@ _SampleQuestion _sampleQuestion(QuizSummary quiz, int index) {
     prompt: 'Q$number. No local-memory question is mapped for this quiz.',
     questionTypeId: 44,
     options: const [],
+    correctAnswers: const [],
     explanation: 'No question explanation is available.',
     hint: '',
   );
 }
 
-String _reviewAnswerLabel(_SampleQuestion question) {
-  if (question.options.isNotEmpty) {
-    return question.options.first;
+_AnswerReviewState _answerReviewState(
+  _SampleQuestion question, {
+  required Set<String> selectedAnswers,
+  required String textAnswer,
+  required bool reviewComplete,
+}) {
+  if (!reviewComplete) {
+    return const _AnswerReviewState(
+      label: 'Review Pending',
+      color: Color(0xFF7C3AED),
+      icon: Icons.pending_actions_outlined,
+      feedback: 'Review is pending.',
+    );
   }
 
-  if (question.questionTypeId == 44) {
-    return 'Submitted descriptive answer pending review';
+  if (question.questionTypeId == 43 || question.questionTypeId == 44) {
+    if (textAnswer.trim().isEmpty) {
+      return const _AnswerReviewState(
+        label: 'Wrong Answer',
+        color: Color(0xFFDC2626),
+        icon: Icons.cancel_outlined,
+        feedback: 'No answer was submitted for this question.',
+      );
+    }
+
+    return const _AnswerReviewState(
+      label: 'Partial',
+      color: Color(0xFFD97706),
+      icon: Icons.rule_outlined,
+      feedback: 'Written answer needs AI or teacher judgement.',
+    );
   }
 
-  return 'Submitted text answer';
+  if (selectedAnswers.isEmpty || question.correctAnswers.isEmpty) {
+    return const _AnswerReviewState(
+      label: 'Wrong Answer',
+      color: Color(0xFFDC2626),
+      icon: Icons.cancel_outlined,
+      feedback: 'The selected answer does not match the correct option.',
+    );
+  }
+
+  final correctSet = question.correctAnswers.toSet();
+  if (selectedAnswers.length == correctSet.length &&
+      selectedAnswers.containsAll(correctSet)) {
+    return const _AnswerReviewState(
+      label: 'Correct',
+      color: Color(0xFF16A34A),
+      icon: Icons.check_circle_outline,
+      feedback: 'Answer matches the correct option.',
+    );
+  }
+
+  if (selectedAnswers.any(correctSet.contains)) {
+    return const _AnswerReviewState(
+      label: 'Partial',
+      color: Color(0xFFD97706),
+      icon: Icons.rule_outlined,
+      feedback: 'Some selected options are correct, but the answer is incomplete.',
+    );
+  }
+
+  return const _AnswerReviewState(
+    label: 'Wrong Answer',
+    color: Color(0xFFDC2626),
+    icon: Icons.cancel_outlined,
+    feedback: 'The selected answer does not match the correct option.',
+  );
+}
+
+String _reviewAnswerLabel(
+  _SampleQuestion question, {
+  required Set<String> selectedAnswers,
+  required String textAnswer,
+}) {
+  if (selectedAnswers.isNotEmpty) {
+    return selectedAnswers.join(', ');
+  }
+
+  if (textAnswer.trim().isNotEmpty) {
+    return textAnswer.trim();
+  }
+
+  if (question.questionTypeId == 44 || question.options.isEmpty) {
+    return textAnswer.trim().isEmpty ? 'No Answer' : textAnswer.trim();
+  }
+
+  return 'No Answer';
 }
 
 List<String> _instructionsFor(QuizSummary quiz) {
@@ -2374,6 +2657,9 @@ String _attemptTimerLabel({
 }
 
 String _primaryActionLabel(QuizSummary quiz) {
+  if (_isExpiredQuiz(quiz)) {
+    return 'Expired';
+  }
   if (quiz.status == QuizStatus.completed) {
     return 'Review';
   }
@@ -2386,11 +2672,54 @@ String _primaryActionLabel(QuizSummary quiz) {
   return 'Start';
 }
 
+bool _isExpiredQuiz(QuizSummary quiz) {
+  return studentQuizStatus(quiz) == 'Expired';
+}
+
+bool _isReviewComplete(QuizSummary quiz) {
+  final normalizedStatus = quiz.resultStatus.toLowerCase().replaceAll(' ', '');
+  return quiz.resultPercent != null &&
+      (normalizedStatus == 'reviewed' ||
+          normalizedStatus == 'completed' ||
+          normalizedStatus == 'reviewcompleted');
+}
+
+String _aiFeedbackMessage(QuizSummary quiz) {
+  final normalizedStatus = quiz.resultStatus.toLowerCase().replaceAll(' ', '');
+
+  if (_isReviewComplete(quiz)) {
+    return 'AI review completed. Automated checks are available with the answer review.';
+  }
+
+  if (normalizedStatus == 'aireview' || normalizedStatus == 'autosubmitted') {
+    return 'AI review is in progress.';
+  }
+
+  return 'AI initial review is pending or not required for this quiz.';
+}
+
+String _teacherFeedbackMessage(QuizSummary quiz) {
+  final normalizedStatus = quiz.resultStatus.toLowerCase().replaceAll(' ', '');
+
+  if (_isReviewComplete(quiz)) {
+    return 'Teacher review completed. Final feedback is available.';
+  }
+
+  if (normalizedStatus == 'underteacherreview' ||
+      normalizedStatus == 'teacherreview' ||
+      normalizedStatus == 'pendingteacherreview' ||
+      normalizedStatus == 'submitted') {
+    return 'Teacher feedback is pending.';
+  }
+
+  return 'Teacher feedback will appear after review is completed.';
+}
+
 String _resultLabel(QuizSummary quiz) {
   if (quiz.resultPercent != null) {
     return '${quiz.resultPercent}% - ${quiz.resultStatus}';
   }
-  return quiz.resultStatus.isEmpty ? 'Not Started' : quiz.resultStatus;
+  return quiz.resultStatus.isEmpty ? studentQuizStatus(quiz) : quiz.resultStatus;
 }
 
 String _studentQuizResultLabel(QuizSummary quiz) {
@@ -2435,7 +2764,9 @@ String _studentQuizResultLabel(QuizSummary quiz) {
     return 'In Progress';
   }
 
-  return resultStatus.isEmpty ? 'Not Started' : resultStatus;
+  return resultStatus.isEmpty || normalizedStatus == 'notstarted'
+      ? studentQuizStatus(quiz)
+      : resultStatus;
 }
 
 String _dateLabel(DateTime? value, {required String fallback}) {

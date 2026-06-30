@@ -86,6 +86,7 @@ class MockQuizRepository implements QuizRepository {
         status: _readQuizStatus(value['status'], _quizzes[index].status),
         resultStatus: _readString(value['resultStatus']),
         resultPercent: _readInt(value['resultPercent']),
+        completedAt: _readDate(value['completedAt']),
         reviewAvailable: value['reviewAvailable'] == true,
       );
     }
@@ -101,6 +102,7 @@ class MockQuizRepository implements QuizRepository {
           'status': quiz.status.name,
           'resultStatus': quiz.resultStatus,
           'resultPercent': quiz.resultPercent,
+          'completedAt': quiz.completedAt?.toIso8601String(),
           'reviewAvailable': quiz.reviewAvailable,
         },
     };
@@ -145,6 +147,14 @@ class MockQuizRepository implements QuizRepository {
     }
     if (value is num) {
       return value.toInt();
+    }
+
+    return null;
+  }
+
+  static DateTime? _readDate(Object? value) {
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
     }
 
     return null;

@@ -22,6 +22,7 @@ class QuizSummary {
     this.attemptLimit = 1,
     this.startAt,
     this.dueAt,
+    this.completedAt,
     this.instructions = const [],
     this.navigationMode = 'Free Navigation',
     this.answersCanBeChanged = true,
@@ -53,6 +54,7 @@ class QuizSummary {
   final int attemptLimit;
   final DateTime? startAt;
   final DateTime? dueAt;
+  final DateTime? completedAt;
   final List<String> instructions;
   final String navigationMode;
   final bool answersCanBeChanged;
@@ -84,6 +86,7 @@ class QuizSummary {
     int? attemptLimit,
     DateTime? startAt,
     DateTime? dueAt,
+    DateTime? completedAt,
     List<String>? instructions,
     String? navigationMode,
     bool? answersCanBeChanged,
@@ -115,6 +118,7 @@ class QuizSummary {
       attemptLimit: attemptLimit ?? this.attemptLimit,
       startAt: startAt ?? this.startAt,
       dueAt: dueAt ?? this.dueAt,
+      completedAt: completedAt ?? this.completedAt,
       instructions: instructions ?? this.instructions,
       navigationMode: navigationMode ?? this.navigationMode,
       answersCanBeChanged: answersCanBeChanged ?? this.answersCanBeChanged,
