@@ -128,9 +128,8 @@ List<QuizSummary> _applyLocalFilters(
     final matchesDate = switch (selectedDateFilter) {
       'Today' => _isSameDay(date, now),
       'Yesterday' => _isSameDay(date, now.subtract(const Duration(days: 1))),
-      'Last 7 days' => _isWithinPastDays(date, now, 7),
-      'Last 15 days' => _isWithinPastDays(date, now, 15),
-      'Upcoming' => date.isAfter(now),
+      'Last 7 Days' => _isWithinPastDays(date, now, 7),
+      'Last 15 Days' => _isWithinPastDays(date, now, 15),
       _ => true,
     };
 
@@ -183,7 +182,7 @@ String _studentStatus(QuizSummary quiz, DateTime now) {
 
   if (quiz.status == QuizStatus.upcoming ||
       (quiz.startAt != null && quiz.startAt!.isAfter(now))) {
-    return 'Upcoming';
+    return 'Up Coming';
   }
 
   return 'Not Attempted';

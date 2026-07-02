@@ -27,10 +27,11 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   Timer? _attemptTimer;
 
   _QuizView _view = _QuizView.list;
+  _QuizView _reviewReturnView = _QuizView.details;
   QuizSummary? _selectedQuiz;
   String _quizType = '';
   String _status = '';
-  String _dateFilter = 'All';
+  String _dateFilter = '';
   int _questionIndex = 0;
   String _saveStatus = 'All answers saved';
   Duration? _remainingTime;
@@ -98,7 +99,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _QuizView.details => _QuizDetailsView(
             quiz: _selectedQuiz!,
             onStart: _startAttempt,
-            onReview: () => setState(() => _view = _QuizView.review),
+            onReview: () => setState(() {
+              _reviewReturnView = _QuizView.details;
+              _view = _QuizView.review;
+            }),
             onCancel: () => setState(() => _view = _QuizView.list),
           ),
         _QuizView.attempt => _QuizAttemptView(
@@ -132,13 +136,14 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
             quiz: _selectedQuiz!,
             selectedOptionAnswers: _selectedOptionAnswers,
             textAnswers: _textAnswers,
-            onBackToList: () => setState(() => _view = _QuizView.list),
+            onBackToList: () => setState(() => _view = _reviewReturnView),
           ),
         _QuizView.history => _AttemptHistoryView(
             quizzes: state.allQuizzes,
             onOpenReview: (quiz) {
               setState(() {
                 _selectedQuiz = quiz;
+                _reviewReturnView = _QuizView.history;
                 _view = _QuizView.review;
               });
             },
@@ -172,7 +177,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
       _searchController.clear();
       _quizType = '';
       _status = '';
-      _dateFilter = 'All';
+      _dateFilter = '';
     });
     _load();
   }
@@ -181,6 +186,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     _stopAttemptTimer();
     setState(() {
       _selectedQuiz = quiz;
+      _reviewReturnView = _QuizView.details;
       _view = _QuizView.details;
     });
   }
@@ -360,7 +366,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _QuizView.details => _QuizView.list,
         _QuizView.attempt => _QuizView.details,
         _QuizView.submitted => _QuizView.list,
-        _QuizView.review => _QuizView.details,
+        _QuizView.review => _reviewReturnView,
         _QuizView.history => _QuizView.list,
         _QuizView.list => _QuizView.list,
       };
@@ -406,32 +412,19 @@ class _QuizListView extends StatelessWidget {
         children: [
           const _OfflineSyncTile(),
           const SizedBox(height: 12),
-          TextField(
-            controller: searchController,
-            decoration: InputDecoration(
-              labelText: 'Search by title or topic',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(
-                tooltip: 'Search',
-                onPressed: onSearch,
-                icon: const Icon(Icons.arrow_forward),
-              ),
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => onSearch(),
-          ),
+          _QuizSummaryStrip(quizzes: state.allQuizzes),
           const SizedBox(height: 12),
           _FilterPanel(
+            searchController: searchController,
             quizType: quizType,
             status: status,
             dateFilter: dateFilter,
+            onSearch: onSearch,
             onQuizTypeChanged: onQuizTypeChanged,
             onStatusChanged: onStatusChanged,
             onDateFilterChanged: onDateFilterChanged,
             onResetFilters: onResetFilters,
           ),
-          const SizedBox(height: 16),
-          _QuizSummaryStrip(quizzes: state.quizzes),
           const SizedBox(height: 16),
           if (state.isLoading)
             const _QuizSkeleton()
@@ -457,99 +450,145 @@ class _QuizListView extends StatelessWidget {
   }
 }
 
-class _FilterPanel extends StatelessWidget {
+class _FilterPanel extends StatefulWidget {
   const _FilterPanel({
+    required this.searchController,
     required this.quizType,
     required this.status,
     required this.dateFilter,
+    required this.onSearch,
     required this.onQuizTypeChanged,
     required this.onStatusChanged,
     required this.onDateFilterChanged,
     required this.onResetFilters,
   });
 
+  final TextEditingController searchController;
   final String quizType;
   final String status;
   final String dateFilter;
+  final VoidCallback onSearch;
   final ValueChanged<String> onQuizTypeChanged;
   final ValueChanged<String> onStatusChanged;
   final ValueChanged<String> onDateFilterChanged;
   final VoidCallback onResetFilters;
 
   @override
+  State<_FilterPanel> createState() => _FilterPanelState();
+}
+
+class _FilterPanelState extends State<_FilterPanel> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         child: Column(
           children: [
             Row(
               children: [
-                const Icon(Icons.tune_outlined),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'Filters',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                  child: SizedBox(
+                    height: 44,
+                    child: TextField(
+                      controller: widget.searchController,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        labelText: 'Search by title or topic',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: IconButton(
+                          tooltip: 'Search',
+                          onPressed: widget.onSearch,
+                          icon: const Icon(Icons.arrow_forward),
                         ),
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => widget.onSearch(),
+                    ),
                   ),
                 ),
-                TextButton(
-                  onPressed: onResetFilters,
-                  child: const Text('Reset'),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Filters',
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                  icon: Icon(
+                    _expanded
+                        ? Icons.filter_list_off_outlined
+                        : Icons.filter_list_outlined,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+            if (_expanded) ...[
+              const SizedBox(height: 10),
+              Row(
                 children: [
-                  _FilterDropdown(
-                    label: 'Type',
-                    value: quizType,
-                    values: const [
-                      '',
-                      'Practice',
-                      'Assessment',
-                      'Competition',
-                      'Surprise',
-                    ],
-                    onChanged: onQuizTypeChanged,
+                  const Icon(Icons.tune_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Filters',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                  _FilterDropdown(
-                    label: 'Status',
-                    value: status,
-                    values: const [
-                      '',
-                      'Expired',
-                      'Completed',
-                      'Under Review',
-                      'Not Attempted',
-                      'Upcoming',
-                      'InProgress',
-                    ],
-                    onChanged: onStatusChanged,
-                  ),
-                  const SizedBox(width: 10),
-                  _FilterDropdown(
-                    label: 'Date',
-                    value: dateFilter,
-                    values: const [
-                      'All',
-                      'Today',
-                      'Yesterday',
-                      'Last 7 days',
-                      'Last 15 days',
-                      'Upcoming',
-                    ],
-                    onChanged: onDateFilterChanged,
+                  TextButton(
+                    onPressed: widget.onResetFilters,
+                    child: const Text('Reset'),
                   ),
                 ],
               ),
-            ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterDropdown(
+                      label: 'Type',
+                      value: widget.quizType,
+                      values: const [
+                        '',
+                        'Practice',
+                        'Assessment',
+                        'Competition',
+                        'Surprise',
+                      ],
+                      onChanged: widget.onQuizTypeChanged,
+                    ),
+                    const SizedBox(width: 10),
+                    _FilterDropdown(
+                      label: 'Status',
+                      value: widget.status,
+                      values: const [
+                        '',
+                        'Expired',
+                        'Completed',
+                        'Under Review',
+                        'InProgress',
+                        'Not Attempted',
+                        'Up Coming',
+                      ],
+                      onChanged: widget.onStatusChanged,
+                    ),
+                    const SizedBox(width: 10),
+                    _FilterDropdown(
+                      label: 'Date',
+                      value: widget.dateFilter,
+                      values: const [
+                        '',
+                        'Today',
+                        'Yesterday',
+                        'Last 7 Days',
+                        'Last 15 Days',
+                      ],
+                      onChanged: widget.onDateFilterChanged,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -633,75 +672,121 @@ class _QuizSummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assigned =
-        quizzes.where((quiz) => quiz.status == QuizStatus.assigned).length;
-    final upcoming =
-        quizzes.where((quiz) => quiz.status == QuizStatus.upcoming).length;
-    final review =
-        quizzes.where((quiz) => quiz.resultStatus.contains('Review')).length;
+    final completedScores = quizzes
+        .where((quiz) => studentQuizStatus(quiz) == 'Completed')
+        .map((quiz) => quiz.resultPercent)
+        .whereType<int>()
+        .toList(growable: false);
+    final averageScore = completedScores.isEmpty
+        ? '-'
+        : '${(completedScores.reduce((a, b) => a + b) / completedScores.length).round()}%';
 
-    return Row(
-      children: [
-        Expanded(
-          child: _MiniMetricCard(
-            icon: Icons.assignment_outlined,
-            label: 'Assigned',
-            value: assigned.toString(),
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _MetricPill(
+                    label: 'Upcoming',
+                    value: _statusCount('Up Coming').toString(),
+                  ),
+                  _MetricPill(
+                    label: 'In-Progress',
+                    value: _statusCount('InProgress').toString(),
+                  ),
+                  _MetricPill(
+                    label: 'Not Attempted',
+                    value: _statusCount('Not Attempted').toString(),
+                  ),
+                  _MetricPill(
+                    label: 'Under Review',
+                    value: _statusCount('Under Review').toString(),
+                  ),
+                  _MetricPill(
+                    label: 'Completed',
+                    value: _statusCount('Completed').toString(),
+                  ),
+                  _MetricPill(
+                    label: 'Expired',
+                    value: _statusCount('Expired').toString(),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _MiniMetricCard(
-            icon: Icons.event_outlined,
-            label: 'Upcoming',
-            value: upcoming.toString(),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _MiniMetricCard(
-            icon: Icons.rate_review_outlined,
-            label: 'Review',
-            value: review.toString(),
-          ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          _AverageScoreBadge(value: averageScore),
+        ],
+      ),
     );
+  }
+
+  int _statusCount(String status) {
+    return quizzes.where((quiz) => studentQuizStatus(quiz) == status).length;
   }
 }
 
-class _MiniMetricCard extends StatelessWidget {
-  const _MiniMetricCard({
-    required this.icon,
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({
     required this.label,
     required this.value,
   });
 
-  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final color = Theme.of(context).colorScheme.primary;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: theme.colorScheme.primary),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            Text(label, overflow: TextOverflow.ellipsis),
-          ],
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(end: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.18)),
         ),
+        child: Text(
+          '$label: $value',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AverageScoreBadge extends StatelessWidget {
+  const _AverageScoreBadge({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16A34A).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        'Avg Score: $value',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: const Color(0xFF15803D),
+              fontWeight: FontWeight.w900,
+            ),
       ),
     );
   }
@@ -716,13 +801,24 @@ class _QuizCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final expired = _isExpiredQuiz(quiz);
+    final status = studentQuizStatus(quiz);
+    final expired = status == 'Expired';
+    final completed = status == 'Completed';
 
     return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ),
       child: InkWell(
         onTap: onOpen,
+        borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -737,6 +833,8 @@ class _QuizCard extends StatelessWidget {
                       children: [
                         Text(
                           quiz.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
@@ -744,17 +842,22 @@ class _QuizCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           '${quiz.subject} - ${_fallback(quiz.topic, quiz.grade)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
                         ),
                       ],
                     ),
                   ),
-                  _StatusChip(
-                    label: studentQuizStatus(quiz),
-                    status: quiz.status,
+                  _QuizCardActions(
+                    status: status,
+                    quizStatus: quiz.status,
+                    onPressed: onOpen,
+                    showButton: !expired,
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -773,38 +876,120 @@ class _QuizCard extends StatelessWidget {
                         ? 'No time limit'
                         : '${quiz.timeLimitMinutes} min',
                   ),
-                  _InfoChip(
-                    icon: Icons.event_available_outlined,
-                    label: _dateLabel(quiz.dueAt, fallback: 'No due date'),
-                  ),
-                  if (quiz.completedAt != null)
+                  if (completed && quiz.completedAt != null)
                     _InfoChip(
                       icon: Icons.check_circle_outline,
-                      label:
-                          'Completed ${_dateLabel(quiz.completedAt, fallback: '')}',
+                      label: _dateLabel(quiz.completedAt, fallback: ''),
+                    )
+                  else
+                    _InfoChip(
+                      icon: Icons.event_available_outlined,
+                      label: _dateLabel(quiz.dueAt, fallback: 'No due date'),
+                    ),
+                  if (completed && quiz.resultPercent != null)
+                    _InfoChip(
+                      icon: Icons.fact_check_outlined,
+                      label: 'Result: ${quiz.resultPercent}%',
                     ),
                 ],
               ),
-              if (!expired) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Result: ${_studentQuizResultLabel(quiz)}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
-                    FilledButton(
-                      onPressed: onOpen,
-                      child: Text(_primaryActionLabel(quiz)),
-                    ),
-                  ],
-                ),
-              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _QuizCardActions extends StatelessWidget {
+  const _QuizCardActions({
+    required this.status,
+    required this.quizStatus,
+    required this.onPressed,
+    required this.showButton,
+  });
+
+  final String status;
+  final QuizStatus quizStatus;
+  final VoidCallback onPressed;
+  final bool showButton;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _StatusChip(label: status, status: quizStatus),
+        if (showButton) ...[
+          const SizedBox(height: 6),
+          _QuizActionButton(
+            status: status,
+            onPressed: onPressed,
+            label: _actionLabelForStatus(status),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _QuizActionButton extends StatelessWidget {
+  const _QuizActionButton({
+    required this.status,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String status;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isNeutral = status == 'Up Coming' || status == 'Completed';
+    final isReview = status == 'Under Review';
+    final isCompleted = status == 'Completed';
+    final backgroundColor = isNeutral
+        ? Colors.transparent
+        : isReview
+            ? const Color(0xFFF59E0B).withValues(alpha: 0.28)
+            : const Color(0xFF2563EB);
+    final foregroundColor = isNeutral
+        ? isCompleted
+            ? const Color(0xFF15803D)
+            : theme.colorScheme.onSurfaceVariant
+        : isReview
+            ? const Color(0xFF92400E)
+            : Colors.white;
+    final borderColor = isNeutral
+        ? isCompleted
+            ? const Color(0xFF16A34A).withValues(alpha: 0.55)
+            : theme.colorScheme.outline
+        : isReview
+            ? const Color(0xFFD97706).withValues(alpha: 0.65)
+            : const Color(0xFF1D4ED8);
+
+    return SizedBox(
+      width: 88,
+      height: 34,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.zero,
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          elevation: isNeutral ? 0 : 1,
+          shadowColor: borderColor.withValues(alpha: 0.35),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+            side: BorderSide(color: borderColor),
+          ),
+          textStyle: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
     );
   }
@@ -877,7 +1062,7 @@ class _QuizDetailsView extends StatelessWidget {
               label: 'End',
               value: _dateLabel(quiz.dueAt, fallback: 'No end date'),
             ),
-            if (quiz.completedAt != null)
+            if (studentStatus == 'Completed' && quiz.completedAt != null)
               _DetailRow(
                 label: 'Completed',
                 value: _dateLabel(quiz.completedAt, fallback: 'Not completed'),
@@ -1613,10 +1798,7 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
 
   @override
   Widget build(BuildContext context) {
-    final history = widget.quizzes
-        .where(_isOlderThanOneMonth)
-        .where(_matchesHistoryFilters)
-        .toList();
+    final history = widget.quizzes.where(_matchesHistoryFilters).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -1654,8 +1836,7 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
             child: AppEmptyState(
               icon: Icons.history_outlined,
               title: 'No attempt history found',
-              message:
-                  'Only quizzes older than one month appear here. Try another filter.',
+              message: 'Try another filter or check completed attempts later.',
             ),
           )
         else
@@ -1672,15 +1853,18 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
 
   Future<void> _pickHistoryDateRange() async {
     final now = DateTime.now();
+    final currentMonthStart = DateTime(now.year, now.month);
+    final defaultEnd = currentMonthStart.subtract(const Duration(days: 1));
+    final defaultStart = defaultEnd.subtract(const Duration(days: 30));
     final selected = await showDateRangePicker(
       context: context,
       initialDateRange: _dateRange ??
           DateTimeRange(
-            start: now.subtract(const Duration(days: 60)),
-            end: now.subtract(const Duration(days: 31)),
+            start: defaultStart,
+            end: defaultEnd,
           ),
       firstDate: DateTime(now.year - 3),
-      lastDate: now,
+      lastDate: defaultEnd,
     );
 
     if (selected != null) {
@@ -1691,8 +1875,10 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
   bool _matchesHistoryFilters(QuizSummary quiz) {
     final studentStatus = studentQuizStatus(quiz);
     final date = _quizDate(quiz);
-    final historyStatus =
+    final currentMonthStart = DateTime(DateTime.now().year, DateTime.now().month);
+    final isAllowedHistoryStatus =
         studentStatus == 'Expired' || studentStatus == 'Completed';
+    final isBeforeCurrentMonth = date.isBefore(currentMonthStart);
     final query = _searchQuery.toLowerCase();
     final searchableText = '${quiz.title} ${quiz.topic}'.toLowerCase();
     final matchesSearch = query.isEmpty || searchableText.contains(query);
@@ -1700,33 +1886,18 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
         _statusFilter.isEmpty || studentStatus == _statusFilter;
     final matchesType =
         _typeFilter.isEmpty || quiz.quizType.startsWith(_typeFilter);
-    final matchesFrom = _dateRange == null ||
-        !date.isBefore(
-          DateTime(
-            _dateRange!.start.year,
-            _dateRange!.start.month,
-            _dateRange!.start.day,
-          ),
-        );
-    final matchesTo = _dateRange == null ||
-        date.isBefore(
-          DateTime(
-            _dateRange!.end.year,
-            _dateRange!.end.month,
-            _dateRange!.end.day,
-          ).add(const Duration(days: 1)),
-        );
+    final matchesDateRange = _matchesDateRange(date, _dateRange);
 
-    return historyStatus &&
+    return isAllowedHistoryStatus &&
+        isBeforeCurrentMonth &&
         matchesSearch &&
         matchesStatus &&
         matchesType &&
-        matchesFrom &&
-        matchesTo;
+        matchesDateRange;
   }
 }
 
-class _HistoryFilterPanel extends StatelessWidget {
+class _HistoryFilterPanel extends StatefulWidget {
   const _HistoryFilterPanel({
     required this.searchController,
     required this.searchQuery,
@@ -1752,83 +1923,114 @@ class _HistoryFilterPanel extends StatelessWidget {
   final VoidCallback onClear;
 
   @override
+  State<_HistoryFilterPanel> createState() => _HistoryFilterPanelState();
+}
+
+class _HistoryFilterPanelState extends State<_HistoryFilterPanel> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         child: Column(
           children: [
             Row(
               children: [
-                const Icon(Icons.manage_history_outlined),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'History Filters',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                  child: SizedBox(
+                    height: 44,
+                    child: TextField(
+                      controller: widget.searchController,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'Search by title or topic',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: widget.searchQuery.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                onPressed: () {
+                                  widget.searchController.clear();
+                                  widget.onSearchChanged('');
+                                },
+                                icon: const Icon(Icons.close),
+                              ),
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onChanged: widget.onSearchChanged,
+                    ),
                   ),
                 ),
-                TextButton(onPressed: onClear, child: const Text('Reset')),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Filters',
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                  icon: Icon(
+                    _expanded
+                        ? Icons.filter_list_off_outlined
+                        : Icons.filter_list_outlined,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by title or topic',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: searchQuery.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Clear search',
-                        onPressed: () {
-                          searchController.clear();
-                          onSearchChanged('');
-                        },
-                        icon: const Icon(Icons.close),
-                      ),
-              ),
-              textInputAction: TextInputAction.search,
-              onChanged: onSearchChanged,
-            ),
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+            if (_expanded) ...[
+              const SizedBox(height: 10),
+              Row(
                 children: [
-                  _FilterDropdown(
-                    label: 'Status',
-                    value: statusFilter,
-                    values: const [
-                      '',
-                      'Expired',
-                      'Completed',
-                    ],
-                    onChanged: onStatusChanged,
+                  const Icon(Icons.manage_history_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'History Filters',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                  _FilterDropdown(
-                    label: 'Type',
-                    value: typeFilter,
-                    values: const [
-                      '',
-                      'Practice',
-                      'Assessment',
-                      'Competition',
-                      'Surprise',
-                    ],
-                    onChanged: onTypeChanged,
-                  ),
-                  const SizedBox(width: 10),
-                  _DateRangeControl(
-                    dateRange: dateRange,
-                    onPressed: onPickDateRange,
+                  TextButton(
+                    onPressed: widget.onClear,
+                    child: const Text('Reset'),
                   ),
                 ],
               ),
-            ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterDropdown(
+                      label: 'Type',
+                      value: widget.typeFilter,
+                      values: const [
+                        '',
+                        'Practice',
+                        'Assessment',
+                        'Competition',
+                        'Surprise',
+                      ],
+                      onChanged: widget.onTypeChanged,
+                    ),
+                    const SizedBox(width: 10),
+                    _FilterDropdown(
+                      label: 'Status',
+                      value: widget.statusFilter,
+                      values: const [
+                        '',
+                        'Expired',
+                        'Completed',
+                      ],
+                      onChanged: widget.onStatusChanged,
+                    ),
+                    const SizedBox(width: 10),
+                    _DateRangeControl(
+                      dateRange: widget.dateRange,
+                      onPressed: widget.onPickDateRange,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -1837,7 +2039,10 @@ class _HistoryFilterPanel extends StatelessWidget {
 }
 
 class _DateRangeControl extends StatelessWidget {
-  const _DateRangeControl({required this.dateRange, required this.onPressed});
+  const _DateRangeControl({
+    required this.dateRange,
+    required this.onPressed,
+  });
 
   final DateTimeRange? dateRange;
   final VoidCallback onPressed;
@@ -1871,6 +2076,9 @@ class _DateRangeControl extends StatelessWidget {
               alignment: AlignmentDirectional.centerStart,
               minimumSize: const Size.fromHeight(48),
               padding: const EdgeInsets.symmetric(horizontal: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ],
@@ -1889,10 +2097,12 @@ class _HistoryQuizCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = studentQuizStatus(quiz);
+    final completed = status == 'Completed';
+    final expired = status == 'Expired';
 
     return Card(
       child: InkWell(
-        onTap: onReview,
+        onTap: expired ? null : onReview,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -1915,10 +2125,7 @@ class _HistoryQuizCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _fallback(
-                            quiz.description,
-                            '${quiz.subject} - ${_fallback(quiz.topic, quiz.quizType)}',
-                          ),
+                          '${quiz.subject} - ${_fallback(quiz.topic, quiz.quizType)}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium,
@@ -1931,16 +2138,18 @@ class _HistoryQuizCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       _StatusChip(label: status, status: quiz.status),
-                      const SizedBox(height: 6),
-                      TextButton.icon(
-                        onPressed: onReview,
-                        icon: const Icon(Icons.rate_review_outlined, size: 18),
-                        label: const Text('Review'),
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                      if (!expired) ...[
+                        const SizedBox(height: 6),
+                        TextButton.icon(
+                          onPressed: onReview,
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                          label: Text(_primaryActionLabel(quiz)),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
@@ -1956,14 +2165,37 @@ class _HistoryQuizCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     _InfoChip(
-                      icon: Icons.fact_check_outlined,
-                      label: 'Result: ${_resultLabel(quiz)}',
+                      icon: Icons.help_outline,
+                      label: '${quiz.questionCount} questions',
                     ),
                     const SizedBox(width: 8),
                     _InfoChip(
-                      icon: Icons.event_outlined,
-                      label: _shortDateLabel(_quizDate(quiz)),
+                      icon: Icons.schedule_outlined,
+                      label: quiz.timeLimitMinutes == null
+                          ? 'No time limit'
+                          : '${quiz.timeLimitMinutes} min',
                     ),
+                    if (expired) ...[
+                      const SizedBox(width: 8),
+                      _InfoChip(
+                        icon: Icons.event_available_outlined,
+                        label: _dateLabel(quiz.dueAt, fallback: 'No due date'),
+                      ),
+                    ],
+                    if (completed && quiz.completedAt != null) ...[
+                      const SizedBox(width: 8),
+                      _InfoChip(
+                        icon: Icons.check_circle_outline,
+                        label: _dateLabel(quiz.completedAt, fallback: ''),
+                      ),
+                    ],
+                    if (completed && quiz.resultPercent != null) ...[
+                      const SizedBox(width: 8),
+                      _InfoChip(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Result: ${quiz.resultPercent}%',
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -2273,11 +2505,11 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (label) {
       'Expired' => Theme.of(context).colorScheme.error,
-      'Completed' => Theme.of(context).colorScheme.outline,
-      'Under Review' => const Color(0xFF7C3AED),
+      'Completed' => const Color(0xFF15803D),
+      'Under Review' => const Color(0xFF92400E),
       'InProgress' => const Color(0xFF2563EB),
-      'Upcoming' => const Color(0xFFD97706),
-      'Not Attempted' => const Color(0xFF16A34A),
+      'Up Coming' => Theme.of(context).colorScheme.onSurfaceVariant,
+      'Not Attempted' => const Color(0xFF1D4ED8),
       _ => switch (status) {
           QuizStatus.assigned => const Color(0xFF2563EB),
           QuizStatus.available => const Color(0xFF16A34A),
@@ -2289,7 +2521,7 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -2324,7 +2556,12 @@ class _InfoChip extends StatelessWidget {
           const SizedBox(width: 5),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 220),
-            child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
           ),
         ],
       ),
@@ -2657,23 +2894,19 @@ String _attemptTimerLabel({
 }
 
 String _primaryActionLabel(QuizSummary quiz) {
-  if (_isExpiredQuiz(quiz)) {
-    return 'Expired';
-  }
-  if (quiz.status == QuizStatus.completed) {
-    return 'Review';
-  }
-  if (quiz.status == QuizStatus.upcoming) {
-    return 'View';
-  }
-  if (quiz.resultStatus == 'In Progress') {
-    return 'Continue';
-  }
-  return 'Start';
+  return _actionLabelForStatus(studentQuizStatus(quiz));
 }
 
-bool _isExpiredQuiz(QuizSummary quiz) {
-  return studentQuizStatus(quiz) == 'Expired';
+String _actionLabelForStatus(String status) {
+  if (status == 'Up Coming' || status == 'Completed') {
+    return 'View';
+  }
+
+  if (status == 'Under Review') {
+    return 'Review';
+  }
+
+  return 'Start';
 }
 
 bool _isReviewComplete(QuizSummary quiz) {
@@ -2713,13 +2946,6 @@ String _teacherFeedbackMessage(QuizSummary quiz) {
   }
 
   return 'Teacher feedback will appear after review is completed.';
-}
-
-String _resultLabel(QuizSummary quiz) {
-  if (quiz.resultPercent != null) {
-    return '${quiz.resultPercent}% - ${quiz.resultStatus}';
-  }
-  return quiz.resultStatus.isEmpty ? studentQuizStatus(quiz) : quiz.resultStatus;
 }
 
 String _studentQuizResultLabel(QuizSummary quiz) {
@@ -2781,10 +3007,8 @@ String _dateLabel(DateTime? value, {required String fallback}) {
   return '$day/$month/${value.year} $hour:$minute';
 }
 
-String _shortDateLabel(DateTime value) {
-  final month = value.month.toString().padLeft(2, '0');
-  final day = value.day.toString().padLeft(2, '0');
-  return '$day/$month/${value.year}';
+DateTime _quizDate(QuizSummary quiz) {
+  return quiz.dueAt ?? quiz.startAt ?? DateTime.now();
 }
 
 String _dateRangeLabel(DateTimeRange? dateRange) {
@@ -2792,17 +3016,32 @@ String _dateRangeLabel(DateTimeRange? dateRange) {
     return 'From date - To date';
   }
 
-  return '${_shortDateLabel(dateRange.start)} - ${_shortDateLabel(dateRange.end)}';
+  return '${_compactDateLabel(dateRange.start)} - ${_compactDateLabel(dateRange.end)}';
 }
 
-bool _isOlderThanOneMonth(QuizSummary quiz) {
-  return _quizDate(quiz).isBefore(
-    DateTime.now().subtract(const Duration(days: 30)),
+String _compactDateLabel(DateTime value) {
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  return '$day/$month/${value.year}';
+}
+
+bool _matchesDateRange(DateTime date, DateTimeRange? dateRange) {
+  if (dateRange == null) {
+    return true;
+  }
+
+  final start = DateTime(
+    dateRange.start.year,
+    dateRange.start.month,
+    dateRange.start.day,
   );
-}
+  final endExclusive = DateTime(
+    dateRange.end.year,
+    dateRange.end.month,
+    dateRange.end.day,
+  ).add(const Duration(days: 1));
 
-DateTime _quizDate(QuizSummary quiz) {
-  return quiz.dueAt ?? quiz.startAt ?? DateTime.now();
+  return !date.isBefore(start) && date.isBefore(endExclusive);
 }
 
 String _navigationMessage(String mode) {
