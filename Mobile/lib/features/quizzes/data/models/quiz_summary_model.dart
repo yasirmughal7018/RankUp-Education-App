@@ -95,6 +95,9 @@ String _readString(
     if (value is String && value.isNotEmpty) {
       return value;
     }
+    if (value is num) {
+      return value.toString();
+    }
   }
 
   return fallback;

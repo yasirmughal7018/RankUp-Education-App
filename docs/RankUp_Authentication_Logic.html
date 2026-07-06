@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RankUp Education — Authentication &amp; Login Logic</title>
+  <style>
+    :root {
+      --ink: #0b2545;
+      --blue: #2e74b5;
+      --muted: #53606d;
+      --border: #d9e1ea;
+      --fill: #f4f6f9;
+      --table: #f2f4f7;
+      --code-bg: #172033;
+      --code-fg: #f8fafc;
+    }
+    body {
+      margin: 0;
+      color: #17212b;
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      background: #ffffff;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      color: var(--ink);
+      font-size: 34px;
+      line-height: 1.15;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    h2 {
+      color: var(--blue);
+      margin: 30px 0 10px;
+      font-size: 23px;
+    }
+    h3 {
+      color: #1f4d78;
+      margin: 22px 0 8px;
+      font-size: 18px;
+    }
+    ul, ol { padding-left: 24px; }
+    li { margin: 5px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 22px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+    th {
+      background: var(--table);
+      text-align: left;
+      color: var(--ink);
+    }
+    .note {
+      background: var(--fill);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 12px 0 18px;
+    }
+    .note-warn {
+      background: #fff8e8;
+      border-color: #e5c26f;
+    }
+    code {
+      background: #eef3f8;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      border-radius: 8px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .meta-table td:first-child { font-weight: 600; width: 28%; }
+    .diagram {
+      background: #fafbfd;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0 20px;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    @media print {
+      body { font-size: 12pt; }
+      main { max-width: none; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>RankUp Education — Authentication &amp; Login Logic</h1>
+    <p class="subtitle">Web API, database model, JWT tokens, registration workflow, class hierarchy, and request flows</p>
+  </header>
+
+  <table class="meta-table">
+    <tr><td>Prepared for</td><td>RankUp Education workspace</td></tr>
+    <tr><td>Scope</td><td>Web API (<code>WebApi/</code>) + Flutter Mobile (<code>Mobile/</code>)</td></tr>
+    <tr><td>Auth model</td><td>JWT access token + opaque refresh token (stored hashed in PostgreSQL)</td></tr>
+    <tr><td>Registration model</td><td>Pending rows in <code>app_users</code> — no separate <code>account_requests</code> table</td></tr>
+  </table>
+
+  <h2>1. Executive Summary</h2>
+  <ul>
+    <li>All authenticated API calls use a <strong>Bearer JWT</strong> access token.</li>
+    <li>Login validates username + password against <code>app_users</code>. Only users with <code>is_active = true</code> and a non-null <code>password_hash</code> may sign in.</li>
+    <li>Registration creates an inactive <code>app_users</code> row. Admin approval activates the account, sets a password, and creates the role profile row.</li>
+    <li>Five roles are supported: <strong>SuperAdmin</strong>, <strong>SchoolAdmin</strong>, <strong>Teacher</strong>, <strong>Student</strong>, <strong>Parent</strong>.</li>
+    <li>The mobile app uses one shared login screen. Role is determined from the API response after authentication — not selected on the login form.</li>
+    <li>All API responses use the wrapper <code>ApiResponse&lt;T&gt;</code> with <code>success</code>, <code>message</code>, <code>data</code>, and <code>errors</code>.</li>
+  </ul>
+
+  <div class="note note-warn">
+    <strong>Important:</strong> Extra registration form fields (email, school name, reason, etc.) are validated by the API but <strong>not persisted</strong>. Only <code>username</code> (mobile), <code>display_name</code>, <code>role</code>, <code>requested_at</code>, <code>is_active</code>, and <code>password_hash</code> are stored on <code>app_users</code>.
+  </div>
+
+  <h2>2. Solution Architecture</h2>
+  <h3>2.1 Web API layers (Clean Architecture)</h3>
+  <table>
+    <tr><th>Layer</th><th>Project</th><th>Responsibility</th></tr>
+    <tr><td>API</td><td><code>RankUpEducation.Api</code></td><td>HTTP endpoints, JWT middleware, rate limiting, exception handling</td></tr>
+    <tr><td>Application</td><td><code>RankUpEducation.Application</code></td><td><code>AuthService</code>, business rules, permissions, mapping</td></tr>
+    <tr><td>Contracts</td><td><code>RankUpEducation.Contracts</code></td><td>Request/response DTOs shared with clients</td></tr>
+    <tr><td>Domain</td><td><code>RankUpEducation.Domain</code></td><td><code>User</code>, <code>RefreshToken</code>, role enums, business invariants</td></tr>
+    <tr><td>Infrastructure</td><td><code>RankUpEducation.Infrastructure</code></td><td>EF Core, repositories, JWT/password hashing, DB access</td></tr>
+    <tr><td>Common</td><td><code>RankUpEducation.Common</code></td><td>CORS, rate limiting, health checks, token hashing utilities</td></tr>
+  </table>
+
+  <h3>2.2 Mobile layers (Flutter Clean Architecture)</h3>
+  <table>
+    <tr><th>Layer</th><th>Path</th><th>Responsibility</th></tr>
+    <tr><td>Presentation</td><td><code>features/authentication/presentation/</code></td><td><code>LoginPage</code>, <code>AuthController</code> (Riverpod)</td></tr>
+    <tr><td>Domain</td><td><code>features/authentication/domain/</code></td><td><code>AuthRepository</code>, entities (<code>AppUser</code>, <code>AuthSession</code>)</td></tr>
+    <tr><td>Data</td><td><code>features/authentication/data/</code></td><td><code>ApiAuthRepository</code>, remote/local datasources, JSON models</td></tr>
+    <tr><td>Core</td><td><code>core/storage/token_store.dart</code></td><td>Secure persistence of access/refresh tokens</td></tr>
+  </table>
+
+  <h2>3. Database Model</h2>
+  <h3>3.1 Core table: <code>app_users</code></h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+    <tr><td><code>id</code></td><td>BIGINT</td><td>Primary key</td></tr>
+    <tr><td><code>username</code></td><td>VARCHAR(50)</td><td>Unique login identifier (mobile number for self-registration)</td></tr>
+    <tr><td><code>display_name</code></td><td>VARCHAR(50)</td><td>Full name shown in UI</td></tr>
+    <tr><td><code>role</code></td><td>TEXT</td><td>superadmin | schooladmin | teacher | student | parent</td></tr>
+    <tr><td><code>password_hash</code></td><td>TEXT NULL</td><td>PBKDF2 hash; NULL while registration is pending</td></tr>
+    <tr><td><code>is_active</code></td><td>BOOLEAN</td><td>Login gate — must be true to authenticate</td></tr>
+    <tr><td><code>requested_at</code></td><td>TIMESTAMPTZ NULL</td><td>When a self-registration request was submitted</td></tr>
+    <tr><td><code>created_date</code> / <code>modified_date</code></td><td>DATE</td><td>Audit dates</td></tr>
+  </table>
+
+  <h3>3.2 Pending registration detection</h3>
+  <pre>is_active = false AND password_hash IS NULL  →  pending registration
+is_active = true  AND password_hash IS NOT NULL  →  active account (can login after password verify)</pre>
+
+  <h3>3.3 Supporting auth tables</h3>
+  <table>
+    <tr><th>Table</th><th>Purpose</th></tr>
+    <tr><td><code>refresh_tokens</code></td><td>Stores SHA-256 hash of refresh token, expiry, revocation</td></tr>
+    <tr><td><code>device_sessions</code></td><td>Registered devices / push tokens (device registration API)</td></tr>
+    <tr><td><code>app_user_students</code></td><td>Student profile — school, campus, grade, roll number, mobile</td></tr>
+    <tr><td><code>app_user_teachers</code></td><td>Teacher profile — school, campus, teacher code, mobile</td></tr>
+    <tr><td><code>app_user_parents</code></td><td>Parent profile — CNIC, mobile</td></tr>
+  </table>
+
+  <h3>3.4 SQL scripts (run order)</h3>
+  <ol>
+    <li><code>docs/RankUpEducatoin_sql.sql</code> — core schema</li>
+    <li><code>docs/RankUpEducation_app_users_registration.sql</code> — nullable password, requested_at, profile mobile columns</li>
+  </ol>
+
+  <h2>4. Roles &amp; Permissions</h2>
+  <table>
+    <tr><th>Role</th><th>Stored in DB</th><th>JWT claim</th><th>Key permissions</th></tr>
+    <tr><td>SuperAdmin</td><td>superadmin</td><td>SuperAdmin</td><td>platform.manage, user.manage, registration.review</td></tr>
+    <tr><td>SchoolAdmin</td><td>schooladmin</td><td>SchoolAdmin</td><td>school.manage, user.manage, registration.review, quiz.manage</td></tr>
+    <tr><td>Teacher</td><td>teacher</td><td>Teacher</td><td>quiz.create, quiz.assign, attendance.mark</td></tr>
+    <tr><td>Student</td><td>student</td><td>Student</td><td>quiz.attempt, dashboard.view</td></tr>
+    <tr><td>Parent</td><td>parent</td><td>Parent</td><td>child.view, dashboard.view</td></tr>
+  </table>
+  <p>Permissions are embedded in the JWT as a comma-separated <code>permissions</code> claim via <code>AuthPermissions.ForRole()</code>.</p>
+
+  <h2>5. API Endpoints</h2>
+  <table>
+    <tr><th>Method</th><th>Route</th><th>Auth</th><th>Description</th></tr>
+    <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>Username + password → access token, refresh token, user profile</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Anonymous</td><td>Submit registration request (creates inactive app_users row)</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>SuperAdmin, SchoolAdmin</td><td>List pending registration requests</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/registrations/{userId}/approve</code></td><td>SuperAdmin, SchoolAdmin</td><td>Set password, activate user, create profile</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/registrations/{userId}/reject</code></td><td>SuperAdmin, SchoolAdmin</td><td>Delete pending registration row</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/token/refresh</code></td><td>Anonymous</td><td>Exchange refresh token for new token pair</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/logout</code></td><td>Anonymous</td><td>Revoke refresh token when provided</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/me</code></td><td>Bearer JWT</td><td>Return current user from token</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/password-reset/request</code></td><td>Anonymous</td><td>Admin-mediated reset workflow (no enumeration)</td></tr>
+  </table>
+
+  <h2>6. Registration Request Flow</h2>
+  <div class="diagram">Mobile LoginPage (account request form)
+    → AuthController.requestAccountAccess()
+    → ApiAuthRepository.requestAccountAccess()
+    → POST /api/auth/register
+    → AuthController.RegisterAsync()
+    → AuthService.RegisterAccountAsync()
+    → UserRepository.AddAsync(User.CreateRegistrationRequest(...))
+    → INSERT app_users (username=mobile, display_name, role, is_active=false, password_hash=NULL, requested_at=now())</div>
+
+  <h3>6.1 Stored vs validated-only fields</h3>
+  <table>
+    <tr><th>Form field</th><th>Stored?</th><th>Where</th></tr>
+    <tr><td>Mobile number</td><td>Yes</td><td><code>app_users.username</code></td></tr>
+    <tr><td>Full name</td><td>Yes</td><td><code>app_users.display_name</code></td></tr>
+    <tr><td>User type (Student/Parent/Teacher)</td><td>Yes</td><td><code>app_users.role</code></td></tr>
+    <tr><td>Email, school name, student ID, reason, admin target</td><td>No</td><td>Validated only — admin collects at approval</td></tr>
+  </table>
+
+  <h3>6.2 Admin approval flow</h3>
+  <div class="diagram">Admin UI / API client
+    → POST /api/auth/registrations/{id}/approve
+    → AuthService.ApproveRegistrationAsync()
+      1. Verify caller is SuperAdmin or SchoolAdmin
+      2. Verify user.IsPendingRegistration
+      3. INSERT app_user_students | teachers | parents (with mobile_number)
+      4. user.Activate(passwordHash)
+      5. SaveChanges()</div>
+
+  <h3>6.3 Approve payload by role</h3>
+  <table>
+    <tr><th>Role</th><th>Required approve fields</th></tr>
+    <tr><td>Student</td><td>password, schoolId, campusId, grade, studentRollNumber; section defaults to "A"</td></tr>
+    <tr><td>Teacher</td><td>password, schoolId, campusId, teacherCode</td></tr>
+    <tr><td>Parent</td><td>password; optional cnic</td></tr>
+  </table>
+
+  <h2>7. Login Request Flow</h2>
+  <div class="diagram">Mobile LoginPage
+    → AuthController.login(identifier, password)
+    → ApiAuthRepository.login()
+    → POST /api/auth/login  { username, password }
+    → AuthService.LoginAsync()
+      1. UserRepository.GetByUsernameAsync()
+      2. Attach profile context (student/teacher/parent/school)
+      3. user.EnsureCanLogin()  — is_active + password_hash required
+      4. PasswordHasher.Verify()
+      5. IssueRefreshToken() → INSERT refresh_tokens (hashed)
+      6. JwtTokenService.CreateAccessToken()
+    → ApiResponse&lt;LoginResponse&gt;
+    → Mobile saves tokens (TokenStore) + user (AuthLocalDataSource)</div>
+
+  <h3>7.1 Login failure cases</h3>
+  <table>
+    <tr><th>Condition</th><th>HTTP</th><th>Message</th></tr>
+    <tr><td>Unknown username</td><td>401</td><td>Invalid username or password</td></tr>
+    <tr><td>Wrong password</td><td>401</td><td>Invalid username or password</td></tr>
+    <tr><td>Pending registration (inactive / no password)</td><td>401</td><td>This account is pending admin approval</td></tr>
+    <tr><td>Inactive account</td><td>401</td><td>This account is not active</td></tr>
+    <tr><td>Missing fields</td><td>400</td><td>Validation errors array</td></tr>
+  </table>
+
+  <h2>8. Token Refresh &amp; Logout</h2>
+  <h3>8.1 Refresh</h3>
+  <div class="diagram">Client POST /api/auth/token/refresh { refreshToken }
+    → Hash token (SHA-256 hex)
+    → Lookup refresh_tokens by token_hash
+    → Verify not expired/revoked
+    → Revoke old token
+    → Issue new refresh + access JWT
+    → Return AuthTokensResponse</div>
+
+  <h3>8.2 Logout</h3>
+  <div class="diagram">Client POST /api/auth/logout { refreshToken }
+    → Revoke matching refresh_tokens row
+    → Mobile clears TokenStore + local user cache</div>
+
+  <h3>8.3 Access token lifetime</h3>
+  <p>Configured in <code>appsettings.json</code> → <code>Jwt:AccessTokenMinutes</code> (default 30 minutes). Refresh token lifetime is 30 days in <code>AuthService</code>.</p>
+
+  <h2>9. JWT Structure</h2>
+  <h3>9.1 Claims issued by JwtTokenService</h3>
+  <table>
+    <tr><th>Claim</th><th>Example</th><th>Source</th></tr>
+    <tr><td>sub / userId / NameIdentifier</td><td>42</td><td><code>app_users.id</code></td></tr>
+    <tr><td>name</td><td>03001234567</td><td><code>app_users.username</code></td></tr>
+    <tr><td>role</td><td>Student</td><td><code>UserRole</code> enum</td></tr>
+    <tr><td>permissions</td><td>dashboard.view,quiz.attempt,...</td><td><code>AuthPermissions.ForRole()</code></td></tr>
+    <tr><td>profileId</td><td>42</td><td>Student/teacher/parent profile id (same as user id for profile tables)</td></tr>
+    <tr><td>schoolId</td><td>1</td><td>From profile — int, only when applicable</td></tr>
+    <tr><td>campusId</td><td>1</td><td>From profile — int, only when applicable</td></tr>
+  </table>
+
+  <h3>9.2 Current user resolution</h3>
+  <p><code>CurrentUserService</code> reads claims from the HTTP context on each request. Protected endpoints use <code>[Authorize]</code> and optional role checks.</p>
+
+  <h2>10. Class Hierarchy</h2>
+  <h3>10.1 Web API — authentication classes</h3>
+  <pre>RankUpEducation.Api
+  └── Controllers.AuthController          → HTTP entry points
+
+RankUpEducation.Application
+  ├── Auth.IAuthService                   → service contract
+  ├── Auth.AuthService                    → login, register, approve, refresh, logout
+  ├── Auth.AuthMapping                    → User → CurrentUserResponse
+  ├── Auth.RegistrationMapping            → User → PendingRegistrationResponse
+  ├── Auth.AuthPermissions                → role → permission strings
+  └── Common.Abstractions
+        ├── IUserRepository
+        ├── ITokenService
+        ├── IPasswordHasher
+        ├── ICurrentUserService
+        └── IUnitOfWork
+
+RankUpEducation.Infrastructure
+  ├── Authentication.JwtTokenService        → ITokenService
+  ├── Authentication.PasswordHasher       → IPasswordHasher (PBKDF2)
+  ├── Authentication.CurrentUserService   → ICurrentUserService
+  └── Persistence.Repositories.UserRepository
+
+RankUpEducation.Domain.Auth
+  ├── User                                → aggregate root for auth
+  ├── RefreshToken                        → refresh token entity
+  ├── DeviceSession                       → device registration
+  └── UserRole                            → enum (5 roles)
+
+RankUpEducation.Contracts.Auth
+  ├── LoginRequest / LoginResponse
+  ├── RegisterAccountRequest / RegisterAccountResponse
+  ├── ApproveRegistrationRequest
+  ├── PendingRegistrationResponse
+  ├── CurrentUserResponse
+  ├── AuthTokensResponse
+  └── RefreshTokenRequest</pre>
+
+  <h3>10.2 Domain — User key methods</h3>
+  <table>
+    <tr><th>Method</th><th>Purpose</th></tr>
+    <tr><td><code>CreateRegistrationRequest()</code></td><td>Factory for pending registration row</td></tr>
+    <tr><td><code>EnsureCanLogin()</code></td><td>Throws if inactive or password missing</td></tr>
+    <tr><td><code>Activate(passwordHash)</code></td><td>Sets password, is_active=true</td></tr>
+    <tr><td><code>AttachProfileContext()</code></td><td>Loads school/campus/profile ids after repository join</td></tr>
+    <tr><td><code>AddRefreshToken()</code></td><td>Links new refresh token to user</td></tr>
+  </table>
+
+  <h3>10.3 Mobile — authentication classes</h3>
+  <pre>presentation/
+  ├── pages/login_page.dart               → UI + account request bottom sheet
+  ├── controllers/auth_controller.dart    → Riverpod StateNotifier
+  └── providers/auth_providers.dart       → DI wiring
+
+domain/
+  ├── repositories/auth_repository.dart   → abstract contract
+  └── entities/
+        ├── app_user.dart
+        ├── auth_session.dart
+        └── user_role.dart
+
+data/
+  ├── repositories/api_auth_repository.dart → real API implementation
+  ├── repositories/mock_auth_repository.dart
+  ├── datasources/auth_remote_datasource.dart
+  ├── datasources/auth_local_datasource.dart
+  └── models/
+        ├── app_user_model.dart
+        ├── auth_session_model.dart
+        └── auth_tokens_model.dart</pre>
+
+  <h2>11. Sequence Diagrams</h2>
+  <h3>11.1 Login (happy path)</h3>
+  <div class="diagram">Mobile          API              AuthService       UserRepository     DB
+  |-- POST login -->|                  |                    |                |
+  |                 |-- LoginAsync --->|                    |                |
+  |                 |                  |-- GetByUsername -->|                |
+  |                 |                  |                    |-- SELECT ----->|
+  |                 |                  |<-- User + profile -|                |
+  |                 |                  |-- Verify password  |                |
+  |                 |                  |-- IssueRefreshToken|                |
+  |                 |                  |-- CreateAccessToken|                |
+  |                 |<-- LoginResponse-|                    |                |
+  |<-- 200 OK ------|                  |                    |                |</div>
+
+  <h3>11.2 Registration + approval</h3>
+  <div class="diagram">User (mobile)     API           Admin           DB
+  |-- register -->|             |               |
+  |               |-- INSERT pending app_users ->|
+  |<-- 200 OK ----|             |               |
+  |                             |-- list pending|
+  |                             |-- approve ---->|
+  |                             |               | INSERT profile
+  |                             |               | UPDATE app_users active
+  |                             |               |
+  User can now login with admin-set password</div>
+
+  <h2>12. Security &amp; Rate Limiting</h2>
+  <ul>
+    <li>Passwords hashed with <strong>PBKDF2-SHA256</strong> (100,000 iterations) via <code>PasswordHasher</code>.</li>
+    <li>Refresh tokens stored as <strong>SHA-256 hex</strong> only — raw token returned once to client.</li>
+    <li>Login endpoint rate-limited: <code>LoginPermitLimit = 8</code> per 60 seconds.</li>
+    <li>Password reset always returns success message to prevent username enumeration.</li>
+    <li>JWT signing key must be ≥ 32 characters — configure in <code>Jwt:SigningKey</code>.</li>
+    <li>CORS policy <code>RankUpEducation</code> applied for configured origins.</li>
+  </ul>
+
+  <h2>13. API Response Format</h2>
+  <pre>{
+  "success": true,
+  "message": "Login successful.",
+  "data": {
+    "accessToken": "eyJ...",
+    "refreshToken": "base64...",
+    "user": {
+      "id": 42,
+      "username": "03001234567",
+      "fullName": "Ali Khan",
+      "name": "Ali Khan",
+      "role": "Student",
+      "profileId": 42,
+      "schoolId": 1,
+      "campusId": 1,
+      "permissions": ["dashboard.view", "quiz.attempt"]
+    }
+  },
+  "errors": []
+}</pre>
+
+  <h2>14. Configuration Reference</h2>
+  <table>
+    <tr><th>Setting</th><th>Location</th><th>Default</th></tr>
+    <tr><td>JWT issuer / audience / signing key</td><td><code>appsettings.json → Jwt</code></td><td>RankUpEducation / 30 min access</td></tr>
+    <tr><td>DB connection</td><td><code>ConnectionStrings:DefaultConnection</code></td><td>PostgreSQL</td></tr>
+    <tr><td>Auto schema for registration columns</td><td><code>Database:EnsureApiSupportTables</code></td><td>true</td></tr>
+    <tr><td>Mobile API base URL</td><td>Flutter env / config</td><td>See <code>Mobile/docs/API_INTEGRATION.md</code></td></tr>
+    <tr><td>Mock auth</td><td><code>USE_MOCKS=true</code></td><td>Uses MockAuthRepository when enabled</td></tr>
+  </table>
+
+  <h2>15. Related Source Files</h2>
+  <table>
+    <tr><th>Area</th><th>Primary files</th></tr>
+    <tr><td>API controller</td><td><code>WebApi/src/RankUpEducation.Api/Controllers/AuthController.cs</code></td></tr>
+    <tr><td>Business logic</td><td><code>WebApi/src/RankUpEducation.Application/Auth/AuthService.cs</code></td></tr>
+    <tr><td>JWT</td><td><code>WebApi/src/RankUpEducation.Infrastructure/Authentication/JwtTokenService.cs</code></td></tr>
+    <tr><td>User persistence</td><td><code>WebApi/src/RankUpEducation.Infrastructure/Persistence/Repositories/UserRepository.cs</code></td></tr>
+    <tr><td>Registration SQL</td><td><code>docs/RankUpEducation_app_users_registration.sql</code></td></tr>
+    <tr><td>Mobile login UI</td><td><code>Mobile/lib/features/authentication/presentation/pages/login_page.dart</code></td></tr>
+    <tr><td>Mobile API client</td><td><code>Mobile/lib/features/authentication/data/datasources/auth_remote_datasource.dart</code></td></tr>
+  </table>
+
+  <div class="note">
+    <strong>Document version:</strong> Generated to reflect the current implementation using <code>app_users</code> registration (no JSONB column, no <code>account_requests</code> table).
+  </div>
+</main>
+</body>
+</html>

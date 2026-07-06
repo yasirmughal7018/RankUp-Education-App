@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="RankUpEducation.Common/RankUpEducation.Common.csproj" Id="49b6d642-79cd-4fa5-b070-ac98064a3554" />
+    <Project Path="src/RankUpEducation.Api/RankUpEducation.Api.csproj" />
+    <Project Path="src/RankUpEducation.Application/RankUpEducation.Application.csproj" />
+    <Project Path="src/RankUpEducation.Contracts/RankUpEducation.Contracts.csproj" />
+    <Project Path="src/RankUpEducation.Domain/RankUpEducation.Domain.csproj" />
+    <Project Path="src/RankUpEducation.Infrastructure/RankUpEducation.Infrastructure.csproj" />
+    <Project Path="src/RankUpEducation.Integration/RankUpEducation.Integration.csproj" />
+  </Folder>
+</Solution>

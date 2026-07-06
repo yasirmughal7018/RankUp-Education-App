@@ -43,6 +43,9 @@ String _readString(Map<String, dynamic> json, List<String> keys) {
     if (value is String && value.isNotEmpty) {
       return value;
     }
+    if (value is num) {
+      return value.toString();
+    }
   }
 
   return '';

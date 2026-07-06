@@ -41,7 +41,7 @@ class AuthRemoteDataSource {
     required String reasonMessage,
   }) {
     return _requestVoid(
-      '/account-requests',
+      '/auth/register',
       data: {
         'fullName': fullName,
         'mobileNumber': mobileNumber,

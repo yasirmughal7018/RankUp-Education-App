@@ -1,0 +1,56 @@
+@RankUpEducation.Api_HostAddress = http://localhost:5255
+
+GET {{RankUpEducation.Api_HostAddress}}/api/health
+Accept: application/json
+
+###
+
+# Login (Student, Parent, Teacher, SchoolAdmin, SuperAdmin)
+POST {{RankUpEducation.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "student-demo",
+  "password": "password"
+}
+
+###
+
+@accessToken = {{login.response.body.data.accessToken}}
+@refreshToken = {{login.response.body.data.refreshToken}}
+
+# Current user
+GET {{RankUpEducation.Api_HostAddress}}/api/auth/me
+Authorization: Bearer {{accessToken}}
+
+###
+
+# Refresh token
+POST {{RankUpEducation.Api_HostAddress}}/api/auth/token/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+###
+
+# Password reset request
+POST {{RankUpEducation.Api_HostAddress}}/api/auth/password-reset/request
+Content-Type: application/json
+
+{
+  "username": "student-demo"
+}
+
+###
+
+# Logout
+POST {{RankUpEducation.Api_HostAddress}}/api/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+###

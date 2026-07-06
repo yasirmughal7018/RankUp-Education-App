@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\RankUpEducation.Common\RankUpEducation.Common.csproj" />
+    <ProjectReference Include="..\RankUpEducation.Application\RankUpEducation.Application.csproj" />
+    <ProjectReference Include="..\RankUpEducation.Contracts\RankUpEducation.Contracts.csproj" />
+    <ProjectReference Include="..\RankUpEducation.Infrastructure\RankUpEducation.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
