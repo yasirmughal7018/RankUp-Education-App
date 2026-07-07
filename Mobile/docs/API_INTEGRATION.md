@@ -99,3 +99,62 @@ Account access request:
 - Do not use CNIC or B-Form as passwords.
 - Never log tokens, CNIC, B-Form, phone numbers, or private child data.
 - Shared reports should use secure or expiring links.
+
+## Quiz Question Endpoints (Parent / Teacher)
+
+Question CRUD lives under `/api/questions`, not under `/api/quizzes`.
+
+| Action | Method | Route |
+|--------|--------|-------|
+| List quiz questions | `GET` | `/api/questions/quiz/{quizId}` |
+| Add question to quiz | `POST` | `/api/questions/quiz/{quizId}` |
+| Update quiz question | `PUT` | `/api/questions/quiz/{quizId}/{questionId}` |
+| Remove from quiz | `DELETE` | `/api/questions/quiz/{quizId}/{questionId}` |
+
+Add/update request body:
+
+```json
+{
+  "questionText": "Which fraction is equivalent to 1/2?",
+  "questionType": "Single Choice",
+  "marks": 2,
+  "estimatedTimeSeconds": 45,
+  "hint": "Reduce each option.",
+  "explanation": "2/4 simplifies to 1/2.",
+  "options": [
+    { "optionText": "2/4", "isCorrect": true },
+    { "optionText": "1/3", "isCorrect": false }
+  ]
+}
+```
+
+List response data:
+
+```json
+{
+  "quizId": 1,
+  "items": [
+    {
+      "questionId": 10,
+      "questionText": "Which fraction is equivalent to 1/2?",
+      "questionType": "Single Choice",
+      "marks": 2,
+      "displayOrder": 1,
+      "hint": "Reduce each option.",
+      "options": [
+        { "optionId": 100, "optionText": "2/4", "isCorrect": true }
+      ]
+    }
+  ]
+}
+```
+
+Add/update/delete return the updated `ManageQuizResponse` (same shape as `GET /api/quizzes/{quizId}/manage`).
+
+## Student Quiz Attempt Endpoints
+
+Students still use `/api/quizzes` for attempts. Questions for an attempt are returned when starting:
+
+- `POST /api/quizzes/{quizId}/attempts` → includes `questions[]` in the start response
+- `POST /api/quizzes/{quizId}/attempts/{attemptId}/submit`
+- `GET /api/quizzes/{quizId}/attempts/{attemptId}/result`
