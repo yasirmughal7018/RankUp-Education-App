@@ -2,12 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
+import 'package:rankup_education/features/student_dashboard/domain/repositories/student_dashboard_repository.dart';
+import 'package:rankup_education/features/student_dashboard/domain/usecases/get_student_dashboard_usecase.dart';
+import 'package:rankup_education/features/student_dashboard/presentation/controllers/student_dashboard_controller.dart';
 import 'package:rankup_education/features/student_dashboard/presentation/pages/student_dashboard_page.dart';
+import 'package:rankup_education/features/student_dashboard/presentation/providers/student_dashboard_provider.dart';
 
 void main() {
   testWidgets('student dashboard renders priority sections', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          studentDashboardRepositoryProvider.overrideWithValue(
+            _FakeStudentDashboardRepository(),
+          ),
+        ],
         child: MaterialApp.router(
           routerConfig: GoRouter(
             initialLocation: '/',
@@ -78,4 +88,11 @@ void main() {
     );
     expect(find.text('Subject Performance'), findsOneWidget);
   });
+}
+
+class _FakeStudentDashboardRepository implements StudentDashboardRepository {
+  @override
+  Future<StudentDashboardModel> getDashboard() async {
+    return StudentDashboardModel.mock();
+  }
 }

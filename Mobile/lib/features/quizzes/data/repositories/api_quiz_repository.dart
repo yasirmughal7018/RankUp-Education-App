@@ -1,4 +1,5 @@
 import 'package:rankup_education/features/quizzes/data/datasources/quiz_remote_datasource.dart';
+import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
@@ -21,7 +22,41 @@ class ApiQuizRepository implements QuizRepository {
   }
 
   @override
-  Future<void> updateQuiz(QuizSummary quiz) async {
-    // Real API persistence will be wired when the backend endpoint is ready.
+  Future<QuizDetail> getQuizDetail(String quizId) {
+    return _remoteDataSource.getQuizDetail(quizId);
+  }
+
+  @override
+  Future<QuizAttemptSession> startAttempt({
+    required String quizId,
+    required String deviceId,
+  }) {
+    return _remoteDataSource.startAttempt(quizId: quizId, deviceId: deviceId);
+  }
+
+  @override
+  Future<QuizAttemptResult> submitAttempt({
+    required String quizId,
+    required String attemptId,
+    required List<QuizAnswerSubmission> answers,
+    required int timeSpentSeconds,
+  }) {
+    return _remoteDataSource.submitAttempt(
+      quizId: quizId,
+      attemptId: attemptId,
+      answers: answers,
+      timeSpentSeconds: timeSpentSeconds,
+    );
+  }
+
+  @override
+  Future<QuizAttemptResult> getAttemptResult({
+    required String quizId,
+    required String attemptId,
+  }) {
+    return _remoteDataSource.getAttemptResult(
+      quizId: quizId,
+      attemptId: attemptId,
+    );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
@@ -8,42 +9,69 @@ class QuizzesState {
     this.allQuizzes = const [],
     this.quizzes = const [],
     this.isLoading = false,
+    this.isDetailLoading = false,
+    this.isAttemptLoading = false,
     this.errorMessage,
+    this.actionError,
     this.search = '',
     this.quizType = '',
     this.status = '',
     this.dateFilter = '',
+    this.selectedDetail,
+    this.activeAttempt,
+    this.attemptResult,
   });
 
   final List<QuizSummary> allQuizzes;
   final List<QuizSummary> quizzes;
   final bool isLoading;
+  final bool isDetailLoading;
+  final bool isAttemptLoading;
   final String? errorMessage;
+  final String? actionError;
   final String search;
   final String quizType;
   final String status;
   final String dateFilter;
+  final QuizDetail? selectedDetail;
+  final QuizAttemptSession? activeAttempt;
+  final QuizAttemptResult? attemptResult;
 
   QuizzesState copyWith({
     List<QuizSummary>? allQuizzes,
     List<QuizSummary>? quizzes,
     bool? isLoading,
+    bool? isDetailLoading,
+    bool? isAttemptLoading,
     String? errorMessage,
+    String? actionError,
     String? search,
     String? quizType,
     String? status,
     String? dateFilter,
+    QuizDetail? selectedDetail,
+    QuizAttemptSession? activeAttempt,
+    QuizAttemptResult? attemptResult,
     bool clearError = false,
+    bool clearActionError = false,
+    bool clearAttempt = false,
+    bool clearResult = false,
   }) {
     return QuizzesState(
       allQuizzes: allQuizzes ?? this.allQuizzes,
       quizzes: quizzes ?? this.quizzes,
       isLoading: isLoading ?? this.isLoading,
+      isDetailLoading: isDetailLoading ?? this.isDetailLoading,
+      isAttemptLoading: isAttemptLoading ?? this.isAttemptLoading,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+      actionError: clearActionError ? null : actionError ?? this.actionError,
       search: search ?? this.search,
       quizType: quizType ?? this.quizType,
       status: status ?? this.status,
       dateFilter: dateFilter ?? this.dateFilter,
+      selectedDetail: selectedDetail ?? this.selectedDetail,
+      activeAttempt: clearAttempt ? null : activeAttempt ?? this.activeAttempt,
+      attemptResult: clearResult ? null : attemptResult ?? this.attemptResult,
     );
   }
 }
@@ -69,7 +97,7 @@ class QuizzesController extends StateNotifier<QuizzesState> {
     );
 
     try {
-      final quizzes = await _repository.getQuizzes();
+      final quizzes = await _repository.getQuizzes(search: state.search);
       state = state.copyWith(
         allQuizzes: quizzes,
         quizzes: _applyLocalFilters(
@@ -86,24 +114,113 @@ class QuizzesController extends StateNotifier<QuizzesState> {
     }
   }
 
-  Future<void> updateQuiz(QuizSummary updatedQuiz) async {
-    final allQuizzes = [
-      for (final quiz in state.allQuizzes)
-        if (quiz.id == updatedQuiz.id) updatedQuiz else quiz,
-    ];
-
+  Future<QuizDetail?> loadDetail(String quizId) async {
     state = state.copyWith(
-      allQuizzes: allQuizzes,
-      quizzes: _applyLocalFilters(
-        allQuizzes,
+      isDetailLoading: true,
+      clearActionError: true,
+      clearAttempt: true,
+      clearResult: true,
+    );
+
+    try {
+      final detail = await _repository.getQuizDetail(quizId);
+      state = state.copyWith(selectedDetail: detail, isDetailLoading: false);
+      return detail;
+    } on Exception catch (error) {
+      state = state.copyWith(
+        isDetailLoading: false,
+        actionError: error.toString(),
+      );
+      return null;
+    }
+  }
+
+  Future<QuizAttemptSession?> startAttempt({
+    required String quizId,
+    required String deviceId,
+  }) async {
+    state = state.copyWith(isAttemptLoading: true, clearActionError: true);
+
+    try {
+      final attempt = await _repository.startAttempt(
+        quizId: quizId,
+        deviceId: deviceId,
+      );
+      state = state.copyWith(
+        activeAttempt: attempt,
+        isAttemptLoading: false,
+        clearResult: true,
+      );
+      return attempt;
+    } on Exception catch (error) {
+      state = state.copyWith(
+        isAttemptLoading: false,
+        actionError: error.toString(),
+      );
+      return null;
+    }
+  }
+
+  Future<QuizAttemptResult?> submitAttempt({
+    required String quizId,
+    required String attemptId,
+    required List<QuizAnswerSubmission> answers,
+    required int timeSpentSeconds,
+  }) async {
+    state = state.copyWith(isAttemptLoading: true, clearActionError: true);
+
+    try {
+      final result = await _repository.submitAttempt(
+        quizId: quizId,
+        attemptId: attemptId,
+        answers: answers,
+        timeSpentSeconds: timeSpentSeconds,
+      );
+      state = state.copyWith(
+        attemptResult: result,
+        isAttemptLoading: false,
+        clearAttempt: true,
+      );
+      await load(
         search: state.search,
         quizType: state.quizType,
         status: state.status,
         dateFilter: state.dateFilter,
-      ),
-    );
+      );
+      return result;
+    } on Exception catch (error) {
+      state = state.copyWith(
+        isAttemptLoading: false,
+        actionError: error.toString(),
+      );
+      return null;
+    }
+  }
 
-    await _repository.updateQuiz(updatedQuiz);
+  Future<QuizAttemptResult?> loadAttemptResult({
+    required String quizId,
+    required String attemptId,
+  }) async {
+    state = state.copyWith(isDetailLoading: true, clearActionError: true);
+
+    try {
+      final result = await _repository.getAttemptResult(
+        quizId: quizId,
+        attemptId: attemptId,
+      );
+      state = state.copyWith(attemptResult: result, isDetailLoading: false);
+      return result;
+    } on Exception catch (error) {
+      state = state.copyWith(
+        isDetailLoading: false,
+        actionError: error.toString(),
+      );
+      return null;
+    }
+  }
+
+  void clearAttemptState() {
+    state = state.copyWith(clearAttempt: true, clearResult: true);
   }
 }
 

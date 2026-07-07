@@ -23,7 +23,7 @@ class AppEnvironment {
       name: name,
       apiBaseUrl: const String.fromEnvironment(
         'API_BASE_URL',
-        defaultValue: 'https://api.rankupeducation.local/api',
+        defaultValue: 'http://10.0.2.2:5255/api',
       ),
       signalRUrl: const String.fromEnvironment(
         'SIGNALR_URL',

@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
-import 'package:rankup_education/features/quizzes/data/local/quiz_local_memory.dart';
+import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
+import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 import 'package:rankup_education/features/quizzes/presentation/providers/quiz_providers.dart';
@@ -22,9 +23,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   final _searchController = TextEditingController();
   final Set<int> _answeredQuestions = {};
   final Set<int> _markedQuestions = {};
-  final Map<int, Set<String>> _selectedOptionAnswers = {};
+  final Map<int, Set<String>> _selectedOptionIds = {};
   final Map<int, String> _textAnswers = {};
   Timer? _attemptTimer;
+  DateTime? _attemptStartedAt;
 
   _QuizView _view = _QuizView.list;
   _QuizView _reviewReturnView = _QuizView.details;
@@ -98,18 +100,22 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
           ),
         _QuizView.details => _QuizDetailsView(
             quiz: _selectedQuiz!,
-            onStart: _startAttempt,
-            onReview: () => setState(() {
-              _reviewReturnView = _QuizView.details;
-              _view = _QuizView.review;
-            }),
+            isLoading: ref.watch(quizzesControllerProvider).isDetailLoading,
+            onStart: () {
+              unawaited(_startAttempt());
+            },
+            onReview: () {
+              unawaited(_openReview());
+            },
             onCancel: () => setState(() => _view = _QuizView.list),
           ),
         _QuizView.attempt => _QuizAttemptView(
             quiz: _selectedQuiz!,
             questionIndex: _questionIndex,
+            questions: ref.watch(quizzesControllerProvider).activeAttempt?.questions ??
+                const [],
             answeredQuestions: _answeredQuestions,
-            selectedOptionAnswers: _selectedOptionAnswers,
+            selectedOptionIds: _selectedOptionIds,
             markedQuestions: _markedQuestions,
             saveStatus: _saveStatus,
             remainingTime: _remainingTime,
@@ -134,8 +140,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
           ),
         _QuizView.review => _QuizReviewView(
             quiz: _selectedQuiz!,
-            selectedOptionAnswers: _selectedOptionAnswers,
-            textAnswers: _textAnswers,
+            result: ref.watch(quizzesControllerProvider).attemptResult,
             onBackToList: () => setState(() => _view = _reviewReturnView),
           ),
         _QuizView.history => _AttemptHistoryView(
@@ -163,6 +168,30 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     };
   }
 
+  Future<void> _openReview() async {
+    final quiz = _selectedQuiz;
+    if (quiz == null) {
+      return;
+    }
+
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    if (attempt != null) {
+      await ref.read(quizzesControllerProvider.notifier).loadAttemptResult(
+            quizId: quiz.id,
+            attemptId: attempt.attemptId,
+          );
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _reviewReturnView = _QuizView.details;
+      _view = _QuizView.review;
+    });
+  }
+
   Future<void> _load() {
     return ref.read(quizzesControllerProvider.notifier).load(
           search: _searchController.text.trim(),
@@ -182,16 +211,31 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     _load();
   }
 
-  void _openDetails(QuizSummary quiz) {
+  Future<void> _openDetails(QuizSummary quiz) async {
     _stopAttemptTimer();
+    ref.read(quizzesControllerProvider.notifier).clearAttemptState();
+
+    final detail =
+        await ref.read(quizzesControllerProvider.notifier).loadDetail(quiz.id);
+    if (!mounted) {
+      return;
+    }
+
+    if (detail == null) {
+      final message = ref.read(quizzesControllerProvider).actionError ??
+          'Could not load quiz details.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
     setState(() {
-      _selectedQuiz = quiz;
+      _selectedQuiz = detail;
       _reviewReturnView = _QuizView.details;
       _view = _QuizView.details;
     });
   }
 
-  void _startAttempt() {
+  Future<void> _startAttempt() async {
     final selectedQuiz = _selectedQuiz;
     if (selectedQuiz == null ||
         studentQuizStatus(selectedQuiz) == 'Expired' ||
@@ -200,16 +244,31 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
       return;
     }
 
-    final timeLimitMinutes = selectedQuiz.timeLimitMinutes;
+    final attempt = await ref.read(quizzesControllerProvider.notifier).startAttempt(
+          quizId: selectedQuiz.id,
+          deviceId: 'rankup-mobile',
+        );
+    if (!mounted) {
+      return;
+    }
+    if (attempt == null) {
+      final message = ref.read(quizzesControllerProvider).actionError ??
+          'Could not start the quiz attempt.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
+    final timeLimitMinutes = attempt.timeLimitMinutes ?? selectedQuiz.timeLimitMinutes;
     _stopAttemptTimer();
 
     setState(() {
       _questionIndex = 0;
       _answeredQuestions.clear();
-      _selectedOptionAnswers.clear();
+      _selectedOptionIds.clear();
       _textAnswers.clear();
       _markedQuestions.clear();
-      _saveStatus = 'Answer autosaved just now';
+      _attemptStartedAt = attempt.startedAt;
+      _saveStatus = 'Attempt started';
       _remainingTime =
           timeLimitMinutes == null ? null : Duration(minutes: timeLimitMinutes);
       _view = _QuizView.attempt;
@@ -238,27 +297,45 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
 
   Future<void> _submitAttempt({bool autoSubmitted = false}) async {
     final quiz = _selectedQuiz;
-    if (quiz == null) {
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    if (quiz == null || attempt == null) {
       return;
     }
 
-    final submittedQuiz = quiz.copyWith(
-      status: QuizStatus.completed,
-      resultStatus: autoSubmitted ? 'AI Review' : 'Under Teacher Review',
-      completedAt: DateTime.now(),
-      reviewAvailable: true,
-    );
-
     _stopAttemptTimer();
-    await ref
-        .read(quizzesControllerProvider.notifier)
-        .updateQuiz(submittedQuiz);
+
+    final answers = <QuizAnswerSubmission>[
+      for (var index = 0; index < attempt.questions.length; index++)
+        _buildAnswerSubmission(attempt.questions[index], index),
+    ];
+    final startedAt = _attemptStartedAt ?? attempt.startedAt;
+    final timeSpentSeconds = DateTime.now().difference(startedAt).inSeconds;
+
+    final result =
+        await ref.read(quizzesControllerProvider.notifier).submitAttempt(
+              quizId: quiz.id,
+              attemptId: attempt.attemptId,
+              answers: answers,
+              timeSpentSeconds: timeSpentSeconds,
+            );
     if (!mounted) {
+      return;
+    }
+    if (result == null) {
+      final message = ref.read(quizzesControllerProvider).actionError ??
+          'Could not submit the quiz attempt.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
     setState(() {
-      _selectedQuiz = submittedQuiz;
+      _selectedQuiz = quiz.copyWith(
+        status: QuizStatus.completed,
+        resultStatus: result.resultStatus,
+        resultPercent: result.percentage,
+        completedAt: DateTime.now(),
+        reviewAvailable: result.reviewAvailable,
+      );
       _saveStatus = autoSubmitted
           ? 'Time ended. Quiz submitted automatically.'
           : 'Quiz submitted';
@@ -266,28 +343,42 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     });
   }
 
+  QuizAnswerSubmission _buildAnswerSubmission(
+    QuizQuestion question,
+    int index,
+  ) {
+    final selectedIds = _selectedOptionIds[index] ?? const <String>{};
+    final textAnswer = _textAnswers[index];
+
+    return QuizAnswerSubmission(
+      questionId: question.id,
+      selectedOptionId: selectedIds.isEmpty ? null : selectedIds.first,
+      submittedText: textAnswer,
+    );
+  }
+
   void _stopAttemptTimer() {
     _attemptTimer?.cancel();
     _attemptTimer = null;
   }
 
-  void _answerOptionQuestion(String answer, int questionTypeId) {
+  void _answerOptionQuestion(String optionId, int questionTypeId) {
     setState(() {
-      final selected = _selectedOptionAnswers.putIfAbsent(
+      final selected = _selectedOptionIds.putIfAbsent(
         _questionIndex,
         () => <String>{},
       );
 
       if (questionTypeId == 41) {
-        if (selected.contains(answer)) {
-          selected.remove(answer);
+        if (selected.contains(optionId)) {
+          selected.remove(optionId);
         } else {
-          selected.add(answer);
+          selected.add(optionId);
         }
       } else {
         selected
           ..clear()
-          ..add(answer);
+          ..add(optionId);
       }
 
       if (selected.isEmpty) {
@@ -296,7 +387,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _answeredQuestions.add(_questionIndex);
       }
 
-      _saveStatus = 'Answer autosaved just now';
+      _saveStatus = 'Answer saved locally';
     });
   }
 
@@ -998,18 +1089,24 @@ class _QuizActionButton extends StatelessWidget {
 class _QuizDetailsView extends StatelessWidget {
   const _QuizDetailsView({
     required this.quiz,
+    required this.isLoading,
     required this.onStart,
     required this.onReview,
     required this.onCancel,
   });
 
   final QuizSummary quiz;
+  final bool isLoading;
   final VoidCallback onStart;
   final VoidCallback onReview;
   final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final studentStatus = studentQuizStatus(quiz);
     final canStart = studentStatus != 'Completed' &&
         studentStatus != 'Expired' &&
@@ -1157,8 +1254,9 @@ class _QuizAttemptView extends StatelessWidget {
   const _QuizAttemptView({
     required this.quiz,
     required this.questionIndex,
+    required this.questions,
     required this.answeredQuestions,
-    required this.selectedOptionAnswers,
+    required this.selectedOptionIds,
     required this.markedQuestions,
     required this.saveStatus,
     required this.remainingTime,
@@ -1173,12 +1271,13 @@ class _QuizAttemptView extends StatelessWidget {
 
   final QuizSummary quiz;
   final int questionIndex;
+  final List<QuizQuestion> questions;
   final Set<int> answeredQuestions;
-  final Map<int, Set<String>> selectedOptionAnswers;
+  final Map<int, Set<String>> selectedOptionIds;
   final Set<int> markedQuestions;
   final String saveStatus;
   final Duration? remainingTime;
-  final void Function(String answer, int questionTypeId) onOptionSelected;
+  final void Function(String optionId, int questionTypeId) onOptionSelected;
   final ValueChanged<String> onTextAnswerChanged;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
@@ -1188,8 +1287,12 @@ class _QuizAttemptView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final question = _sampleQuestion(quiz, questionIndex);
-    final progress = (questionIndex + 1) / quiz.questionCount;
+    if (questions.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final question = questions[questionIndex.clamp(0, questions.length - 1)];
+    final progress = (questionIndex + 1) / questions.length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -1223,7 +1326,7 @@ class _QuizAttemptView extends StatelessWidget {
                 const SizedBox(height: 10),
                 LinearProgressIndicator(value: progress),
                 const SizedBox(height: 8),
-                Text('Question ${questionIndex + 1} of ${quiz.questionCount}'),
+                Text('Question ${questionIndex + 1} of ${questions.length}'),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -1236,7 +1339,7 @@ class _QuizAttemptView extends StatelessWidget {
                     _InfoChip(
                       icon: Icons.radio_button_unchecked,
                       label:
-                          '${quiz.questionCount - answeredQuestions.length} unanswered',
+                          '${questions.length - answeredQuestions.length} unanswered',
                     ),
                     _InfoChip(
                       icon: Icons.flag_outlined,
@@ -1265,7 +1368,7 @@ class _QuizAttemptView extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  question.prompt,
+                  'Q${questionIndex + 1}. ${question.text}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
@@ -1290,20 +1393,20 @@ class _QuizAttemptView extends StatelessWidget {
                 else
                   for (final option in question.options) ...[
                     _AnswerOption(
-                      label: option,
-                      selected: selectedOptionAnswers[questionIndex]?.contains(
-                            option,
+                      label: option.text,
+                      selected: selectedOptionIds[questionIndex]?.contains(
+                            option.id,
                           ) ??
                           false,
                       multipleSelection: question.questionTypeId == 41,
                       onTap: () => onOptionSelected(
-                        option,
+                        option.id,
                         question.questionTypeId,
                       ),
                     ),
                     const SizedBox(height: 8),
                   ],
-                if (question.hint.isNotEmpty && question.options.isEmpty) ...[
+                if ((question.hint ?? '').isNotEmpty && question.options.isEmpty) ...[
                   const SizedBox(height: 10),
                   _InfoChip(
                     icon: Icons.lightbulb_outline,
@@ -1324,7 +1427,7 @@ class _QuizAttemptView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _QuestionNavigator(
-          totalQuestions: quiz.questionCount,
+          totalQuestions: questions.length,
           currentIndex: questionIndex,
           answeredQuestions: answeredQuestions,
           markedQuestions: markedQuestions,
@@ -1357,14 +1460,14 @@ class _QuizAttemptView extends StatelessWidget {
             Expanded(
               child: FilledButton.icon(
                 onPressed:
-                    questionIndex == quiz.questionCount - 1 ? onSubmit : onNext,
+                    questionIndex == questions.length - 1 ? onSubmit : onNext,
                 icon: Icon(
-                  questionIndex == quiz.questionCount - 1
+                  questionIndex == questions.length - 1
                       ? Icons.send_outlined
                       : Icons.chevron_right,
                 ),
                 label: Text(
-                  questionIndex == quiz.questionCount - 1 ? 'Submit' : 'Next',
+                  questionIndex == questions.length - 1 ? 'Submit' : 'Next',
                 ),
               ),
             ),
@@ -1526,19 +1629,17 @@ class _SubmissionConfirmationView extends StatelessWidget {
 class _QuizReviewView extends StatelessWidget {
   const _QuizReviewView({
     required this.quiz,
-    required this.selectedOptionAnswers,
-    required this.textAnswers,
+    required this.result,
     required this.onBackToList,
   });
 
   final QuizSummary quiz;
-  final Map<int, Set<String>> selectedOptionAnswers;
-  final Map<int, String> textAnswers;
+  final QuizAttemptResult? result;
   final VoidCallback onBackToList;
 
   @override
   Widget build(BuildContext context) {
-    final reviewComplete = _isReviewComplete(quiz);
+    final reviewComplete = result != null && result!.reviewAvailable;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -1563,28 +1664,30 @@ class _QuizReviewView extends StatelessWidget {
                       ? 'Reviewed answers, explanations, and feedback are available for this quiz.'
                       : 'Your attempt has been submitted. Answers and feedback will appear after AI and teacher review are completed.',
                 ),
+                if (result != null) ...[
+                  const SizedBox(height: 12),
+                  _DetailRow(
+                    label: 'Score',
+                    value: '${result!.percentage}% (${result!.obtainedMarks}/${result!.totalMarks})',
+                  ),
+                  _DetailRow(label: 'Status', value: result!.resultStatus),
+                ],
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
-        if (!reviewComplete) ...[
-          _ReviewFeedbackSection(quiz: quiz),
-          const SizedBox(height: 12),
-        ] else ...[
-          _ReviewFeedbackSection(quiz: quiz),
-          const SizedBox(height: 12),
-        ],
-        for (var index = 0; index < quiz.questionCount; index++) ...[
-          _ReviewQuestionCard(
-            index: index,
-            quiz: quiz,
-            selectedAnswers: selectedOptionAnswers[index] ?? const <String>{},
-            textAnswer: textAnswers[index] ?? '',
-            reviewComplete: reviewComplete,
-          ),
-          const SizedBox(height: 12),
-        ],
+        _ReviewFeedbackSection(quiz: quiz),
+        const SizedBox(height: 12),
+        if (result != null)
+          for (var index = 0; index < result!.questions.length; index++) ...[
+            _ReviewQuestionCard(
+              index: index,
+              question: result!.questions[index],
+              reviewComplete: reviewComplete,
+            ),
+            const SizedBox(height: 12),
+          ],
         FilledButton.icon(
           onPressed: onBackToList,
           icon: const Icon(Icons.list_alt_outlined),
@@ -1598,25 +1701,18 @@ class _QuizReviewView extends StatelessWidget {
 class _ReviewQuestionCard extends StatelessWidget {
   const _ReviewQuestionCard({
     required this.index,
-    required this.quiz,
-    required this.selectedAnswers,
-    required this.textAnswer,
+    required this.question,
     required this.reviewComplete,
   });
 
   final int index;
-  final QuizSummary quiz;
-  final Set<String> selectedAnswers;
-  final String textAnswer;
+  final QuizResultQuestion question;
   final bool reviewComplete;
 
   @override
   Widget build(BuildContext context) {
-    final question = _sampleQuestion(quiz, index);
     final answerState = _answerReviewState(
       question,
-      selectedAnswers: selectedAnswers,
-      textAnswer: textAnswer,
       reviewComplete: reviewComplete,
     );
 
@@ -1640,18 +1736,15 @@ class _ReviewQuestionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(question.prompt),
+            Text(question.text),
             const SizedBox(height: 8),
             Text(
-              'Your answer: ${_reviewAnswerLabel(
-                question,
-                selectedAnswers: selectedAnswers,
-                textAnswer: textAnswer,
-              )}',
+              'Your answer: ${question.submittedText ?? question.selectedOptionId ?? 'No Answer'}',
             ),
-            if (reviewComplete && question.correctAnswers.isNotEmpty)
-              Text('Correct answer: ${question.correctAnswers.join(', ')}'),
-            if (reviewComplete) Text('Explanation: ${question.explanation}'),
+            if (reviewComplete && question.correctOptionId != null)
+              Text('Correct option: ${question.correctOptionId}'),
+            if (reviewComplete && (question.explanation ?? '').isNotEmpty)
+              Text('Explanation: ${question.explanation}'),
             if (reviewComplete) ...[
               const SizedBox(height: 8),
               Text('Feedback: ${answerState.feedback}'),
@@ -2675,24 +2768,6 @@ class _ErrorPanel extends StatelessWidget {
   }
 }
 
-class _SampleQuestion {
-  const _SampleQuestion({
-    required this.prompt,
-    required this.questionTypeId,
-    required this.options,
-    required this.correctAnswers,
-    required this.explanation,
-    required this.hint,
-  });
-
-  final String prompt;
-  final int questionTypeId;
-  final List<String> options;
-  final List<String> correctAnswers;
-  final String explanation;
-  final String hint;
-}
-
 class _AnswerReviewState {
   const _AnswerReviewState({
     required this.label,
@@ -2707,44 +2782,8 @@ class _AnswerReviewState {
   final String feedback;
 }
 
-_SampleQuestion _sampleQuestion(QuizSummary quiz, int index) {
-  final mappedQuestions = questionsForQuiz(quiz.id);
-  if (index < mappedQuestions.length) {
-    final question = mappedQuestions[index];
-    final optionRows = optionsForQuestion(question.id);
-    final options =
-        optionRows.map((option) => option.optionText).toList(growable: false);
-    final correctAnswers = optionRows
-        .where((option) => option.isCorrect)
-        .map((option) => option.optionText)
-        .toList(growable: false);
-
-    return _SampleQuestion(
-      prompt: 'Q${index + 1}. ${question.questionText}',
-      questionTypeId: question.questionTypeId,
-      options: options,
-      correctAnswers: correctAnswers,
-      explanation: question.explanation,
-      hint: question.hint,
-    );
-  }
-
-  final number = index + 1;
-
-  return _SampleQuestion(
-    prompt: 'Q$number. No local-memory question is mapped for this quiz.',
-    questionTypeId: 44,
-    options: const [],
-    correctAnswers: const [],
-    explanation: 'No question explanation is available.',
-    hint: '',
-  );
-}
-
 _AnswerReviewState _answerReviewState(
-  _SampleQuestion question, {
-  required Set<String> selectedAnswers,
-  required String textAnswer,
+  QuizResultQuestion question, {
   required bool reviewComplete,
 }) {
   if (!reviewComplete) {
@@ -2756,50 +2795,21 @@ _AnswerReviewState _answerReviewState(
     );
   }
 
-  if (question.questionTypeId == 43 || question.questionTypeId == 44) {
-    if (textAnswer.trim().isEmpty) {
-      return const _AnswerReviewState(
-        label: 'Wrong Answer',
-        color: Color(0xFFDC2626),
-        icon: Icons.cancel_outlined,
-        feedback: 'No answer was submitted for this question.',
-      );
-    }
-
-    return const _AnswerReviewState(
-      label: 'Partial',
-      color: Color(0xFFD97706),
-      icon: Icons.rule_outlined,
-      feedback: 'Written answer needs AI or teacher judgement.',
-    );
-  }
-
-  if (selectedAnswers.isEmpty || question.correctAnswers.isEmpty) {
-    return const _AnswerReviewState(
-      label: 'Wrong Answer',
-      color: Color(0xFFDC2626),
-      icon: Icons.cancel_outlined,
-      feedback: 'The selected answer does not match the correct option.',
-    );
-  }
-
-  final correctSet = question.correctAnswers.toSet();
-  if (selectedAnswers.length == correctSet.length &&
-      selectedAnswers.containsAll(correctSet)) {
+  if (question.isCorrect) {
     return const _AnswerReviewState(
       label: 'Correct',
       color: Color(0xFF16A34A),
       icon: Icons.check_circle_outline,
-      feedback: 'Answer matches the correct option.',
+      feedback: 'Answer marked correct.',
     );
   }
 
-  if (selectedAnswers.any(correctSet.contains)) {
+  if (question.awardedMarks > 0 && question.awardedMarks < question.marks) {
     return const _AnswerReviewState(
       label: 'Partial',
       color: Color(0xFFD97706),
       icon: Icons.rule_outlined,
-      feedback: 'Some selected options are correct, but the answer is incomplete.',
+      feedback: 'Partial marks awarded.',
     );
   }
 
@@ -2807,28 +2817,8 @@ _AnswerReviewState _answerReviewState(
     label: 'Wrong Answer',
     color: Color(0xFFDC2626),
     icon: Icons.cancel_outlined,
-    feedback: 'The selected answer does not match the correct option.',
+    feedback: 'Answer marked incorrect.',
   );
-}
-
-String _reviewAnswerLabel(
-  _SampleQuestion question, {
-  required Set<String> selectedAnswers,
-  required String textAnswer,
-}) {
-  if (selectedAnswers.isNotEmpty) {
-    return selectedAnswers.join(', ');
-  }
-
-  if (textAnswer.trim().isNotEmpty) {
-    return textAnswer.trim();
-  }
-
-  if (question.questionTypeId == 44 || question.options.isEmpty) {
-    return textAnswer.trim().isEmpty ? 'No Answer' : textAnswer.trim();
-  }
-
-  return 'No Answer';
 }
 
 List<String> _instructionsFor(QuizSummary quiz) {

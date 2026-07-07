@@ -1,10 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/api/api_client.dart';
 import 'package:rankup_education/features/student_dashboard/data/datasources/student_dashboard_local_datasource.dart';
 import 'package:rankup_education/features/student_dashboard/data/datasources/student_dashboard_remote_datasource.dart';
 import 'package:rankup_education/features/student_dashboard/data/repositories/api_student_dashboard_repository.dart';
-import 'package:rankup_education/features/student_dashboard/data/repositories/mock_student_dashboard_repository.dart';
 import 'package:rankup_education/features/student_dashboard/domain/repositories/student_dashboard_repository.dart';
 import 'package:rankup_education/features/student_dashboard/domain/usecases/get_student_dashboard_usecase.dart';
 import 'package:rankup_education/features/student_dashboard/presentation/controllers/student_dashboard_controller.dart';
@@ -14,14 +12,9 @@ final studentDashboardLocalDataSourceProvider =
   return StudentDashboardLocalDataSource();
 });
 
+/// Student dashboard always loads from the live API.
 final studentDashboardRepositoryProvider =
     Provider<StudentDashboardRepository>((ref) {
-  final environment = ref.watch(appEnvironmentProvider);
-
-  if (environment.enableMockRepositories) {
-    return const MockStudentDashboardRepository();
-  }
-
   return ApiStudentDashboardRepository(
     StudentDashboardRemoteDataSource(ref.watch(dioProvider)),
     ref.watch(studentDashboardLocalDataSourceProvider),
