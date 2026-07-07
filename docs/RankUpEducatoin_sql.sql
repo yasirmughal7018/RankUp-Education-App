@@ -9,14 +9,21 @@ CREATE TABLE public.app_users (
 	username varchar(50) NOT NULL,
 	display_name varchar(50) NULL,
 	"role" text NOT NULL,
-	password_hash text NOT NULL,
+	password_hash text NULL,
 	is_active bool DEFAULT false NOT NULL,
 	created_date date DEFAULT CURRENT_DATE NULL,
 	modified_date date NULL,
+	email varchar(200) NULL,
+	last_login_at timestamptz NULL,
+	requested_at timestamptz NULL,
 	CONSTRAINT app_users_id_role_key UNIQUE (id, role),
 	CONSTRAINT app_users_pkey PRIMARY KEY (id),
-	CONSTRAINT app_users_username_key UNIQUE (username)
+	CONSTRAINT app_users_username_key UNIQUE (username),
+	CONSTRAINT chk_app_users_password_when_active CHECK (((is_active = false) OR (password_hash IS NOT NULL))),
+	CONSTRAINT chk_app_users_role CHECK ((role = ANY (ARRAY['superadmin'::text, 'schooladmin'::text, 'teacher'::text, 'student'::text, 'parent'::text])))
 );
+CREATE UNIQUE INDEX ix_app_users_email ON public.app_users USING btree (email) WHERE (email IS NOT NULL);
+CREATE INDEX ix_app_users_pending_registration ON public.app_users USING btree (requested_at DESC NULLS LAST) WHERE (is_active = false);
 
 
 -- public.schools definition
@@ -46,6 +53,7 @@ CREATE TABLE public.app_user_parents (
 	parent_id int8 NOT NULL,
 	cnic varchar(13) NULL,
 	modified_date timestamptz DEFAULT now() NOT NULL,
+	mobile_number varchar(40) NULL,
 	CONSTRAINT app_user_parents_pkey PRIMARY KEY (parent_id),
 	CONSTRAINT app_user_parents_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.app_users(id)
 );
@@ -172,7 +180,7 @@ CREATE TABLE public.school_campuses (
 
 CREATE TABLE public.student_groups (
 	id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
-	refral_id int8 NOT NULL,
+	referral_id int8 NOT NULL,
 	group_name varchar(50) NOT NULL,
 	description varchar(200) NOT NULL,
 	is_teacher_group bool DEFAULT true NOT NULL,
@@ -182,7 +190,7 @@ CREATE TABLE public.student_groups (
 	creator_role varchar(50) NULL,
 	CONSTRAINT chk_creator_role_type CHECK (((creator_role)::text = ANY ((ARRAY['teacher'::character varying, 'parent'::character varying])::text[]))),
 	CONSTRAINT student_groups_pkey PRIMARY KEY (id),
-	CONSTRAINT student_groups_refral_id_and_role_fkey FOREIGN KEY (refral_id,creator_role) REFERENCES public.app_users(id,"role")
+	CONSTRAINT student_groups_refral_id_and_role_fkey FOREIGN KEY (referral_id,creator_role) REFERENCES public.app_users(id,"role")
 );
 
 
@@ -201,6 +209,7 @@ CREATE TABLE public.app_user_students (
 	grade int2 NOT NULL,
 	"section" text NOT NULL,
 	modified_date timestamptz DEFAULT now() NOT NULL,
+	mobile_number varchar(40) NULL,
 	CONSTRAINT app_user_students_pkey PRIMARY KEY (student_id),
 	CONSTRAINT app_user_students_campus_id_fkey FOREIGN KEY (campus_id) REFERENCES public.school_campuses(id),
 	CONSTRAINT app_user_students_grade_fkey FOREIGN KEY (grade) REFERENCES public.lookups(id),
@@ -222,6 +231,7 @@ CREATE TABLE public.app_user_teachers (
 	teacher_code varchar(50) NOT NULL,
 	cnic varchar(13) NULL,
 	modified_date timestamptz DEFAULT now() NOT NULL,
+	mobile_number varchar(40) NULL,
 	CONSTRAINT app_user_teachers_pkey PRIMARY KEY (teacher_id),
 	CONSTRAINT app_user_teachers_campus_id_fkey FOREIGN KEY (campus_id) REFERENCES public.school_campuses(id),
 	CONSTRAINT app_user_teachers_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id),
@@ -263,7 +273,7 @@ CREATE TABLE public.question_accepted_answers (
 	allow_partial_match bool DEFAULT false NOT NULL,
 	normalized_answer varchar(1000) NOT NULL,
 	minimum_length int2 DEFAULT 0 NOT NULL,
-	maximum_length int8 DEFAULT 1000 NOT NULL,
+	maximum_length int2 DEFAULT 1000 NOT NULL,
 	ai_review varchar(1000) NULL,
 	teacher_review varchar(1000) NULL,
 	CONSTRAINT question_accepted_answers_pkey PRIMARY KEY (id),
@@ -445,7 +455,7 @@ CREATE TABLE public.quiz_attempts (
 	number_of_question_attempt int2 NOT NULL,
 	status_id int2 NOT NULL,
 	started_date timestamptz DEFAULT now() NOT NULL,
-	submitted_date timestamptz DEFAULT now() NOT NULL,
+	submitted_date timestamptz NULL,
 	time_spent_seconds int2 DEFAULT 0 NOT NULL,
 	device_id varchar(100) NOT NULL,
 	is_offline_attempt bool DEFAULT false NOT NULL,
