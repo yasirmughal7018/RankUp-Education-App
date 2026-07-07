@@ -152,37 +152,6 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Quiz published."));
     }
 
-    [HttpPost("{quizId:long}/questions")]
-    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> AddQuestionAsync(
-        long quizId,
-        [FromBody] AddQuizQuestionRequest request,
-        CancellationToken cancellationToken)
-    {
-        var response = await _quizManageService.AddQuestionAsync(quizId, request, cancellationToken);
-        return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question added."));
-    }
-
-    [HttpPut("{quizId:long}/questions/{questionId:long}")]
-    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> UpdateQuestionAsync(
-        long quizId,
-        long questionId,
-        [FromBody] UpdateQuizQuestionRequest request,
-        CancellationToken cancellationToken)
-    {
-        var response = await _quizManageService.UpdateQuestionAsync(quizId, questionId, request, cancellationToken);
-        return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question updated."));
-    }
-
-    [HttpDelete("{quizId:long}/questions/{questionId:long}")]
-    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> RemoveQuestionAsync(
-        long quizId,
-        long questionId,
-        CancellationToken cancellationToken)
-    {
-        var response = await _quizManageService.RemoveQuestionAsync(quizId, questionId, cancellationToken);
-        return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question removed."));
-    }
-
     [HttpPost("{quizId:long}/assign")]
     public async Task<ActionResult<ApiResponse<AssignQuizResponse>>> AssignAsync(
         long quizId,

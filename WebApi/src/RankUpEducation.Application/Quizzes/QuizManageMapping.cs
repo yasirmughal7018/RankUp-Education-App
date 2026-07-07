@@ -1,3 +1,5 @@
+using RankUpEducation.Application.Questions;
+using RankUpEducation.Contracts.Questions;
 using RankUpEducation.Contracts.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
@@ -28,17 +30,7 @@ internal static class QuizManageMapping
             detail.IsReviewRequired,
             detail.CreatedByName,
             detail.SchoolName,
-            questions.Select(question => new ManageQuizQuestionResponse(
-                question.QuestionId,
-                question.QuestionText,
-                question.QuestionTypeName,
-                question.Marks,
-                question.DisplayOrder,
-                question.Hint,
-                question.Options.Select(option => new QuizQuestionOptionResponse(
-                    option.OptionId,
-                    option.OptionText,
-                    option.IsCorrect)).ToArray())).ToArray());
+            questions.Select(QuestionMapping.ToQuestionResponse).ToArray());
     }
 
     public static QuizAssignmentResponse ToAssignmentResponse(QuizAssignmentListItem item)
