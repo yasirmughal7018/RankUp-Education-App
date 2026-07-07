@@ -64,4 +64,40 @@ internal static class QuizStatusCalculator
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToArray();
     }
+
+    public static string ResolveMonitorStatus(
+        DateTimeOffset now,
+        DateTimeOffset startAt,
+        DateTimeOffset endAt,
+        int attemptCount,
+        bool isReviewDone,
+        DateTimeOffset? lastSubmittedAt)
+    {
+        if (lastSubmittedAt is not null && !isReviewDone)
+        {
+            return "pending_review";
+        }
+
+        if (isReviewDone)
+        {
+            return "reviewed";
+        }
+
+        if (attemptCount == 0 && now < startAt)
+        {
+            return "upcoming";
+        }
+
+        if (attemptCount == 0)
+        {
+            return "not_started";
+        }
+
+        if (now <= endAt)
+        {
+            return "in_progress";
+        }
+
+        return "completed";
+    }
 }

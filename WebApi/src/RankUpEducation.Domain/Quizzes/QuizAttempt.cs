@@ -51,4 +51,10 @@ public sealed class QuizAttempt : BaseEntity
         StatusId = submittedStatusId;
         Submit(obtainedMarks, totalMarks, timeSpentSeconds);
     }
+
+    public void ApplyReviewedScore(short obtainedMarks, short totalMarks, short reviewedStatusId)
+    {
+        StatusId = reviewedStatusId;
+        Submit(obtainedMarks, totalMarks, TimeSpentSeconds);
+    }
 }

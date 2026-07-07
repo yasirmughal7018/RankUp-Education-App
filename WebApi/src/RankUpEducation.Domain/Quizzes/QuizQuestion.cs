@@ -21,4 +21,9 @@ public sealed class QuizQuestion : BaseEntity
     public short DisplayOrder { get; private set; }
     public short Marks { get; private set; }
     public bool ShuffleOptions { get; private set; } = true;
+
+    public void SetMarks(short marks)
+    {
+        Marks = marks;
+    }
 }

@@ -56,4 +56,42 @@ public sealed class Question : BaseEntity
     public bool IsAiApproved { get; private set; }
     public IReadOnlyCollection<QuestionOption> Options => _options;
     public IReadOnlyCollection<QuestionAcceptedAnswer> AcceptedAnswers => _acceptedAnswers;
+
+    public void UpdateDetails(
+        string questionText,
+        short questionTypeId,
+        short classId,
+        short subjectId,
+        short? topicId,
+        short difficultyLevel,
+        short estimatedTimeSeconds,
+        short marks,
+        string? hint,
+        string? explanation)
+    {
+        QuestionText = questionText.Trim();
+        QuestionTypeId = questionTypeId;
+        ClassId = classId;
+        SubjectId = subjectId;
+        TopicId = topicId;
+        DifficultyLevel = difficultyLevel;
+        EstimatedTimeSeconds = estimatedTimeSeconds;
+        Marks = marks;
+        Hint = string.IsNullOrWhiteSpace(hint) ? null : hint.Trim();
+        Explanation = string.IsNullOrWhiteSpace(explanation) ? null : explanation.Trim();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public QuestionOption AddOption(string optionText, bool isCorrect)
+    {
+        var option = new QuestionOption(Id, optionText, isCorrect);
+        _options.Add(option);
+        return option;
+    }
 }

@@ -69,11 +69,90 @@ public sealed class Quiz : SoftDeleteEntity
     public DateOnly? ModifiedDate { get; private set; }
     public bool IsReviewRequired { get; private set; } = true;
 
-    public void Publish()
+    public void UpdateDetails(
+        string quizTitle,
+        string description,
+        short classId,
+        short subjectId,
+        short topicId,
+        short difficultyLevelId,
+        string instructions,
+        short? timeLimitMinutes,
+        short? allowedAttempts,
+        bool shuffleQuestions,
+        bool shuffleOptions,
+        bool isReviewRequired)
+    {
+        QuizTitle = quizTitle.Trim();
+        Description = description.Trim();
+        ClassId = classId;
+        SubjectId = subjectId;
+        TopicId = topicId;
+        DifficultyLevelId = difficultyLevelId;
+        Instructions = instructions.Trim();
+        TimeLimitMinutes = timeLimitMinutes;
+        AllowedAttempts = allowedAttempts;
+        ShuffleQuestions = shuffleQuestions;
+        ShuffleOptions = shuffleOptions;
+        IsReviewRequired = isReviewRequired;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetQuestionTotals(short totalQuestions, short totalMarks)
+    {
+        TotalQuestions = totalQuestions;
+        TotalMarks = totalMarks;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetLifecycleStatus(short lifecycleStatusId)
+    {
+        LifecycleStatusId = lifecycleStatusId;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void Publish(short lifecycleStatusId, short approvalStatusId, string? approvedBy)
     {
         if (TotalQuestions <= 0)
         {
             throw new BusinessRuleException("Quiz must contain at least one question.");
         }
+
+        LifecycleStatusId = lifecycleStatusId;
+        ApprovalStatusId = approvalStatusId;
+        ApprovedBy = approvedBy;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SubmitForApproval(short lifecycleStatusId)
+    {
+        if (TotalQuestions <= 0)
+        {
+            throw new BusinessRuleException("Quiz must contain at least one question.");
+        }
+
+        LifecycleStatusId = lifecycleStatusId;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void Approve(short approvalStatusId, string approvedBy)
+    {
+        ApprovalStatusId = approvalStatusId;
+        ApprovedBy = approvedBy.Trim();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void MarkDeleted(DateTimeOffset deletedAt, long? deletedBy)
+    {
+        SoftDelete(deletedAt, deletedBy);
+        IsActive = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void Archive(short lifecycleStatusId)
+    {
+        LifecycleStatusId = lifecycleStatusId;
+        IsActive = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 }

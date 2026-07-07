@@ -22,7 +22,8 @@ public sealed record QuizListItem(
     bool IsReviewRequired,
     int AttemptCount,
     short? BestPercentage,
-    DateTimeOffset? LastSubmittedAt);
+    DateTimeOffset? LastSubmittedAt,
+    string? LifecycleStatusName = null);
 
 public sealed record QuizDetailItem(
     long QuizId,
@@ -48,7 +49,26 @@ public sealed record QuizDetailItem(
     bool IsReviewRequired,
     int AttemptCount,
     short? BestPercentage,
-    DateTimeOffset? LastSubmittedAt);
+    DateTimeOffset? LastSubmittedAt,
+    short LifecycleStatusId,
+    string LifecycleStatusName);
+
+public sealed record StudentSchoolContext(
+    int SchoolId,
+    int CampusId,
+    short Grade);
+
+public sealed record QuizAssignmentListItem(
+    long AssignmentId,
+    long StudentId,
+    long? StudentGroupId,
+    DateTimeOffset StartDateTime,
+    DateTimeOffset EndDateTime,
+    short AllowedAttempts,
+    short QuizResultStatusId,
+    string QuizResultStatusName,
+    bool IsReviewDone,
+    int AttemptCount);
 
 public sealed record QuizQuestionItem(
     long QuestionId,
@@ -102,3 +122,84 @@ public sealed record QuizAssignmentAccess(
     DateTimeOffset EndDateTime,
     short AllowedAttempts,
     int ExistingAttemptCount);
+
+public sealed record QuizAssignmentBoardItem(
+    long AssignmentId,
+    long QuizId,
+    string QuizTitle,
+    long StudentId,
+    DateTimeOffset StartDateTime,
+    DateTimeOffset EndDateTime,
+    short AllowedAttempts,
+    int AttemptCount,
+    bool IsReviewDone,
+    string ResultStatusName,
+    DateTimeOffset? LastSubmittedAt);
+
+public sealed record QuizMonitoringStudentItem(
+    long StudentId,
+    long AssignmentId,
+    int AttemptCount,
+    short? BestPercentage,
+    bool IsReviewDone,
+    DateTimeOffset? LastSubmittedAt,
+    DateTimeOffset StartDateTime,
+    DateTimeOffset EndDateTime);
+
+public sealed record PendingReviewItem(
+    long QuizId,
+    string QuizTitle,
+    long AttemptId,
+    long StudentId,
+    short AttemptNumber,
+    DateTimeOffset SubmittedAt,
+    short TotalMarks,
+    short ObtainedMarks);
+
+public sealed record AttemptReviewDetailItem(
+    long AttemptId,
+    long QuizId,
+    string QuizTitle,
+    long StudentId,
+    short AttemptNumber,
+    short TotalMarks,
+    short ObtainedMarks,
+    short Percentage,
+    string StatusName,
+    bool IsReviewDone,
+    DateTimeOffset SubmittedAt,
+    IReadOnlyList<AttemptReviewQuestionItem> Questions);
+
+public sealed record AttemptReviewQuestionItem(
+    long AttemptQuestionId,
+    long QuestionId,
+    string QuestionText,
+    string QuestionTypeName,
+    short MaxMarks,
+    short AwardedMarks,
+    bool IsCorrect,
+    long? SelectedOptionId,
+    string? SubmittedText,
+    string? ParentFeedback,
+    bool RequiresReview,
+    long? QuizReviewId);
+
+public sealed record QuizQuestionCopyItem(
+    long QuestionId,
+    string QuestionText,
+    short QuestionTypeId,
+    short ClassId,
+    short SubjectId,
+    short? TopicId,
+    short DifficultyLevel,
+    short EstimatedTimeSeconds,
+    short Marks,
+    string? Hint,
+    string? Explanation,
+    short DisplayOrder,
+    IReadOnlyList<QuizQuestionOptionItem> Options);
+
+public sealed record QuizAssignmentReviewState(
+    long AssignmentId,
+    bool IsReviewDone,
+    bool IsReviewRequired);

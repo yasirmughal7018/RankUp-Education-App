@@ -19,4 +19,9 @@ public sealed class QuizAttemptQuestion : BaseEntity
     public long QuestionId { get; private set; }
     public short DisplayOrder { get; private set; }
     public long? QuizReviewId { get; private set; }
+
+    public void LinkReview(long quizReviewId)
+    {
+        QuizReviewId = quizReviewId;
+    }
 }

@@ -8,13 +8,15 @@ internal static class QuizMapping
     public static QuizSummaryResponse ToSummaryResponse(QuizListItem item, DateTimeOffset now)
     {
         var attemptLimit = item.AllowedAttempts <= 0 ? (short)1 : item.AllowedAttempts;
-        var status = QuizStatusCalculator.ResolveListStatus(
-            now,
-            item.StartDateTime,
-            item.EndDateTime,
-            item.AttemptCount,
-            attemptLimit,
-            item.LastSubmittedAt);
+        var status = item.StartDateTime is null && !string.IsNullOrWhiteSpace(item.LifecycleStatusName)
+            ? item.LifecycleStatusName.ToLowerInvariant()
+            : QuizStatusCalculator.ResolveListStatus(
+                now,
+                item.StartDateTime,
+                item.EndDateTime,
+                item.AttemptCount,
+                attemptLimit,
+                item.LastSubmittedAt);
 
         var totalMarks = item.TotalMarks ?? item.TotalQuestions;
         var points = totalMarks;
@@ -111,31 +113,42 @@ internal static class QuizMapping
                 .ToArray());
     }
 
-    public static QuizAttemptResultResponse ToAttemptResult(QuizAttemptDetailItem item, string quizTitle, bool reviewAvailable)
+    public static QuizAttemptResultResponse ToAttemptResult(
+        QuizAttemptDetailItem item,
+        string quizTitle,
+        bool reviewAvailable,
+        bool maskPendingReview = false,
+        string? resultStatusOverride = null)
     {
+        var displayedObtained = maskPendingReview ? (short)0 : item.ObtainedMarks;
+        var displayedPercentage = maskPendingReview ? (short)0 : item.Percentage;
+
         return new QuizAttemptResultResponse(
             item.AttemptId,
             item.QuizId,
             quizTitle,
             item.AttemptNumber,
             item.TotalMarks,
-            item.ObtainedMarks,
-            item.Percentage,
+            displayedObtained,
+            displayedPercentage,
             item.TimeSpentSeconds,
-            item.StatusName,
+            resultStatusOverride ?? item.StatusName,
             reviewAvailable,
             item.Questions.Select(question =>
             {
                 var correctOption = question.Options.FirstOrDefault(option => option.IsCorrect);
+                var isSubjective = !string.IsNullOrWhiteSpace(question.SubmittedText) && question.SelectedOptionId is null;
+                var awardedMarks = maskPendingReview && isSubjective ? (short)0 : question.AwardedMarks;
+
                 return new QuizResultQuestionResponse(
                     question.QuestionId,
                     question.QuestionText,
                     question.Marks,
-                    question.AwardedMarks,
-                    question.IsCorrect,
+                    awardedMarks,
+                    maskPendingReview && isSubjective ? false : question.IsCorrect,
                     question.Explanation,
                     question.SelectedOptionId,
-                    correctOption?.OptionId,
+                    maskPendingReview && isSubjective ? null : correctOption?.OptionId,
                     question.SubmittedText);
             }).ToArray());
     }

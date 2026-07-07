@@ -42,4 +42,27 @@ public sealed class QuizAssignment : BaseEntity
     public bool IsReviewDone { get; private set; }
     public DateTimeOffset CreatedDate { get; private set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ModifiedDate { get; private set; }
+
+    public void AssignToGroup(long studentGroupId)
+    {
+        StudentGroupId = studentGroupId;
+    }
+
+    public void MarkReviewDone()
+    {
+        IsReviewDone = true;
+        ModifiedDate = DateTimeOffset.UtcNow;
+    }
+
+    public void GrantRetry(short additionalAttempts)
+    {
+        if (additionalAttempts <= 0)
+        {
+            throw new BusinessRuleException("Additional attempts must be greater than zero.");
+        }
+
+        AllowedAttempts += additionalAttempts;
+        IsReviewDone = false;
+        ModifiedDate = DateTimeOffset.UtcNow;
+    }
 }

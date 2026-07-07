@@ -104,6 +104,28 @@ public sealed class QuizService : IQuizService
             return QuizMapping.ToDetailResponse(detail, now);
         }
 
+        if (role == UserRole.Parent)
+        {
+            var parentId = _currentUser.ProfileId ?? _currentUser.UserId
+                ?? throw new ForbiddenAppException("Parent profile was not found.");
+
+            var ownedDetail = await _quizzes.GetDetailForCreatorAsync(quizId, parentId, cancellationToken);
+            if (ownedDetail is not null)
+            {
+                return QuizMapping.ToDetailResponse(ownedDetail, now);
+            }
+        }
+
+        if (role == UserRole.Teacher)
+        {
+            var teacherUserId = _currentUser.UserId ?? throw new ForbiddenAppException("Teacher account was not found.");
+            var ownedDetail = await _quizzes.GetDetailForCreatorAsync(quizId, teacherUserId, cancellationToken);
+            if (ownedDetail is not null)
+            {
+                return QuizMapping.ToDetailResponse(ownedDetail, now);
+            }
+        }
+
         if (role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.SuperAdmin or UserRole.Parent)
         {
             var list = await ListAsync(null, null, null, cancellationToken);
@@ -115,10 +137,10 @@ public sealed class QuizService : IQuizService
                 null,
                 summary.Title,
                 summary.Description,
-                (short)summary.QuestionCount,
-                (short)summary.TotalMarks,
-                (short?)summary.TimeLimitMinutes,
-                (short)summary.AttemptLimit,
+                summary.QuestionCount,
+                summary.TotalMarks,
+                summary.TimeLimitMinutes,
+                summary.AttemptLimit,
                 summary.StartAt,
                 summary.DueAt,
                 summary.CreatedBy,
@@ -133,8 +155,10 @@ public sealed class QuizService : IQuizService
                 true,
                 summary.ReviewAvailable,
                 0,
-                (short?)summary.ResultPercent,
-                summary.CompletedAt);
+                summary.ResultPercent,
+                summary.CompletedAt,
+                0,
+                summary.Status);
 
             return QuizMapping.ToDetailResponse(detail, now);
         }
@@ -153,6 +177,14 @@ public sealed class QuizService : IQuizService
 
         var access = await _quizzes.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("This quiz is not assigned to you.");
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
+            ?? throw new NotFoundAppException("This quiz is not assigned to you.");
+
+        if (!quiz.IsActive)
+        {
+            throw new BusinessRuleException("This quiz is no longer available.");
+        }
 
         var now = _dateTimeProvider.UtcNow;
         EnsureAttemptWindow(access, now);
@@ -246,6 +278,7 @@ public sealed class QuizService : IQuizService
             .ToDictionary(group => group.Key, group => group.Last());
 
         var answerEntities = new List<QuizAttemptAnswer>();
+        var hasSubjectiveAnswers = false;
 
         foreach (var attemptQuestion in attemptDetail.Questions)
         {
@@ -263,15 +296,20 @@ public sealed class QuizService : IQuizService
 
             var isCorrect = false;
             short awardedMarks = 0;
+            var isDescriptive = QuizQuestionHelper.IsDescriptiveType(question.QuestionTypeName)
+                || (selectedOptionId is null && !string.IsNullOrWhiteSpace(submitted.SubmittedText));
 
             if (selectedOptionId is not null)
             {
                 var selectedOption = question.Options.FirstOrDefault(option => option.OptionId == selectedOptionId);
                 isCorrect = selectedOption?.IsCorrect ?? false;
                 awardedMarks = isCorrect ? question.Marks : (short)0;
+                obtainedMarks += awardedMarks;
             }
-
-            obtainedMarks += awardedMarks;
+            else if (isDescriptive)
+            {
+                hasSubjectiveAnswers = true;
+            }
 
             var answer = new QuizAttemptAnswer(
                 attemptQuestion.AttemptQuestionId,
@@ -297,7 +335,15 @@ public sealed class QuizService : IQuizService
         var result = await _quizzes.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        return QuizMapping.ToAttemptResult(result, quizTitle, reviewAvailable: true);
+        var reviewState = await _quizzes.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
+        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false } && hasSubjectiveAnswers;
+
+        return QuizMapping.ToAttemptResult(
+            result,
+            quizTitle,
+            reviewAvailable: !maskPendingReview,
+            maskPendingReview: maskPendingReview,
+            resultStatusOverride: maskPendingReview ? "Pending Review" : null);
     }
 
     public async Task<QuizAttemptResultResponse> GetAttemptResultAsync(
@@ -319,7 +365,15 @@ public sealed class QuizService : IQuizService
         var quizTitle = (await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken))?.QuizTitle
             ?? "Quiz";
 
-        return QuizMapping.ToAttemptResult(result, quizTitle, reviewAvailable: true);
+        var reviewState = await _quizzes.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
+        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false };
+
+        return QuizMapping.ToAttemptResult(
+            result,
+            quizTitle,
+            reviewAvailable: reviewState?.IsReviewDone ?? true,
+            maskPendingReview: maskPendingReview,
+            resultStatusOverride: maskPendingReview ? "Pending Review" : null);
     }
 
     private async Task<IReadOnlyList<QuizListItem>> ListForStudentAsync(
@@ -342,7 +396,14 @@ public sealed class QuizService : IQuizService
             ?? throw new ForbiddenAppException("Parent profile was not found.");
 
         var studentIds = await _quizzes.GetLinkedStudentIdsAsync(parentId, cancellationToken);
-        return await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken);
+        var assignedItems = await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken);
+        var createdItems = await _quizzes.ListForCreatorAsync(parentId, search, subject, grade, cancellationToken);
+
+        return assignedItems
+            .Concat(createdItems.Where(created => assignedItems.All(assigned => assigned.QuizId != created.QuizId)))
+            .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
+            .ThenByDescending(item => item.QuizId)
+            .ToArray();
     }
 
     private async Task<IReadOnlyList<QuizListItem>> ListForTeacherAsync(
@@ -355,7 +416,7 @@ public sealed class QuizService : IQuizService
         var schoolId = _currentUser.SchoolId ?? throw new ForbiddenAppException("Teacher school context was not found.");
         var campusId = _currentUser.CampusId ?? throw new ForbiddenAppException("Teacher campus context was not found.");
 
-        return await _quizzes.ListForTeacherAsync(
+        var schoolItems = await _quizzes.ListForTeacherAsync(
             teacherUserId,
             schoolId,
             campusId,
@@ -363,6 +424,13 @@ public sealed class QuizService : IQuizService
             subject,
             grade,
             cancellationToken);
+        var createdItems = await _quizzes.ListForCreatorAsync(teacherUserId, search, subject, grade, cancellationToken);
+
+        return schoolItems
+            .Concat(createdItems.Where(created => schoolItems.All(item => item.QuizId != created.QuizId)))
+            .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
+            .ThenByDescending(item => item.QuizId)
+            .ToArray();
     }
 
     private static void EnsureAttemptWindow(QuizAssignmentAccess access, DateTimeOffset now)

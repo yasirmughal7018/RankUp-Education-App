@@ -12,6 +12,10 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddScoped<IQuizService, QuizService>();
+        services.AddScoped<IQuizManageService, QuizManageService>();
+        services.AddScoped<IQuizAssignService, QuizAssignService>();
+        services.AddScoped<IQuizMonitorService, QuizMonitorService>();
+        services.AddScoped<IQuizReviewService, QuizReviewService>();
 
         return services;
     }

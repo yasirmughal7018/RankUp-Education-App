@@ -30,4 +30,16 @@ public sealed class QuizReview : BaseEntity
     public string? ParentReviewComment { get; private set; }
     public long? QuizId { get; private set; }
     public long? QuestionId { get; private set; }
+
+    public void SetParentReview(short? statusId, string? comment)
+    {
+        ParentReviewStatus = statusId;
+        ParentReviewComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+    }
+
+    public void SetTeacherReview(short? statusId, string? comment)
+    {
+        TeacherReviewStatus = statusId;
+        TeacherReviewComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+    }
 }
