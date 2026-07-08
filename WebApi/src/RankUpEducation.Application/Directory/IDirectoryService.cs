@@ -38,16 +38,73 @@ public interface IDirectoryService
         int? campusId,
         short? grade,
         string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryStudentResponse> CreateStudentAsync(
+        CreateDirectoryStudentRequest request,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryStudentResponse> UpdateStudentAsync(
+        long studentId,
+        UpdateDirectoryStudentRequest request,
+        CancellationToken cancellationToken);
+
+    Task ActivateStudentAsync(long studentId, CancellationToken cancellationToken);
+
+    Task DeactivateStudentAsync(long studentId, CancellationToken cancellationToken);
+
+    Task<BulkActionResponse> BulkDeactivateStudentsAsync(
+        BulkDeactivateRequest request,
         CancellationToken cancellationToken);
 
     Task<DirectoryTeacherListResponse> ListTeachersAsync(
         int? schoolId,
         int? campusId,
         string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryTeacherResponse> CreateTeacherAsync(
+        CreateDirectoryTeacherRequest request,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryTeacherResponse> UpdateTeacherAsync(
+        long teacherId,
+        UpdateDirectoryTeacherRequest request,
+        CancellationToken cancellationToken);
+
+    Task ActivateTeacherAsync(long teacherId, CancellationToken cancellationToken);
+
+    Task DeactivateTeacherAsync(long teacherId, CancellationToken cancellationToken);
+
+    Task<BulkActionResponse> BulkDeactivateTeachersAsync(
+        BulkDeactivateRequest request,
         CancellationToken cancellationToken);
 
     Task<DirectoryParentListResponse> ListParentsAsync(
         string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryParentResponse> CreateParentAsync(
+        CreateDirectoryParentRequest request,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryParentResponse> UpdateParentAsync(
+        long parentId,
+        UpdateDirectoryParentRequest request,
+        CancellationToken cancellationToken);
+
+    Task ActivateParentAsync(long parentId, CancellationToken cancellationToken);
+
+    Task DeactivateParentAsync(long parentId, CancellationToken cancellationToken);
+
+    Task<BulkActionResponse> BulkDeactivateParentsAsync(
+        BulkDeactivateRequest request,
         CancellationToken cancellationToken);
 
     Task<LinkParentStudentResponse> LinkParentStudentAsync(

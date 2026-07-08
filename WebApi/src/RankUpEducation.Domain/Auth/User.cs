@@ -90,6 +90,29 @@ public sealed class User : SoftDeleteEntity
         IsActive = true;
     }
 
+    public void UpdateProfile(string fullName)
+    {
+        FullName = fullName.Trim();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetActive(bool isActive)
+    {
+        IsActive = isActive;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetPasswordHash(string passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash))
+        {
+            throw new BusinessRuleException("Password hash is required.");
+        }
+
+        PasswordHash = passwordHash;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
     public void AttachProfileContext(long? profileId, int? schoolId, int? campusId)
     {
         ProfileId = profileId;

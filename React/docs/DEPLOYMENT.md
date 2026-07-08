@@ -43,6 +43,7 @@ Static output is written to `React/dist/`.
 
 ## Security notes
 
-- Do not commit `.env` or secrets.
+- Do not commit `.env` or secrets. Use `.env.example` placeholders only (`localhost` API URL, no credentials).
+- Web API DB passwords and JWT signing keys belong in user-secrets or environment variables — see [`WebApi/README.md`](../../WebApi/README.md).
 - Keep access tokens in browser storage only for trusted HTTPS origins.
 - Rotate API credentials and review CORS allow-lists when domains change.

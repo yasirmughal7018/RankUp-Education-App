@@ -27,4 +27,19 @@ public sealed class Student : SoftDeleteEntity
     public short Grade { get; private set; }
     public string Section { get; private set; } = string.Empty;
     public DateTimeOffset ModifiedDate { get; private set; } = DateTimeOffset.UtcNow;
+
+    public void Update(
+        int campusId,
+        string rollNumber,
+        short grade,
+        string section,
+        string? mobileNumber)
+    {
+        CampusId = campusId;
+        StudentRollNumber = rollNumber.Trim();
+        Grade = grade;
+        Section = section.Trim();
+        MobileNumber = string.IsNullOrWhiteSpace(mobileNumber) ? null : mobileNumber.Trim();
+        ModifiedDate = DateTimeOffset.UtcNow;
+    }
 }

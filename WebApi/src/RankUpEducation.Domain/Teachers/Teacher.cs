@@ -23,4 +23,12 @@ public sealed class Teacher : SoftDeleteEntity
     public string? Cnic { get; private set; }
     public string? MobileNumber { get; private set; }
     public DateTimeOffset ModifiedDate { get; private set; } = DateTimeOffset.UtcNow;
+
+    public void Update(int campusId, string teacherCode, string? mobileNumber)
+    {
+        CampusId = campusId;
+        TeacherCode = teacherCode.Trim();
+        MobileNumber = string.IsNullOrWhiteSpace(mobileNumber) ? null : mobileNumber.Trim();
+        ModifiedDate = DateTimeOffset.UtcNow;
+    }
 }

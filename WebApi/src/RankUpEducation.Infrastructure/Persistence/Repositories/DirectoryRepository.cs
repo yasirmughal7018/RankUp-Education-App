@@ -4,6 +4,8 @@ using RankUpEducation.Contracts.Directory;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Schools;
+using RankUpEducation.Domain.Students;
+using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
@@ -171,11 +173,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .AnyAsync(school => school.Id == schoolId && !school.IsDeleted, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<DirectoryStudentResponse>> ListStudentsAsync(
+    public async Task<(IReadOnlyList<DirectoryStudentResponse> Items, int TotalCount)> ListStudentsAsync(
         int? schoolId,
         int? campusId,
         short? grade,
         string? search,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         var query =
@@ -208,8 +212,11 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 || row.student.StudentRollNumber.Contains(term));
         }
 
-        return await query
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderBy(row => row.user.FullName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(row => new DirectoryStudentResponse(
                 row.student.Id,
                 row.user.FullName,
@@ -221,12 +228,16 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 row.student.CampusId,
                 row.user.IsActive))
             .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
     }
 
-    public async Task<IReadOnlyList<DirectoryTeacherResponse>> ListTeachersAsync(
+    public async Task<(IReadOnlyList<DirectoryTeacherResponse> Items, int TotalCount)> ListTeachersAsync(
         int? schoolId,
         int? campusId,
         string? search,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         var query =
@@ -254,8 +265,11 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 || row.teacher.TeacherCode.Contains(term));
         }
 
-        return await query
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderBy(row => row.user.FullName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(row => new DirectoryTeacherResponse(
                 row.teacher.Id,
                 row.user.FullName,
@@ -265,10 +279,14 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 row.teacher.CampusId,
                 row.user.IsActive))
             .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
     }
 
-    public async Task<IReadOnlyList<DirectoryParentResponse>> ListParentsAsync(
+    public async Task<(IReadOnlyList<DirectoryParentResponse> Items, int TotalCount)> ListParentsAsync(
         string? search,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken)
     {
         var query =
@@ -284,10 +302,16 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 row.user.FullName.Contains(term) || row.user.Username.Contains(term));
         }
 
-        var rows = await query.OrderBy(row => row.user.FullName).ToListAsync(cancellationToken);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderBy(row => row.user.FullName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
         if (rows.Count == 0)
         {
-            return Array.Empty<DirectoryParentResponse>();
+            return (Array.Empty<DirectoryParentResponse>(), totalCount);
         }
 
         var parentIds = rows.Select(row => row.parent.Id).ToArray();
@@ -297,12 +321,41 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .Select(group => new { ParentId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(item => item.ParentId, item => item.Count, cancellationToken);
 
-        return rows.Select(row => new DirectoryParentResponse(
+        var items = rows.Select(row => new DirectoryParentResponse(
             row.parent.Id,
             row.user.FullName,
             row.user.Username,
             linkCounts.GetValueOrDefault(row.parent.Id),
             row.user.IsActive)).ToArray();
+
+        return (items, totalCount);
+    }
+
+    public Task<Student?> GetStudentEntityAsync(long studentId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Students
+            .FirstOrDefaultAsync(student => student.Id == studentId && !student.IsDeleted, cancellationToken);
+    }
+
+    public Task<Teacher?> GetTeacherEntityAsync(long teacherId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Teachers
+            .FirstOrDefaultAsync(teacher => teacher.Id == teacherId && !teacher.IsDeleted, cancellationToken);
+    }
+
+    public Task<Parent?> GetParentEntityAsync(long parentId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Parents
+            .FirstOrDefaultAsync(parent => parent.Id == parentId && !parent.IsDeleted, cancellationToken);
+    }
+
+    public async Task SetUserActiveAsync(long userId, bool isActive, CancellationToken cancellationToken)
+    {
+        var user = await _dbContext.Users
+            .FirstOrDefaultAsync(item => item.Id == userId && !item.IsDeleted, cancellationToken)
+            ?? throw new InvalidOperationException($"User {userId} was not found.");
+
+        user.SetActive(isActive);
     }
 
     public async Task LinkParentStudentAsync(
@@ -347,5 +400,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
     {
         return _dbContext.Students.AsNoTracking()
             .AnyAsync(student => student.Id == studentId && !student.IsDeleted, cancellationToken);
+    }
+
+    public Task<int> CountParentStudentLinksAsync(long parentId, CancellationToken cancellationToken)
+    {
+        return _dbContext.ParentStudentRelations.AsNoTracking()
+            .CountAsync(
+                relation => relation.ParentId == parentId && relation.IsActive,
+                cancellationToken);
     }
 }

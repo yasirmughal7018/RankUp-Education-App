@@ -24,6 +24,6 @@ Before App Store release:
 
 - Use `--dart-define=APP_ENV=production`.
 - Use the production API URL and SignalR URL.
-- Disable mock repositories with `--dart-define=USE_MOCKS=false`.
+- Keep mocks off for release builds (`USE_MOCKS` defaults to `false`; do not pass `USE_MOCKS=true`).
 - Verify privacy policy, child-safety rules, and data-sharing flows.
 - Run unit, widget, integration, Android, and iOS smoke tests.

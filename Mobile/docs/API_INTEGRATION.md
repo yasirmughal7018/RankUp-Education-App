@@ -23,8 +23,15 @@ Recommended MVP endpoints:
 - `GET /auth/me`
 - `POST /devices/register`
 
-The current mobile build keeps `USE_MOCKS` enabled and uses local dummy data.
-These demo accounts are available until the real API is connected:
+`USE_MOCKS` defaults to **false** (`AppEnvironment.fromDartDefines` in
+`lib/app/environment.dart`). The app talks to the real API unless you opt in
+to offline demo mode:
+
+```powershell
+flutter run --dart-define=USE_MOCKS=true
+```
+
+With mocks enabled, these local demo accounts work without the API:
 
 | User | Username / ID | Password |
 | --- | --- | --- |
@@ -186,3 +193,27 @@ Students still use `/api/quizzes` for attempts. Questions for an attempt are ret
 - `POST /api/quizzes/{quizId}/attempts` → includes `questions[]` in the start response
 - `POST /api/quizzes/{quizId}/attempts/{attemptId}/submit`
 - `GET /api/quizzes/{quizId}/attempts/{attemptId}/result`
+
+## Product stub endpoints (empty lists today)
+
+These authorized GETs return successful empty payloads so Mobile can wire UI
+without failing. Full domain logic is not implemented yet.
+
+| Feature | Method | Route |
+| --- | --- | --- |
+| Notifications | `GET` | `/api/notifications` |
+| Attendance | `GET` | `/api/attendance/me` |
+| Messaging | `GET` | `/api/messaging/threads` |
+| Rewards | `GET` | `/api/rewards/me` |
+| Competitions | `GET` | `/api/competitions` |
+| Worksheets | `GET` | `/api/worksheets` |
+| Device / push | `POST` | `/api/devices/register` |
+
+### Offline sync & push (placeholders)
+
+- **Offline sync:** `lib/core/synchronization/sync_queue.dart` holds an
+  in-memory queue (`enqueue` / `processPending`). Persistence and API replay
+  are not implemented.
+- **Push:** `lib/core/notifications/notification_service.dart` registers a
+  debug placeholder token via `/devices/register` after login. Firebase
+  Messaging / local notification channels are still TODO.

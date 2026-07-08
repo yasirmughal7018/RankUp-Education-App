@@ -1,49 +1,43 @@
 import 'package:flutter/material.dart';
-import 'package:rankup_education/features/worksheets/data/models/worksheet_summary.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/features/product_stubs/data/product_stub_models.dart';
+import 'package:rankup_education/features/product_stubs/presentation/providers/product_stub_providers.dart';
+import 'package:rankup_education/features/product_stubs/presentation/widgets/async_product_page.dart';
 
-class WorksheetsPage extends StatelessWidget {
+class WorksheetsPage extends ConsumerWidget {
   const WorksheetsPage({super.key});
 
-  static const _worksheets = [
-    WorksheetSummary(
-      id: 'worksheet-1',
-      title: 'Human Body Systems',
-      subject: 'Science',
-      status: 'Assigned',
-    ),
-    WorksheetSummary(
-      id: 'worksheet-2',
-      title: 'Essay Planning',
-      subject: 'English',
-      status: 'Under Review',
-    ),
-  ];
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Worksheets')),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemBuilder: (context, index) {
-          final worksheet = _worksheets[index];
-          return Card(
-            child: ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: Text(worksheet.title),
-              subtitle: Text(worksheet.subject),
-              trailing: Chip(label: Text(worksheet.status)),
-            ),
-          );
-        },
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemCount: _worksheets.length,
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
-        icon: const Icon(Icons.upload_file),
-        label: const Text('Submit'),
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(worksheetsProvider);
+    return AsyncProductPage(
+      title: 'Worksheets',
+      asyncValue: async,
+      onRefresh: () => ref.invalidate(worksheetsProvider),
+      icon: Icons.description_outlined,
+      emptyTitle: 'No worksheets',
+      emptyMessage:
+          'Assigned worksheets from teachers will appear here when available.',
+      isEmpty: (data) => (data as List<WorksheetItem>).isEmpty,
+      builder: (context, data) {
+        final items = data as List<WorksheetItem>;
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: Text(item.title),
+                subtitle: Text(item.subject),
+                trailing: Chip(label: Text(item.status)),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

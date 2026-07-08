@@ -12,7 +12,11 @@ public sealed record CampusResponse(long Id, long SchoolId, string Name, string?
 
 public sealed record UpsertCampusRequest(string Name, string? Address, bool IsActive = true);
 
-public sealed record DirectoryStudentListResponse(IReadOnlyList<DirectoryStudentResponse> Items);
+public sealed record DirectoryStudentListResponse(
+    IReadOnlyList<DirectoryStudentResponse> Items,
+    int PageNumber,
+    int PageSize,
+    int TotalCount);
 
 public sealed record DirectoryStudentResponse(
     long StudentId,
@@ -25,7 +29,30 @@ public sealed record DirectoryStudentResponse(
     int CampusId,
     bool IsActive);
 
-public sealed record DirectoryTeacherListResponse(IReadOnlyList<DirectoryTeacherResponse> Items);
+public sealed record CreateDirectoryStudentRequest(
+    string FullName,
+    string Username,
+    string Password,
+    int SchoolId,
+    int CampusId,
+    string RollNumber,
+    short Grade,
+    string Section,
+    string? MobileNumber = null);
+
+public sealed record UpdateDirectoryStudentRequest(
+    string FullName,
+    int CampusId,
+    string RollNumber,
+    short Grade,
+    string Section,
+    string? MobileNumber = null);
+
+public sealed record DirectoryTeacherListResponse(
+    IReadOnlyList<DirectoryTeacherResponse> Items,
+    int PageNumber,
+    int PageSize,
+    int TotalCount);
 
 public sealed record DirectoryTeacherResponse(
     long TeacherId,
@@ -36,7 +63,26 @@ public sealed record DirectoryTeacherResponse(
     int CampusId,
     bool IsActive);
 
-public sealed record DirectoryParentListResponse(IReadOnlyList<DirectoryParentResponse> Items);
+public sealed record CreateDirectoryTeacherRequest(
+    string FullName,
+    string Username,
+    string Password,
+    int SchoolId,
+    int CampusId,
+    string TeacherCode,
+    string? MobileNumber = null);
+
+public sealed record UpdateDirectoryTeacherRequest(
+    string FullName,
+    int CampusId,
+    string TeacherCode,
+    string? MobileNumber = null);
+
+public sealed record DirectoryParentListResponse(
+    IReadOnlyList<DirectoryParentResponse> Items,
+    int PageNumber,
+    int PageSize,
+    int TotalCount);
 
 public sealed record DirectoryParentResponse(
     long ParentId,
@@ -45,6 +91,18 @@ public sealed record DirectoryParentResponse(
     int LinkedStudentCount,
     bool IsActive);
 
+public sealed record CreateDirectoryParentRequest(
+    string FullName,
+    string Username,
+    string Password,
+    string? Cnic = null,
+    string? MobileNumber = null);
+
+public sealed record UpdateDirectoryParentRequest(
+    string FullName,
+    string? Cnic = null,
+    string? MobileNumber = null);
+
 public sealed record LinkParentStudentRequest(long StudentId, string Relationship = "Guardian");
 
 public sealed record LinkParentStudentResponse(
@@ -52,3 +110,7 @@ public sealed record LinkParentStudentResponse(
     long StudentId,
     string Relationship,
     bool IsActive);
+
+public sealed record BulkDeactivateRequest(IReadOnlyList<long> Ids);
+
+public sealed record BulkActionResponse(int AffectedCount);

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
+import 'package:rankup_education/core/notifications/notification_service.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
@@ -36,15 +37,21 @@ class AuthState {
 }
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._repository) : super(const AuthState());
+  AuthController(this._repository, this._notifications)
+      : super(const AuthState());
 
   final AuthRepository _repository;
+  final NotificationService _notifications;
 
   Future<void> restoreSession() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final session = await _repository.restoreSession();
       state = state.copyWith(user: session?.user, isLoading: false);
+      final user = session?.user;
+      if (user != null) {
+        await _notifications.registerDeviceToken(user.id);
+      }
     } on Exception catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.toString());
     }
@@ -65,6 +72,7 @@ class AuthController extends StateNotifier<AuthState> {
         password: password,
       );
       state = state.copyWith(user: session.user, isLoading: false);
+      await _notifications.registerDeviceToken(session.user.id);
     } on AppException catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.message);
     } on Exception catch (error) {

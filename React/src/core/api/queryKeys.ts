@@ -29,14 +29,21 @@ export const queryKeys = {
     campusId?: number | null;
     grade?: number | null;
     search?: string;
+    pageNumber?: number;
+    pageSize?: number;
   }) => ["directory", "students", filters] as const,
   directoryTeachers: (filters: {
     schoolId?: number | null;
     campusId?: number | null;
     search?: string;
+    pageNumber?: number;
+    pageSize?: number;
   }) => ["directory", "teachers", filters] as const,
-  directoryParents: (search?: string) =>
-    ["directory", "parents", search ?? ""] as const,
+  directoryParents: (filters: {
+    search?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }) => ["directory", "parents", filters] as const,
   reportQuizSummary: (from?: string | null, to?: string | null) =>
     ["reports", "quiz-summary", from ?? null, to ?? null] as const,
   reportQuizPerformance: (quizId: number) =>
