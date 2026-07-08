@@ -3,6 +3,7 @@ export const queryKeys = {
     ["lookups", type ?? "all", parentId ?? null] as const,
   lookupTypes: () => ["lookup-types"] as const,
   quizzes: (search?: string) => ["quizzes", search ?? ""] as const,
+  pendingQuizApprovals: () => ["quizzes", "pending-approval"] as const,
   manageQuiz: (quizId: number) => ["quizzes", "manage", quizId] as const,
   quizAssignments: (quizId: number) => ["quizzes", quizId, "assignments"] as const,
   assignmentBoard: (studentId?: number | null) =>

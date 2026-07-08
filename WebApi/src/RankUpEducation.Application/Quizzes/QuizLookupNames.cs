@@ -18,8 +18,21 @@ public static class QuizLookupNames
     public static readonly string[] CancelledLifecycleNames = ["Cancelled", "CANCELLED"];
     public static readonly string[] ArchivedLifecycleNames = ["Archived", "ARCHIVED"];
     public static readonly string[] ApprovedStatusNames = ["Approved", "APPROVED"];
+    public static readonly string[] RejectedApprovalStatusNames = ["Rejected", "Declined", "REJECTED"];
     public static readonly string[] AssignedResultNames = ["Assigned", "Not Started", "Pending"];
     public static readonly string[] McqQuestionTypeNames = ["MCQ", "Multiple Choice", "MultipleChoice"];
+    /// <summary>
+    /// Multi-select MCQ types. Mobile maps lookup names containing "multiple" to type id 41
+    /// (multi-select UI); names containing "Multi" are treated the same on the API.
+    /// </summary>
+    public static readonly string[] MultiSelectQuestionTypeNames =
+    [
+        "Multi Select",
+        "MultiSelect",
+        "Multiple Choice",
+        "MultipleChoice",
+        "Multiple"
+    ];
     public static readonly string[] DescriptiveQuestionTypeNames = ["Descriptive", "Short Answer", "ShortAnswer"];
     public static readonly string[] PendingQuestionStatusNames = ["Pending", "Draft", "Under Review"];
     public static readonly string[] ApprovedQuestionStatusNames = ["Approved", "Active", "Published"];

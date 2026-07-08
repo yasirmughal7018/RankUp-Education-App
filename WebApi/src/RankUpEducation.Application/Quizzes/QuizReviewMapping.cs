@@ -28,5 +28,6 @@ internal static class QuizReviewMapping
                 question.SelectedOptionId,
                 question.SubmittedText,
                 question.ParentFeedback,
-                question.RequiresReview)).ToArray());
+                question.RequiresReview,
+                question.SelectedOptionIds)).ToArray());
 }

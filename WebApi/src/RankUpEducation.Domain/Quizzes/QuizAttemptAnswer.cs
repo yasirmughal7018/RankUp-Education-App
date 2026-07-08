@@ -26,4 +26,12 @@ public sealed class QuizAttemptAnswer : BaseEntity
         AwardedMarks = awardedMarks;
         IsCorrect = isCorrect;
     }
+
+    public void UpdateDraft(long? questionOptionId, string? submittedText)
+    {
+        QuestionOptionId = questionOptionId;
+        SubmittedText = string.IsNullOrWhiteSpace(submittedText) ? null : submittedText.Trim();
+        IsCorrect = false;
+        AwardedMarks = 0;
+    }
 }

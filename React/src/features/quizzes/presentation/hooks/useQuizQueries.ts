@@ -5,6 +5,7 @@ import * as quizMonitorApi from "@/features/quizzes/data/quizMonitorApi";
 import type {
   AddQuizQuestionInput,
   AssignQuizInput,
+  AttachBankQuestionInput,
   QuizFormValues,
 } from "@/features/quizzes/domain/quizTypes";
 import type { MarkAttemptAnswerInput } from "@/features/quizzes/domain/quizMonitorTypes";
@@ -13,6 +14,13 @@ export function useQuizzesQuery(search?: string) {
   return useQuery({
     queryKey: queryKeys.quizzes(search),
     queryFn: () => quizApi.listQuizzes(search),
+  });
+}
+
+export function usePendingQuizApprovalsQuery() {
+  return useQuery({
+    queryKey: queryKeys.pendingQuizApprovals(),
+    queryFn: () => quizApi.listPendingQuizApprovals(),
   });
 }
 
@@ -134,6 +142,31 @@ export function useAddQuizQuestionMutation(quizId: number) {
   });
 }
 
+export function useUpdateQuizQuestionMutation(quizId: number) {
+  const invalidate = useInvalidateQuizDetail(quizId);
+
+  return useMutation({
+    mutationFn: ({
+      questionId,
+      input,
+    }: {
+      questionId: number;
+      input: AddQuizQuestionInput;
+    }) => quizApi.updateQuizQuestion(quizId, questionId, input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAttachBankQuestionMutation(quizId: number) {
+  const invalidate = useInvalidateQuizDetail(quizId);
+
+  return useMutation({
+    mutationFn: (input: AttachBankQuestionInput) =>
+      quizApi.attachBankQuestion(quizId, input),
+    onSuccess: invalidate,
+  });
+}
+
 export function useAssignQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
   const queryClient = useQueryClient();
@@ -204,6 +237,24 @@ export function useApproveQuizMutation() {
     mutationFn: (quizId: number) => quizApi.approveQuiz(quizId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.pendingQuizApprovals(),
+      });
+    },
+  });
+}
+
+export function useRejectQuizMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ quizId, reason }: { quizId: number; reason?: string }) =>
+      quizApi.rejectQuiz(quizId, reason),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.pendingQuizApprovals(),
+      });
     },
   });
 }

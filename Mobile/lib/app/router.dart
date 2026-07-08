@@ -11,6 +11,7 @@ import 'package:rankup_education/features/discussions/presentation/pages/discuss
 import 'package:rankup_education/features/messaging/presentation/pages/messages_page.dart';
 import 'package:rankup_education/features/parent_dashboard/presentation/pages/parent_dashboard_page.dart';
 import 'package:rankup_education/features/profile/presentation/pages/profile_page.dart';
+import 'package:rankup_education/features/questions/presentation/pages/questions_page.dart';
 import 'package:rankup_education/features/quizzes/presentation/pages/quizzes_page.dart';
 import 'package:rankup_education/features/rankings/presentation/pages/rankings_page.dart';
 import 'package:rankup_education/features/reports/presentation/pages/reports_page.dart';
@@ -59,6 +60,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/quizzes',
             builder: (context, state) => const QuizzesPage(),
+          ),
+          GoRoute(
+            path: '/questions',
+            builder: (context, state) => const QuestionsPage(),
           ),
           GoRoute(
             path: '/worksheets',

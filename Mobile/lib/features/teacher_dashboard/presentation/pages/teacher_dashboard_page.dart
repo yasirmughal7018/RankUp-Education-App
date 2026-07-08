@@ -28,8 +28,14 @@ class TeacherDashboardPage extends StatelessWidget {
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: () => context.go('/quizzes'),
-            icon: const Icon(Icons.add_task),
-            label: const Text('Create Quiz'),
+            icon: const Icon(Icons.assignment_outlined),
+            label: const Text('Manage Quizzes'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.push('/questions'),
+            icon: const Icon(Icons.quiz_outlined),
+            label: const Text('Question Bank'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(

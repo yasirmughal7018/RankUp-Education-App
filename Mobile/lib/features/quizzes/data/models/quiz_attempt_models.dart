@@ -118,6 +118,35 @@ class QuizOptionModel extends QuizOption {
   }
 }
 
+class SavedQuizAnswerModel extends SavedQuizAnswer {
+  const SavedQuizAnswerModel({
+    required super.questionId,
+    super.selectedOptionId,
+    super.selectedOptionIds,
+    super.submittedText,
+  });
+
+  factory SavedQuizAnswerModel.fromJson(Map<String, dynamic> json) {
+    final selectedOptionIds = json['selectedOptionIds'];
+    final parsedIds = selectedOptionIds is List
+        ? selectedOptionIds
+            .map((value) => value?.toString() ?? '')
+            .where((value) => value.isNotEmpty)
+            .toList(growable: false)
+        : const <String>[];
+    final singleId = _readNullableString(json, ['selectedOptionId']);
+
+    return SavedQuizAnswerModel(
+      questionId: _readString(json, ['questionId', 'id']),
+      selectedOptionId: singleId,
+      selectedOptionIds: parsedIds.isNotEmpty
+          ? parsedIds
+          : (singleId == null ? const <String>[] : <String>[singleId]),
+      submittedText: _readNullableString(json, ['submittedText']),
+    );
+  }
+}
+
 class QuizAttemptSessionModel extends QuizAttemptSession {
   const QuizAttemptSessionModel({
     required super.attemptId,
@@ -126,20 +155,30 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
     required super.startedAt,
     required super.questions,
     super.timeLimitMinutes,
+    super.resumed,
+    super.savedAnswers,
   });
 
   factory QuizAttemptSessionModel.fromJson(Map<String, dynamic> json) {
     final questions = json['questions'];
+    final savedAnswers = json['savedAnswers'];
     return QuizAttemptSessionModel(
       attemptId: _readString(json, ['attemptId', 'id']),
       quizId: _readString(json, ['quizId']),
       attemptNumber: _readInt(json, ['attemptNumber'], fallback: 1),
       startedAt: _readDate(json, ['startedAt']) ?? DateTime.now(),
       timeLimitMinutes: _readNullableInt(json, ['timeLimitMinutes']),
+      resumed: _readBool(json, ['resumed']),
       questions: questions is List
           ? questions
               .whereType<Map<String, dynamic>>()
               .map(QuizQuestionModel.fromJson)
+              .toList()
+          : const [],
+      savedAnswers: savedAnswers is List
+          ? savedAnswers
+              .whereType<Map<String, dynamic>>()
+              .map(SavedQuizAnswerModel.fromJson)
               .toList()
           : const [],
     );

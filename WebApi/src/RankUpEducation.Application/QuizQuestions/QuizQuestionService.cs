@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Contracts.Quizzes;
+using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Questions;
 using RankUpEducation.Domain.Quizzes;
 
@@ -15,6 +16,11 @@ public interface IQuizQuestionService
     Task<ManageQuizResponse> AddToQuizAsync(
         long quizId,
         AddQuizQuestionRequest request,
+        CancellationToken cancellationToken);
+
+    Task<ManageQuizResponse> AttachBankQuestionAsync(
+        long quizId,
+        AttachBankQuestionRequest request,
         CancellationToken cancellationToken);
 
     Task<ManageQuizResponse> UpdateOnQuizAsync(
@@ -34,6 +40,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
     private readonly IQuizRepository _quizzes;
     private readonly IQuizQuestionRepository _quizQuestions;
     private readonly IQuestionRepository _questions;
+    private readonly ILookupRepository _lookups;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly QuizManageGuard _guard;
@@ -49,6 +56,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         _quizzes = quizzes;
         _quizQuestions = quizQuestions;
         _questions = questions;
+        _lookups = lookups;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _guard = new QuizManageGuard(quizzes, lookups);
@@ -110,6 +118,70 @@ public sealed class QuizQuestionService : IQuizQuestionService
         var displayOrder = (short)(existingQuestions.Count + 1);
         await _quizQuestions.AddQuizQuestionAsync(
             new QuizQuestion(quizId, question.Id, displayOrder, request.Marks),
+            cancellationToken);
+        await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await BuildManageResponseAsync(quizId, scope, cancellationToken);
+    }
+
+    public async Task<ManageQuizResponse> AttachBankQuestionAsync(
+        long quizId,
+        AttachBankQuestionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var scope = QuizScopeResolver.RequireManageScope(_currentUser);
+        var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+
+        if (request.QuestionId <= 0)
+        {
+            throw new ValidationAppException(["QuestionId is required."]);
+        }
+
+        var question = await _questions.GetQuestionEntityForManageAsync(request.QuestionId, cancellationToken)
+            ?? throw new NotFoundAppException("Question was not found.");
+
+        if (!question.IsActive)
+        {
+            throw new BusinessRuleException("Only active questions can be attached to a quiz.");
+        }
+
+        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
+        var isApproved = QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
+            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+        if (!isApproved)
+        {
+            throw new BusinessRuleException("Only approved question-bank items can be attached to a quiz.");
+        }
+
+        if (question.ClassId != quiz.ClassId || question.SubjectId != quiz.SubjectId)
+        {
+            throw new BusinessRuleException(
+                "Question class/subject must match the quiz class/subject.");
+        }
+
+        var existingLink = await _quizQuestions.GetQuizQuestionLinkAsync(
+            quizId,
+            request.QuestionId,
+            cancellationToken);
+        if (existingLink is not null)
+        {
+            throw new BusinessRuleException("This question is already on the quiz.");
+        }
+
+        var marks = request.Marks ?? question.Marks;
+        if (marks <= 0)
+        {
+            throw new ValidationAppException(["Marks must be greater than zero."]);
+        }
+
+        var existingQuestions = await _quizQuestions.GetQuizQuestionsAsync(
+            quizId,
+            cancellationToken,
+            includeInactive: true);
+        var displayOrder = (short)(existingQuestions.Count + 1);
+        await _quizQuestions.AddQuizQuestionAsync(
+            new QuizQuestion(quizId, question.Id, displayOrder, marks),
             cancellationToken);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

@@ -23,6 +23,12 @@ public interface IQuizService
         StartQuizAttemptRequest request,
         CancellationToken cancellationToken);
 
+    Task<SaveQuizAttemptAnswersResponse> SaveAttemptAnswersAsync(
+        long quizId,
+        long attemptId,
+        SaveQuizAttemptAnswersRequest request,
+        CancellationToken cancellationToken);
+
     Task<QuizAttemptResultResponse> SubmitAttemptAsync(
         long quizId,
         long attemptId,
@@ -208,16 +214,32 @@ public sealed class QuizService : IQuizService
         var now = _dateTimeProvider.UtcNow;
         EnsureAttemptWindow(access, now);
 
-        if (access.ExistingAttemptCount >= access.AllowedAttempts)
-        {
-            throw new BusinessRuleException("You have used all allowed attempts for this quiz.");
-        }
-
         var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             InProgressStatusName,
             fallback: 1,
             cancellationToken);
+
+        var existingInProgress = await _attempts.GetInProgressAttemptAsync(
+            quizId,
+            studentId,
+            inProgressStatusId,
+            cancellationToken);
+
+        if (existingInProgress is not null)
+        {
+            return await BuildAttemptPayloadAsync(
+                quiz,
+                existingInProgress,
+                studentId,
+                resumed: true,
+                cancellationToken);
+        }
+
+        if (access.ExistingAttemptCount >= access.AllowedAttempts)
+        {
+            throw new BusinessRuleException("You have used all allowed attempts for this quiz.");
+        }
 
         var attemptNumber = (short)(access.ExistingAttemptCount + 1);
         var attempt = new QuizAttempt(
@@ -234,7 +256,7 @@ public sealed class QuizService : IQuizService
             throw new BusinessRuleException("This quiz has no active questions.");
         }
 
-        var orderedQuestions = quizQuestions.OrderBy(question => question.DisplayOrder).ToList();
+        var orderedQuestions = OrderQuestionsForAttempt(quizQuestions, quiz.ShuffleQuestions);
         await _attempts.AddAttemptAsync(attempt, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -245,15 +267,81 @@ public sealed class QuizService : IQuizService
         await _attempts.AddAttemptQuestionsAsync(attemptQuestions, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var quizDetail = await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken);
+        return await BuildAttemptPayloadAsync(
+            quiz,
+            attempt,
+            studentId,
+            resumed: false,
+            cancellationToken);
+    }
 
-        return new StartQuizAttemptResponse(
-            attempt.Id,
-            quizId,
-            attemptNumber,
-            quizDetail?.TimeLimitMinutes,
-            attempt.StartedDate,
-            orderedQuestions.Select(question => QuizMapping.ToAttemptQuestion(question, revealCorrectAnswers: false)).ToArray());
+    public async Task<SaveQuizAttemptAnswersResponse> SaveAttemptAnswersAsync(
+        long quizId,
+        long attemptId,
+        SaveQuizAttemptAnswersRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureStudentRole();
+        var studentId = RequireStudentId();
+
+        var attempt = await _attempts.GetAttemptEntityAsync(attemptId, studentId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz attempt was not found.");
+
+        if (attempt.QuizId != quizId)
+        {
+            throw new NotFoundAppException("Quiz attempt was not found.");
+        }
+
+        var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
+            AttemptStatusType,
+            InProgressStatusName,
+            fallback: 1,
+            cancellationToken);
+
+        if (attempt.StatusId != inProgressStatusId)
+        {
+            throw new BusinessRuleException("Only in-progress attempts can save draft answers.");
+        }
+
+        var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
+            ?? throw new NotFoundAppException("This quiz is not assigned to you.");
+        EnsureAttemptWindow(access, _dateTimeProvider.UtcNow);
+
+        var answers = request.Answers ?? Array.Empty<SubmitQuizAnswerRequest>();
+        var savedCount = 0;
+
+        foreach (var submitted in answers
+            .GroupBy(answer => answer.QuestionId)
+            .Select(group => group.Last()))
+        {
+            var attemptQuestion = await _attempts.GetAttemptQuestionEntityAsync(
+                attemptId,
+                submitted.QuestionId,
+                cancellationToken);
+            if (attemptQuestion is null)
+            {
+                continue;
+            }
+
+            var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
+            await ReplaceAttemptAnswersAsync(
+                attemptQuestion.Id,
+                selectedOptionIds,
+                submitted.SubmittedText,
+                awardedMarks: 0,
+                isCorrect: false,
+                cancellationToken);
+
+            savedCount++;
+        }
+
+        if (request.TimeSpentSeconds is short timeSpent)
+        {
+            attempt.UpdateTimeSpent((short)Math.Clamp((int)timeSpent, 0, short.MaxValue));
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return new SaveQuizAttemptAnswersResponse(attemptId, savedCount);
     }
 
     public async Task<QuizAttemptResultResponse> SubmitAttemptAsync(
@@ -296,7 +384,6 @@ public sealed class QuizService : IQuizService
             .GroupBy(answer => answer.QuestionId)
             .ToDictionary(group => group.Key, group => group.Last());
 
-        var answerEntities = new List<QuizAttemptAnswer>();
         var hasSubjectiveAnswers = false;
 
         foreach (var attemptQuestion in attemptDetail.Questions)
@@ -311,15 +398,28 @@ public sealed class QuizService : IQuizService
                 continue;
             }
 
-            long? selectedOptionId = submitted.SelectedOptionId;
-
+            var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
             var isCorrect = false;
             short awardedMarks = 0;
+            var isMultiSelect = QuizQuestionHelper.IsMultiSelectType(question.QuestionTypeName);
             var isDescriptive = QuizQuestionHelper.IsDescriptiveType(question.QuestionTypeName)
-                || (selectedOptionId is null && !string.IsNullOrWhiteSpace(submitted.SubmittedText));
+                || (selectedOptionIds.Count == 0 && !string.IsNullOrWhiteSpace(submitted.SubmittedText));
 
-            if (selectedOptionId is not null)
+            if (isMultiSelect && selectedOptionIds.Count > 0)
             {
+                var correctOptionIds = question.Options
+                    .Where(option => option.IsCorrect)
+                    .Select(option => option.OptionId)
+                    .ToArray();
+                (isCorrect, awardedMarks) = QuizAnswerSelection.ScoreMultiSelect(
+                    selectedOptionIds,
+                    correctOptionIds,
+                    question.Marks);
+                obtainedMarks += awardedMarks;
+            }
+            else if (selectedOptionIds.Count > 0)
+            {
+                var selectedOptionId = selectedOptionIds[0];
                 var selectedOption = question.Options.FirstOrDefault(option => option.OptionId == selectedOptionId);
                 isCorrect = selectedOption?.IsCorrect ?? false;
                 awardedMarks = isCorrect ? question.Marks : (short)0;
@@ -330,15 +430,14 @@ public sealed class QuizService : IQuizService
                 hasSubjectiveAnswers = true;
             }
 
-            var answer = new QuizAttemptAnswer(
+            await ReplaceAttemptAnswersAsync(
                 attemptQuestion.AttemptQuestionId,
-                selectedOptionId,
-                submitted.SubmittedText);
-            answer.Mark(awardedMarks, isCorrect);
-            answerEntities.Add(answer);
+                selectedOptionIds,
+                submitted.SubmittedText,
+                awardedMarks,
+                isCorrect,
+                cancellationToken);
         }
-
-        await _attempts.AddAttemptAnswersAsync(answerEntities, cancellationToken);
 
         attempt.MarkSubmitted(
             submittedStatusId,
@@ -393,6 +492,136 @@ public sealed class QuizService : IQuizService
             maskPendingReview: maskPendingReview,
             resultStatusOverride: maskPendingReview ? "Pending Review" : null);
     }
+
+    private async Task<StartQuizAttemptResponse> BuildAttemptPayloadAsync(
+        Quiz quiz,
+        QuizAttempt attempt,
+        long studentId,
+        bool resumed,
+        CancellationToken cancellationToken)
+    {
+        var quizDetail = await _quizzes.GetDetailForStudentAsync(quiz.Id, studentId, cancellationToken);
+        var attemptDetail = await _attempts.GetAttemptDetailAsync(attempt.Id, studentId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz attempt was not found.");
+
+        var bankQuestions = await _quizQuestions.GetQuizQuestionsAsync(quiz.Id, cancellationToken);
+        var bankById = bankQuestions.ToDictionary(question => question.QuestionId);
+
+        var questions = attemptDetail.Questions
+            .OrderBy(question => question.DisplayOrder)
+            .Select(attemptQuestion =>
+            {
+                if (!bankById.TryGetValue(attemptQuestion.QuestionId, out var bankQuestion))
+                {
+                    return new QuizQuestionForAttemptResponse(
+                        attemptQuestion.QuestionId,
+                        attemptQuestion.QuestionText,
+                        "Unknown",
+                        attemptQuestion.Marks,
+                        attemptQuestion.DisplayOrder,
+                        null,
+                        Array.Empty<QuizOptionResponse>());
+                }
+
+                var options = bankQuestion.Options
+                    .Select(option => new QuizOptionResponse(
+                        option.OptionId,
+                        option.OptionText,
+                        option.OptionImageUrl))
+                    .ToList();
+
+                if (quiz.ShuffleOptions && options.Count > 1)
+                {
+                    options = options.OrderBy(_ => Random.Shared.Next()).ToList();
+                }
+
+                return new QuizQuestionForAttemptResponse(
+                    bankQuestion.QuestionId,
+                    bankQuestion.QuestionText,
+                    bankQuestion.QuestionTypeName,
+                    bankQuestion.Marks,
+                    attemptQuestion.DisplayOrder,
+                    bankQuestion.Hint,
+                    options);
+            })
+            .ToArray();
+
+        var savedAnswers = attemptDetail.Questions
+            .Where(question =>
+                question.SelectedOptionIds.Count > 0
+                || question.SelectedOptionId is not null
+                || !string.IsNullOrWhiteSpace(question.SubmittedText))
+            .Select(question => new SavedQuizAnswerResponse(
+                question.QuestionId,
+                question.SelectedOptionId,
+                question.SubmittedText,
+                question.SelectedOptionIds))
+            .ToArray();
+
+        return new StartQuizAttemptResponse(
+            attempt.Id,
+            quiz.Id,
+            attempt.NumberOfQuestionAttempt,
+            quizDetail?.TimeLimitMinutes,
+            attempt.StartedDate,
+            resumed,
+            questions,
+            savedAnswers);
+    }
+
+    private async Task ReplaceAttemptAnswersAsync(
+        long attemptQuestionId,
+        IReadOnlyList<long> selectedOptionIds,
+        string? submittedText,
+        short awardedMarks,
+        bool isCorrect,
+        CancellationToken cancellationToken)
+    {
+        await _attempts.RemoveAttemptAnswersAsync(attemptQuestionId, cancellationToken);
+
+        if (selectedOptionIds.Count == 0 && string.IsNullOrWhiteSpace(submittedText))
+        {
+            return;
+        }
+
+        if (selectedOptionIds.Count == 0)
+        {
+            var textAnswer = new QuizAttemptAnswer(attemptQuestionId, null, submittedText);
+            if (awardedMarks > 0 || isCorrect)
+            {
+                textAnswer.Mark(awardedMarks, isCorrect);
+            }
+
+            await _attempts.AddAttemptAnswersAsync([textAnswer], cancellationToken);
+            return;
+        }
+
+        var answerRows = selectedOptionIds
+            .Select((optionId, index) =>
+            {
+                var row = new QuizAttemptAnswer(
+                    attemptQuestionId,
+                    optionId,
+                    index == 0 ? submittedText : null);
+                if (index == 0 && (awardedMarks > 0 || isCorrect))
+                {
+                    row.Mark(awardedMarks, isCorrect);
+                }
+
+                return row;
+            })
+            .ToArray();
+
+        await _attempts.AddAttemptAnswersAsync(answerRows, cancellationToken);
+    }
+
+    private static List<QuizQuestionItem> OrderQuestionsForAttempt(
+        IReadOnlyList<QuizQuestionItem> questions,
+        bool shuffleQuestions)
+        => QuizQuestionOrder.OrderForAttempt(
+            questions,
+            question => question.DisplayOrder,
+            shuffleQuestions).ToList();
 
     private async Task<IReadOnlyList<QuizListItem>> ListForStudentAsync(
         string? search,

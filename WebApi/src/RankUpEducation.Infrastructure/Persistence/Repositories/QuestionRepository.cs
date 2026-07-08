@@ -29,7 +29,9 @@ public sealed class QuestionRepository : IQuestionRepository
 
     public Task<Question?> GetQuestionEntityForManageAsync(long questionId, CancellationToken cancellationToken)
     {
-        return _dbContext.Questions.FirstOrDefaultAsync(question => question.Id == questionId, cancellationToken);
+        return _dbContext.Questions
+            .Include(question => question.Options)
+            .FirstOrDefaultAsync(question => question.Id == questionId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<QuestionListItem>> ListQuestionsAsync(
@@ -164,6 +166,7 @@ public sealed class QuestionRepository : IQuestionRepository
             question.CreatedBy,
             question.ApprovedBy,
             question.IsAiApproved,
+            question.RejectionReason,
             question.CreatedDate,
             question.ModifiedDate,
             options);

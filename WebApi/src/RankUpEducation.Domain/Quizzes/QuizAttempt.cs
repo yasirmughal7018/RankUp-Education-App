@@ -46,6 +46,11 @@ public sealed class QuizAttempt : BaseEntity
         SubmittedDate = DateTimeOffset.UtcNow;
     }
 
+    public void UpdateTimeSpent(short timeSpentSeconds)
+    {
+        TimeSpentSeconds = timeSpentSeconds;
+    }
+
     public void MarkSubmitted(short submittedStatusId, short obtainedMarks, short totalMarks, short timeSpentSeconds)
     {
         StatusId = submittedStatusId;

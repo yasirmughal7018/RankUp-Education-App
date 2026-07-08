@@ -86,7 +86,9 @@ public sealed class QuestionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _questionService.ApproveAiAsync(questionId, cancellationToken);
-        return Ok(ApiResponse<QuestionApprovalResponse>.Ok(response, "Question AI-approved."));
+        return Ok(ApiResponse<QuestionApprovalResponse>.Ok(
+            response,
+            "Question marked AI-approved after heuristic validation (not LLM scoring)."));
     }
 
     [HttpPost("{questionId:long}/reject")]

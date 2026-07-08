@@ -38,7 +38,8 @@ public sealed record AttemptReviewQuestionResponse(
     long? SelectedOptionId,
     string? SubmittedText,
     string? ParentFeedback,
-    bool RequiresReview);
+    bool RequiresReview,
+    IReadOnlyList<long>? SelectedOptionIds = null);
 
 public sealed record MarkAttemptAnswerRequest(
     long QuestionId,

@@ -143,8 +143,20 @@ Quiz-scoped question logic is separate from the question bank. Routes live under
 |--------|--------|-------|
 | List quiz questions | `GET` | `/api/quizzes/{quizId}/questions` |
 | Add question to quiz | `POST` | `/api/quizzes/{quizId}/questions` |
+| Attach from question bank | `POST` | `/api/quizzes/{quizId}/questions/from-bank` |
 | Update quiz question | `PUT` | `/api/quizzes/{quizId}/questions/{questionId}` |
 | Remove from quiz | `DELETE` | `/api/quizzes/{quizId}/questions/{questionId}` |
+
+Attach-from-bank request body:
+
+```json
+{
+  "questionId": 10,
+  "marks": 2
+}
+```
+
+`marks` is optional; when omitted the bank question marks are used.
 
 Add/update request body:
 
@@ -188,11 +200,78 @@ Add/update/delete return the updated `ManageQuizResponse` (same shape as `GET /a
 
 ## Student Quiz Attempt Endpoints
 
-Students still use `/api/quizzes` for attempts. Questions for an attempt are returned when starting:
+Students use `/api/quizzes` for attempts.
 
-- `POST /api/quizzes/{quizId}/attempts` → includes `questions[]` in the start response
-- `POST /api/quizzes/{quizId}/attempts/{attemptId}/submit`
-- `GET /api/quizzes/{quizId}/attempts/{attemptId}/result`
+| Action | Method | Route |
+|--------|--------|-------|
+| Start or resume | `POST` | `/api/quizzes/{quizId}/attempts` |
+| Save draft answers | `PUT` | `/api/quizzes/{quizId}/attempts/{attemptId}/draft` |
+| Submit attempt | `POST` | `/api/quizzes/{quizId}/attempts/{attemptId}/submit` |
+| Get result / review | `GET` | `/api/quizzes/{quizId}/attempts/{attemptId}/result` |
+
+### Start / resume
+
+`POST /api/quizzes/{quizId}/attempts` with `{ "deviceId": "..." }` returns:
+
+```json
+{
+  "attemptId": 1,
+  "quizId": 10,
+  "attemptNumber": 1,
+  "timeLimitMinutes": 30,
+  "startedAt": "2026-07-09T00:00:00Z",
+  "resumed": true,
+  "questions": [],
+  "savedAnswers": [
+    {
+      "questionId": 100,
+      "selectedOptionId": 201,
+      "selectedOptionIds": [201, 202],
+      "submittedText": null
+    }
+  ]
+}
+```
+
+When `resumed` is true, Mobile hydrates local selections from `savedAnswers`.
+
+### Draft save
+
+`PUT /api/quizzes/{quizId}/attempts/{attemptId}/draft`:
+
+```json
+{
+  "answers": [
+    {
+      "questionId": 100,
+      "selectedOptionId": 201,
+      "selectedOptionIds": [201, 202],
+      "submittedText": null
+    }
+  ],
+  "timeSpentSeconds": 45
+}
+```
+
+Mobile debounces draft saves (~800ms) after answer changes.
+
+### Multi-select answers
+
+For multi-select questions, send **all** chosen ids in `selectedOptionIds`.
+`selectedOptionId` remains for single-choice / true-false.
+Submit uses the same answer shape as draft.
+
+## Quiz manage / approval (teacher & admin)
+
+| Action | Method | Route |
+|--------|--------|-------|
+| Pending quiz approval | `GET` | `/api/quizzes/pending-approval` |
+| Reject quiz | `POST` | `/api/quizzes/{quizId}/reject` |
+
+Reject body: `{ "reason": "optional" }`.
+
+Mobile teacher MVP lists quizzes via `GET /api/quizzes` and shows a read-only summary.
+Create/edit/assign/from-bank attach remain on web for this MVP.
 
 ## Product stub endpoints (empty lists today)
 

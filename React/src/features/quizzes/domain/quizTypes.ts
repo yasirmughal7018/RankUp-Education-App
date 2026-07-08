@@ -95,6 +95,27 @@ export interface AddQuizQuestionInput {
   options: Array<{ optionText: string; isCorrect: boolean }>;
 }
 
+export type UpdateQuizQuestionInput = AddQuizQuestionInput;
+
+export interface AttachBankQuestionInput {
+  questionId: number;
+  marks?: number | null;
+}
+
+export interface PendingQuizApproval {
+  quizId: number;
+  title: string;
+  createdBy: string;
+  schoolName: string;
+  subjectName: string;
+  gradeName: string;
+  quizTypeName: string;
+  approvalStatus: string;
+  lifecycleStatus: string;
+  totalQuestions: number;
+  modifiedDate: string;
+}
+
 export interface AssignQuizInput {
   mode: string;
   studentIds: number[];
@@ -214,6 +235,30 @@ export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
       { optionText: "", isCorrect: true },
       { optionText: "", isCorrect: false },
     ],
+  };
+}
+
+export function mapQuizQuestionToInput(
+  question: QuizQuestionItem,
+): AddQuizQuestionInput {
+  const isMcq = question.questionType.toLowerCase().includes("mcq");
+
+  return {
+    questionText: question.questionText,
+    questionType: question.questionType,
+    marks: question.marks,
+    estimatedTimeSeconds: 60,
+    hint: question.hint ?? "",
+    explanation: "",
+    options: isMcq
+      ? question.options.map((option) => ({
+          optionText: option.optionText,
+          isCorrect: option.isCorrect,
+        }))
+      : [
+          { optionText: "", isCorrect: true },
+          { optionText: "", isCorrect: false },
+        ],
   };
 }
 

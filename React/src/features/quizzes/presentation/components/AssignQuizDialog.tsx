@@ -1,10 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { LookupSelect } from "@/core/components/LookupSelect";
+import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { useDirectoryStudentsQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import type { AssignQuizInput } from "@/features/quizzes/domain/quizTypes";
 
 interface AssignQuizDialogProps {
   isSubmitting: boolean;
+  defaultGrade?: string;
   onClose: () => void;
   onSubmit: (input: AssignQuizInput) => Promise<void>;
 }
@@ -19,21 +23,66 @@ function defaultDateTime(offsetHours: number): string {
   return date.toISOString().slice(0, 16);
 }
 
+function parseGradeNumber(grade?: string): number | null {
+  if (!grade?.trim()) {
+    return null;
+  }
+
+  const match = grade.match(/\d+/);
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[0]);
+  return Number.isFinite(value) ? value : null;
+}
+
 export function AssignQuizDialog({
   isSubmitting,
+  defaultGrade,
   onClose,
   onSubmit,
 }: AssignQuizDialogProps) {
   const { user } = useAuth();
   const isTeacher = user?.role === "Teacher";
   const [mode, setMode] = useState("selected");
-  const [studentIdsText, setStudentIdsText] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [gradeId, setGradeId] = useState("");
+  const [gradeId, setGradeId] = useState<number | "">("");
+  const [gradeFilter, setGradeFilter] = useState<number | "">(
+    () => parseGradeNumber(defaultGrade) ?? "",
+  );
   const [startAt, setStartAt] = useState(defaultDateTime(1));
   const [endAt, setEndAt] = useState(defaultDateTime(24));
   const [allowedAttempts, setAllowedAttempts] = useState(1);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(studentSearch.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [studentSearch]);
+
+  const studentsQuery = useDirectoryStudentsQuery(
+    {
+      search: debouncedSearch || undefined,
+      grade: gradeFilter === "" ? undefined : gradeFilter,
+      pageNumber: 1,
+      pageSize: 50,
+    },
+    mode === "selected",
+  );
+
+  const students = studentsQuery.data?.items ?? [];
+
+  const selectedSet = useMemo(
+    () => new Set(selectedStudentIds),
+    [selectedStudentIds],
+  );
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -46,17 +95,20 @@ export function AssignQuizDialog({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isSubmitting, onClose]);
 
+  function toggleStudent(studentId: number) {
+    setSelectedStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId],
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    const studentIds = studentIdsText
-      .split(/[,\s]+/)
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isFinite(value) && value > 0);
-
-    if (mode === "selected" && studentIds.length === 0) {
-      setError("Enter at least one student ID for selected assignment.");
+    if (mode === "selected" && selectedStudentIds.length === 0) {
+      setError("Select at least one student for selected assignment.");
       return;
     }
 
@@ -65,20 +117,20 @@ export function AssignQuizDialog({
       return;
     }
 
-    if (mode === "allingrade" && !gradeId) {
-      setError("Grade ID is required for all-in-grade assignment.");
+    if (mode === "allingrade" && gradeId === "") {
+      setError("Grade is required for all-in-grade assignment.");
       return;
     }
 
     try {
       await onSubmit({
         mode,
-        studentIds,
+        studentIds: selectedStudentIds,
         groupId: groupId ? Number(groupId) : null,
         startAt: new Date(startAt).toISOString(),
         endAt: new Date(endAt).toISOString(),
         allowedAttempts,
-        gradeId: gradeId ? Number(gradeId) : null,
+        gradeId: gradeId === "" ? null : gradeId,
       });
     } catch (caught) {
       const apiError = caught as ApiError;
@@ -88,7 +140,7 @@ export function AssignQuizDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-8">
-      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-xl font-semibold text-slate-900">Assign quiz</h2>
         <p className="mt-2 text-sm text-slate-600">
           Choose students and set the assignment window.
@@ -119,21 +171,101 @@ export function AssignQuizDialog({
           </div>
 
           {mode === "selected" ? (
-            <div>
-              <label
-                htmlFor="studentIds"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
-                Student IDs
-              </label>
-              <input
-                id="studentIds"
-                value={studentIdsText}
-                disabled={isSubmitting}
-                onChange={(event) => setStudentIdsText(event.target.value)}
-                className={inputClassName}
-                placeholder="101, 102, 103"
-              />
+            <div className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="studentSearch"
+                    className="mb-1 block text-sm font-medium text-slate-700"
+                  >
+                    Search students
+                  </label>
+                  <input
+                    id="studentSearch"
+                    value={studentSearch}
+                    disabled={isSubmitting}
+                    onChange={(event) => setStudentSearch(event.target.value)}
+                    className={inputClassName}
+                    placeholder="Name, username, or roll #"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="gradeFilter"
+                    className="mb-1 block text-sm font-medium text-slate-700"
+                  >
+                    Grade filter
+                  </label>
+                  <input
+                    id="gradeFilter"
+                    type="number"
+                    value={gradeFilter}
+                    disabled={isSubmitting}
+                    onChange={(event) =>
+                      setGradeFilter(
+                        event.target.value === ""
+                          ? ""
+                          : Number(event.target.value),
+                      )
+                    }
+                    className={inputClassName}
+                    min={1}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              {selectedStudentIds.length > 0 ? (
+                <p className="text-xs text-slate-600">
+                  {selectedStudentIds.length} student
+                  {selectedStudentIds.length === 1 ? "" : "s"} selected
+                </p>
+              ) : null}
+
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200">
+                {studentsQuery.isLoading ? (
+                  <p className="px-3 py-4 text-sm text-slate-600">
+                    Loading students...
+                  </p>
+                ) : studentsQuery.error ? (
+                  <p className="px-3 py-4 text-sm text-red-700">
+                    {studentsQuery.error.message}
+                  </p>
+                ) : students.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-slate-600">
+                    No students found. Try a different search.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {students.map((student) => {
+                      const checked = selectedSet.has(student.studentId);
+                      return (
+                        <li key={student.studentId}>
+                          <label className="flex cursor-pointer items-start gap-3 px-3 py-2 hover:bg-slate-50">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={isSubmitting}
+                              onChange={() => toggleStudent(student.studentId)}
+                              className="mt-1"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-medium text-slate-900">
+                                {student.fullName}
+                              </span>
+                              <span className="block text-xs text-slate-500">
+                                Grade {student.grade}
+                                {student.section ? `-${student.section}` : ""} ·{" "}
+                                {student.rollNumber || student.username}
+                              </span>
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             </div>
           ) : null}
 
@@ -151,24 +283,22 @@ export function AssignQuizDialog({
                 className={inputClassName}
                 min={1}
               />
+              <p className="mt-1 text-xs text-slate-500">
+                Enter the student group ID to assign.
+              </p>
             </div>
           ) : null}
 
           {mode === "allingrade" ? (
-            <div>
-              <label htmlFor="gradeId" className="mb-1 block text-sm font-medium text-slate-700">
-                Grade ID
-              </label>
-              <input
-                id="gradeId"
-                type="number"
-                value={gradeId}
-                disabled={isSubmitting}
-                onChange={(event) => setGradeId(event.target.value)}
-                className={inputClassName}
-                min={1}
-              />
-            </div>
+            <LookupSelect
+              label="Grade"
+              value={gradeId}
+              onChange={setGradeId}
+              type={LOOKUP_TYPES.CLASS}
+              disabled={isSubmitting}
+              required
+              placeholder="Select grade..."
+            />
           ) : null}
 
           <div className="grid gap-4 md:grid-cols-2">

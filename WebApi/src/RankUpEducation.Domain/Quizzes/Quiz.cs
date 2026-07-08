@@ -142,6 +142,13 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    public void Reject(short approvalStatusId)
+    {
+        ApprovalStatusId = approvalStatusId;
+        ApprovedBy = null;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
     public void MarkDeleted(DateTimeOffset deletedAt, long? deletedBy)
     {
         SoftDelete(deletedAt, deletedBy);

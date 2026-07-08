@@ -34,6 +34,7 @@ public sealed record QuestionDetailItem(
     string CreatedBy,
     string? ApprovedBy,
     bool IsAiApproved,
+    string? RejectionReason,
     DateOnly CreatedDate,
     DateOnly ModifiedDate,
     IReadOnlyList<QuizQuestionOptionItem> Options);

@@ -30,8 +30,17 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         }
 
         await _dbContext.Database.ExecuteSqlRawAsync(RegistrationSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuestionSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
+
+    private const string QuestionSupportSql = """
+        ALTER TABLE public.questions
+            ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(1000) NULL;
+
+        ALTER TABLE public.questions
+            ADD COLUMN IF NOT EXISTS is_ai_approved BOOLEAN NOT NULL DEFAULT FALSE;
+        """;
 
     private const string RegistrationSupportSql = """
         ALTER TABLE public.app_users

@@ -37,6 +37,7 @@ internal static class QuestionMapping
             item.CreatedBy,
             item.ApprovedBy,
             item.IsAiApproved,
+            item.RejectionReason,
             item.CreatedDate,
             item.ModifiedDate,
             item.Options.Select(option => new QuestionOptionResponse(

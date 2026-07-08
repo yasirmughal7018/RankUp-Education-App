@@ -2,10 +2,13 @@ import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 import type {
   AssignQuizInput,
   AddQuizQuestionInput,
+  AttachBankQuestionInput,
   ManageQuiz,
+  PendingQuizApproval,
   QuizAssignment,
   QuizFormValues,
   QuizSummary,
+  UpdateQuizQuestionInput,
 } from "@/features/quizzes/domain/quizTypes";
 import {
   buildQuizPayload,
@@ -91,8 +94,26 @@ export async function archiveQuiz(quizId: number): Promise<void> {
   await apiRequest(`/quizzes/${quizId}/archive`, { method: "POST" });
 }
 
+export async function listPendingQuizApprovals(): Promise<PendingQuizApproval[]> {
+  const response = await apiRequest<{ items: PendingQuizApproval[] }>(
+    "/quizzes/pending-approval",
+  );
+
+  return response.items;
+}
+
 export async function approveQuiz(quizId: number): Promise<void> {
   await apiRequest(`/quizzes/${quizId}/approve`, { method: "POST" });
+}
+
+export async function rejectQuiz(
+  quizId: number,
+  reason?: string,
+): Promise<void> {
+  await apiRequest(`/quizzes/${quizId}/reject`, {
+    method: "POST",
+    body: { reason: reason?.trim() || null },
+  });
 }
 
 export async function addQuizQuestion(
@@ -102,6 +123,30 @@ export async function addQuizQuestion(
   return apiRequest<ManageQuiz>(`/quizzes/${quizId}/questions`, {
     method: "POST",
     body: buildQuizQuestionPayload(input),
+  });
+}
+
+export async function updateQuizQuestion(
+  quizId: number,
+  questionId: number,
+  input: UpdateQuizQuestionInput,
+): Promise<ManageQuiz> {
+  return apiRequest<ManageQuiz>(`/quizzes/${quizId}/questions/${questionId}`, {
+    method: "PUT",
+    body: buildQuizQuestionPayload(input),
+  });
+}
+
+export async function attachBankQuestion(
+  quizId: number,
+  input: AttachBankQuestionInput,
+): Promise<ManageQuiz> {
+  return apiRequest<ManageQuiz>(`/quizzes/${quizId}/questions/from-bank`, {
+    method: "POST",
+    body: {
+      questionId: input.questionId,
+      marks: input.marks ?? null,
+    },
   });
 }
 

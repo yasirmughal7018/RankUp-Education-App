@@ -115,3 +115,26 @@ public sealed record ApproveQuizResponse(
     long QuizId,
     string ApprovalStatus,
     string LifecycleStatus);
+
+public sealed record RejectQuizRequest(string? Reason = null);
+
+public sealed record RejectQuizResponse(
+    long QuizId,
+    string ApprovalStatus,
+    string LifecycleStatus,
+    string? Reason);
+
+public sealed record PendingQuizApprovalListResponse(IReadOnlyList<PendingQuizApprovalItemResponse> Items);
+
+public sealed record PendingQuizApprovalItemResponse(
+    long QuizId,
+    string Title,
+    string CreatedBy,
+    string SchoolName,
+    string SubjectName,
+    string GradeName,
+    string QuizTypeName,
+    string ApprovalStatus,
+    string LifecycleStatus,
+    short TotalQuestions,
+    DateOnly ModifiedDate);

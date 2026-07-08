@@ -67,16 +67,22 @@ public sealed record QuestionDetailResponse(
     string CreatedBy,
     string? ApprovedBy,
     bool IsAiApproved,
+    string? RejectionReason,
     DateOnly CreatedDate,
     DateOnly ModifiedDate,
     IReadOnlyList<QuestionOptionResponse> Options);
 
+/// <summary>
+/// Approval outcome. <see cref="IsAiApproved"/> is an AI-approval marker (role-gated heuristic validation),
+/// not an external LLM scoring result.
+/// </summary>
 public sealed record QuestionApprovalResponse(
     long QuestionId,
     string Status,
     bool IsActive,
     string? ApprovedBy,
-    bool IsAiApproved);
+    bool IsAiApproved,
+    string? RejectionReason = null);
 
 public sealed record QuestionActiveStateResponse(
     long QuestionId,

@@ -22,12 +22,29 @@ public sealed record StartQuizAttemptResponse(
     short AttemptNumber,
     short? TimeLimitMinutes,
     DateTimeOffset StartedAt,
-    IReadOnlyList<QuizQuestionForAttemptResponse> Questions);
+    bool Resumed,
+    IReadOnlyList<QuizQuestionForAttemptResponse> Questions,
+    IReadOnlyList<SavedQuizAnswerResponse> SavedAnswers);
+
+public sealed record SavedQuizAnswerResponse(
+    long QuestionId,
+    long? SelectedOptionId,
+    string? SubmittedText,
+    IReadOnlyList<long>? SelectedOptionIds = null);
+
+public sealed record SaveQuizAttemptAnswersRequest(
+    IReadOnlyList<SubmitQuizAnswerRequest> Answers,
+    short? TimeSpentSeconds = null);
+
+public sealed record SaveQuizAttemptAnswersResponse(
+    long AttemptId,
+    int SavedCount);
 
 public sealed record SubmitQuizAnswerRequest(
     long QuestionId,
     long? SelectedOptionId,
-    string? SubmittedText);
+    string? SubmittedText,
+    IReadOnlyList<long>? SelectedOptionIds = null);
 
 public sealed record SubmitQuizAttemptRequest(
     IReadOnlyList<SubmitQuizAnswerRequest> Answers,
@@ -55,4 +72,6 @@ public sealed record QuizResultQuestionResponse(
     string? Explanation,
     long? SelectedOptionId,
     long? CorrectOptionId,
-    string? SubmittedText);
+    string? SubmittedText,
+    IReadOnlyList<long>? SelectedOptionIds = null,
+    IReadOnlyList<long>? CorrectOptionIds = null);

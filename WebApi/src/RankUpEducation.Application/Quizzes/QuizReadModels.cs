@@ -25,6 +25,19 @@ public sealed record QuizListItem(
     DateTimeOffset? LastSubmittedAt,
     string? LifecycleStatusName = null);
 
+public sealed record PendingQuizApprovalItem(
+    long QuizId,
+    string Title,
+    string CreatedBy,
+    string SchoolName,
+    string SubjectName,
+    string GradeName,
+    string QuizTypeName,
+    string ApprovalStatus,
+    string LifecycleStatus,
+    short TotalQuestions,
+    DateOnly ModifiedDate);
+
 public sealed record QuizDetailItem(
     long QuizId,
     long? AssignmentId,
@@ -117,7 +130,8 @@ public sealed record QuizAttemptQuestionItem(
     string? SubmittedText,
     short AwardedMarks,
     bool IsCorrect,
-    IReadOnlyList<QuizQuestionOptionItem> Options);
+    IReadOnlyList<QuizQuestionOptionItem> Options,
+    IReadOnlyList<long> SelectedOptionIds);
 
 public sealed record QuizAssignmentAccess(
     long AssignmentId,
@@ -191,7 +205,8 @@ public sealed record AttemptReviewQuestionItem(
     string? SubmittedText,
     string? ParentFeedback,
     bool RequiresReview,
-    long? QuizReviewId);
+    long? QuizReviewId,
+    IReadOnlyList<long> SelectedOptionIds);
 
 public sealed record QuizQuestionCopyItem(
     long QuestionId,

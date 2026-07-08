@@ -38,6 +38,8 @@ export function QuestionDetailPage() {
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showRejectReason, setShowRejectReason] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   const canApprove = user ? canApproveQuestions(user.role) : false;
   const canAiApprove = user ? canAiApproveQuestions(user.role) : false;
@@ -216,17 +218,66 @@ export function QuestionDetailPage() {
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={() =>
-                void runAction(
-                  () => rejectQuestion.mutateAsync(undefined),
-                  "Question rejected.",
-                )
-              }
+              onClick={() => {
+                setShowRejectReason(true);
+                setRejectReason("");
+                setActionError(null);
+                setSuccessMessage(null);
+              }}
               className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
             >
               Reject
             </button>
           </>
+        ) : null}
+
+        {canApprove && isPending && showRejectReason ? (
+          <div className="w-full rounded-xl border border-red-200 bg-red-50/60 p-4">
+            <label
+              htmlFor="rejectReason"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
+              Rejection reason (optional)
+            </label>
+            <textarea
+              id="rejectReason"
+              rows={3}
+              value={rejectReason}
+              disabled={isSubmitting}
+              onChange={(event) => setRejectReason(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+              placeholder="Explain why this question is being rejected..."
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() =>
+                  void runAction(async () => {
+                    await rejectQuestion.mutateAsync(
+                      rejectReason.trim() || undefined,
+                    );
+                    setShowRejectReason(false);
+                    setRejectReason("");
+                  }, "Question rejected.")
+                }
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-70"
+              >
+                Confirm reject
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setShowRejectReason(false);
+                  setRejectReason("");
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         ) : null}
 
         {isApproved && !question.isActive ? (

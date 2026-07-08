@@ -13,6 +13,10 @@ public sealed record AddQuizQuestionRequest(
     string? Explanation,
     IReadOnlyList<QuizQuestionOptionRequest> Options);
 
+public sealed record AttachBankQuestionRequest(
+    long QuestionId,
+    short? Marks = null);
+
 public sealed record UpdateQuizQuestionRequest(
     string QuestionText,
     string QuestionType,

@@ -229,10 +229,18 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             attempt.SubmittedDate,
             attemptQuestions.Select(item =>
             {
-                var answer = answers.FirstOrDefault(row => row.QuizAttemptQuestionId == item.Id);
+                var questionAnswers = answers
+                    .Where(row => row.QuizAttemptQuestionId == item.Id)
+                    .ToArray();
+                var selectedOptionIds = QuizAnswerSelection.AggregateSelectedOptionIds(
+                    questionAnswers.Select(row => row.QuestionOptionId));
+                var primaryAnswer = questionAnswers.FirstOrDefault();
+                var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
+                    ?? primaryAnswer;
                 var typeName = typeNames.GetValueOrDefault(item.QuestionTypeId, "Multiple Choice");
                 var requiresReview = QuizQuestionHelper.IsDescriptiveType(typeName)
-                    || (answer?.QuestionOptionId is null && !string.IsNullOrWhiteSpace(answer?.SubmittedText));
+                    || (selectedOptionIds.Count == 0
+                        && !string.IsNullOrWhiteSpace(primaryAnswer?.SubmittedText));
 
                 string? feedback = null;
                 if (item.QuizReviewId is not null)
@@ -240,19 +248,24 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     reviews.TryGetValue(item.QuizReviewId.Value, out feedback);
                 }
 
+                var submittedText = questionAnswers
+                    .Select(row => row.SubmittedText)
+                    .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+
                 return new AttemptReviewQuestionItem(
                     item.Id,
                     item.QuestionId,
                     item.QuestionText,
                     typeName,
                     quizQuestions.GetValueOrDefault(item.QuestionId, (short)0),
-                    answer?.AwardedMarks ?? 0,
-                    answer?.IsCorrect ?? false,
-                    answer?.QuestionOptionId,
-                    answer?.SubmittedText,
+                    marked?.AwardedMarks ?? 0,
+                    marked?.IsCorrect ?? false,
+                    selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
+                    submittedText,
                     string.IsNullOrWhiteSpace(feedback) ? null : feedback,
                     requiresReview,
-                    item.QuizReviewId);
+                    item.QuizReviewId,
+                    selectedOptionIds);
             }).ToArray());
     }
 

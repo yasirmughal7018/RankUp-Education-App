@@ -28,6 +28,7 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(question => question.CreatedDate).HasColumnName("created_date");
         builder.Property(question => question.ModifiedDate).HasColumnName("modified_date");
         builder.Property(question => question.IsAiApproved).HasColumnName("is_ai_approved").HasDefaultValue(false);
+        builder.Property(question => question.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(1000);
         builder.HasIndex(question => new { question.ClassId, question.SubjectId, question.TopicId })
             .HasDatabaseName("idx_questions_lookup_ids");
         builder.Navigation(question => question.Options).UsePropertyAccessMode(PropertyAccessMode.Field);

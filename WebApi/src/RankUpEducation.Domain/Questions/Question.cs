@@ -54,6 +54,7 @@ public sealed class Question : BaseEntity
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public bool IsAiApproved { get; private set; }
+    public string? RejectionReason { get; private set; }
     public IReadOnlyCollection<QuestionOption> Options => _options;
     public IReadOnlyCollection<QuestionAcceptedAnswer> AcceptedAnswers => _acceptedAnswers;
 
@@ -99,6 +100,7 @@ public sealed class Question : BaseEntity
         StatusId = pendingStatusId;
         ApprovedBy = null;
         IsAiApproved = false;
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -107,6 +109,7 @@ public sealed class Question : BaseEntity
         StatusId = approvedStatusId;
         ApprovedBy = approvedBy.Trim();
         IsAiApproved = false;
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
     }
@@ -116,16 +119,22 @@ public sealed class Question : BaseEntity
         StatusId = approvedStatusId;
         ApprovedBy = approvedBy.Trim();
         IsAiApproved = true;
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
     }
 
-    public void Reject(short rejectedStatusId)
+    public void Reject(short rejectedStatusId, string? reason)
     {
         StatusId = rejectedStatusId;
         ApprovedBy = null;
         IsAiApproved = false;
         IsActive = false;
+        RejectionReason = string.IsNullOrWhiteSpace(reason)
+            ? null
+            : reason.Trim().Length > 1000
+                ? reason.Trim()[..1000]
+                : reason.Trim();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

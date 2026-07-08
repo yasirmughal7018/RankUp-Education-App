@@ -41,6 +41,10 @@ public interface IQuizRepository
         string? grade,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<PendingQuizApprovalItem>> ListPendingApprovalAsync(
+        int? schoolId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<QuizListItem>> ListForCreatorAsync(
         long creatorUserId,
         string? search,

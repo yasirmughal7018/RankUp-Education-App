@@ -161,6 +161,25 @@ class QuizzesController extends StateNotifier<QuizzesState> {
     }
   }
 
+  Future<bool> saveDraft({
+    required String quizId,
+    required String attemptId,
+    required List<QuizAnswerSubmission> answers,
+    int? timeSpentSeconds,
+  }) async {
+    try {
+      await _repository.saveDraft(
+        quizId: quizId,
+        attemptId: attemptId,
+        answers: answers,
+        timeSpentSeconds: timeSpentSeconds,
+      );
+      return true;
+    } on Exception {
+      return false;
+    }
+  }
+
   Future<QuizAttemptResult?> submitAttempt({
     required String quizId,
     required String attemptId,

@@ -15,6 +15,13 @@ abstract class QuizRepository {
     required String deviceId,
   });
 
+  Future<void> saveDraft({
+    required String quizId,
+    required String attemptId,
+    required List<QuizAnswerSubmission> answers,
+    int? timeSpentSeconds,
+  });
+
   Future<QuizAttemptResult> submitAttempt({
     required String quizId,
     required String attemptId,
@@ -32,10 +39,12 @@ class QuizAnswerSubmission {
   const QuizAnswerSubmission({
     required this.questionId,
     this.selectedOptionId,
+    this.selectedOptionIds,
     this.submittedText,
   });
 
   final String questionId;
   final String? selectedOptionId;
+  final List<String>? selectedOptionIds;
   final String? submittedText;
 }

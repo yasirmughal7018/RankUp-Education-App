@@ -199,11 +199,18 @@ public sealed class QuestionService : IQuestionService
         return ToApprovalResponse(questionId, statusName, question);
     }
 
+    /// <summary>
+    /// Marks the question as AI-approved after heuristic validation.
+    /// This is an AI-approval marker (role-gated), not external LLM scoring.
+    /// </summary>
     public async Task<QuestionApprovalResponse> ApproveAiAsync(long questionId, CancellationToken cancellationToken)
     {
         var scope = QuestionScopeResolver.RequireAiApprovalScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
         await EnsurePendingAsync(question, cancellationToken);
+
+        var questionTypeName = await _lookups.GetLookupNameAsync(question.QuestionTypeId, cancellationToken);
+        QuestionAiApprovalValidator.EnsureReadyForAiApproval(question, questionTypeName);
 
         var approvedStatusId = await RequireApprovedStatusIdAsync(cancellationToken);
         question.ApproveByAi(scope.UserId.ToString(), approvedStatusId);
@@ -218,13 +225,12 @@ public sealed class QuestionService : IQuestionService
         RejectQuestionRequest request,
         CancellationToken cancellationToken)
     {
-        _ = request;
         QuestionScopeResolver.RequireApprovalScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
         await EnsurePendingAsync(question, cancellationToken);
 
         var rejectedStatusId = await RequireRejectedStatusIdAsync(cancellationToken);
-        question.Reject(rejectedStatusId);
+        question.Reject(rejectedStatusId, request.Reason);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var statusName = await _lookups.GetLookupNameAsync(rejectedStatusId, cancellationToken);
@@ -339,7 +345,13 @@ public sealed class QuestionService : IQuestionService
         long questionId,
         string statusName,
         Question question)
-        => new(questionId, statusName, question.IsActive, question.ApprovedBy, question.IsAiApproved);
+        => new(
+            questionId,
+            statusName,
+            question.IsActive,
+            question.ApprovedBy,
+            question.IsAiApproved,
+            question.RejectionReason);
 
     private static void EnsureCanView(QuestionDetailItem detail, QuestionManageScope scope)
     {
