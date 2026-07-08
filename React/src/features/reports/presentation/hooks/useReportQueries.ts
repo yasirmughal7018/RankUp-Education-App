@@ -2,10 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as reportApi from "@/features/reports/data/reportApi";
 
-export function useQuizSummaryReportQuery(enabled = true) {
+export function useQuizSummaryReportQuery(
+  options?: { from?: string; to?: string },
+  enabled = true,
+) {
+  const from = options?.from || undefined;
+  const to = options?.to || undefined;
+
   return useQuery({
-    queryKey: queryKeys.reportQuizSummary(),
-    queryFn: () => reportApi.getQuizSummaryReport(),
+    queryKey: queryKeys.reportQuizSummary(from, to),
+    queryFn: () => reportApi.getQuizSummaryReport({ from, to }),
     enabled,
   });
 }

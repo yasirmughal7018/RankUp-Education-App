@@ -27,6 +27,47 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<SchoolListResponse>.Ok(response));
     }
 
+    [HttpPost("schools")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<ActionResult<ApiResponse<SchoolResponse>>> CreateSchoolAsync(
+        [FromBody] UpsertSchoolRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.CreateSchoolAsync(request, cancellationToken);
+        return Ok(ApiResponse<SchoolResponse>.Ok(response, "School created."));
+    }
+
+    [HttpPut("schools/{schoolId:long}")]
+    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<SchoolResponse>>> UpdateSchoolAsync(
+        long schoolId,
+        [FromBody] UpsertSchoolRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.UpdateSchoolAsync(schoolId, request, cancellationToken);
+        return Ok(ApiResponse<SchoolResponse>.Ok(response, "School updated."));
+    }
+
+    [HttpPost("schools/{schoolId:long}/deactivate")]
+    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> DeactivateSchoolAsync(
+        long schoolId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.DeactivateSchoolAsync(schoolId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "School deactivated."));
+    }
+
+    [HttpPost("schools/{schoolId:long}/activate")]
+    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> ActivateSchoolAsync(
+        long schoolId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.ActivateSchoolAsync(schoolId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "School activated."));
+    }
+
     [HttpGet("schools/{schoolId:long}/campuses")]
     [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<CampusListResponse>>> ListCampusesAsync(
@@ -35,6 +76,48 @@ public sealed class DirectoryController : ControllerBase
     {
         var response = await _directoryService.ListCampusesAsync(schoolId, cancellationToken);
         return Ok(ApiResponse<CampusListResponse>.Ok(response));
+    }
+
+    [HttpPost("schools/{schoolId:long}/campuses")]
+    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<CampusResponse>>> CreateCampusAsync(
+        long schoolId,
+        [FromBody] UpsertCampusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.CreateCampusAsync(schoolId, request, cancellationToken);
+        return Ok(ApiResponse<CampusResponse>.Ok(response, "Campus created."));
+    }
+
+    [HttpPut("campuses/{campusId:long}")]
+    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<CampusResponse>>> UpdateCampusAsync(
+        long campusId,
+        [FromBody] UpsertCampusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.UpdateCampusAsync(campusId, request, cancellationToken);
+        return Ok(ApiResponse<CampusResponse>.Ok(response, "Campus updated."));
+    }
+
+    [HttpPost("campuses/{campusId:long}/deactivate")]
+    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> DeactivateCampusAsync(
+        long campusId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.DeactivateCampusAsync(campusId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Campus deactivated."));
+    }
+
+    [HttpPost("campuses/{campusId:long}/activate")]
+    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> ActivateCampusAsync(
+        long campusId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.ActivateCampusAsync(campusId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Campus activated."));
     }
 
     [HttpGet("students")]

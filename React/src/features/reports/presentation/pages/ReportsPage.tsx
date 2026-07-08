@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { PageHeader } from "@/core/components/PageHeader";
+import { downloadCsv, toCsv } from "@/core/utils/csv";
 import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
 import {
   displayStudentName,
@@ -15,8 +16,15 @@ import {
 export function ReportsPage() {
   const [quizFilterInput, setQuizFilterInput] = useState("");
   const [quizFilter, setQuizFilter] = useState<number | "">("");
+  const [fromInput, setFromInput] = useState("");
+  const [toInput, setToInput] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
-  const summaryQuery = useQuizSummaryReportQuery();
+  const summaryQuery = useQuizSummaryReportQuery({
+    from: from || undefined,
+    to: to || undefined,
+  });
   const rankingsQuery = useRankingsReportQuery(
     quizFilter === "" ? null : quizFilter,
   );
@@ -34,6 +42,58 @@ export function ReportsPage() {
 
     const parsed = Number(value);
     setQuizFilter(parsed > 0 ? parsed : "");
+  }
+
+  function applyDateRange() {
+    setFrom(fromInput);
+    setTo(toInput);
+  }
+
+  function exportRankingsCsv() {
+    const rankings = rankingsQuery.data;
+    if (!rankings || rankings.items.length === 0) {
+      return;
+    }
+
+    const csv = toCsv(
+      ["Rank", "Student ID", "Student Name", "Best %", "Attempts"],
+      rankings.items.map((item) => [
+        item.rank,
+        item.studentId,
+        displayStudentName(item.studentName, item.studentId),
+        item.bestPercentage,
+        item.attemptCount,
+      ]),
+    );
+    const suffix = quizFilter === "" ? "overall" : `quiz-${quizFilter}`;
+    downloadCsv(`rankings-${suffix}.csv`, csv);
+  }
+
+  function exportPerformanceCsv() {
+    const performance = performanceQuery.data;
+    if (!performance || performance.students.length === 0) {
+      return;
+    }
+
+    const csv = toCsv(
+      [
+        "Student ID",
+        "Student Name",
+        "Attempts",
+        "Best %",
+        "Status",
+        "Review Done",
+      ],
+      performance.students.map((student) => [
+        student.studentId,
+        displayStudentName(student.studentName, student.studentId),
+        student.attemptCount,
+        student.bestPercentage,
+        student.status,
+        student.isReviewDone ? "Yes" : "No",
+      ]),
+    );
+    downloadCsv(`performance-quiz-${performance.quizId}.csv`, csv);
   }
 
   const summary = summaryQuery.data;
@@ -67,39 +127,95 @@ export function ReportsPage() {
         }
       />
 
-      <section className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-4">
-        <input
-          type="number"
-          min={1}
-          value={quizFilterInput}
-          onChange={(event) => setQuizFilterInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              applyQuizFilter();
-            }
-          }}
-          placeholder="Optional quiz ID for performance & rankings"
-          className="min-w-[260px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        />
-        <button
-          type="button"
-          onClick={applyQuizFilter}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-        >
-          Apply filter
-        </button>
-        {quizFilter !== "" ? (
+      <section className="mb-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="number"
+            min={1}
+            value={quizFilterInput}
+            onChange={(event) => setQuizFilterInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                applyQuizFilter();
+              }
+            }}
+            placeholder="Optional quiz ID for performance & rankings"
+            className="min-w-[260px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
           <button
             type="button"
-            onClick={() => {
-              setQuizFilterInput("");
-              setQuizFilter("");
-            }}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={applyQuizFilter}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
           >
-            Clear
+            Apply filter
           </button>
-        ) : null}
+          {quizFilter !== "" ? (
+            <button
+              type="button"
+              onClick={() => {
+                setQuizFilterInput("");
+                setQuizFilter("");
+              }}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4">
+          <div>
+            <label
+              htmlFor="summary-from"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Summary from
+            </label>
+            <input
+              id="summary-from"
+              type="date"
+              value={fromInput}
+              onChange={(event) => setFromInput(event.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="summary-to"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Summary to
+            </label>
+            <input
+              id="summary-to"
+              type="date"
+              value={toInput}
+              onChange={(event) => setToInput(event.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={applyDateRange}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+          >
+            Apply dates
+          </button>
+          {from || to ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFromInput("");
+                setToInput("");
+                setFrom("");
+                setTo("");
+              }}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Clear dates
+            </button>
+          ) : null}
+        </div>
       </section>
 
       {summaryQuery.error ? (
@@ -139,15 +255,25 @@ export function ReportsPage() {
       </section>
 
       <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {rankings?.title ?? "Rankings"}
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            {quizFilter === ""
-              ? "Overall rankings across quizzes in scope."
-              : `Rankings for quiz #${quizFilter}.`}
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              {rankings?.title ?? "Rankings"}
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {quizFilter === ""
+                ? "Overall rankings across quizzes in scope."
+                : `Rankings for quiz #${quizFilter}.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={exportRankingsCsv}
+            disabled={!rankings || rankings.items.length === 0}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            Export CSV
+          </button>
         </div>
 
         {rankingsQuery.error ? (
@@ -206,13 +332,23 @@ export function ReportsPage() {
 
       {typeof quizFilter === "number" ? (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">
-              {performance?.quizTitle ?? `Quiz #${quizFilter} performance`}
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Per-student performance for the selected quiz.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">
+                {performance?.quizTitle ?? `Quiz #${quizFilter} performance`}
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Per-student performance for the selected quiz.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={exportPerformanceCsv}
+              disabled={!performance || performance.students.length === 0}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              Export CSV
+            </button>
           </div>
 
           {performanceQuery.error ? (

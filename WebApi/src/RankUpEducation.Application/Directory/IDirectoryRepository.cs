@@ -7,7 +7,40 @@ public interface IDirectoryRepository
 {
     Task<IReadOnlyList<SchoolResponse>> ListSchoolsAsync(CancellationToken cancellationToken);
 
+    Task<SchoolResponse?> GetSchoolAsync(long schoolId, CancellationToken cancellationToken);
+
+    Task<SchoolResponse> CreateSchoolAsync(string name, string code, bool isActive, CancellationToken cancellationToken);
+
+    Task<SchoolResponse?> UpdateSchoolAsync(
+        long schoolId,
+        string name,
+        string code,
+        bool isActive,
+        CancellationToken cancellationToken);
+
+    Task<bool> SetSchoolActiveAsync(long schoolId, bool isActive, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<CampusResponse>> ListCampusesAsync(long schoolId, CancellationToken cancellationToken);
+
+    Task<CampusResponse?> GetCampusAsync(long campusId, CancellationToken cancellationToken);
+
+    Task<CampusResponse> CreateCampusAsync(
+        long schoolId,
+        string name,
+        string address,
+        bool isActive,
+        CancellationToken cancellationToken);
+
+    Task<CampusResponse?> UpdateCampusAsync(
+        long campusId,
+        string name,
+        string address,
+        bool isActive,
+        CancellationToken cancellationToken);
+
+    Task<bool> SetCampusActiveAsync(long campusId, bool isActive, CancellationToken cancellationToken);
+
+    Task<bool> SchoolExistsAsync(long schoolId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<DirectoryStudentResponse>> ListStudentsAsync(
         int? schoolId,

@@ -24,4 +24,17 @@ public sealed class Campus : SoftDeleteEntity
     public bool IsActive { get; private set; }
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    public void Update(string name, string address)
+    {
+        Name = name.Trim();
+        Address = address.Trim();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetActive(bool isActive)
+    {
+        IsActive = isActive;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
 }

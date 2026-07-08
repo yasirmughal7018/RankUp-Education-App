@@ -5,6 +5,8 @@ import type {
   DirectoryStudentFilters,
   DirectoryTeacherFilters,
   LinkParentStudentInput,
+  UpsertCampusInput,
+  UpsertSchoolInput,
 } from "@/features/directory/domain/directoryTypes";
 
 export function useDirectorySchoolsQuery(enabled = true) {
@@ -50,6 +52,134 @@ export function useDirectoryParentsQuery(search?: string, enabled = true) {
     queryKey: queryKeys.directoryParents(search),
     queryFn: () => directoryApi.listParents(search),
     enabled,
+  });
+}
+
+export function useCreateSchoolMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UpsertSchoolInput) => directoryApi.createSchool(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["directory", "schools"] });
+    },
+  });
+}
+
+export function useUpdateSchoolMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      schoolId,
+      input,
+    }: {
+      schoolId: number;
+      input: UpsertSchoolInput;
+    }) => directoryApi.updateSchool(schoolId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["directory", "schools"] });
+    },
+  });
+}
+
+export function useActivateSchoolMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (schoolId: number) => directoryApi.activateSchool(schoolId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["directory", "schools"] });
+    },
+  });
+}
+
+export function useDeactivateSchoolMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (schoolId: number) => directoryApi.deactivateSchool(schoolId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["directory", "schools"] });
+    },
+  });
+}
+
+export function useCreateCampusMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      schoolId,
+      input,
+    }: {
+      schoolId: number;
+      input: UpsertCampusInput;
+    }) => directoryApi.createCampus(schoolId, input),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.directoryCampuses(variables.schoolId),
+      });
+    },
+  });
+}
+
+export function useUpdateCampusMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      campusId,
+      schoolId,
+      input,
+    }: {
+      campusId: number;
+      schoolId: number;
+      input: UpsertCampusInput;
+    }) => directoryApi.updateCampus(campusId, input),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.directoryCampuses(variables.schoolId),
+      });
+    },
+  });
+}
+
+export function useActivateCampusMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      campusId,
+      schoolId,
+    }: {
+      campusId: number;
+      schoolId: number;
+    }) => directoryApi.activateCampus(campusId),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.directoryCampuses(variables.schoolId),
+      });
+    },
+  });
+}
+
+export function useDeactivateCampusMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      campusId,
+      schoolId,
+    }: {
+      campusId: number;
+      schoolId: number;
+    }) => directoryApi.deactivateCampus(campusId),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.directoryCampuses(variables.schoolId),
+      });
+    },
   });
 }
 

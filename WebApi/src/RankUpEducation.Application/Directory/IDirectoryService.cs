@@ -6,7 +6,32 @@ public interface IDirectoryService
 {
     Task<SchoolListResponse> ListSchoolsAsync(CancellationToken cancellationToken);
 
+    Task<SchoolResponse> CreateSchoolAsync(UpsertSchoolRequest request, CancellationToken cancellationToken);
+
+    Task<SchoolResponse> UpdateSchoolAsync(
+        long schoolId,
+        UpsertSchoolRequest request,
+        CancellationToken cancellationToken);
+
+    Task DeactivateSchoolAsync(long schoolId, CancellationToken cancellationToken);
+
+    Task ActivateSchoolAsync(long schoolId, CancellationToken cancellationToken);
+
     Task<CampusListResponse> ListCampusesAsync(long schoolId, CancellationToken cancellationToken);
+
+    Task<CampusResponse> CreateCampusAsync(
+        long schoolId,
+        UpsertCampusRequest request,
+        CancellationToken cancellationToken);
+
+    Task<CampusResponse> UpdateCampusAsync(
+        long campusId,
+        UpsertCampusRequest request,
+        CancellationToken cancellationToken);
+
+    Task DeactivateCampusAsync(long campusId, CancellationToken cancellationToken);
+
+    Task ActivateCampusAsync(long campusId, CancellationToken cancellationToken);
 
     Task<DirectoryStudentListResponse> ListStudentsAsync(
         int? schoolId,

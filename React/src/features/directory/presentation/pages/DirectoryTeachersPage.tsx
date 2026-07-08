@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useDirectoryTeachersQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+
+const PAGE_SIZE = 50;
 
 export function DirectoryTeachersPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const { data: teachers = [], isLoading, error, refetch, isFetching } =
     useDirectoryTeachersQuery({ search: search || undefined });
+
+  const visibleTeachers = useMemo(
+    () => teachers.slice(0, PAGE_SIZE),
+    [teachers],
+  );
 
   function applySearch() {
     setSearch(searchInput.trim());
@@ -76,59 +83,69 @@ export function DirectoryTeachersPage() {
             No teachers found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Name
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Username
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Code
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    School / Campus
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {teachers.map((teacher) => (
-                  <tr key={teacher.teacherId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {teacher.fullName}
-                      <p className="text-xs font-normal text-slate-500">
-                        ID {teacher.teacherId}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{teacher.username}</td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {teacher.teacherCode}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {teacher.schoolId} / {teacher.campusId}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-medium ${
-                          teacher.isActive
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {teacher.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
+          <>
+            <div className="border-b border-slate-200 px-5 py-3 text-sm text-slate-600">
+              Showing {visibleTeachers.length} of {teachers.length}
+              {teachers.length > PAGE_SIZE
+                ? ` (first ${PAGE_SIZE})`
+                : ""}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Username
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Code
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      School / Campus
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Status
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {visibleTeachers.map((teacher) => (
+                    <tr key={teacher.teacherId} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {teacher.fullName}
+                        <p className="text-xs font-normal text-slate-500">
+                          ID {teacher.teacherId}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {teacher.username}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {teacher.teacherCode}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {teacher.schoolId} / {teacher.campusId}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-medium ${
+                            teacher.isActive
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {teacher.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

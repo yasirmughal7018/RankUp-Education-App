@@ -4,9 +4,13 @@ public sealed record SchoolListResponse(IReadOnlyList<SchoolResponse> Items);
 
 public sealed record SchoolResponse(long Id, string Name, string Code, bool IsActive);
 
+public sealed record UpsertSchoolRequest(string Name, string Code, bool IsActive = true);
+
 public sealed record CampusListResponse(IReadOnlyList<CampusResponse> Items);
 
 public sealed record CampusResponse(long Id, long SchoolId, string Name, string? Address, bool IsActive);
+
+public sealed record UpsertCampusRequest(string Name, string? Address, bool IsActive = true);
 
 public sealed record DirectoryStudentListResponse(IReadOnlyList<DirectoryStudentResponse> Items);
 

@@ -16,7 +16,18 @@ describe("queryKeys", () => {
   });
 
   it("builds report and directory keys", () => {
-    expect(queryKeys.reportQuizSummary()).toEqual(["reports", "quiz-summary"]);
+    expect(queryKeys.reportQuizSummary()).toEqual([
+      "reports",
+      "quiz-summary",
+      null,
+      null,
+    ]);
+    expect(queryKeys.reportQuizSummary("2026-01-01", "2026-01-31")).toEqual([
+      "reports",
+      "quiz-summary",
+      "2026-01-01",
+      "2026-01-31",
+    ]);
     expect(queryKeys.reportRankings(5)).toEqual(["reports", "rankings", 5]);
     expect(queryKeys.directoryParents("ali")).toEqual([
       "directory",

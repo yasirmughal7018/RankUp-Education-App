@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useDirectoryStudentsQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+
+const PAGE_SIZE = 50;
 
 export function DirectoryStudentsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const { data: students = [], isLoading, error, refetch, isFetching } =
     useDirectoryStudentsQuery({ search: search || undefined });
+
+  const visibleStudents = useMemo(
+    () => students.slice(0, PAGE_SIZE),
+    [students],
+  );
 
   function applySearch() {
     setSearch(searchInput.trim());
@@ -76,66 +83,76 @@ export function DirectoryStudentsPage() {
             No students found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Name
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Username
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Roll
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Grade
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    School / Campus
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {students.map((student) => (
-                  <tr key={student.studentId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {student.fullName}
-                      <p className="text-xs font-normal text-slate-500">
-                        ID {student.studentId}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{student.username}</td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {student.rollNumber}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {student.grade}
-                      {student.section}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {student.schoolId} / {student.campusId}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-medium ${
-                          student.isActive
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {student.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
+          <>
+            <div className="border-b border-slate-200 px-5 py-3 text-sm text-slate-600">
+              Showing {visibleStudents.length} of {students.length}
+              {students.length > PAGE_SIZE
+                ? ` (first ${PAGE_SIZE})`
+                : ""}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Username
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Roll
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Grade
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      School / Campus
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Status
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {visibleStudents.map((student) => (
+                    <tr key={student.studentId} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {student.fullName}
+                        <p className="text-xs font-normal text-slate-500">
+                          ID {student.studentId}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {student.username}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {student.rollNumber}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {student.grade}
+                        {student.section}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {student.schoolId} / {student.campusId}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-medium ${
+                            student.isActive
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {student.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -19,4 +19,15 @@ public sealed class School : SoftDeleteEntity
     public string Name { get; private set; }
     public string Code { get; private set; }
     public bool IsActive { get; private set; } = true;
+
+    public void Update(string name, string code)
+    {
+        Name = name.Trim();
+        Code = code.Trim();
+    }
+
+    public void SetActive(bool isActive)
+    {
+        IsActive = isActive;
+    }
 }

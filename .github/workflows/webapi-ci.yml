@@ -1,0 +1,27 @@
+name: WebApi CI
+
+on:
+  push:
+    paths:
+      - "WebApi/**"
+      - ".github/workflows/webapi-ci.yml"
+  pull_request:
+    paths:
+      - "WebApi/**"
+      - ".github/workflows/webapi-ci.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build
+        run: dotnet build WebApi/src/RankUpEducation.Api/RankUpEducation.Api.csproj -c Release

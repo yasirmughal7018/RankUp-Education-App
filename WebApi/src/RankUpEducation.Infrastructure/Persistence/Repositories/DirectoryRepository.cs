@@ -3,6 +3,7 @@ using RankUpEducation.Application.Directory;
 using RankUpEducation.Contracts.Directory;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
+using RankUpEducation.Domain.Schools;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
@@ -18,15 +19,71 @@ public sealed class DirectoryRepository : IDirectoryRepository
     public async Task<IReadOnlyList<SchoolResponse>> ListSchoolsAsync(CancellationToken cancellationToken)
     {
         return await _dbContext.Schools.AsNoTracking()
+            .Where(school => !school.IsDeleted)
             .OrderBy(school => school.Name)
             .Select(school => new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive))
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<SchoolResponse?> GetSchoolAsync(long schoolId, CancellationToken cancellationToken)
+    {
+        return await _dbContext.Schools.AsNoTracking()
+            .Where(school => school.Id == schoolId && !school.IsDeleted)
+            .Select(school => new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<SchoolResponse> CreateSchoolAsync(
+        string name,
+        string code,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var school = new School(name, code);
+        school.SetActive(isActive);
+        await _dbContext.Schools.AddAsync(school, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive);
+    }
+
+    public async Task<SchoolResponse?> UpdateSchoolAsync(
+        long schoolId,
+        string name,
+        string code,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var school = await _dbContext.Schools
+            .FirstOrDefaultAsync(item => item.Id == schoolId && !item.IsDeleted, cancellationToken);
+        if (school is null)
+        {
+            return null;
+        }
+
+        school.Update(name, code);
+        school.SetActive(isActive);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive);
+    }
+
+    public async Task<bool> SetSchoolActiveAsync(long schoolId, bool isActive, CancellationToken cancellationToken)
+    {
+        var school = await _dbContext.Schools
+            .FirstOrDefaultAsync(item => item.Id == schoolId && !item.IsDeleted, cancellationToken);
+        if (school is null)
+        {
+            return false;
+        }
+
+        school.SetActive(isActive);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<IReadOnlyList<CampusResponse>> ListCampusesAsync(long schoolId, CancellationToken cancellationToken)
     {
         return await _dbContext.Campuses.AsNoTracking()
-            .Where(campus => campus.SchoolId == schoolId)
+            .Where(campus => campus.SchoolId == schoolId && !campus.IsDeleted)
             .OrderBy(campus => campus.Name)
             .Select(campus => new CampusResponse(
                 campus.Id,
@@ -35,6 +92,83 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
                 campus.IsActive))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<CampusResponse?> GetCampusAsync(long campusId, CancellationToken cancellationToken)
+    {
+        return await _dbContext.Campuses.AsNoTracking()
+            .Where(campus => campus.Id == campusId && !campus.IsDeleted)
+            .Select(campus => new CampusResponse(
+                campus.Id,
+                campus.SchoolId,
+                campus.Name,
+                string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
+                campus.IsActive))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<CampusResponse> CreateCampusAsync(
+        long schoolId,
+        string name,
+        string address,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var campus = new Campus((int)schoolId, name, address);
+        campus.SetActive(isActive);
+        await _dbContext.Campuses.AddAsync(campus, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return new CampusResponse(
+            campus.Id,
+            campus.SchoolId,
+            campus.Name,
+            string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
+            campus.IsActive);
+    }
+
+    public async Task<CampusResponse?> UpdateCampusAsync(
+        long campusId,
+        string name,
+        string address,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var campus = await _dbContext.Campuses
+            .FirstOrDefaultAsync(item => item.Id == campusId && !item.IsDeleted, cancellationToken);
+        if (campus is null)
+        {
+            return null;
+        }
+
+        campus.Update(name, address);
+        campus.SetActive(isActive);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return new CampusResponse(
+            campus.Id,
+            campus.SchoolId,
+            campus.Name,
+            string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
+            campus.IsActive);
+    }
+
+    public async Task<bool> SetCampusActiveAsync(long campusId, bool isActive, CancellationToken cancellationToken)
+    {
+        var campus = await _dbContext.Campuses
+            .FirstOrDefaultAsync(item => item.Id == campusId && !item.IsDeleted, cancellationToken);
+        if (campus is null)
+        {
+            return false;
+        }
+
+        campus.SetActive(isActive);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public Task<bool> SchoolExistsAsync(long schoolId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Schools.AsNoTracking()
+            .AnyAsync(school => school.Id == schoolId && !school.IsDeleted, cancellationToken);
     }
 
     public async Task<IReadOnlyList<DirectoryStudentResponse>> ListStudentsAsync(

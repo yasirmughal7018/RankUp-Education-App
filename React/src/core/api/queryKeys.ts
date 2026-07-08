@@ -37,7 +37,8 @@ export const queryKeys = {
   }) => ["directory", "teachers", filters] as const,
   directoryParents: (search?: string) =>
     ["directory", "parents", search ?? ""] as const,
-  reportQuizSummary: () => ["reports", "quiz-summary"] as const,
+  reportQuizSummary: (from?: string | null, to?: string | null) =>
+    ["reports", "quiz-summary", from ?? null, to ?? null] as const,
   reportQuizPerformance: (quizId: number) =>
     ["reports", "quizzes", quizId, "performance"] as const,
   reportRankings: (quizId?: number | null) =>

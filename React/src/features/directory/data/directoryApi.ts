@@ -9,6 +9,8 @@ import type {
   DirectoryTeacherFilters,
   LinkParentStudentInput,
   LinkParentStudentResult,
+  UpsertCampusInput,
+  UpsertSchoolInput,
 } from "@/features/directory/domain/directoryTypes";
 
 function toQuery(params: Record<string, string | number | null | undefined>) {
@@ -30,11 +32,77 @@ export async function listSchools(): Promise<DirectorySchool[]> {
   return response.items;
 }
 
+export async function createSchool(
+  input: UpsertSchoolInput,
+): Promise<DirectorySchool> {
+  return apiRequest<DirectorySchool>("/directory/schools", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateSchool(
+  schoolId: number,
+  input: UpsertSchoolInput,
+): Promise<DirectorySchool> {
+  return apiRequest<DirectorySchool>(`/directory/schools/${schoolId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function activateSchool(schoolId: number): Promise<void> {
+  await apiRequestVoid(`/directory/schools/${schoolId}/activate`, {
+    method: "POST",
+  });
+}
+
+export async function deactivateSchool(schoolId: number): Promise<void> {
+  await apiRequestVoid(`/directory/schools/${schoolId}/deactivate`, {
+    method: "POST",
+  });
+}
+
 export async function listCampuses(schoolId: number): Promise<DirectoryCampus[]> {
   const response = await apiRequest<{ items: DirectoryCampus[] }>(
     `/directory/schools/${schoolId}/campuses`,
   );
   return response.items;
+}
+
+export async function createCampus(
+  schoolId: number,
+  input: UpsertCampusInput,
+): Promise<DirectoryCampus> {
+  return apiRequest<DirectoryCampus>(
+    `/directory/schools/${schoolId}/campuses`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function updateCampus(
+  campusId: number,
+  input: UpsertCampusInput,
+): Promise<DirectoryCampus> {
+  return apiRequest<DirectoryCampus>(`/directory/campuses/${campusId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function activateCampus(campusId: number): Promise<void> {
+  await apiRequestVoid(`/directory/campuses/${campusId}/activate`, {
+    method: "POST",
+  });
+}
+
+export async function deactivateCampus(campusId: number): Promise<void> {
+  await apiRequestVoid(`/directory/campuses/${campusId}/deactivate`, {
+    method: "POST",
+  });
 }
 
 export async function listStudents(

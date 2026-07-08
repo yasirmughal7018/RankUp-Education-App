@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { ApiError } from "@/core/api/types";
 import { PageHeader } from "@/core/components/PageHeader";
@@ -9,6 +9,8 @@ import {
   useLinkParentStudentMutation,
   useUnlinkParentStudentMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+
+const PAGE_SIZE = 50;
 
 export function DirectoryParentsPage() {
   const [searchInput, setSearchInput] = useState("");
@@ -21,6 +23,11 @@ export function DirectoryParentsPage() {
     useDirectoryParentsQuery(search || undefined);
   const linkMutation = useLinkParentStudentMutation();
   const unlinkMutation = useUnlinkParentStudentMutation();
+
+  const visibleParents = useMemo(
+    () => parents.slice(0, PAGE_SIZE),
+    [parents],
+  );
 
   function applySearch() {
     setSearch(searchInput.trim());
@@ -157,75 +164,85 @@ export function DirectoryParentsPage() {
             No parents found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Name
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Username
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Linked students
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {parents.map((parent) => (
-                  <tr key={parent.parentId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {parent.fullName}
-                      <p className="text-xs font-normal text-slate-500">
-                        ID {parent.parentId}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{parent.username}</td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {parent.linkedStudentCount}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-medium ${
-                          parent.isActive
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {parent.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setLinkParent(parent)}
-                          className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
-                        >
-                          Link
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleUnlink(parent)}
-                          disabled={unlinkMutation.isPending}
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                        >
-                          Unlink
-                        </button>
-                      </div>
-                    </td>
+          <>
+            <div className="border-b border-slate-200 px-5 py-3 text-sm text-slate-600">
+              Showing {visibleParents.length} of {parents.length}
+              {parents.length > PAGE_SIZE
+                ? ` (first ${PAGE_SIZE})`
+                : ""}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Username
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Linked students
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-600">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-slate-600">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {visibleParents.map((parent) => (
+                    <tr key={parent.parentId} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {parent.fullName}
+                        <p className="text-xs font-normal text-slate-500">
+                          ID {parent.parentId}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {parent.username}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {parent.linkedStudentCount}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-medium ${
+                            parent.isActive
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {parent.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setLinkParent(parent)}
+                            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
+                          >
+                            Link
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleUnlink(parent)}
+                            disabled={unlinkMutation.isPending}
+                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                          >
+                            Unlink
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

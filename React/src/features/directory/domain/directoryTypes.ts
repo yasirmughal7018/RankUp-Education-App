@@ -5,11 +5,23 @@ export interface DirectorySchool {
   isActive: boolean;
 }
 
+export interface UpsertSchoolInput {
+  name: string;
+  code: string;
+  isActive: boolean;
+}
+
 export interface DirectoryCampus {
   id: number;
   schoolId: number;
   name: string;
   address: string | null;
+  isActive: boolean;
+}
+
+export interface UpsertCampusInput {
+  name: string;
+  address?: string | null;
   isActive: boolean;
 }
 

@@ -160,20 +160,37 @@ Feature hooks:
 
 ## Directory
 
+List / search:
+
 - `GET /api/directory/schools`
 - `GET /api/directory/schools/{id}/campuses`
-- `GET /api/directory/students?search=`
-- `GET /api/directory/teachers?search=`
+- `GET /api/directory/students?search=` (also `schoolId`, `campusId`, `grade`)
+- `GET /api/directory/teachers?search=` (also `schoolId`, `campusId`)
 - `GET /api/directory/parents?search=`
 - `POST /api/directory/parents/{parentId}/students`
 - `DELETE /api/directory/parents/{parentId}/students/{studentId}`
 
+School / campus CRUD (Schools page):
+
+- `POST /api/directory/schools` — create school (**SuperAdmin** only); body `{ name, code, isActive }`
+- `PUT /api/directory/schools/{schoolId}` — update school (**SuperAdmin**, **SchoolAdmin**)
+- `POST /api/directory/schools/{schoolId}/activate`
+- `POST /api/directory/schools/{schoolId}/deactivate`
+- `POST /api/directory/schools/{schoolId}/campuses` — body `{ name, address?, isActive }`
+- `PUT /api/directory/campuses/{campusId}`
+- `POST /api/directory/campuses/{campusId}/activate`
+- `POST /api/directory/campuses/{campusId}/deactivate`
+
+Students / Teachers / Parents pages keep Apply-button search and show the first **50** rows with a “Showing X of Y” caption.
+
 ## Reports
 
-- `GET /api/reports/quiz-summary`
+- `GET /api/reports/quiz-summary?from=&to=` — optional date range on the Reports page
 - `GET /api/reports/quizzes/{id}/performance`
 - `GET /api/reports/rankings?quizId=`
 - `GET /api/reports/students/{id}/quiz-history`
+
+Rankings and performance tables support client-side **CSV export** (see `src/core/utils/csv.ts`).
 
 ## Assignment Board
 
@@ -250,8 +267,8 @@ React helpers live in `src/core/lookups/` and `src/core/components/LookupSelect.
 
 ## CI
 
-GitHub Actions workflow: `.github/workflows/react-ci.yml`  
-Runs on push/PR when `React/**` changes: `npm ci`, lint, test, build.
+- React: `.github/workflows/react-ci.yml` — push/PR on `React/**` (`npm ci`, lint, test, build)
+- Web API: `.github/workflows/webapi-ci.yml` — push/PR on `WebApi/**` (`dotnet build` Release)
 
 ## Related Projects
 

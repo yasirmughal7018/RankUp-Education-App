@@ -33,12 +33,133 @@ public sealed class DirectoryService : IDirectoryService
         return new SchoolListResponse(items);
     }
 
+    public async Task<SchoolResponse> CreateSchoolAsync(
+        UpsertSchoolRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureSuperAdmin();
+        ValidateSchoolRequest(request);
+        var school = await _directory.CreateSchoolAsync(
+            request.Name,
+            request.Code,
+            request.IsActive,
+            cancellationToken);
+        return school;
+    }
+
+    public async Task<SchoolResponse> UpdateSchoolAsync(
+        long schoolId,
+        UpsertSchoolRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        EnsureSchoolAccess(schoolId);
+        ValidateSchoolRequest(request);
+        var school = await _directory.UpdateSchoolAsync(
+            schoolId,
+            request.Name,
+            request.Code,
+            request.IsActive,
+            cancellationToken)
+            ?? throw new NotFoundAppException("School was not found.");
+        return school;
+    }
+
+    public async Task DeactivateSchoolAsync(long schoolId, CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        EnsureSchoolAccess(schoolId);
+        if (!await _directory.SetSchoolActiveAsync(schoolId, false, cancellationToken))
+        {
+            throw new NotFoundAppException("School was not found.");
+        }
+    }
+
+    public async Task ActivateSchoolAsync(long schoolId, CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        EnsureSchoolAccess(schoolId);
+        if (!await _directory.SetSchoolActiveAsync(schoolId, true, cancellationToken))
+        {
+            throw new NotFoundAppException("School was not found.");
+        }
+    }
+
     public async Task<CampusListResponse> ListCampusesAsync(long schoolId, CancellationToken cancellationToken)
     {
         EnsureAdmin();
         EnsureSchoolAccess(schoolId);
         var items = await _directory.ListCampusesAsync(schoolId, cancellationToken);
         return new CampusListResponse(items);
+    }
+
+    public async Task<CampusResponse> CreateCampusAsync(
+        long schoolId,
+        UpsertCampusRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        EnsureSchoolAccess(schoolId);
+        ValidateCampusRequest(request);
+
+        if (!await _directory.SchoolExistsAsync(schoolId, cancellationToken))
+        {
+            throw new NotFoundAppException("School was not found.");
+        }
+
+        return await _directory.CreateCampusAsync(
+            schoolId,
+            request.Name,
+            request.Address ?? string.Empty,
+            request.IsActive,
+            cancellationToken);
+    }
+
+    public async Task<CampusResponse> UpdateCampusAsync(
+        long campusId,
+        UpsertCampusRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        ValidateCampusRequest(request);
+
+        var existing = await _directory.GetCampusAsync(campusId, cancellationToken)
+            ?? throw new NotFoundAppException("Campus was not found.");
+        EnsureSchoolAccess(existing.SchoolId);
+
+        return await _directory.UpdateCampusAsync(
+            campusId,
+            request.Name,
+            request.Address ?? string.Empty,
+            request.IsActive,
+            cancellationToken)
+            ?? throw new NotFoundAppException("Campus was not found.");
+    }
+
+    public async Task DeactivateCampusAsync(long campusId, CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        var existing = await _directory.GetCampusAsync(campusId, cancellationToken)
+            ?? throw new NotFoundAppException("Campus was not found.");
+        EnsureSchoolAccess(existing.SchoolId);
+
+        if (!await _directory.SetCampusActiveAsync(campusId, false, cancellationToken))
+        {
+            throw new NotFoundAppException("Campus was not found.");
+        }
+    }
+
+    public async Task ActivateCampusAsync(long campusId, CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        var existing = await _directory.GetCampusAsync(campusId, cancellationToken)
+            ?? throw new NotFoundAppException("Campus was not found.");
+        EnsureSchoolAccess(existing.SchoolId);
+
+        if (!await _directory.SetCampusActiveAsync(campusId, true, cancellationToken))
+        {
+            throw new NotFoundAppException("Campus was not found.");
+        }
     }
 
     public async Task<DirectoryStudentListResponse> ListStudentsAsync(
@@ -124,6 +245,30 @@ public sealed class DirectoryService : IDirectoryService
         if (role is not (UserRole.SuperAdmin or UserRole.SchoolAdmin))
         {
             throw new ForbiddenAppException("Only administrators can manage the directory.");
+        }
+    }
+
+    private void EnsureSuperAdmin()
+    {
+        if (ParseRole() != UserRole.SuperAdmin)
+        {
+            throw new ForbiddenAppException("Only SuperAdmin can create schools.");
+        }
+    }
+
+    private static void ValidateSchoolRequest(UpsertSchoolRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Code))
+        {
+            throw new ValidationAppException(["School name and code are required."]);
+        }
+    }
+
+    private static void ValidateCampusRequest(UpsertCampusRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new ValidationAppException(["Campus name is required."]);
         }
     }
 
