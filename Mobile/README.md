@@ -30,29 +30,42 @@ flutter run
 
 ## Environment
 
-Select the environment with Dart defines:
+The Android emulator reaches your PC at `10.0.2.2`, not `localhost`.
 
 ```powershell
-flutter run --dart-define=APP_ENV=development --dart-define=API_BASE_URL=https://localhost:5001/api
+cd "D:\Projects\RankUp Education\Mobile"
+flutter run
+```
+
+That default targets `http://10.0.2.2:5255/api` and uses the real API for login.
+
+Start the Web API first:
+
+```powershell
+dotnet run --project WebApi/src/RankUpEducation.Api --launch-profile http
+```
+
+Optional overrides:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5255/api --dart-define=USE_MOCKS=false
 ```
 
 Supported values: `development`, `test`, `staging`, and `production`.
 
 ## Mock Login
 
-The mobile app uses one common login form. Enter a demo username to open a
-role-specific dashboard. Mock repositories are enabled by default, so the app
-uses local dummy data until the real API is connected.
+Offline demo mode is disabled by default. To use local mock auth for the demo
+accounts only, run with `--dart-define=USE_MOCKS=true`.
 
 | User | Username / ID | Password | Result |
 | --- | --- | --- | --- |
-| Student Demo | `student-demo` | `password` | Opens the Student dashboard |
-| Parent Demo | `parent-demo` | `password` | Opens the Parent dashboard |
-| Teacher Demo | `teacher-demo` | `password` | Opens the Teacher dashboard |
+| Student Demo | `student-demo` | `password` | Mock only when `USE_MOCKS=true` |
+| Parent Demo | `parent-demo` | `password` | Mock only when `USE_MOCKS=true` |
+| Teacher Demo | `teacher-demo` | `password` | Mock only when `USE_MOCKS=true` |
 
-The app does not support mobile registration or OTP login. Accounts are created
-by the school admin. In API mode, the backend validates the username/password
-and returns the authenticated user's role in the login response.
+With the default API mode, login always calls `POST /api/auth/login` on the
+Web API. Use a real username/password from PostgreSQL.
 
 The login screen also includes admin-assisted actions:
 

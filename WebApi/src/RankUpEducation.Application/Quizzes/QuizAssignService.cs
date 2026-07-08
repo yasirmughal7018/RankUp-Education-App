@@ -25,17 +25,32 @@ public interface IQuizAssignService
 public sealed class QuizAssignService : IQuizAssignService
 {
     private readonly IQuizRepository _quizzes;
+    private readonly IQuizAssignmentRepository _assignments;
+    private readonly IQuizAttemptRepository _attempts;
+    private readonly ILookupRepository _lookups;
+    private readonly IStudentScopeRepository _studentScope;
+    private readonly IUserRepository _users;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public QuizAssignService(
         IQuizRepository quizzes,
+        IQuizAssignmentRepository assignments,
+        IQuizAttemptRepository attempts,
+        ILookupRepository lookups,
+        IStudentScopeRepository studentScope,
+        IUserRepository users,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider)
     {
         _quizzes = quizzes;
+        _assignments = assignments;
+        _attempts = attempts;
+        _lookups = lookups;
+        _studentScope = studentScope;
+        _users = users;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -68,7 +83,7 @@ public sealed class QuizAssignService : IQuizAssignService
         var assignments = new List<QuizAssignment>();
         foreach (var studentId in studentIds)
         {
-            if (await _quizzes.AssignmentExistsAsync(quizId, studentId, cancellationToken))
+            if (await _assignments.AssignmentExistsAsync(quizId, studentId, cancellationToken))
             {
                 continue;
             }
@@ -95,12 +110,12 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("All selected students already have assignments for this quiz.");
         }
 
-        await _quizzes.AddAssignmentsAsync(assignments, cancellationToken);
+        await _assignments.AddAssignmentsAsync(assignments, cancellationToken);
         quiz.SetLifecycleStatus(assignedLifecycleId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var createdAssignments = await _quizzes.ListAssignmentsForQuizAsync(quizId, cancellationToken);
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var createdAssignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
 
         return new AssignQuizResponse(
             quizId,
@@ -116,7 +131,7 @@ public sealed class QuizAssignService : IQuizAssignService
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
         await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
 
-        var assignments = await _quizzes.ListAssignmentsForQuizAsync(quizId, cancellationToken);
+        var assignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
         return new QuizAssignmentListResponse(assignments.Select(QuizManageMapping.ToAssignmentResponse).ToArray());
     }
 
@@ -126,7 +141,7 @@ public sealed class QuizAssignService : IQuizAssignService
         var quiz = await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
         var now = _dateTimeProvider.UtcNow;
 
-        var removed = await _quizzes.RemoveFutureAssignmentsAsync(quizId, now, cancellationToken);
+        var removed = await _assignments.RemoveFutureAssignmentsAsync(quizId, now, cancellationToken);
         if (removed == 0)
         {
             throw new BusinessRuleException("No upcoming assignments were found to cancel.");
@@ -140,7 +155,7 @@ public sealed class QuizAssignService : IQuizAssignService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new CancelQuizResponse(quizId, lifecycleName, removed);
     }
 
@@ -158,7 +173,7 @@ public sealed class QuizAssignService : IQuizAssignService
 
         await EnsureNotArchivedAsync(quiz, cancellationToken);
 
-        var assignment = await _quizzes.GetAssignmentEntityByIdAsync(assignmentId, quizId, cancellationToken)
+        var assignment = await _assignments.GetAssignmentEntityByIdAsync(assignmentId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Assignment was not found.");
 
         if (!assignment.IsReviewDone)
@@ -166,7 +181,7 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("Review must be finalized before allowing a retry.");
         }
 
-        var attemptCount = await _quizzes.CountAttemptsAsync(quizId, assignment.StudentId, cancellationToken);
+        var attemptCount = await _attempts.CountAttemptsAsync(quizId, assignment.StudentId, cancellationToken);
         if (attemptCount < assignment.AllowedAttempts)
         {
             throw new BusinessRuleException("Student still has remaining attempts on this assignment.");
@@ -176,10 +191,13 @@ public sealed class QuizAssignService : IQuizAssignService
         assignment.GrantRetry(extraAttempts);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var student = await _users.GetByIdAsync(assignment.StudentId, cancellationToken);
+
         return new AllowRetryResponse(
             assignment.Id,
             quizId,
             assignment.StudentId,
+            student?.FullName ?? $"Student {assignment.StudentId}",
             assignment.AllowedAttempts,
             attemptCount,
             assignment.IsReviewDone);
@@ -187,7 +205,7 @@ public sealed class QuizAssignService : IQuizAssignService
 
     private async Task EnsureNotArchivedAsync(Quiz quiz, CancellationToken cancellationToken)
     {
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         if (lifecycleName.Equals("Archived", StringComparison.OrdinalIgnoreCase))
         {
             throw new BusinessRuleException("Archived quizzes are read-only.");
@@ -200,7 +218,7 @@ public sealed class QuizAssignService : IQuizAssignService
         CancellationToken cancellationToken)
     {
         var quiz = await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
 
         if (lifecycleName.Equals("Archived", StringComparison.OrdinalIgnoreCase))
         {
@@ -219,7 +237,7 @@ public sealed class QuizAssignService : IQuizAssignService
 
         if (scope.Role == UserRole.Teacher)
         {
-            var approvalName = await _quizzes.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+            var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             if (!approvalName.Equals("Approved", StringComparison.OrdinalIgnoreCase))
             {
                 throw new BusinessRuleException("Teacher quizzes must be approved before assignment.");
@@ -254,7 +272,7 @@ public sealed class QuizAssignService : IQuizAssignService
             {
                 "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
                 "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
-                "alllinked" => await _quizzes.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken),
+                "alllinked" => await _studentScope.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken),
                 "group" => await ResolveGroupStudentsAsync(scope, request, UserRole.Parent, cancellationToken),
                 _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported."])
             };
@@ -278,7 +296,7 @@ public sealed class QuizAssignService : IQuizAssignService
         var studentId = request.StudentIds?.FirstOrDefault()
             ?? throw new ValidationAppException(["Student id is required for one-student assignment."]);
 
-        await QuizScopeResolver.EnsureCanAccessStudentAsync(_quizzes, scope, studentId, cancellationToken);
+        await QuizScopeResolver.EnsureCanAccessStudentAsync(_studentScope, scope, studentId, cancellationToken);
         return [studentId];
     }
 
@@ -297,7 +315,7 @@ public sealed class QuizAssignService : IQuizAssignService
         {
             try
             {
-                await QuizScopeResolver.EnsureCanAccessStudentAsync(_quizzes, scope, studentId, cancellationToken);
+                await QuizScopeResolver.EnsureCanAccessStudentAsync(_studentScope, scope, studentId, cancellationToken);
                 validIds.Add(studentId);
             }
             catch (ForbiddenAppException)
@@ -320,7 +338,7 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["Group id is required for group assignment."]);
         }
 
-        var memberIds = await _quizzes.GetGroupMemberStudentIdsAsync(
+        var memberIds = await _studentScope.GetGroupMemberStudentIdsAsync(
             request.GroupId.Value,
             scope.UserId,
             groupOwnerRole.ToString().ToLowerInvariant(),
@@ -336,7 +354,7 @@ public sealed class QuizAssignService : IQuizAssignService
         {
             try
             {
-                await QuizScopeResolver.EnsureCanAccessStudentAsync(_quizzes, scope, studentId, cancellationToken);
+                await QuizScopeResolver.EnsureCanAccessStudentAsync(_studentScope, scope, studentId, cancellationToken);
                 validIds.Add(studentId);
             }
             catch (ForbiddenAppException)
@@ -358,7 +376,7 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["Grade id is required for allInGrade assignment."]);
         }
 
-        return await _quizzes.GetStudentIdsInSchoolByGradeAsync(
+        return await _studentScope.GetStudentIdsInSchoolByGradeAsync(
             scope.SchoolId!.Value,
             scope.CampusId!.Value,
             request.GradeId.Value,
@@ -398,7 +416,7 @@ public sealed class QuizAssignService : IQuizAssignService
         IReadOnlyList<string> names,
         CancellationToken cancellationToken)
     {
-        var id = await _quizzes.ResolveLookupIdByNamesAsync(type, names, 0, cancellationToken);
+        var id = await _lookups.ResolveLookupIdByNamesAsync(type, names, 0, cancellationToken);
         if (id == 0)
         {
             throw new BusinessRuleException($"Required lookup '{type}' ({string.Join(", ", names)}) was not found.");

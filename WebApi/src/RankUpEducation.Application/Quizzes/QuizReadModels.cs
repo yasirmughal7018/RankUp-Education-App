@@ -50,6 +50,10 @@ public sealed record QuizDetailItem(
     int AttemptCount,
     short? BestPercentage,
     DateTimeOffset? LastSubmittedAt,
+    short ClassId,
+    short SubjectId,
+    short TopicId,
+    short DifficultyLevelId,
     short LifecycleStatusId,
     string LifecycleStatusName);
 
@@ -61,6 +65,7 @@ public sealed record StudentSchoolContext(
 public sealed record QuizAssignmentListItem(
     long AssignmentId,
     long StudentId,
+    string StudentName,
     long? StudentGroupId,
     DateTimeOffset StartDateTime,
     DateTimeOffset EndDateTime,
@@ -128,6 +133,7 @@ public sealed record QuizAssignmentBoardItem(
     long QuizId,
     string QuizTitle,
     long StudentId,
+    string StudentName,
     DateTimeOffset StartDateTime,
     DateTimeOffset EndDateTime,
     short AllowedAttempts,
@@ -138,6 +144,7 @@ public sealed record QuizAssignmentBoardItem(
 
 public sealed record QuizMonitoringStudentItem(
     long StudentId,
+    string StudentName,
     long AssignmentId,
     int AttemptCount,
     short? BestPercentage,
@@ -151,6 +158,7 @@ public sealed record PendingReviewItem(
     string QuizTitle,
     long AttemptId,
     long StudentId,
+    string StudentName,
     short AttemptNumber,
     DateTimeOffset SubmittedAt,
     short TotalMarks,
@@ -161,6 +169,7 @@ public sealed record AttemptReviewDetailItem(
     long QuizId,
     string QuizTitle,
     long StudentId,
+    string StudentName,
     short AttemptNumber,
     short TotalMarks,
     short ObtainedMarks,

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/api/api_exception_mapper.dart';
@@ -14,7 +15,11 @@ final dioProvider = Provider<Dio>((ref) {
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 20),
       sendTimeout: const Duration(seconds: 20),
-      headers: const {'Accept': 'application/json'},
+      followRedirects: false,
+      headers: const {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
     ),
   );
 
@@ -24,7 +29,11 @@ final dioProvider = Provider<Dio>((ref) {
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 20),
       sendTimeout: const Duration(seconds: 20),
-      headers: const {'Accept': 'application/json'},
+      followRedirects: false,
+      headers: const {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
     ),
   );
 
@@ -75,6 +84,14 @@ final dioProvider = Provider<Dio>((ref) {
   );
 
   if (environment.enableNetworkLogging) {
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          debugPrint('Dio ${options.method} ${options.uri}');
+          handler.next(options);
+        },
+      ),
+    );
     dio.interceptors.add(
       LogInterceptor(
         requestBody: true,

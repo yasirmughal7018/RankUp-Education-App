@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:rankup_education/core/api/api_exception_mapper.dart';
 import 'package:rankup_education/core/api/api_response.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
@@ -17,6 +18,13 @@ class AuthRemoteDataSource {
     required String identifier,
     required String password,
   }) async {
+    if (kDebugMode) {
+      debugPrint(
+        'AuthRemoteDataSource.login -> POST /auth/login '
+        '(username: $identifier)',
+      );
+    }
+
     return _requestSession(
       '/auth/login',
       data: {'username': identifier, 'password': password},
@@ -86,7 +94,11 @@ class AuthRemoteDataSource {
     required Map<String, dynamic> data,
   }) async {
     try {
-      final response = await _dio.post<Map<String, dynamic>>(path, data: data);
+      final response = await _dio.post<Map<String, dynamic>>(
+        path,
+        data: data,
+        options: Options(extra: {'skipAuthRefresh': true}),
+      );
       return AuthSessionModel.fromJson(_unwrap(response.data));
     } on DioException catch (error) {
       throw mapDioException(error);
@@ -95,7 +107,11 @@ class AuthRemoteDataSource {
 
   Future<void> _requestVoid(String path, {Map<String, dynamic>? data}) async {
     try {
-      await _dio.post<Map<String, dynamic>>(path, data: data);
+      await _dio.post<Map<String, dynamic>>(
+        path,
+        data: data,
+        options: Options(extra: {'skipAuthRefresh': true}),
+      );
     } on DioException catch (error) {
       throw mapDioException(error);
     }

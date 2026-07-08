@@ -70,10 +70,6 @@ class QuizDetail extends QuizSummary {
     this.shuffleOptions = false,
   });
 
-  final int attemptsUsed;
-  final bool shuffleQuestions;
-  final bool shuffleOptions;
-
   factory QuizDetail.fromSummary(QuizSummary summary) {
     return QuizDetail(
       id: summary.id,
@@ -104,6 +100,10 @@ class QuizDetail extends QuizSummary {
       schoolName: summary.schoolName,
     );
   }
+
+  final int attemptsUsed;
+  final bool shuffleQuestions;
+  final bool shuffleOptions;
 }
 
 class QuizAttemptSession {

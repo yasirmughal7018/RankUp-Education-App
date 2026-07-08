@@ -10,6 +10,7 @@ internal static class QuizReviewMapping
             detail.QuizId,
             detail.QuizTitle,
             detail.StudentId,
+            detail.StudentName,
             detail.AttemptNumber,
             detail.TotalMarks,
             detail.ObtainedMarks,

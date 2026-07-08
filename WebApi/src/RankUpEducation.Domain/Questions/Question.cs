@@ -88,6 +88,47 @@ public sealed class Question : BaseEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    public void Activate()
+    {
+        IsActive = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SubmitForApproval(short pendingStatusId)
+    {
+        StatusId = pendingStatusId;
+        ApprovedBy = null;
+        IsAiApproved = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void Approve(string approvedBy, short approvedStatusId)
+    {
+        StatusId = approvedStatusId;
+        ApprovedBy = approvedBy.Trim();
+        IsAiApproved = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        IsActive = true;
+    }
+
+    public void ApproveByAi(string approvedBy, short approvedStatusId)
+    {
+        StatusId = approvedStatusId;
+        ApprovedBy = approvedBy.Trim();
+        IsAiApproved = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        IsActive = true;
+    }
+
+    public void Reject(short rejectedStatusId)
+    {
+        StatusId = rejectedStatusId;
+        ApprovedBy = null;
+        IsAiApproved = false;
+        IsActive = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
     public QuestionOption AddOption(string optionText, bool isCorrect)
     {
         var option = new QuestionOption(Id, optionText, isCorrect);

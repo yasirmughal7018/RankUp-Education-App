@@ -58,13 +58,13 @@ Content-Type: application/json
 @quizId = 1
 
 # List questions on a quiz (parent/teacher owner)
-GET {{RankUpEducation.Api_HostAddress}}/api/questions/quiz/{{quizId}}
+GET {{RankUpEducation.Api_HostAddress}}/api/quizzes/{{quizId}}/questions
 Authorization: Bearer {{accessToken}}
 
 ###
 
 # Add question to quiz
-POST {{RankUpEducation.Api_HostAddress}}/api/questions/quiz/{{quizId}}
+POST {{RankUpEducation.Api_HostAddress}}/api/quizzes/{{quizId}}/questions
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
@@ -86,8 +86,108 @@ Content-Type: application/json
 
 @questionId = 1
 
+# Question bank - list (optional filters: isActive, subjectId, classId, pendingApprovalOnly)
+GET {{RankUpEducation.Api_HostAddress}}/api/questions?pendingApprovalOnly=false
+Authorization: Bearer {{accessToken}}
+
+###
+
+# Pending approval queue (school admin)
+GET {{RankUpEducation.Api_HostAddress}}/api/questions/pending-approval
+Authorization: Bearer {{accessToken}}
+
+###
+
+# Create standalone question (starts in Pending status)
+POST {{RankUpEducation.Api_HostAddress}}/api/questions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "questionText": "What is 7 x 8?",
+  "questionType": "Single Choice",
+  "classId": 1,
+  "subjectId": 1,
+  "topicId": 1,
+  "difficultyLevel": 1,
+  "marks": 1,
+  "estimatedTimeSeconds": 30,
+  "hint": null,
+  "explanation": "56",
+  "options": [
+    { "optionText": "56", "isCorrect": true },
+    { "optionText": "54", "isCorrect": false }
+  ]
+}
+
+###
+
+# Update question bank item
+PUT {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "questionText": "What is 7 x 8?",
+  "questionType": "Single Choice",
+  "classId": 1,
+  "subjectId": 1,
+  "topicId": 1,
+  "difficultyLevel": 1,
+  "marks": 1,
+  "estimatedTimeSeconds": 30,
+  "hint": null,
+  "explanation": "56",
+  "options": [
+    { "optionText": "56", "isCorrect": true },
+    { "optionText": "54", "isCorrect": false }
+  ]
+}
+
+###
+
+# Approve question (school admin)
+POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/approve
+Authorization: Bearer {{accessToken}}
+
+###
+
+# AI-approve question (super admin)
+POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/approve-ai
+Authorization: Bearer {{accessToken}}
+
+###
+
+# Reject question (school admin)
+POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/reject
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Incorrect answer key"
+}
+
+###
+
+# Activate / deactivate
+POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/activate
+Authorization: Bearer {{accessToken}}
+
+###
+
+POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/deactivate
+Authorization: Bearer {{accessToken}}
+
+###
+
+# Delete question (must not be linked to quizzes)
+DELETE {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}
+Authorization: Bearer {{accessToken}}
+
+###
+
 # Update question on quiz
-PUT {{RankUpEducation.Api_HostAddress}}/api/questions/quiz/{{quizId}}/{{questionId}}
+PUT {{RankUpEducation.Api_HostAddress}}/api/quizzes/{{quizId}}/questions/{{questionId}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
@@ -107,7 +207,7 @@ Content-Type: application/json
 ###
 
 # Remove question from quiz
-DELETE {{RankUpEducation.Api_HostAddress}}/api/questions/quiz/{{quizId}}/{{questionId}}
+DELETE {{RankUpEducation.Api_HostAddress}}/api/quizzes/{{quizId}}/questions/{{questionId}}
 Authorization: Bearer {{accessToken}}
 
 ###

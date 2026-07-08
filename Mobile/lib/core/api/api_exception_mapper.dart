@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
 
@@ -7,7 +9,17 @@ AppException mapDioException(DioException error) {
   final data = response?.data;
 
   if (statusCode == 401) {
+    final message = _messageFrom(data);
+    if (message != 'Something went wrong. Please try again.') {
+      return AuthenticationException(message);
+    }
     return const AuthenticationException('Your session has expired.');
+  }
+
+  if (statusCode == 307 || statusCode == 308) {
+    return const NetworkException(
+      'The API redirected to HTTPS. Start the API with the http profile on port 5255.',
+    );
   }
 
   if (statusCode == 403) {
@@ -20,24 +32,61 @@ AppException mapDioException(DioException error) {
     return ValidationException(_messageFrom(data), _errorsFrom(data));
   }
 
-  if (error.type == DioExceptionType.connectionError ||
-      error.type == DioExceptionType.connectionTimeout ||
-      error.type == DioExceptionType.receiveTimeout ||
-      error.type == DioExceptionType.sendTimeout) {
-    return const NetworkException(
-      'Network connection failed. Please check your internet and try again.',
+  if (statusCode == 429) {
+    return ValidationException(
+      _messageFrom(data),
+      const ['Too many requests. Please wait and try again.'],
     );
+  }
+
+  if (_isConnectionFailure(error)) {
+    return NetworkException(_connectionMessage(error));
   }
 
   return UnknownAppException(_messageFrom(data));
 }
 
+bool _isConnectionFailure(DioException error) {
+  if (error.type == DioExceptionType.connectionError ||
+      error.type == DioExceptionType.connectionTimeout ||
+      error.type == DioExceptionType.receiveTimeout ||
+      error.type == DioExceptionType.sendTimeout) {
+    return true;
+  }
+
+  final underlying = error.error;
+  if (underlying is SocketException) {
+    return true;
+  }
+
+  final message = error.message?.toLowerCase() ?? '';
+  return message.contains('connection refused') ||
+      message.contains('failed host lookup') ||
+      message.contains('network is unreachable') ||
+      message.contains('connection reset');
+}
+
+String _connectionMessage(DioException error) {
+  final underlying = error.error;
+  if (underlying is SocketException) {
+    return 'Cannot reach the API at the configured address. '
+        'Start the Web API and confirm the emulator uses http://10.0.2.2:5255/api.';
+  }
+
+  return 'Network connection failed. Start the Web API and confirm the emulator '
+      'uses http://10.0.2.2:5255/api.';
+}
+
 String _messageFrom(Object? data) {
   if (data is Map<String, dynamic>) {
-    final message = data['message'];
+    final message = data['message'] ?? data['title'];
     if (message is String && message.isNotEmpty) {
       return message;
     }
+  }
+
+  if (data is String && data.isNotEmpty) {
+    return data;
   }
 
   return 'Something went wrong. Please try again.';

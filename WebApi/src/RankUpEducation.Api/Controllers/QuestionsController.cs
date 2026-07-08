@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using RankUpEducation.Application.Questions;
 using RankUpEducation.Contracts.Common;
 using RankUpEducation.Contracts.Questions;
-using RankUpEducation.Contracts.Quizzes;
 
 namespace RankUpEducation.Api.Controllers;
 
@@ -19,47 +18,111 @@ public sealed class QuestionsController : ControllerBase
         _questionService = questionService;
     }
 
-    /// <summary>Lists all questions linked to a quiz (parent/teacher owner only).</summary>
-    [HttpGet("quiz/{quizId:long}")]
-    public async Task<ActionResult<ApiResponse<QuizQuestionListResponse>>> ListForQuizAsync(
-        long quizId,
-        CancellationToken cancellationToken)
+    [HttpGet]
+    public async Task<ActionResult<ApiResponse<QuestionListResponse>>> ListAsync(
+        [FromQuery] bool? isActive,
+        [FromQuery] short? subjectId,
+        [FromQuery] short? classId,
+        [FromQuery] bool pendingApprovalOnly = false,
+        CancellationToken cancellationToken = default)
     {
-        var response = await _questionService.ListForQuizAsync(quizId, cancellationToken);
-        return Ok(ApiResponse<QuizQuestionListResponse>.Ok(response));
+        var response = await _questionService.ListAsync(
+            isActive,
+            subjectId,
+            classId,
+            pendingApprovalOnly,
+            cancellationToken);
+        return Ok(ApiResponse<QuestionListResponse>.Ok(response));
     }
 
-    /// <summary>Adds a question to a quiz and returns the updated quiz manage view.</summary>
-    [HttpPost("quiz/{quizId:long}")]
-    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> AddToQuizAsync(
-        long quizId,
-        [FromBody] AddQuizQuestionRequest request,
+    [HttpGet("pending-approval")]
+    public async Task<ActionResult<ApiResponse<QuestionListResponse>>> ListPendingApprovalAsync(
         CancellationToken cancellationToken)
     {
-        var response = await _questionService.AddToQuizAsync(quizId, request, cancellationToken);
-        return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question added."));
+        var response = await _questionService.ListPendingApprovalAsync(cancellationToken);
+        return Ok(ApiResponse<QuestionListResponse>.Ok(response));
     }
 
-    /// <summary>Updates a question on a quiz and returns the updated quiz manage view.</summary>
-    [HttpPut("quiz/{quizId:long}/{questionId:long}")]
-    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> UpdateOnQuizAsync(
-        long quizId,
-        long questionId,
-        [FromBody] UpdateQuizQuestionRequest request,
-        CancellationToken cancellationToken)
-    {
-        var response = await _questionService.UpdateOnQuizAsync(quizId, questionId, request, cancellationToken);
-        return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question updated."));
-    }
-
-    /// <summary>Removes a question from a quiz and returns the updated quiz manage view.</summary>
-    [HttpDelete("quiz/{quizId:long}/{questionId:long}")]
-    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> RemoveFromQuizAsync(
-        long quizId,
+    [HttpGet("{questionId:long}")]
+    public async Task<ActionResult<ApiResponse<QuestionDetailResponse>>> GetByIdAsync(
         long questionId,
         CancellationToken cancellationToken)
     {
-        var response = await _questionService.RemoveFromQuizAsync(quizId, questionId, cancellationToken);
-        return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question removed."));
+        var response = await _questionService.GetByIdAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response));
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<ApiResponse<QuestionDetailResponse>>> CreateAsync(
+        [FromBody] CreateQuestionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.CreateAsync(request, cancellationToken);
+        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question created."));
+    }
+
+    [HttpPut("{questionId:long}")]
+    public async Task<ActionResult<ApiResponse<QuestionDetailResponse>>> UpdateAsync(
+        long questionId,
+        [FromBody] UpdateQuestionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.UpdateAsync(questionId, request, cancellationToken);
+        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question updated."));
+    }
+
+    [HttpPost("{questionId:long}/approve")]
+    public async Task<ActionResult<ApiResponse<QuestionApprovalResponse>>> ApproveAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.ApproveAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionApprovalResponse>.Ok(response, "Question approved."));
+    }
+
+    [HttpPost("{questionId:long}/approve-ai")]
+    public async Task<ActionResult<ApiResponse<QuestionApprovalResponse>>> ApproveAiAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.ApproveAiAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionApprovalResponse>.Ok(response, "Question AI-approved."));
+    }
+
+    [HttpPost("{questionId:long}/reject")]
+    public async Task<ActionResult<ApiResponse<QuestionApprovalResponse>>> RejectAsync(
+        long questionId,
+        [FromBody] RejectQuestionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.RejectAsync(questionId, request, cancellationToken);
+        return Ok(ApiResponse<QuestionApprovalResponse>.Ok(response, "Question rejected."));
+    }
+
+    [HttpPost("{questionId:long}/activate")]
+    public async Task<ActionResult<ApiResponse<QuestionActiveStateResponse>>> ActivateAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.ActivateAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question activated."));
+    }
+
+    [HttpPost("{questionId:long}/deactivate")]
+    public async Task<ActionResult<ApiResponse<QuestionActiveStateResponse>>> DeactivateAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.DeactivateAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question deactivated."));
+    }
+
+    [HttpDelete("{questionId:long}")]
+    public async Task<ActionResult<ApiResponse<DeleteQuestionResponse>>> DeleteAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.DeleteAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<DeleteQuestionResponse>.Ok(response, "Question deleted."));
     }
 }

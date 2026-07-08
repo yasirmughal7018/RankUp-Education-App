@@ -1,4 +1,4 @@
-using RankUpEducation.Contracts.Questions;
+using RankUpEducation.Contracts.QuizQuestions;
 
 namespace RankUpEducation.Contracts.Quizzes;
 
@@ -42,6 +42,10 @@ public sealed record ManageQuizResponse(
     string QuizType,
     string Difficulty,
     string LifecycleStatus,
+    short ClassId,
+    short SubjectId,
+    short TopicId,
+    short DifficultyLevelId,
     short QuestionCount,
     short TotalMarks,
     short? TimeLimitMinutes,
@@ -66,6 +70,7 @@ public sealed record AssignQuizRequest(
 public sealed record QuizAssignmentResponse(
     long AssignmentId,
     long StudentId,
+    string StudentName,
     long? GroupId,
     DateTimeOffset StartAt,
     DateTimeOffset EndAt,
@@ -101,6 +106,7 @@ public sealed record AllowRetryResponse(
     long AssignmentId,
     long QuizId,
     long StudentId,
+    string StudentName,
     short AllowedAttempts,
     int AttemptCount,
     bool IsReviewDone);

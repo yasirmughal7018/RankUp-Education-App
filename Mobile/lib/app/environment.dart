@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/app/api_base_url.dart';
 
 enum EnvironmentName { development, test, staging, production }
 
@@ -13,6 +14,7 @@ class AppEnvironment {
 
   factory AppEnvironment.fromDartDefines() {
     const env = String.fromEnvironment('APP_ENV', defaultValue: 'development');
+    const apiFromDefine = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
     final name = EnvironmentName.values.firstWhere(
       (value) => value.name == env,
@@ -21,10 +23,7 @@ class AppEnvironment {
 
     return AppEnvironment(
       name: name,
-      apiBaseUrl: const String.fromEnvironment(
-        'API_BASE_URL',
-        defaultValue: 'http://10.0.2.2:5255/api',
-      ),
+      apiBaseUrl: resolveApiBaseUrl(apiFromDefine),
       signalRUrl: const String.fromEnvironment(
         'SIGNALR_URL',
         defaultValue: 'https://api.rankupeducation.local/hubs',
@@ -32,7 +31,7 @@ class AppEnvironment {
       enableNetworkLogging: name != EnvironmentName.production,
       enableMockRepositories: const bool.fromEnvironment(
         'USE_MOCKS',
-        defaultValue: true,
+        defaultValue: false,
       ),
     );
   }
@@ -42,6 +41,8 @@ class AppEnvironment {
   final String signalRUrl;
   final bool enableNetworkLogging;
   final bool enableMockRepositories;
+
+  bool get usesApiAuth => !enableMockRepositories;
 }
 
 final appEnvironmentProvider = Provider<AppEnvironment>(

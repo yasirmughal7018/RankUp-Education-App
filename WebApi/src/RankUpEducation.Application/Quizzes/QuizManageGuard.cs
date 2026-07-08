@@ -1,6 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
-using RankUpEducation.Contracts.Questions;
+using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Quizzes;
 
@@ -9,10 +9,12 @@ namespace RankUpEducation.Application.Quizzes;
 internal sealed class QuizManageGuard
 {
     private readonly IQuizRepository _quizzes;
+    private readonly ILookupRepository _lookups;
 
-    public QuizManageGuard(IQuizRepository quizzes)
+    public QuizManageGuard(IQuizRepository quizzes, ILookupRepository lookups)
     {
         _quizzes = quizzes;
+        _lookups = lookups;
     }
 
     public async Task<Quiz> RequireOwnedQuizAsync(
@@ -39,7 +41,7 @@ internal sealed class QuizManageGuard
 
     public async Task EnsureNotArchivedAsync(Quiz quiz, CancellationToken cancellationToken)
     {
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         if (IsArchivedLifecycle(lifecycleName))
         {
             throw new BusinessRuleException("Archived quizzes are read-only.");
@@ -48,7 +50,7 @@ internal sealed class QuizManageGuard
 
     public async Task EnsureDraftOnlyAsync(Quiz quiz, CancellationToken cancellationToken)
     {
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         if (!IsDraftLifecycle(lifecycleName))
         {
             throw new BusinessRuleException("Only draft quizzes can be deleted.");
@@ -60,7 +62,7 @@ internal sealed class QuizManageGuard
         IReadOnlyList<string> names,
         CancellationToken cancellationToken)
     {
-        var id = await _quizzes.ResolveLookupIdByNamesAsync(type, names, 0, cancellationToken);
+        var id = await _lookups.ResolveLookupIdByNamesAsync(type, names, 0, cancellationToken);
         if (id == 0)
         {
             throw new BusinessRuleException($"Required lookup '{type}' ({string.Join(", ", names)}) was not found.");
@@ -88,7 +90,7 @@ internal sealed class QuizManageGuard
                 cancellationToken);
         }
 
-        var directId = await _quizzes.ResolveLookupIdAsync(QuizLookupNames.QuestionType, normalized, 0, cancellationToken);
+        var directId = await _lookups.ResolveLookupIdAsync(QuizLookupNames.QuestionType, normalized, 0, cancellationToken);
         if (directId == 0)
         {
             throw new ValidationAppException([$"Question type '{questionType}' is not supported."]);
@@ -133,7 +135,7 @@ internal sealed class QuizManageGuard
 
     private async Task EnsureEditableLifecycleAsync(Quiz quiz, CancellationToken cancellationToken)
     {
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         if (IsArchivedLifecycle(lifecycleName))
         {
             throw new BusinessRuleException("Archived quizzes are read-only.");

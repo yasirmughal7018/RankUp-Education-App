@@ -21,4 +21,15 @@ public sealed class ParentStudentRelation : BaseEntity
     public string Relationship { get; private set; }
     public bool IsActive { get; private set; } = true;
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    public void Activate(string relationship)
+    {
+        Relationship = relationship.Trim();
+        IsActive = true;
+    }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+    }
 }

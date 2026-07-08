@@ -42,17 +42,32 @@ public sealed class QuizService : IQuizService
     private const string SubmittedStatusName = "Submitted";
 
     private readonly IQuizRepository _quizzes;
+    private readonly IQuizAssignmentRepository _assignments;
+    private readonly IQuizQuestionRepository _quizQuestions;
+    private readonly IQuizAttemptRepository _attempts;
+    private readonly ILookupRepository _lookups;
+    private readonly IStudentScopeRepository _studentScope;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUnitOfWork _unitOfWork;
 
     public QuizService(
         IQuizRepository quizzes,
+        IQuizAssignmentRepository assignments,
+        IQuizQuestionRepository quizQuestions,
+        IQuizAttemptRepository attempts,
+        ILookupRepository lookups,
+        IStudentScopeRepository studentScope,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
         IUnitOfWork unitOfWork)
     {
         _quizzes = quizzes;
+        _assignments = assignments;
+        _quizQuestions = quizQuestions;
+        _attempts = attempts;
+        _lookups = lookups;
+        _studentScope = studentScope;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _unitOfWork = unitOfWork;
@@ -158,6 +173,10 @@ public sealed class QuizService : IQuizService
                 summary.ResultPercent,
                 summary.CompletedAt,
                 0,
+                0,
+                0,
+                0,
+                0,
                 summary.Status);
 
             return QuizMapping.ToDetailResponse(detail, now);
@@ -175,7 +194,7 @@ public sealed class QuizService : IQuizService
         var studentId = RequireStudentId();
         ValidateDeviceId(request.DeviceId);
 
-        var access = await _quizzes.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
+        var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("This quiz is not assigned to you.");
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
@@ -194,7 +213,7 @@ public sealed class QuizService : IQuizService
             throw new BusinessRuleException("You have used all allowed attempts for this quiz.");
         }
 
-        var inProgressStatusId = await _quizzes.ResolveLookupIdAsync(
+        var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             InProgressStatusName,
             fallback: 1,
@@ -209,21 +228,21 @@ public sealed class QuizService : IQuizService
             request.DeviceId.Trim());
         attempt.Begin(inProgressStatusId);
 
-        var quizQuestions = await _quizzes.GetQuizQuestionsAsync(quizId, cancellationToken);
+        var quizQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken);
         if (quizQuestions.Count == 0)
         {
             throw new BusinessRuleException("This quiz has no active questions.");
         }
 
         var orderedQuestions = quizQuestions.OrderBy(question => question.DisplayOrder).ToList();
-        await _quizzes.AddAttemptAsync(attempt, cancellationToken);
+        await _attempts.AddAttemptAsync(attempt, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var attemptQuestions = orderedQuestions
             .Select((question, index) => new QuizAttemptQuestion(attempt.Id, question.QuestionId, (short)(index + 1)))
             .ToArray();
 
-        await _quizzes.AddAttemptQuestionsAsync(attemptQuestions, cancellationToken);
+        await _attempts.AddAttemptQuestionsAsync(attemptQuestions, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var quizDetail = await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken);
@@ -246,7 +265,7 @@ public sealed class QuizService : IQuizService
         EnsureStudentRole();
         var studentId = RequireStudentId();
 
-        var attempt = await _quizzes.GetAttemptEntityAsync(attemptId, studentId, cancellationToken)
+        var attempt = await _attempts.GetAttemptEntityAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         if (attempt.QuizId != quizId)
@@ -254,7 +273,7 @@ public sealed class QuizService : IQuizService
             throw new NotFoundAppException("Quiz attempt was not found.");
         }
 
-        var submittedStatusId = await _quizzes.ResolveLookupIdAsync(
+        var submittedStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             SubmittedStatusName,
             fallback: 2,
@@ -265,12 +284,12 @@ public sealed class QuizService : IQuizService
             throw new BusinessRuleException("This quiz attempt has already been submitted.");
         }
 
-        var quizQuestions = await _quizzes.GetQuizQuestionsAsync(quizId, cancellationToken);
+        var quizQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken);
         var questionMap = quizQuestions.ToDictionary(question => question.QuestionId);
         var totalMarks = (short)quizQuestions.Sum(question => question.Marks);
         short obtainedMarks = 0;
 
-        var attemptDetail = await _quizzes.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
+        var attemptDetail = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         var answersByQuestionId = request.Answers
@@ -319,7 +338,7 @@ public sealed class QuizService : IQuizService
             answerEntities.Add(answer);
         }
 
-        await _quizzes.AddAttemptAnswersAsync(answerEntities, cancellationToken);
+        await _attempts.AddAttemptAnswersAsync(answerEntities, cancellationToken);
 
         attempt.MarkSubmitted(
             submittedStatusId,
@@ -332,10 +351,10 @@ public sealed class QuizService : IQuizService
         var quizTitle = (await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken))?.QuizTitle
             ?? "Quiz";
 
-        var result = await _quizzes.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
+        var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        var reviewState = await _quizzes.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
+        var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
         var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false } && hasSubjectiveAnswers;
 
         return QuizMapping.ToAttemptResult(
@@ -351,10 +370,9 @@ public sealed class QuizService : IQuizService
         long attemptId,
         CancellationToken cancellationToken)
     {
-        EnsureStudentRole();
-        var studentId = RequireStudentId();
+        var studentId = await ResolveResultViewerStudentIdAsync(quizId, attemptId, cancellationToken);
 
-        var result = await _quizzes.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
+        var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         if (result.QuizId != quizId)
@@ -365,7 +383,7 @@ public sealed class QuizService : IQuizService
         var quizTitle = (await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken))?.QuizTitle
             ?? "Quiz";
 
-        var reviewState = await _quizzes.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
+        var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
         var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false };
 
         return QuizMapping.ToAttemptResult(
@@ -395,7 +413,7 @@ public sealed class QuizService : IQuizService
         var parentId = _currentUser.ProfileId ?? _currentUser.UserId
             ?? throw new ForbiddenAppException("Parent profile was not found.");
 
-        var studentIds = await _quizzes.GetLinkedStudentIdsAsync(parentId, cancellationToken);
+        var studentIds = await _studentScope.GetLinkedStudentIdsAsync(parentId, cancellationToken);
         var assignedItems = await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken);
         var createdItems = await _quizzes.ListForCreatorAsync(parentId, search, subject, grade, cancellationToken);
 
@@ -460,6 +478,37 @@ public sealed class QuizService : IQuizService
         {
             throw new ForbiddenAppException("Only students can start or submit quiz attempts.");
         }
+    }
+
+    private async Task<long> ResolveResultViewerStudentIdAsync(
+        long quizId,
+        long attemptId,
+        CancellationToken cancellationToken)
+    {
+        var role = ParseRole(_currentUser.Role);
+
+        if (role == UserRole.Student)
+        {
+            return RequireStudentId();
+        }
+
+        if (role != UserRole.Parent)
+        {
+            throw new ForbiddenAppException("Only students and linked parents can view quiz attempt results.");
+        }
+
+        var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz attempt was not found.");
+
+        var parentId = _currentUser.ProfileId ?? _currentUser.UserId
+            ?? throw new ForbiddenAppException("Parent profile was not found.");
+
+        if (!await _studentScope.IsLinkedStudentAsync(parentId, attempt.StudentId, cancellationToken))
+        {
+            throw new ForbiddenAppException("You can only view results for linked students.");
+        }
+
+        return attempt.StudentId;
     }
 
     private long RequireStudentId()

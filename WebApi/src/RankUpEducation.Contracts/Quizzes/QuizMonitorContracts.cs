@@ -7,6 +7,7 @@ public sealed record QuizAssignmentBoardItemResponse(
     long QuizId,
     string QuizTitle,
     long StudentId,
+    string StudentName,
     DateTimeOffset StartAt,
     DateTimeOffset EndAt,
     short AllowedAttempts,
@@ -26,6 +27,7 @@ public sealed record QuizMonitoringResponse(
 
 public sealed record QuizMonitoringStudentResponse(
     long StudentId,
+    string StudentName,
     long AssignmentId,
     int AttemptCount,
     short? BestPercentage,

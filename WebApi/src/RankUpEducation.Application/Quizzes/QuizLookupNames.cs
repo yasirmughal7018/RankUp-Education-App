@@ -21,6 +21,9 @@ public static class QuizLookupNames
     public static readonly string[] AssignedResultNames = ["Assigned", "Not Started", "Pending"];
     public static readonly string[] McqQuestionTypeNames = ["MCQ", "Multiple Choice", "MultipleChoice"];
     public static readonly string[] DescriptiveQuestionTypeNames = ["Descriptive", "Short Answer", "ShortAnswer"];
+    public static readonly string[] PendingQuestionStatusNames = ["Pending", "Draft", "Under Review"];
+    public static readonly string[] ApprovedQuestionStatusNames = ["Approved", "Active", "Published"];
+    public static readonly string[] RejectedQuestionStatusNames = ["Rejected", "Declined"];
     public static readonly string[] ActiveQuestionStatusNames = ["Active", "Approved", "Published"];
     public static readonly string[] SubmittedAttemptStatusNames = ["Submitted", "SUBMITTED"];
     public static readonly string[] ReviewedAttemptStatusNames = ["Reviewed", "REVIEWED"];

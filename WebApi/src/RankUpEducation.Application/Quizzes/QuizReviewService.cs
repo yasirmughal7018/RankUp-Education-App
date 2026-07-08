@@ -31,15 +31,30 @@ public interface IQuizReviewService
 public sealed class QuizReviewService : IQuizReviewService
 {
     private readonly IQuizRepository _quizzes;
+    private readonly IQuizReviewRepository _reviews;
+    private readonly IQuizAttemptRepository _attempts;
+    private readonly IQuizAssignmentRepository _assignments;
+    private readonly ILookupRepository _lookups;
+    private readonly IStudentScopeRepository _studentScope;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
 
     public QuizReviewService(
         IQuizRepository quizzes,
+        IQuizReviewRepository reviews,
+        IQuizAttemptRepository attempts,
+        IQuizAssignmentRepository assignments,
+        ILookupRepository lookups,
+        IStudentScopeRepository studentScope,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser)
     {
         _quizzes = quizzes;
+        _reviews = reviews;
+        _attempts = attempts;
+        _assignments = assignments;
+        _lookups = lookups;
+        _studentScope = studentScope;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
     }
@@ -47,13 +62,14 @@ public sealed class QuizReviewService : IQuizReviewService
     public async Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var items = await _quizzes.ListPendingReviewsForCreatorAsync(scope.UserId, cancellationToken);
+        var items = await _reviews.ListPendingReviewsForCreatorAsync(scope.UserId, cancellationToken);
 
         return new PendingReviewListResponse(items.Select(item => new PendingReviewItemResponse(
             item.QuizId,
             item.QuizTitle,
             item.AttemptId,
             item.StudentId,
+            item.StudentName,
             item.AttemptNumber,
             item.SubmittedAt,
             item.TotalMarks,
@@ -66,7 +82,7 @@ public sealed class QuizReviewService : IQuizReviewService
         CancellationToken cancellationToken)
     {
         await EnsureReviewAccessAsync(quizId, attemptId, cancellationToken);
-        var detail = await _quizzes.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
+        var detail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         return QuizReviewMapping.ToReviewResponse(detail);
@@ -87,7 +103,7 @@ public sealed class QuizReviewService : IQuizReviewService
             throw new BusinessRuleException("This attempt review has already been finalized.");
         }
 
-        var reviewDetail = await _quizzes.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
+        var reviewDetail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         var questionMap = reviewDetail.Questions.ToDictionary(question => question.QuestionId);
@@ -106,10 +122,10 @@ public sealed class QuizReviewService : IQuizReviewService
                 ]);
             }
 
-            var attemptQuestion = await _quizzes.GetAttemptQuestionEntityAsync(attemptId, markRequest.QuestionId, cancellationToken)
+            var attemptQuestion = await _attempts.GetAttemptQuestionEntityAsync(attemptId, markRequest.QuestionId, cancellationToken)
                 ?? throw new NotFoundAppException("Attempt question was not found.");
 
-            var answer = await _quizzes.GetAttemptAnswerEntityAsync(attemptQuestion.Id, cancellationToken);
+            var answer = await _attempts.GetAttemptAnswerEntityAsync(attemptQuestion.Id, cancellationToken);
             if (answer is not null)
             {
                 var isCorrect = markRequest.AwardedMarks == reviewQuestion.MaxMarks && reviewQuestion.MaxMarks > 0;
@@ -136,7 +152,7 @@ public sealed class QuizReviewService : IQuizReviewService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var updated = await _quizzes.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
+        var updated = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         return QuizReviewMapping.ToReviewResponse(updated);
@@ -156,15 +172,15 @@ public sealed class QuizReviewService : IQuizReviewService
             throw new BusinessRuleException("This attempt review has already been finalized.");
         }
 
-        var attempt = await _quizzes.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
+        var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        if (!await _quizzes.IsSubmittedAttemptAsync(attemptId, cancellationToken))
+        if (!await _attempts.IsSubmittedAttemptAsync(attemptId, cancellationToken))
         {
             throw new BusinessRuleException("Only submitted attempts can be reviewed.");
         }
 
-        var reviewDetail = await _quizzes.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
+        var reviewDetail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         var unreviewedSubjective = reviewDetail.Questions
@@ -177,7 +193,7 @@ public sealed class QuizReviewService : IQuizReviewService
         }
 
         var obtainedMarks = (short)reviewDetail.Questions.Sum(question => question.AwardedMarks);
-        var reviewedStatusId = await _quizzes.ResolveLookupIdByNamesAsync(
+        var reviewedStatusId = await _lookups.ResolveLookupIdByNamesAsync(
             "QuizAttemptStatus",
             QuizLookupNames.ReviewedAttemptStatusNames,
             fallback: attempt.StatusId,
@@ -206,11 +222,11 @@ public sealed class QuizReviewService : IQuizReviewService
 
         QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
 
-        var attempt = await _quizzes.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
+        var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         await QuizScopeResolver.EnsureCanAccessStudentAsync(
-            _quizzes,
+            _studentScope,
             scope,
             attempt.StudentId,
             cancellationToken);
@@ -221,10 +237,10 @@ public sealed class QuizReviewService : IQuizReviewService
         long attemptId,
         CancellationToken cancellationToken)
     {
-        var attempt = await _quizzes.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
+        var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        return await _quizzes.GetAssignmentEntityAsync(quizId, attempt.StudentId, cancellationToken)
+        return await _assignments.GetAssignmentEntityAsync(quizId, attempt.StudentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz assignment was not found.");
     }
 
@@ -236,7 +252,7 @@ public sealed class QuizReviewService : IQuizReviewService
     {
         if (attemptQuestion.QuizReviewId is not null)
         {
-            var existingReview = await _quizzes.GetQuestionReviewEntityAsync(attemptQuestion.QuizReviewId.Value, cancellationToken);
+            var existingReview = await _reviews.GetQuestionReviewEntityAsync(attemptQuestion.QuizReviewId.Value, cancellationToken);
             if (existingReview is not null)
             {
                 if (scope.Role == UserRole.Teacher)
@@ -262,7 +278,7 @@ public sealed class QuizReviewService : IQuizReviewService
             review.SetParentReview(null, feedback);
         }
 
-        await _quizzes.AddReviewAsync(review, cancellationToken);
+        await _reviews.AddReviewAsync(review, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         attemptQuestion.LinkReview(review.Id);
     }

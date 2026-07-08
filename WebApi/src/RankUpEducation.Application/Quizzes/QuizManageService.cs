@@ -30,19 +30,31 @@ public interface IQuizManageService
 public sealed class QuizManageService : IQuizManageService
 {
     private readonly IQuizRepository _quizzes;
+    private readonly IQuizQuestionRepository _quizQuestions;
+    private readonly IQuestionRepository _questions;
+    private readonly ILookupRepository _lookups;
+    private readonly IStudentScopeRepository _studentScope;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly QuizManageGuard _guard;
 
     public QuizManageService(
         IQuizRepository quizzes,
+        IQuizQuestionRepository quizQuestions,
+        IQuestionRepository questions,
+        ILookupRepository lookups,
+        IStudentScopeRepository studentScope,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser)
     {
         _quizzes = quizzes;
+        _quizQuestions = quizQuestions;
+        _questions = questions;
+        _lookups = lookups;
+        _studentScope = studentScope;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
-        _guard = new QuizManageGuard(quizzes);
+        _guard = new QuizManageGuard(quizzes, lookups);
     }
 
     public async Task<ManageQuizResponse> CreateAsync(CreateQuizRequest request, CancellationToken cancellationToken)
@@ -182,7 +194,7 @@ public sealed class QuizManageService : IQuizManageService
             throw new BusinessRuleException("Parent private quizzes do not require school approval.");
         }
 
-        var approvalName = await _quizzes.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
         if (approvalName.Equals("Approved", StringComparison.OrdinalIgnoreCase))
         {
             throw new BusinessRuleException("Quiz is already approved.");
@@ -196,7 +208,7 @@ public sealed class QuizManageService : IQuizManageService
         quiz.Approve(approvedStatusId, scope.UserId.ToString());
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new ApproveQuizResponse(quizId, "Approved", lifecycleName);
     }
 
@@ -264,7 +276,7 @@ public sealed class QuizManageService : IQuizManageService
         await _quizzes.AddQuizAsync(copy, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var sourceQuestions = await _quizzes.GetQuizQuestionsForCopyAsync(quizId, cancellationToken);
+        var sourceQuestions = await _quizQuestions.GetQuizQuestionsForCopyAsync(quizId, cancellationToken);
         var questionStatusId = await _guard.RequireLookupAsync(
             QuizLookupNames.QuestionStatus,
             QuizLookupNames.ActiveQuestionStatusNames,
@@ -296,7 +308,7 @@ public sealed class QuizManageService : IQuizManageService
                 sourceQuestion.Hint,
                 sourceQuestion.Explanation);
 
-            await _quizzes.AddQuestionAsync(question, cancellationToken);
+            await _questions.AddQuestionAsync(question, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             if (sourceQuestion.Options.Count > 0)
@@ -304,15 +316,15 @@ public sealed class QuizManageService : IQuizManageService
                 var options = sourceQuestion.Options
                     .Select(option => new QuestionOption(question.Id, option.OptionText, option.IsCorrect))
                     .ToArray();
-                await _quizzes.AddQuestionOptionsAsync(options, cancellationToken);
+                await _questions.AddQuestionOptionsAsync(options, cancellationToken);
             }
 
-            await _quizzes.AddQuizQuestionAsync(
+            await _quizQuestions.AddQuizQuestionAsync(
                 new QuizQuestion(copy.Id, question.Id, sourceQuestion.DisplayOrder, sourceQuestion.Marks),
                 cancellationToken);
         }
 
-        await _quizzes.RecalculateQuizTotalsAsync(copy.Id, cancellationToken);
+        await _quizQuestions.RecalculateQuizTotalsAsync(copy.Id, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var duplicated = await BuildManageResponseAsync(copy.Id, cancellationToken);
@@ -324,7 +336,7 @@ public sealed class QuizManageService : IQuizManageService
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
         var quiz = await _guard.RequireOwnedQuizAsync(quizId, scope, cancellationToken);
 
-        var lifecycleName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         if (IsArchivedLifecycle(lifecycleName))
         {
             throw new BusinessRuleException("Quiz is already archived.");
@@ -343,7 +355,7 @@ public sealed class QuizManageService : IQuizManageService
         quiz.Archive(archivedStatusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var archivedName = await _quizzes.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var archivedName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new ArchiveQuizResponse(quizId, archivedName);
     }
 
@@ -353,7 +365,7 @@ public sealed class QuizManageService : IQuizManageService
         var detail = await _quizzes.GetDetailForCreatorAsync(quizId, scope.UserId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
-        var questions = await _quizzes.GetQuizQuestionsAsync(quizId, cancellationToken);
+        var questions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
         return QuizManageMapping.ToManageResponse(detail, questions);
     }
 
@@ -364,7 +376,7 @@ public sealed class QuizManageService : IQuizManageService
     {
         if (scope.Role == UserRole.Parent)
         {
-            var linkedStudentIds = await _quizzes.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken);
+            var linkedStudentIds = await _studentScope.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken);
             if (linkedStudentIds.Count == 0)
             {
                 throw new BusinessRuleException("Link at least one child before creating a quiz.");
@@ -376,7 +388,7 @@ public sealed class QuizManageService : IQuizManageService
                 throw new ForbiddenAppException("Selected child is not linked to this parent account.");
             }
 
-            var context = await _quizzes.GetStudentSchoolContextAsync(studentId, cancellationToken)
+            var context = await _studentScope.GetStudentSchoolContextAsync(studentId, cancellationToken)
                 ?? throw new BusinessRuleException("Student school context was not found.");
 
             return context;

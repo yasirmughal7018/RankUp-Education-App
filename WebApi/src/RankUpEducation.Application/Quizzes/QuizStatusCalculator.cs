@@ -1,6 +1,6 @@
 namespace RankUpEducation.Application.Quizzes;
 
-internal static class QuizStatusCalculator
+public static class QuizStatusCalculator
 {
     public static string ResolveListStatus(
         DateTimeOffset now,

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/core/errors/app_exception.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
@@ -64,6 +65,8 @@ class AuthController extends StateNotifier<AuthState> {
         password: password,
       );
       state = state.copyWith(user: session.user, isLoading: false);
+    } on AppException catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.message);
     } on Exception catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.toString());
     }

@@ -100,16 +100,44 @@ Account access request:
 - Never log tokens, CNIC, B-Form, phone numbers, or private child data.
 - Shared reports should use secure or expiring links.
 
-## Quiz Question Endpoints (Parent / Teacher)
+## Question Bank Endpoints
 
-Question CRUD lives under `/api/questions`, not under `/api/quizzes`.
+Standalone question management under `/api/questions`.
 
 | Action | Method | Route |
 |--------|--------|-------|
-| List quiz questions | `GET` | `/api/questions/quiz/{quizId}` |
-| Add question to quiz | `POST` | `/api/questions/quiz/{quizId}` |
-| Update quiz question | `PUT` | `/api/questions/quiz/{quizId}/{questionId}` |
-| Remove from quiz | `DELETE` | `/api/questions/quiz/{quizId}/{questionId}` |
+| List questions | `GET` | `/api/questions?isActive=&subjectId=&classId=&pendingApprovalOnly=` |
+| Pending approval queue | `GET` | `/api/questions/pending-approval` |
+| Get question | `GET` | `/api/questions/{questionId}` |
+| Create question | `POST` | `/api/questions` |
+| Update question | `PUT` | `/api/questions/{questionId}` |
+| Approve | `POST` | `/api/questions/{questionId}/approve` |
+| AI approve (SuperAdmin) | `POST` | `/api/questions/{questionId}/approve-ai` |
+| Reject | `POST` | `/api/questions/{questionId}/reject` |
+| Activate | `POST` | `/api/questions/{questionId}/activate` |
+| Deactivate | `POST` | `/api/questions/{questionId}/deactivate` |
+| Delete | `DELETE` | `/api/questions/{questionId}` |
+
+Workflow:
+
+1. Teacher/parent creates a question → status **Pending**, `isActive = true`.
+2. School admin approves → status **Approved**, sets `approvedBy`, `isAiApproved = false`.
+3. Super admin AI-approves → status **Approved**, sets `approvedBy`, `isAiApproved = true`.
+4. School admin rejects → status **Rejected**, `isActive = false`, `isAiApproved = false`.
+5. Teacher edits an approved question → returns to **Pending**, clears approval and `isAiApproved`.
+6. **Deactivate** hides a question from quizzes without deleting the row.
+7. **Delete** permanently removes a question only when it is not linked to any quiz.
+
+## Quiz Question Endpoints (Parent / Teacher)
+
+Quiz-scoped question logic is separate from the question bank. Routes live under `/api/quizzes/{quizId}/questions`.
+
+| Action | Method | Route |
+|--------|--------|-------|
+| List quiz questions | `GET` | `/api/quizzes/{quizId}/questions` |
+| Add question to quiz | `POST` | `/api/quizzes/{quizId}/questions` |
+| Update quiz question | `PUT` | `/api/quizzes/{quizId}/questions/{questionId}` |
+| Remove from quiz | `DELETE` | `/api/quizzes/{quizId}/questions/{questionId}` |
 
 Add/update request body:
 

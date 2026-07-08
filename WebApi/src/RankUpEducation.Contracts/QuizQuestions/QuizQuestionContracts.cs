@@ -1,4 +1,4 @@
-namespace RankUpEducation.Contracts.Questions;
+namespace RankUpEducation.Contracts.QuizQuestions;
 
 public sealed record QuizQuestionOptionRequest(
     string OptionText,

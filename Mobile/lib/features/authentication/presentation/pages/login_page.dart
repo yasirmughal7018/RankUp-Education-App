@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/app/api_base_url.dart';
+import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -24,7 +26,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final environment = ref.watch(appEnvironmentProvider);
     final theme = Theme.of(context);
+    final showDevApiHint = environment.name == EnvironmentName.development;
+    final localhostWarning = usesHostUnreachableLocalhost(environment.apiBaseUrl);
+    final authModeLabel = environment.usesApiAuth
+        ? 'API login (calls POST /auth/login)'
+        : 'Offline demo mode (student/parent/teacher-demo only)';
 
     return Scaffold(
       body: SafeArea(
@@ -54,6 +62,43 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     style: theme.textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 32),
+                  if (showDevApiHint) ...[
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          '$authModeLabel\n'
+                          'Dev API: ${environment.apiBaseUrl}\n'
+                          'Start the Web API with: dotnet run --launch-profile http',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                    if (localhostWarning) ...[
+                      const SizedBox(height: 12),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            'This Android emulator cannot reach localhost on your PC. '
+                            'Use http://$hostLoopbackAddress:5255/api instead.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                  ],
                   TextField(
                     controller: _identifierController,
                     decoration: const InputDecoration(

@@ -77,14 +77,14 @@ public static class QuizScopeResolver
         => string.Equals(quiz.CreatedByName, scope.UserId.ToString(), StringComparison.Ordinal);
 
     public static async Task EnsureCanAccessStudentAsync(
-        IQuizRepository quizzes,
+        IStudentScopeRepository studentScope,
         QuizManageScope scope,
         long studentId,
         CancellationToken cancellationToken)
     {
         if (scope.Role == UserRole.Parent)
         {
-            if (!await quizzes.IsLinkedStudentAsync(scope.ParentId, studentId, cancellationToken))
+            if (!await studentScope.IsLinkedStudentAsync(scope.ParentId, studentId, cancellationToken))
             {
                 throw new ForbiddenAppException("You can only assign quizzes to linked children.");
             }
@@ -94,7 +94,7 @@ public static class QuizScopeResolver
 
         if (scope.Role == UserRole.Teacher)
         {
-            if (!await quizzes.IsStudentInSchoolAsync(
+            if (!await studentScope.IsStudentInSchoolAsync(
                     studentId,
                     scope.SchoolId!.Value,
                     scope.CampusId!.Value,

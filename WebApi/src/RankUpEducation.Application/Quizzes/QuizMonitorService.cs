@@ -16,15 +16,21 @@ public interface IQuizMonitorService
 public sealed class QuizMonitorService : IQuizMonitorService
 {
     private readonly IQuizRepository _quizzes;
+    private readonly IQuizAssignmentRepository _assignments;
+    private readonly IQuizReviewRepository _reviews;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public QuizMonitorService(
         IQuizRepository quizzes,
+        IQuizAssignmentRepository assignments,
+        IQuizReviewRepository reviews,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider)
     {
         _quizzes = quizzes;
+        _assignments = assignments;
+        _reviews = reviews;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -34,7 +40,7 @@ public sealed class QuizMonitorService : IQuizMonitorService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var items = await _quizzes.ListAssignmentBoardForCreatorAsync(scope.UserId, studentId, cancellationToken);
+        var items = await _assignments.ListAssignmentBoardForCreatorAsync(scope.UserId, studentId, cancellationToken);
         var now = _dateTimeProvider.UtcNow;
 
         return new QuizAssignmentBoardResponse(items.Select(item => new QuizAssignmentBoardItemResponse(
@@ -42,6 +48,7 @@ public sealed class QuizMonitorService : IQuizMonitorService
             item.QuizId,
             item.QuizTitle,
             item.StudentId,
+            item.StudentName,
             item.StartDateTime,
             item.EndDateTime,
             item.AllowedAttempts,
@@ -63,11 +70,12 @@ public sealed class QuizMonitorService : IQuizMonitorService
         var quiz = await _quizzes.GetDetailForCreatorAsync(quizId, scope.UserId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
-        var students = await _quizzes.ListMonitoringForQuizAsync(quizId, scope.UserId, cancellationToken);
+        var students = await _reviews.ListMonitoringForQuizAsync(quizId, scope.UserId, cancellationToken);
         var now = _dateTimeProvider.UtcNow;
 
         var studentResponses = students.Select(item => new QuizMonitoringStudentResponse(
             item.StudentId,
+            item.StudentName,
             item.AssignmentId,
             item.AttemptCount,
             item.BestPercentage,

@@ -4,8 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
 import 'package:rankup_education/features/student_dashboard/domain/repositories/student_dashboard_repository.dart';
-import 'package:rankup_education/features/student_dashboard/domain/usecases/get_student_dashboard_usecase.dart';
-import 'package:rankup_education/features/student_dashboard/presentation/controllers/student_dashboard_controller.dart';
 import 'package:rankup_education/features/student_dashboard/presentation/pages/student_dashboard_page.dart';
 import 'package:rankup_education/features/student_dashboard/presentation/providers/student_dashboard_provider.dart';
 

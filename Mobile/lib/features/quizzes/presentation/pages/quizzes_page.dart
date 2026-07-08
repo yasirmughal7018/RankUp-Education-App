@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
-import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
+import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 import 'package:rankup_education/features/quizzes/presentation/providers/quiz_providers.dart';
 
@@ -112,8 +112,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _QuizView.attempt => _QuizAttemptView(
             quiz: _selectedQuiz!,
             questionIndex: _questionIndex,
-            questions: ref.watch(quizzesControllerProvider).activeAttempt?.questions ??
-                const [],
+            questions:
+                ref.watch(quizzesControllerProvider).activeAttempt?.questions ??
+                    const [],
             answeredQuestions: _answeredQuestions,
             selectedOptionIds: _selectedOptionIds,
             markedQuestions: _markedQuestions,
@@ -224,7 +225,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     if (detail == null) {
       final message = ref.read(quizzesControllerProvider).actionError ??
           'Could not load quiz details.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
@@ -244,21 +246,24 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
       return;
     }
 
-    final attempt = await ref.read(quizzesControllerProvider.notifier).startAttempt(
-          quizId: selectedQuiz.id,
-          deviceId: 'rankup-mobile',
-        );
+    final attempt =
+        await ref.read(quizzesControllerProvider.notifier).startAttempt(
+              quizId: selectedQuiz.id,
+              deviceId: 'rankup-mobile',
+            );
     if (!mounted) {
       return;
     }
     if (attempt == null) {
       final message = ref.read(quizzesControllerProvider).actionError ??
           'Could not start the quiz attempt.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
-    final timeLimitMinutes = attempt.timeLimitMinutes ?? selectedQuiz.timeLimitMinutes;
+    final timeLimitMinutes =
+        attempt.timeLimitMinutes ?? selectedQuiz.timeLimitMinutes;
     _stopAttemptTimer();
 
     setState(() {
@@ -324,7 +329,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     if (result == null) {
       final message = ref.read(quizzesControllerProvider).actionError ??
           'Could not submit the quiz attempt.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
@@ -1406,7 +1412,8 @@ class _QuizAttemptView extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                   ],
-                if ((question.hint ?? '').isNotEmpty && question.options.isEmpty) ...[
+                if ((question.hint ?? '').isNotEmpty &&
+                    question.options.isEmpty) ...[
                   const SizedBox(height: 10),
                   _InfoChip(
                     icon: Icons.lightbulb_outline,
@@ -1668,7 +1675,8 @@ class _QuizReviewView extends StatelessWidget {
                   const SizedBox(height: 12),
                   _DetailRow(
                     label: 'Score',
-                    value: '${result!.percentage}% (${result!.obtainedMarks}/${result!.totalMarks})',
+                    value:
+                        '${result!.percentage}% (${result!.obtainedMarks}/${result!.totalMarks})',
                   ),
                   _DetailRow(label: 'Status', value: result!.resultStatus),
                 ],
@@ -1968,7 +1976,8 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
   bool _matchesHistoryFilters(QuizSummary quiz) {
     final studentStatus = studentQuizStatus(quiz);
     final date = _quizDate(quiz);
-    final currentMonthStart = DateTime(DateTime.now().year, DateTime.now().month);
+    final currentMonthStart =
+        DateTime(DateTime.now().year, DateTime.now().month);
     final isAllowedHistoryStatus =
         studentStatus == 'Expired' || studentStatus == 'Completed';
     final isBeforeCurrentMonth = date.isBefore(currentMonthStart);

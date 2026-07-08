@@ -1,30 +1,46 @@
+import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/storage/token_store.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
-/// Routes student logins to the real API while parent/teacher demo accounts
-/// continue using mock auth.
+/// Uses the real API by default. Offline demo accounts are only available when
+/// [AppEnvironment.enableMockRepositories] is true.
 class RoleAwareAuthRepository implements AuthRepository {
   RoleAwareAuthRepository(
     this._apiRepository,
     this._mockRepository,
     this._tokenStore,
+    this._environment,
   );
 
   final AuthRepository _apiRepository;
   final AuthRepository _mockRepository;
   final TokenStore _tokenStore;
+  final AppEnvironment _environment;
 
-  static bool usesMockDemoLogin(String identifier) {
-    final normalized = identifier.trim().toLowerCase();
-    return normalized == 'parent-demo' || normalized == 'teacher-demo';
+  static const demoUsernames = {
+    'student-demo',
+    'parent-demo',
+    'teacher-demo',
+  };
+
+  static bool isDemoUsername(String identifier) {
+    return demoUsernames.contains(identifier.trim().toLowerCase());
   }
 
   AuthRepository _repositoryForLogin(String identifier) {
-    return usesMockDemoLogin(identifier) ? _mockRepository : _apiRepository;
+    if (_environment.enableMockRepositories && isDemoUsername(identifier)) {
+      return _mockRepository;
+    }
+
+    return _apiRepository;
   }
 
   Future<AuthRepository> _repositoryForSession() async {
+    if (!_environment.enableMockRepositories) {
+      return _apiRepository;
+    }
+
     final token = await _tokenStore.readAccessToken();
     if (token != null && token.startsWith('mock-')) {
       return _mockRepository;
