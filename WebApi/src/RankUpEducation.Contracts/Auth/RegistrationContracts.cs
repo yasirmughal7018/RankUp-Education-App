@@ -8,7 +8,10 @@ public sealed record RegisterAccountRequest(
     string? SchoolCampusName,
     string? StudentOrEmployeeId,
     string AdminTarget,
-    string? ReasonMessage);
+    string? ReasonMessage,
+    int? SchoolId = null,
+    int? CampusId = null,
+    string? Cnic = null);
 
 public sealed record RegisterAccountResponse(
     long Id,
@@ -21,7 +24,17 @@ public sealed record PendingRegistrationResponse(
     string Username,
     string FullName,
     string Role,
-    DateTimeOffset? RequestedAt);
+    DateTimeOffset? RequestedAt,
+    string? MobileNumber,
+    string? EmailAddress,
+    string? Cnic,
+    int? SchoolId,
+    int? CampusId,
+    DateOnly? CreatedDate,
+    string? ReasonMessage,
+    string? AdminTarget,
+    string? SchoolCampusName,
+    string? StudentOrEmployeeId);
 
 public sealed record ApproveRegistrationRequest(
     string Password,

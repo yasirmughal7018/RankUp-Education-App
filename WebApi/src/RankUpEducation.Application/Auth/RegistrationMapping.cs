@@ -12,6 +12,16 @@ internal static class RegistrationMapping
             user.Username,
             user.FullName,
             user.Role.ToString(),
-            user.RequestedAt);
+            user.RequestedAt,
+            user.MobileNumber,
+            user.EmailAddress,
+            user.Cnic,
+            user.SchoolId,
+            user.CampusId,
+            user.CreatedDate,
+            user.ReasonMessage,
+            user.AdminTarget,
+            user.SchoolCampusName,
+            user.StudentOrEmployeeId);
     }
 }

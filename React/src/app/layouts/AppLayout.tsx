@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { environment } from "@/app/environment";
 import { isAdminRole } from "@/core/api/types";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { NotificationsBell } from "@/features/notifications/presentation/components/NotificationsBell";
 import { canManageQuestions } from "@/features/questions/domain/questionTypes";
 import { canManageQuizzes } from "@/features/quizzes/domain/quizTypes";
 import { canViewReports } from "@/features/reports/domain/reportTypes";
@@ -87,6 +88,7 @@ export function AppLayout() {
                   </NavLink>
                 ) : null}
                 <div className="flex items-center gap-2">
+                  {user && isAdminRole(user.role) ? <NotificationsBell /> : null}
                   <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 sm:inline">
                     {user?.fullName || user?.username}
                   </span>

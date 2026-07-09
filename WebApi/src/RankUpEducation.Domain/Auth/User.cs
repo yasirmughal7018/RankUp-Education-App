@@ -20,7 +20,10 @@ public sealed class User : SoftDeleteEntity
         UserRole role,
         long? profileId = null,
         int? schoolId = null,
-        int? campusId = null)
+        int? campusId = null,
+        string? mobileNumber = null,
+        string? cnic = null,
+        string? emailAddress = null)
     {
         Username = username.Trim();
         PasswordHash = passwordHash;
@@ -29,7 +32,12 @@ public sealed class User : SoftDeleteEntity
         ProfileId = profileId;
         SchoolId = schoolId;
         CampusId = campusId;
+        MobileNumber = NormalizeOptional(mobileNumber);
+        Cnic = NormalizeOptional(cnic);
+        EmailAddress = NormalizeOptional(emailAddress);
+        CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
+        MustChangePassword = false;
     }
 
     public string Username { get; private set; }
@@ -39,6 +47,14 @@ public sealed class User : SoftDeleteEntity
     public long? ProfileId { get; private set; }
     public int? SchoolId { get; private set; }
     public int? CampusId { get; private set; }
+    public string? MobileNumber { get; private set; }
+    public string? Cnic { get; private set; }
+    public string? EmailAddress { get; private set; }
+    public bool MustChangePassword { get; private set; }
+    public string? ReasonMessage { get; private set; }
+    public string? AdminTarget { get; private set; }
+    public string? SchoolCampusName { get; private set; }
+    public string? StudentOrEmployeeId { get; private set; }
     public DateOnly? CreatedDate { get; private set; }
     public DateOnly? ModifiedDate { get; private set; }
     public bool IsActive { get; private set; }
@@ -53,7 +69,16 @@ public sealed class User : SoftDeleteEntity
         string username,
         string fullName,
         UserRole role,
-        DateTimeOffset requestedAt)
+        DateTimeOffset requestedAt,
+        string mobileNumber,
+        string? emailAddress = null,
+        string? cnic = null,
+        int? schoolId = null,
+        int? campusId = null,
+        string? reasonMessage = null,
+        string? adminTarget = null,
+        string? schoolCampusName = null,
+        string? studentOrEmployeeId = null)
     {
         return new User
         {
@@ -62,7 +87,18 @@ public sealed class User : SoftDeleteEntity
             Role = role,
             PasswordHash = null,
             IsActive = false,
-            RequestedAt = requestedAt
+            RequestedAt = requestedAt,
+            MobileNumber = mobileNumber.Trim(),
+            EmailAddress = NormalizeOptional(emailAddress),
+            Cnic = NormalizeOptional(cnic),
+            SchoolId = schoolId,
+            CampusId = campusId,
+            CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            ReasonMessage = NormalizeOptional(reasonMessage),
+            AdminTarget = NormalizeOptional(adminTarget),
+            SchoolCampusName = NormalizeOptional(schoolCampusName),
+            StudentOrEmployeeId = NormalizeOptional(studentOrEmployeeId),
+            MustChangePassword = false
         };
     }
 
@@ -88,6 +124,48 @@ public sealed class User : SoftDeleteEntity
 
         PasswordHash = passwordHash;
         IsActive = true;
+    }
+
+    public void RequirePasswordChange()
+    {
+        MustChangePassword = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void ClearPasswordChangeRequirement()
+    {
+        MustChangePassword = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void AssignSchoolCampus(int? schoolId, int? campusId)
+    {
+        if (schoolId.HasValue)
+        {
+            SchoolId = schoolId;
+        }
+
+        if (campusId.HasValue)
+        {
+            CampusId = campusId;
+        }
+
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void UpdateContactInfo(string? mobileNumber, string? cnic)
+    {
+        if (!string.IsNullOrWhiteSpace(mobileNumber))
+        {
+            MobileNumber = mobileNumber.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(cnic))
+        {
+            Cnic = cnic.Trim();
+        }
+
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     public void UpdateProfile(string fullName)
@@ -141,4 +219,7 @@ public sealed class User : SoftDeleteEntity
 
         existing.Update(deviceSession.Platform, deviceSession.PushToken, deviceSession.AppVersion, deviceSession.LastSeenAt);
     }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

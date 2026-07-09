@@ -77,6 +77,9 @@ class RoleAwareAuthRepository implements AuthRepository {
     required String studentOrEmployeeId,
     required String adminTarget,
     required String reasonMessage,
+    String? cnic,
+    int? schoolId,
+    int? campusId,
   }) {
     return _apiRepository.requestAccountAccess(
       fullName: fullName,
@@ -87,6 +90,9 @@ class RoleAwareAuthRepository implements AuthRepository {
       studentOrEmployeeId: studentOrEmployeeId,
       adminTarget: adminTarget,
       reasonMessage: reasonMessage,
+      cnic: cnic,
+      schoolId: schoolId,
+      campusId: campusId,
     );
   }
 

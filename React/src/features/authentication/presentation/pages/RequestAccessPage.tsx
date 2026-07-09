@@ -10,13 +10,26 @@ const inputClassName =
 const USER_TYPES = ["Student", "Parent", "Teacher"] as const;
 const ADMIN_TARGETS = ["School Admin", "Portal Admin"] as const;
 
+function parseOptionalId(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function RequestAccessPage() {
   const [form, setForm] = useState({
     fullName: "",
     mobileNumber: "",
     emailAddress: "",
+    cnic: "",
     userType: "Student" as RegisterAccountRequest["userType"],
     schoolCampusName: "",
+    schoolId: "",
+    campusId: "",
     studentOrEmployeeId: "",
     adminTarget: "School Admin",
     reasonMessage: "",
@@ -45,6 +58,9 @@ export function RequestAccessPage() {
         studentOrEmployeeId: form.studentOrEmployeeId.trim() || null,
         adminTarget: form.adminTarget,
         reasonMessage: form.reasonMessage.trim() || null,
+        schoolId: parseOptionalId(form.schoolId),
+        campusId: parseOptionalId(form.campusId),
+        cnic: form.cnic.trim() || null,
       });
 
       setSuccessMessage(
@@ -54,8 +70,11 @@ export function RequestAccessPage() {
         fullName: "",
         mobileNumber: "",
         emailAddress: "",
+        cnic: "",
         userType: "Student",
         schoolCampusName: "",
+        schoolId: "",
+        campusId: "",
         studentOrEmployeeId: "",
         adminTarget: "School Admin",
         reasonMessage: "",
@@ -73,7 +92,7 @@ export function RequestAccessPage() {
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <PageHeader
           title="Request account access"
-          description="Submit a registration request for School Admin or Portal Admin review. Accounts are not created automatically."
+          description="Creates a pending user only. School Admin and Super Admin receive in-app notifications to review your request. Accounts are not activated until approved."
         />
 
         {successMessage ? (
@@ -94,7 +113,7 @@ export function RequestAccessPage() {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label htmlFor="fullName" className="mb-1 block text-sm font-medium text-slate-700">
-              Full name
+              Full name *
             </label>
             <input
               id="fullName"
@@ -108,7 +127,7 @@ export function RequestAccessPage() {
 
           <div>
             <label htmlFor="mobileNumber" className="mb-1 block text-sm font-medium text-slate-700">
-              Mobile number
+              Mobile number *
             </label>
             <input
               id="mobileNumber"
@@ -135,13 +154,28 @@ export function RequestAccessPage() {
             />
           </div>
 
+          <div>
+            <label htmlFor="cnic" className="mb-1 block text-sm font-medium text-slate-700">
+              CNIC (optional)
+            </label>
+            <input
+              id="cnic"
+              disabled={isSubmitting}
+              value={form.cnic}
+              onChange={(event) => updateField("cnic", event.target.value)}
+              className={inputClassName}
+              placeholder="12345-1234567-1"
+            />
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="userType" className="mb-1 block text-sm font-medium text-slate-700">
-                Account type
+                Account type *
               </label>
               <select
                 id="userType"
+                required
                 disabled={isSubmitting}
                 value={form.userType}
                 onChange={(event) =>
@@ -162,10 +196,11 @@ export function RequestAccessPage() {
 
             <div>
               <label htmlFor="adminTarget" className="mb-1 block text-sm font-medium text-slate-700">
-                Send request to
+                Admin target *
               </label>
               <select
                 id="adminTarget"
+                required
                 disabled={isSubmitting}
                 value={form.adminTarget}
                 onChange={(event) => updateField("adminTarget", event.target.value)}
@@ -182,7 +217,7 @@ export function RequestAccessPage() {
 
           <div>
             <label htmlFor="schoolCampusName" className="mb-1 block text-sm font-medium text-slate-700">
-              School / campus (optional)
+              School / campus name (optional)
             </label>
             <input
               id="schoolCampusName"
@@ -191,6 +226,41 @@ export function RequestAccessPage() {
               onChange={(event) => updateField("schoolCampusName", event.target.value)}
               className={inputClassName}
             />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="schoolId" className="mb-1 block text-sm font-medium text-slate-700">
+                School ID
+                {form.userType === "Student" || form.userType === "Teacher"
+                  ? " (recommended)"
+                  : " (optional)"}
+              </label>
+              <input
+                id="schoolId"
+                type="number"
+                disabled={isSubmitting}
+                value={form.schoolId}
+                onChange={(event) => updateField("schoolId", event.target.value)}
+                className={inputClassName}
+              />
+            </div>
+            <div>
+              <label htmlFor="campusId" className="mb-1 block text-sm font-medium text-slate-700">
+                Campus ID
+                {form.userType === "Student" || form.userType === "Teacher"
+                  ? " (recommended)"
+                  : " (optional)"}
+              </label>
+              <input
+                id="campusId"
+                type="number"
+                disabled={isSubmitting}
+                value={form.campusId}
+                onChange={(event) => updateField("campusId", event.target.value)}
+                className={inputClassName}
+              />
+            </div>
           </div>
 
           <div>

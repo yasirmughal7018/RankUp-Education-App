@@ -44,6 +44,7 @@ export interface QuestionDetail {
   createdDate: string;
   modifiedDate: string;
   options: QuestionOption[];
+  rejectionReason?: string | null;
 }
 
 export interface QuestionFormValues {
@@ -67,9 +68,54 @@ export interface QuestionListFilters {
   pendingApprovalOnly?: boolean;
 }
 
-export const QUESTION_TYPES = ["MCQ", "Descriptive"] as const;
+/** Sticky scope kept while adding multiple questions. */
+export interface QuestionScopeValues {
+  classId: number;
+  subjectId: number;
+  topicId: number | null;
+  difficultyLevel: number;
+}
+
+export const QUESTION_TYPES = [
+  "Single Choice",
+  "Multiple Choice",
+  "True/False",
+  "Fill in the Blanks",
+  "Descriptive",
+] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];
+
+export const QUESTION_TYPE_META: Record<
+  QuestionType,
+  { label: string; shortLabel: string; description: string }
+> = {
+  "Single Choice": {
+    label: "Single Choice",
+    shortLabel: "Single",
+    description: "Student picks exactly one correct option.",
+  },
+  "Multiple Choice": {
+    label: "Multiple Choice",
+    shortLabel: "Multi",
+    description: "Student can select one or more correct options.",
+  },
+  "True/False": {
+    label: "True / False",
+    shortLabel: "T/F",
+    description: "Fixed True and False options; mark one as correct.",
+  },
+  "Fill in the Blanks": {
+    label: "Fill in the Blanks",
+    shortLabel: "Fill",
+    description: "Add accepted answer texts students may type.",
+  },
+  Descriptive: {
+    label: "Descriptive",
+    shortLabel: "Essay",
+    description: "Open written answer; marked by a teacher.",
+  },
+};
 
 export const QUESTION_MANAGER_ROLES: UserRole[] = [
   "SuperAdmin",
@@ -100,29 +146,144 @@ export function isApprovedQuestionStatus(status: string): boolean {
   return ["approved", "active", "published"].includes(normalized);
 }
 
-export function createEmptyQuestionForm(): QuestionFormValues {
+export function normalizeQuestionType(type: string): QuestionType {
+  const value = type.trim().toLowerCase();
+
+  if (
+    value === "single choice" ||
+    value === "singlechoice" ||
+    value === "mcq"
+  ) {
+    return "Single Choice";
+  }
+
+  if (
+    value === "multiple choice" ||
+    value === "multiplechoice" ||
+    value === "multi select" ||
+    value === "multiselect" ||
+    value === "multiple"
+  ) {
+    return "Multiple Choice";
+  }
+
+  if (value.includes("true") && value.includes("false")) {
+    return "True/False";
+  }
+
+  if (value.includes("fill") && value.includes("blank")) {
+    return "Fill in the Blanks";
+  }
+
+  if (
+    value === "descriptive" ||
+    value === "short answer" ||
+    value === "shortanswer"
+  ) {
+    return "Descriptive";
+  }
+
+  return "Single Choice";
+}
+
+export function isSingleChoiceType(type: string): boolean {
+  return normalizeQuestionType(type) === "Single Choice";
+}
+
+export function isMultipleChoiceType(type: string): boolean {
+  return normalizeQuestionType(type) === "Multiple Choice";
+}
+
+export function isTrueFalseType(type: string): boolean {
+  return normalizeQuestionType(type) === "True/False";
+}
+
+export function isFillBlankType(type: string): boolean {
+  return normalizeQuestionType(type) === "Fill in the Blanks";
+}
+
+export function isDescriptiveType(type: string): boolean {
+  return normalizeQuestionType(type) === "Descriptive";
+}
+
+export function usesAnswerOptions(type: string): boolean {
+  const normalized = normalizeQuestionType(type);
+  return normalized !== "Descriptive";
+}
+
+export function defaultOptionsForType(type: string): QuestionOptionInput[] {
+  const normalized = normalizeQuestionType(type);
+
+  switch (normalized) {
+    case "True/False":
+      return [
+        { optionText: "True", isCorrect: true },
+        { optionText: "False", isCorrect: false },
+      ];
+    case "Fill in the Blanks":
+      return [{ optionText: "", isCorrect: true }];
+    case "Descriptive":
+      return [];
+    case "Multiple Choice":
+      return [
+        { optionText: "", isCorrect: true },
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+      ];
+    case "Single Choice":
+    default:
+      return [
+        { optionText: "", isCorrect: true },
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+      ];
+  }
+}
+
+export function createEmptyQuestionForm(
+  scope?: Partial<QuestionScopeValues>,
+): QuestionFormValues {
   return {
     questionText: "",
-    questionType: "MCQ",
-    classId: 0,
-    subjectId: 0,
-    topicId: null,
-    difficultyLevel: 0,
+    questionType: "Single Choice",
+    classId: scope?.classId ?? 0,
+    subjectId: scope?.subjectId ?? 0,
+    topicId: scope?.topicId ?? null,
+    difficultyLevel: scope?.difficultyLevel ?? 0,
     marks: 1,
     estimatedTimeSeconds: 60,
     hint: "",
     explanation: "",
-    options: [
-      { optionText: "", isCorrect: true },
-      { optionText: "", isCorrect: false },
-    ],
+    options: defaultOptionsForType("Single Choice"),
+  };
+}
+
+/** Keep Class / Subject / Topic / Difficulty; clear question-specific fields. */
+export function resetQuestionContent(
+  current: QuestionFormValues,
+): QuestionFormValues {
+  return {
+    ...createEmptyQuestionForm({
+      classId: current.classId,
+      subjectId: current.subjectId,
+      topicId: current.topicId,
+      difficultyLevel: current.difficultyLevel,
+    }),
+    questionType: current.questionType,
+    marks: current.marks,
+    estimatedTimeSeconds: current.estimatedTimeSeconds,
+    options: defaultOptionsForType(current.questionType),
   };
 }
 
 export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
+  const questionType = normalizeQuestionType(detail.questionType);
+
   return {
     questionText: detail.questionText,
-    questionType: detail.questionType,
+    questionType,
     classId: detail.classId,
     subjectId: detail.subjectId,
     topicId: detail.topicId,
@@ -137,16 +298,17 @@ export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
             optionText: option.optionText,
             isCorrect: option.isCorrect,
           }))
-        : createEmptyQuestionForm().options,
+        : defaultOptionsForType(questionType),
   };
 }
 
 export function buildQuestionPayload(values: QuestionFormValues) {
-  const isMcq = values.questionType.toLowerCase().includes("mcq");
+  const questionType = normalizeQuestionType(values.questionType);
+  const withOptions = usesAnswerOptions(questionType);
 
   return {
     questionText: values.questionText.trim(),
-    questionType: values.questionType,
+    questionType,
     classId: values.classId,
     subjectId: values.subjectId,
     topicId: values.topicId,
@@ -155,7 +317,7 @@ export function buildQuestionPayload(values: QuestionFormValues) {
     estimatedTimeSeconds: values.estimatedTimeSeconds,
     hint: values.hint.trim() || null,
     explanation: values.explanation.trim() || null,
-    options: isMcq
+    options: withOptions
       ? values.options
           .filter((option) => option.optionText.trim())
           .map((option) => ({
@@ -183,15 +345,42 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
     return "Difficulty level is required.";
   }
 
-  if (values.questionType.toLowerCase().includes("mcq")) {
-    const options = values.options.filter((option) => option.optionText.trim());
+  const questionType = normalizeQuestionType(values.questionType);
+  const options = values.options.filter((option) => option.optionText.trim());
 
+  if (questionType === "Single Choice") {
     if (options.length < 2) {
-      return "MCQ questions need at least two options.";
+      return "Single Choice needs at least two options.";
     }
+    if (options.filter((option) => option.isCorrect).length !== 1) {
+      return "Mark exactly one option as correct.";
+    }
+  }
 
+  if (questionType === "Multiple Choice") {
+    if (options.length < 2) {
+      return "Multiple Choice needs at least two options.";
+    }
     if (!options.some((option) => option.isCorrect)) {
-      return "At least one option must be marked correct.";
+      return "Mark at least one option as correct.";
+    }
+  }
+
+  if (questionType === "True/False") {
+    if (options.length !== 2) {
+      return "True/False must have True and False options.";
+    }
+    if (options.filter((option) => option.isCorrect).length !== 1) {
+      return "Mark either True or False as correct.";
+    }
+  }
+
+  if (questionType === "Fill in the Blanks") {
+    if (options.length < 1) {
+      return "Add at least one accepted answer.";
+    }
+    if (!options.every((option) => option.isCorrect)) {
+      return "All fill-in answers should be marked as accepted.";
     }
   }
 

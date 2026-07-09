@@ -24,10 +24,21 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.CreatedDate).HasColumnName("created_date");
         builder.Property(user => user.ModifiedDate).HasColumnName("modified_date");
         builder.Property(user => user.RequestedAt).HasColumnName("requested_at");
+        builder.Property(user => user.MobileNumber).HasColumnName("mobile_number").HasMaxLength(40);
+        builder.Property(user => user.Cnic).HasColumnName("cnic").HasMaxLength(20);
+        builder.HasIndex(user => user.Cnic)
+            .IsUnique()
+            .HasFilter("cnic IS NOT NULL");
+        builder.Property(user => user.SchoolId).HasColumnName("school_id");
+        builder.Property(user => user.CampusId).HasColumnName("campus_id");
+        builder.Property(user => user.EmailAddress).HasColumnName("email").HasMaxLength(120);
+        builder.Property(user => user.MustChangePassword).HasColumnName("must_change_password").HasDefaultValue(false);
+        builder.Property(user => user.ReasonMessage).HasColumnName("reason_message").HasMaxLength(1000);
+        builder.Property(user => user.AdminTarget).HasColumnName("admin_target").HasMaxLength(80);
+        builder.Property(user => user.SchoolCampusName).HasColumnName("school_campus_name").HasMaxLength(200);
+        builder.Property(user => user.StudentOrEmployeeId).HasColumnName("student_or_employee_id").HasMaxLength(80);
 
         builder.Ignore(user => user.ProfileId);
-        builder.Ignore(user => user.SchoolId);
-        builder.Ignore(user => user.CampusId);
         builder.Ignore(user => user.LastLoginAt);
         builder.Ignore(user => user.CreatedAt);
         builder.Ignore(user => user.CreatedBy);

@@ -89,9 +89,21 @@ public sealed class QuizQuestionHelperTests
     [InlineData("Multiple Choice", true)]
     [InlineData("Multi Select", true)]
     [InlineData("MCQ", false)]
+    [InlineData("Single Choice", false)]
+    [InlineData("True/False", false)]
     [InlineData("Descriptive", false)]
     public void IsMultiSelectType_MatchesMobileMultiNaming(string typeName, bool expected)
     {
         Assert.Equal(expected, QuizQuestionHelper.IsMultiSelectType(typeName));
+    }
+
+    [Theory]
+    [InlineData("Single Choice", true)]
+    [InlineData("MCQ", true)]
+    [InlineData("Multiple Choice", false)]
+    [InlineData("True/False", false)]
+    public void IsSingleChoiceType_RecognizesAliases(string typeName, bool expected)
+    {
+        Assert.Equal(expected, QuizQuestionHelper.IsSingleChoiceType(typeName));
     }
 }

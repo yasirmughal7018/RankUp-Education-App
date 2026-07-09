@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Notifications;
 using RankUpEducation.Contracts.Auth;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
@@ -13,12 +14,14 @@ public sealed class AuthService : IAuthService
 {
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
     private static readonly string[] AllowedRegistrationRoles = ["Student", "Parent", "Teacher"];
+    private const string RegistrationRequestCategory = "RegistrationRequest";
 
     private readonly IUserRepository _users;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationService _notifications;
     private readonly IUnitOfWork _unitOfWork;
 
     public AuthService(
@@ -27,6 +30,7 @@ public sealed class AuthService : IAuthService
         ITokenService tokenService,
         IDateTimeProvider dateTimeProvider,
         ICurrentUserService currentUser,
+        INotificationService notifications,
         IUnitOfWork unitOfWork)
     {
         _users = users;
@@ -34,6 +38,7 @@ public sealed class AuthService : IAuthService
         _tokenService = tokenService;
         _dateTimeProvider = dateTimeProvider;
         _currentUser = currentUser;
+        _notifications = notifications;
         _unitOfWork = unitOfWork;
     }
 
@@ -80,15 +85,39 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException(["An account or request already exists for this mobile number."]);
         }
 
+        var cnic = string.IsNullOrWhiteSpace(request.Cnic) ? null : request.Cnic.Trim();
+        if (cnic is not null && await _users.CnicExistsAsync(cnic, cancellationToken))
+        {
+            throw new ValidationAppException(["An account already exists for this CNIC."]);
+        }
+
         var role = ParseRegistrationRole(request.UserType);
         var user = User.CreateRegistrationRequest(
             username,
             request.FullName.Trim(),
             role,
-            _dateTimeProvider.UtcNow);
+            _dateTimeProvider.UtcNow,
+            username,
+            request.EmailAddress,
+            cnic,
+            request.SchoolId,
+            request.CampusId,
+            request.ReasonMessage,
+            request.AdminTarget,
+            request.SchoolCampusName,
+            request.StudentOrEmployeeId);
 
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // In-app DB notifications only (category RegistrationRequest). Push is NoOp — do not rely on it.
+        var recipientIds = await _users.ListAdminRecipientsAsync(user.SchoolId, cancellationToken);
+        await _notifications.CreateAsync(
+            recipientIds,
+            "New registration request",
+            $"{user.FullName} requested {user.Role} access ({user.Username}).",
+            RegistrationRequestCategory,
+            cancellationToken);
 
         return new RegisterAccountResponse(user.Id, user.Username, user.FullName, user.Role.ToString());
     }
@@ -100,7 +129,14 @@ public sealed class AuthService : IAuthService
         EnsureRegistrationReviewer();
 
         var safeTake = Math.Clamp(take, 1, 100);
-        var users = await _users.ListPendingRegistrationsAsync(safeTake, cancellationToken);
+        int? schoolIdFilter = null;
+        if (IsSchoolAdmin())
+        {
+            schoolIdFilter = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+        }
+
+        var users = await _users.ListPendingRegistrationsAsync(safeTake, schoolIdFilter, cancellationToken);
         return users.Select(user => user.ToPendingResponse()).ToArray();
     }
 
@@ -120,13 +156,26 @@ public sealed class AuthService : IAuthService
             throw new BusinessRuleException("This user is not a pending registration request.");
         }
 
-        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber)
+        EnsureCanApproveRegistration(user, request);
+
+        if (!string.IsNullOrWhiteSpace(request.Cnic)
+            && !string.Equals(request.Cnic.Trim(), user.Cnic, StringComparison.OrdinalIgnoreCase)
+            && await _users.CnicExistsAsync(request.Cnic.Trim(), cancellationToken))
+        {
+            throw new ValidationAppException(["An account already exists for this CNIC."]);
+        }
+
+        user.AssignSchoolCampus(request.SchoolId, request.CampusId);
+        user.UpdateContactInfo(request.MobileNumber, request.Cnic);
+
+        var mobileNumber = string.IsNullOrWhiteSpace(user.MobileNumber)
             ? user.Username
-            : request.MobileNumber.Trim();
+            : user.MobileNumber;
 
         await CreateProfileForRoleAsync(user, request, mobileNumber, cancellationToken);
 
         user.Activate(_passwordHasher.Hash(request.Password));
+        user.RequirePasswordChange();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var activated = await _users.GetByIdAsync(userId, cancellationToken)
@@ -146,6 +195,8 @@ public sealed class AuthService : IAuthService
         {
             throw new BusinessRuleException("This user is not a pending registration request.");
         }
+
+        EnsureCanRejectRegistration(user);
 
         await _users.DeleteAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -194,6 +245,44 @@ public sealed class AuthService : IAuthService
         return user.ToCurrentUserResponse();
     }
 
+    public async Task<CurrentUserResponse> ChangePasswordAsync(
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        user.EnsureCanLogin();
+
+        if (string.IsNullOrWhiteSpace(request.CurrentPassword)
+            || string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            throw new ValidationAppException(["Current password and new password are required."]);
+        }
+
+        if (request.NewPassword.Length < 6)
+        {
+            throw new ValidationAppException(["New password must be at least 6 characters."]);
+        }
+
+        if (!_passwordHasher.Verify(request.CurrentPassword, user.PasswordHash!))
+        {
+            throw new ValidationAppException(["Current password is incorrect."]);
+        }
+
+        if (string.Equals(request.CurrentPassword, request.NewPassword, StringComparison.Ordinal))
+        {
+            throw new ValidationAppException(["New password must be different from the current password."]);
+        }
+
+        user.SetPasswordHash(_passwordHasher.Hash(request.NewPassword));
+        user.ClearPasswordChangeRequirement();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return user.ToCurrentUserResponse();
+    }
+
     public async Task LogoutAsync(RefreshTokenRequest? request, CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.RefreshToken))
@@ -221,7 +310,7 @@ public sealed class AuthService : IAuthService
                     throw new BusinessRuleException("Student profile already exists.");
                 }
 
-                if (request.SchoolId is null || request.CampusId is null || request.Grade is null)
+                if (user.SchoolId is null || user.CampusId is null || request.Grade is null)
                 {
                     throw new ValidationAppException(["School, campus, and grade are required to approve a student."]);
                 }
@@ -232,10 +321,18 @@ public sealed class AuthService : IAuthService
                 }
 
                 var section = string.IsNullOrWhiteSpace(request.Section) ? "A" : request.Section.Trim();
+                // Sync mobile onto profile for backward-compatible directory queries.
                 await _users.AddStudentProfileAsync(
-                    new Student(user.Id, request.SchoolId.Value, request.CampusId.Value, request.StudentRollNumber.Trim(), request.Grade.Value, section, mobileNumber),
+                    new Student(
+                        user.Id,
+                        user.SchoolId.Value,
+                        user.CampusId.Value,
+                        request.StudentRollNumber.Trim(),
+                        request.Grade.Value,
+                        section,
+                        mobileNumber),
                     cancellationToken);
-                user.AttachProfileContext(user.Id, request.SchoolId, request.CampusId);
+                user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
 
             case UserRole.Teacher:
@@ -244,7 +341,7 @@ public sealed class AuthService : IAuthService
                     throw new BusinessRuleException("Teacher profile already exists.");
                 }
 
-                if (request.SchoolId is null || request.CampusId is null)
+                if (user.SchoolId is null || user.CampusId is null)
                 {
                     throw new ValidationAppException(["School and campus are required to approve a teacher."]);
                 }
@@ -255,9 +352,14 @@ public sealed class AuthService : IAuthService
                 }
 
                 await _users.AddTeacherProfileAsync(
-                    new Teacher(user.Id, request.SchoolId.Value, request.CampusId.Value, request.TeacherCode.Trim(), mobileNumber),
+                    new Teacher(
+                        user.Id,
+                        user.SchoolId.Value,
+                        user.CampusId.Value,
+                        request.TeacherCode.Trim(),
+                        mobileNumber),
                     cancellationToken);
-                user.AttachProfileContext(user.Id, request.SchoolId, request.CampusId);
+                user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
 
             case UserRole.Parent:
@@ -266,12 +368,61 @@ public sealed class AuthService : IAuthService
                     throw new BusinessRuleException("Parent profile already exists.");
                 }
 
-                await _users.AddParentProfileAsync(new Parent(user.Id, request.Cnic, mobileNumber), cancellationToken);
-                user.AttachProfileContext(user.Id, null, null);
+                await _users.AddParentProfileAsync(
+                    new Parent(user.Id, user.Cnic, mobileNumber),
+                    cancellationToken);
+                user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
 
             default:
                 throw new BusinessRuleException("Only student, parent, and teacher registrations can be approved.");
+        }
+    }
+
+    private void EnsureCanApproveRegistration(User user, ApproveRegistrationRequest request)
+    {
+        if (!IsSchoolAdmin())
+        {
+            return;
+        }
+
+        var adminSchoolId = _currentUser.SchoolId
+            ?? throw new ForbiddenAppException("School context was not found.");
+
+        if (user.SchoolId.HasValue && user.SchoolId != adminSchoolId)
+        {
+            throw new ForbiddenAppException("You can only approve registrations for your school.");
+        }
+
+        if (!user.SchoolId.HasValue)
+        {
+            var assignedSchoolId = request.SchoolId ?? adminSchoolId;
+            if (assignedSchoolId != adminSchoolId)
+            {
+                throw new ForbiddenAppException("You can only assign registrations to your school.");
+            }
+
+            // Ensure school is set on approve when the pending user had none.
+            if (!request.SchoolId.HasValue)
+            {
+                user.AssignSchoolCampus(adminSchoolId, request.CampusId);
+            }
+        }
+    }
+
+    private void EnsureCanRejectRegistration(User user)
+    {
+        if (!IsSchoolAdmin())
+        {
+            return;
+        }
+
+        var adminSchoolId = _currentUser.SchoolId
+            ?? throw new ForbiddenAppException("School context was not found.");
+
+        if (user.SchoolId.HasValue && user.SchoolId != adminSchoolId)
+        {
+            throw new ForbiddenAppException("You can only reject registrations for your school.");
         }
     }
 
@@ -284,6 +435,9 @@ public sealed class AuthService : IAuthService
             throw new ForbiddenAppException("Only admins can review registration requests.");
         }
     }
+
+    private bool IsSchoolAdmin()
+        => string.Equals(_currentUser.Role, UserRole.SchoolAdmin.ToString(), StringComparison.OrdinalIgnoreCase);
 
     private static UserRole ParseRegistrationRole(string userType)
     {

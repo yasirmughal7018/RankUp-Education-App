@@ -9,4 +9,5 @@ public sealed record CurrentUserResponse(
     long? ProfileId,
     int? SchoolId,
     int? CampusId,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    bool MustChangePassword);

@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
-import { QUESTION_TYPES } from "@/features/questions/domain/questionTypes";
+import {
+  QUESTION_TYPES,
+  defaultOptionsForType,
+  normalizeQuestionType,
+  usesAnswerOptions,
+  validateQuestionForm,
+} from "@/features/questions/domain/questionTypes";
 import { QuestionOptionsEditor } from "@/features/questions/presentation/components/QuestionOptionsEditor";
 import { useQuestionsQuery } from "@/features/questions/presentation/hooks/useQuestionQueries";
 import {
@@ -29,9 +35,10 @@ const inputClassName =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
 
 function mapQuestionToInput(question: QuizQuestionItem): AddQuizQuestionInput {
+  const questionType = normalizeQuestionType(question.questionType);
   return {
     questionText: question.questionText,
-    questionType: question.questionType,
+    questionType,
     marks: question.marks,
     estimatedTimeSeconds: 60,
     hint: question.hint ?? "",
@@ -42,10 +49,7 @@ function mapQuestionToInput(question: QuizQuestionItem): AddQuizQuestionInput {
             optionText: option.optionText,
             isCorrect: option.isCorrect,
           }))
-        : [
-            { optionText: "", isCorrect: true },
-            { optionText: "", isCorrect: false },
-          ],
+        : defaultOptionsForType(questionType),
   };
 }
 
@@ -115,7 +119,7 @@ export function AddQuizQuestionDialog({
     });
   }, [bankQuestions, bankSearch, excludedIds]);
 
-  const isMcq = values.questionType.toLowerCase().includes("mcq");
+  const showOptions = usesAnswerOptions(values.questionType);
   const showBankTab = !isEdit && Boolean(onAttachFromBank);
 
   useEffect(() => {
@@ -161,21 +165,33 @@ export function AddQuizQuestionDialog({
       return;
     }
 
-    if (isMcq) {
-      const options = values.options.filter((option) => option.optionText.trim());
-      if (options.length < 2) {
-        setError("MCQ questions need at least two options.");
-        return;
-      }
-
-      if (!options.some((option) => option.isCorrect)) {
-        setError("At least one option must be marked correct.");
-        return;
-      }
+    const validationError = validateQuestionForm({
+      questionText: values.questionText,
+      questionType: values.questionType,
+      classId: classId && classId > 0 ? classId : 1,
+      subjectId: subjectId && subjectId > 0 ? subjectId : 1,
+      topicId: null,
+      difficultyLevel: 1,
+      marks: values.marks,
+      estimatedTimeSeconds: values.estimatedTimeSeconds,
+      hint: values.hint,
+      explanation: values.explanation,
+      options: values.options,
+    });
+    if (
+      validationError &&
+      !validationError.includes("Class and subject") &&
+      !validationError.includes("Difficulty")
+    ) {
+      setError(validationError);
+      return;
     }
 
     try {
-      await onSubmit(values);
+      await onSubmit({
+        ...values,
+        questionType: normalizeQuestionType(values.questionType),
+      });
     } catch (caught) {
       const apiError = caught as ApiError;
       setError(apiError.message || "Unable to save question.");
@@ -377,14 +393,16 @@ export function AddQuizQuestionDialog({
                   </label>
                   <select
                     id="questionType"
-                    value={values.questionType}
+                    value={normalizeQuestionType(values.questionType)}
                     disabled={isSubmitting}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const nextType = normalizeQuestionType(event.target.value);
                       setValues((current) => ({
                         ...current,
-                        questionType: event.target.value,
-                      }))
-                    }
+                        questionType: nextType,
+                        options: defaultOptionsForType(nextType),
+                      }));
+                    }}
                     className={inputClassName}
                   >
                     {QUESTION_TYPES.map((type) => (
@@ -444,8 +462,9 @@ export function AddQuizQuestionDialog({
                 </div>
               </div>
 
-              {isMcq ? (
+              {showOptions ? (
                 <QuestionOptionsEditor
+                  questionType={values.questionType}
                   options={values.options}
                   disabled={isSubmitting}
                   onChange={(options) =>
@@ -455,7 +474,11 @@ export function AddQuizQuestionDialog({
                     }))
                   }
                 />
-              ) : null}
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Descriptive questions do not require predefined options.
+                </div>
+              )}
             </>
           )}
 

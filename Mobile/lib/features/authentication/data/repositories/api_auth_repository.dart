@@ -48,6 +48,9 @@ class ApiAuthRepository implements AuthRepository {
     required String studentOrEmployeeId,
     required String adminTarget,
     required String reasonMessage,
+    String? cnic,
+    int? schoolId,
+    int? campusId,
   }) {
     return _remoteDataSource.requestAccountAccess(
       fullName: fullName,
@@ -58,6 +61,9 @@ class ApiAuthRepository implements AuthRepository {
       studentOrEmployeeId: studentOrEmployeeId,
       adminTarget: adminTarget,
       reasonMessage: reasonMessage,
+      cnic: cnic,
+      schoolId: schoolId,
+      campusId: campusId,
     );
   }
 

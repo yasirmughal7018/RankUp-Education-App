@@ -18,18 +18,32 @@ public static class QuestionAiApprovalValidator
         }
 
         var options = question.Options.Where(option => option.IsActive).ToArray();
-        var isMcq = QuizQuestionHelper.IsMcqType(questionTypeName)
-            || QuizQuestionHelper.IsMultiSelectType(questionTypeName)
-            || options.Length > 0;
 
-        if (!isMcq)
+        if (QuizQuestionHelper.IsDescriptiveType(questionTypeName))
+        {
+            return;
+        }
+
+        if (QuizQuestionHelper.IsFillBlankType(questionTypeName))
+        {
+            if (options.Length < 1 || options.All(option => string.IsNullOrWhiteSpace(option.OptionText)))
+            {
+                throw new BusinessRuleException(
+                    "AI approval requires fill-in-the-blank questions to have at least one accepted answer.");
+            }
+
+            return;
+        }
+
+        if (!QuizQuestionHelper.UsesOptions(questionTypeName) && options.Length == 0)
         {
             return;
         }
 
         if (options.Length < 2)
         {
-            throw new BusinessRuleException("AI approval requires MCQ questions to have at least 2 options.");
+            throw new BusinessRuleException(
+                "AI approval requires choice questions to have at least 2 options.");
         }
 
         var correctCount = options.Count(option => option.IsCorrect);
@@ -38,7 +52,7 @@ public static class QuestionAiApprovalValidator
             if (correctCount < 1)
             {
                 throw new BusinessRuleException(
-                    "AI approval requires multi-select questions to have at least one correct option.");
+                    "AI approval requires multiple-choice questions to have at least one correct option.");
             }
 
             return;
@@ -47,7 +61,7 @@ public static class QuestionAiApprovalValidator
         if (correctCount != 1)
         {
             throw new BusinessRuleException(
-                "AI approval requires MCQ questions to have exactly one correct option.");
+                "AI approval requires single-choice / true-false questions to have exactly one correct option.");
         }
     }
 }

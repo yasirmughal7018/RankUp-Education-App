@@ -64,6 +64,14 @@ export interface RegisterAccountRequest {
   studentOrEmployeeId?: string | null;
   adminTarget: string;
   reasonMessage?: string | null;
+  schoolId?: number | null;
+  campusId?: number | null;
+  cnic?: string | null;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface RegisterAccountResponse {
@@ -88,5 +96,14 @@ export async function registerAccount(
     method: "POST",
     body: request,
     skipAuth: true,
+  });
+}
+
+export async function changePassword(
+  request: ChangePasswordRequest,
+): Promise<CurrentUser> {
+  return apiRequest<CurrentUser>("/auth/change-password", {
+    method: "POST",
+    body: request,
   });
 }

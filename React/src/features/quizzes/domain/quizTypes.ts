@@ -1,4 +1,9 @@
 import type { UserRole } from "@/core/api/types";
+import {
+  defaultOptionsForType,
+  normalizeQuestionType,
+  usesAnswerOptions,
+} from "@/features/questions/domain/questionTypes";
 
 export interface QuizSummary {
   id: number;
@@ -226,13 +231,15 @@ export function validateQuizForm(values: QuizFormValues): string | null {
 export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
   return {
     questionText: "",
-    questionType: "MCQ",
+    questionType: "Single Choice",
     marks: 1,
     estimatedTimeSeconds: 60,
     hint: "",
     explanation: "",
     options: [
       { optionText: "", isCorrect: true },
+      { optionText: "", isCorrect: false },
+      { optionText: "", isCorrect: false },
       { optionText: "", isCorrect: false },
     ],
   };
@@ -241,38 +248,37 @@ export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
 export function mapQuizQuestionToInput(
   question: QuizQuestionItem,
 ): AddQuizQuestionInput {
-  const isMcq = question.questionType.toLowerCase().includes("mcq");
+  const questionType = normalizeQuestionType(question.questionType);
 
   return {
     questionText: question.questionText,
-    questionType: question.questionType,
+    questionType,
     marks: question.marks,
     estimatedTimeSeconds: 60,
     hint: question.hint ?? "",
     explanation: "",
-    options: isMcq
-      ? question.options.map((option) => ({
-          optionText: option.optionText,
-          isCorrect: option.isCorrect,
-        }))
-      : [
-          { optionText: "", isCorrect: true },
-          { optionText: "", isCorrect: false },
-        ],
+    options: usesAnswerOptions(questionType)
+      ? question.options.length > 0
+        ? question.options.map((option) => ({
+            optionText: option.optionText,
+            isCorrect: option.isCorrect,
+          }))
+        : defaultOptionsForType(questionType)
+      : [],
   };
 }
 
 export function buildQuizQuestionPayload(input: AddQuizQuestionInput) {
-  const isMcq = input.questionType.toLowerCase().includes("mcq");
+  const questionType = normalizeQuestionType(input.questionType);
 
   return {
     questionText: input.questionText.trim(),
-    questionType: input.questionType,
+    questionType,
     marks: input.marks,
     estimatedTimeSeconds: input.estimatedTimeSeconds,
     hint: input.hint.trim() || null,
     explanation: input.explanation.trim() || null,
-    options: isMcq
+    options: usesAnswerOptions(questionType)
       ? input.options
           .filter((option) => option.optionText.trim())
           .map((option) => ({

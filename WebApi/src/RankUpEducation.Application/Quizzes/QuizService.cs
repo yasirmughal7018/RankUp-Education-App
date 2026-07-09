@@ -402,8 +402,11 @@ public sealed class QuizService : IQuizService
             var isCorrect = false;
             short awardedMarks = 0;
             var isMultiSelect = QuizQuestionHelper.IsMultiSelectType(question.QuestionTypeName);
+            var isFillBlank = QuizQuestionHelper.IsFillBlankType(question.QuestionTypeName);
             var isDescriptive = QuizQuestionHelper.IsDescriptiveType(question.QuestionTypeName)
-                || (selectedOptionIds.Count == 0 && !string.IsNullOrWhiteSpace(submitted.SubmittedText));
+                || (!isFillBlank
+                    && selectedOptionIds.Count == 0
+                    && !string.IsNullOrWhiteSpace(submitted.SubmittedText));
 
             if (isMultiSelect && selectedOptionIds.Count > 0)
             {
@@ -416,6 +419,23 @@ public sealed class QuizService : IQuizService
                     correctOptionIds,
                     question.Marks);
                 obtainedMarks += awardedMarks;
+            }
+            else if (isFillBlank && !string.IsNullOrWhiteSpace(submitted.SubmittedText))
+            {
+                var submittedText = submitted.SubmittedText.Trim();
+                var matched = question.Options.FirstOrDefault(option =>
+                    option.IsCorrect
+                    && string.Equals(
+                        option.OptionText.Trim(),
+                        submittedText,
+                        StringComparison.OrdinalIgnoreCase));
+                isCorrect = matched is not null;
+                awardedMarks = isCorrect ? question.Marks : (short)0;
+                obtainedMarks += awardedMarks;
+                if (matched is not null)
+                {
+                    selectedOptionIds = [matched.OptionId];
+                }
             }
             else if (selectedOptionIds.Count > 0)
             {

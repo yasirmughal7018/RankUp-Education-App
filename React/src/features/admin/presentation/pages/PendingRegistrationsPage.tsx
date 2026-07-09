@@ -9,15 +9,43 @@ import {
 } from "@/features/admin/presentation/hooks/useRegistrationQueries";
 import { PageHeader } from "@/core/components/PageHeader";
 
-function formatRequestedAt(value: string | null): string {
+function formatRequestedAt(value: string | null | undefined): string {
   if (!value) {
     return "—";
   }
 
+  // DateOnly comes as "YYYY-MM-DD"; DateTimeOffset as ISO string.
+  const date = value.length === 10 ? new Date(`${value}T00:00:00`) : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+    timeStyle: value.length === 10 ? undefined : "short",
+  }).format(date);
+}
+
+function formatSchoolCampus(registration: PendingRegistration): string {
+  const parts: string[] = [];
+
+  if (registration.schoolCampusName) {
+    parts.push(registration.schoolCampusName);
+  }
+
+  if (registration.schoolId != null || registration.campusId != null) {
+    const ids = [
+      registration.schoolId != null ? `School ${registration.schoolId}` : null,
+      registration.campusId != null ? `Campus ${registration.campusId}` : null,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+    if (ids) {
+      parts.push(ids);
+    }
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
 export function PendingRegistrationsPage() {
@@ -123,13 +151,19 @@ export function PendingRegistrationsPage() {
                     Name
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Username
+                    Mobile
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Role
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Requested
+                    School / campus
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Created
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Reason
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-slate-600">
                     Actions
@@ -139,22 +173,33 @@ export function PendingRegistrationsPage() {
               <tbody className="divide-y divide-slate-200">
                 {registrations.map((registration) => {
                   const canApprove = isRegistrationActionRole(registration.role);
+                  const createdDisplay =
+                    registration.createdDate ?? registration.requestedAt;
 
                   return (
                     <tr key={registration.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        {registration.fullName}
+                        <div>{registration.fullName}</div>
+                        <div className="text-xs font-normal text-slate-500">
+                          {registration.username}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-700">
-                        {registration.username}
+                        {registration.mobileNumber ?? registration.username}
                       </td>
                       <td className="px-4 py-3">
                         <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
                           {registration.role}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {formatRequestedAt(registration.requestedAt)}
+                      <td className="max-w-[12rem] px-4 py-3 text-slate-700">
+                        {formatSchoolCampus(registration)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700">
+                        {formatRequestedAt(createdDisplay)}
+                      </td>
+                      <td className="max-w-[14rem] truncate px-4 py-3 text-slate-700">
+                        {registration.reasonMessage || "—"}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">

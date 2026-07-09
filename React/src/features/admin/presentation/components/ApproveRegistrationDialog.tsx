@@ -28,16 +28,18 @@ export function ApproveRegistrationDialog({
   onSubmit,
 }: ApproveRegistrationDialogProps) {
   const { user } = useAuth();
-  const defaults = getDefaultApprovalValues(user);
+  const defaults = getDefaultApprovalValues(registration, user);
   const [password, setPassword] = useState("");
   const [schoolId, setSchoolId] = useState(String(defaults.schoolId));
   const [campusId, setCampusId] = useState(String(defaults.campusId));
-  const [studentRollNumber, setStudentRollNumber] = useState("");
+  const [studentRollNumber, setStudentRollNumber] = useState(
+    defaults.studentOrEmployeeId,
+  );
   const [grade, setGrade] = useState("");
   const [section, setSection] = useState(defaults.section);
-  const [teacherCode, setTeacherCode] = useState("");
-  const [mobileNumber, setMobileNumber] = useState(registration.username);
-  const [cnic, setCnic] = useState("");
+  const [teacherCode, setTeacherCode] = useState(defaults.studentOrEmployeeId);
+  const [mobileNumber, setMobileNumber] = useState(defaults.mobileNumber);
+  const [cnic, setCnic] = useState(defaults.cnic);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export function ApproveRegistrationDialog({
     const request: ApproveRegistrationRequest = {
       password,
       mobileNumber: mobileNumber.trim() || registration.username,
+      cnic: cnic.trim() || null,
     };
 
     const role = registration.role as RegistrationActionRole;
@@ -91,10 +94,6 @@ export function ApproveRegistrationDialog({
       request.teacherCode = teacherCode.trim();
     }
 
-    if (role === "Parent") {
-      request.cnic = cnic.trim() || null;
-    }
-
     try {
       await onSubmit(registration, request);
     } catch (caught) {
@@ -120,6 +119,10 @@ export function ApproveRegistrationDialog({
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {registration.fullName} ({registration.role}) — {registration.username}
+          </p>
+          <p className="mt-2 text-sm text-slate-500">
+            Admin sets initial password; user must change it on first login
+            (MustChangePassword).
           </p>
         </div>
 
@@ -157,6 +160,21 @@ export function ApproveRegistrationDialog({
               onChange={(event) => setMobileNumber(event.target.value)}
               className={inputClassName}
               disabled={isSubmitting}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="cnic" className="mb-1 block text-sm font-medium text-slate-700">
+              CNIC
+            </label>
+            <input
+              id="cnic"
+              type="text"
+              value={cnic}
+              onChange={(event) => setCnic(event.target.value)}
+              className={inputClassName}
+              disabled={isSubmitting}
+              placeholder="Stored on user profile"
             />
           </div>
 
@@ -200,7 +218,7 @@ export function ApproveRegistrationDialog({
                   htmlFor="studentRollNumber"
                   className="mb-1 block text-sm font-medium text-slate-700"
                 >
-                  Roll number
+                  Roll number *
                 </label>
                 <input
                   id="studentRollNumber"
@@ -245,7 +263,7 @@ export function ApproveRegistrationDialog({
           {registration.role === "Teacher" ? (
             <div>
               <label htmlFor="teacherCode" className="mb-1 block text-sm font-medium text-slate-700">
-                Teacher code
+                Teacher code *
               </label>
               <input
                 id="teacherCode"
@@ -254,22 +272,6 @@ export function ApproveRegistrationDialog({
                 onChange={(event) => setTeacherCode(event.target.value)}
                 className={inputClassName}
                 required
-                disabled={isSubmitting}
-              />
-            </div>
-          ) : null}
-
-          {registration.role === "Parent" ? (
-            <div>
-              <label htmlFor="cnic" className="mb-1 block text-sm font-medium text-slate-700">
-                CNIC (optional)
-              </label>
-              <input
-                id="cnic"
-                type="text"
-                value={cnic}
-                onChange={(event) => setCnic(event.target.value)}
-                className={inputClassName}
                 disabled={isSubmitting}
               />
             </div>

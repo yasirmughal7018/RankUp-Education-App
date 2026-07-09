@@ -18,6 +18,7 @@ internal static class AuthMapping
             user.ProfileId,
             user.SchoolId,
             user.CampusId,
-            permissions);
+            permissions,
+            user.MustChangePassword);
     }
 }

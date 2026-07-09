@@ -106,6 +106,9 @@ class AuthController extends StateNotifier<AuthState> {
     required String studentOrEmployeeId,
     required String adminTarget,
     required String reasonMessage,
+    String? cnic,
+    int? schoolId,
+    int? campusId,
   }) async {
     state = state.copyWith(
       isLoading: true,
@@ -122,6 +125,9 @@ class AuthController extends StateNotifier<AuthState> {
         studentOrEmployeeId: studentOrEmployeeId,
         adminTarget: adminTarget,
         reasonMessage: reasonMessage,
+        cnic: cnic,
+        schoolId: schoolId,
+        campusId: campusId,
       );
       state = state.copyWith(
         isLoading: false,

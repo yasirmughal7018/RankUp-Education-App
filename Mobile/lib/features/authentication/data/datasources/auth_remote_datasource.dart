@@ -47,6 +47,9 @@ class AuthRemoteDataSource {
     required String studentOrEmployeeId,
     required String adminTarget,
     required String reasonMessage,
+    String? cnic,
+    int? schoolId,
+    int? campusId,
   }) {
     return _requestVoid(
       '/auth/register',
@@ -59,6 +62,9 @@ class AuthRemoteDataSource {
         'studentOrEmployeeId': studentOrEmployeeId,
         'adminTarget': adminTarget,
         'reasonMessage': reasonMessage,
+        if (cnic != null && cnic.isNotEmpty) 'cnic': cnic,
+        if (schoolId != null) 'schoolId': schoolId,
+        if (campusId != null) 'campusId': campusId,
       },
     );
   }

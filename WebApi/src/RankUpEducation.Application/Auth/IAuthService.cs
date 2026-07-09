@@ -20,5 +20,9 @@ public interface IAuthService
 
     Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken);
 
+    Task<CurrentUserResponse> ChangePasswordAsync(
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken);
+
     Task LogoutAsync(RefreshTokenRequest? request, CancellationToken cancellationToken);
 }

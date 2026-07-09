@@ -74,20 +74,25 @@ internal sealed class QuizManageGuard
     public async Task<short> ResolveQuestionTypeIdAsync(string questionType, CancellationToken cancellationToken)
     {
         var normalized = questionType.Trim();
-        if (QuizLookupNames.McqQuestionTypeNames.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
-        {
-            return await RequireLookupAsync(
-                QuizLookupNames.QuestionType,
-                QuizLookupNames.McqQuestionTypeNames,
-                cancellationToken);
-        }
 
-        if (QuizLookupNames.DescriptiveQuestionTypeNames.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+        string[][] candidateGroups =
+        [
+            QuizLookupNames.SingleChoiceQuestionTypeNames,
+            QuizLookupNames.MultiSelectQuestionTypeNames,
+            QuizLookupNames.TrueFalseQuestionTypeNames,
+            QuizLookupNames.FillBlankQuestionTypeNames,
+            QuizLookupNames.DescriptiveQuestionTypeNames
+        ];
+
+        foreach (var group in candidateGroups)
         {
-            return await RequireLookupAsync(
-                QuizLookupNames.QuestionType,
-                QuizLookupNames.DescriptiveQuestionTypeNames,
-                cancellationToken);
+            if (group.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                return await RequireLookupAsync(
+                    QuizLookupNames.QuestionType,
+                    group,
+                    cancellationToken);
+            }
         }
 
         var directId = await _lookups.ResolveLookupIdAsync(QuizLookupNames.QuestionType, normalized, 0, cancellationToken);

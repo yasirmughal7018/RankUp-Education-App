@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Lookups;
+using RankUpEducation.Domain.Notifications;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Questions;
 using RankUpEducation.Domain.Quizzes;
@@ -30,6 +31,7 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<DeviceSession> DeviceSessions => Set<DeviceSession>();
+    public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Lookup> Lookups => Set<Lookup>();
     public DbSet<School> Schools => Set<School>();
     public DbSet<Campus> Campuses => Set<Campus>();

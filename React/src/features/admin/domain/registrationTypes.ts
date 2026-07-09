@@ -6,6 +6,16 @@ export interface PendingRegistration {
   fullName: string;
   role: UserRole;
   requestedAt: string | null;
+  mobileNumber: string | null;
+  emailAddress: string | null;
+  cnic: string | null;
+  schoolId: number | null;
+  campusId: number | null;
+  createdDate: string | null;
+  reasonMessage: string | null;
+  adminTarget: string | null;
+  schoolCampusName: string | null;
+  studentOrEmployeeId: string | null;
 }
 
 export interface ApproveRegistrationRequest {
@@ -31,10 +41,16 @@ export function isRegistrationActionRole(
   return role === "Student" || role === "Teacher" || role === "Parent";
 }
 
-export function getDefaultApprovalValues(user: CurrentUser | null) {
+export function getDefaultApprovalValues(
+  registration: PendingRegistration,
+  user: CurrentUser | null,
+) {
   return {
-    schoolId: user?.schoolId ?? "",
-    campusId: user?.campusId ?? "",
+    schoolId: registration.schoolId ?? user?.schoolId ?? "",
+    campusId: registration.campusId ?? user?.campusId ?? "",
+    mobileNumber: registration.mobileNumber ?? registration.username,
+    cnic: registration.cnic ?? "",
+    studentOrEmployeeId: registration.studentOrEmployeeId ?? "",
     section: "A",
   };
 }

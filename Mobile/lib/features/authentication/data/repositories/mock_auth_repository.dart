@@ -41,6 +41,9 @@ class MockAuthRepository implements AuthRepository {
     required String studentOrEmployeeId,
     required String adminTarget,
     required String reasonMessage,
+    String? cnic,
+    int? schoolId,
+    int? campusId,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
   }

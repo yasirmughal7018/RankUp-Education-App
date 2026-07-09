@@ -38,17 +38,58 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.AnyAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken);
     }
 
+    public Task<bool> CnicExistsAsync(string cnic, CancellationToken cancellationToken)
+    {
+        var normalized = cnic.Trim();
+        return _dbContext.Users.AnyAsync(
+            user => user.Cnic != null && user.Cnic.ToLower() == normalized.ToLower(),
+            cancellationToken);
+    }
+
     public async Task AddAsync(User user, CancellationToken cancellationToken)
     {
         await _dbContext.Users.AddAsync(user, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(
+        int take,
+        int? schoolIdFilter,
+        CancellationToken cancellationToken)
     {
-        return await _dbContext.Users.AsNoTracking()
-            .Where(user => !user.IsActive && user.PasswordHash == null)
+        var query = _dbContext.Users.AsNoTracking()
+            .Where(user => !user.IsActive && user.PasswordHash == null);
+
+        if (schoolIdFilter.HasValue)
+        {
+            query = query.Where(user => user.SchoolId == null || user.SchoolId == schoolIdFilter.Value);
+        }
+
+        return await query
             .OrderByDescending(user => user.RequestedAt)
             .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<long>> ListAdminRecipientsAsync(int? schoolId, CancellationToken cancellationToken)
+    {
+        var query = _dbContext.Users.AsNoTracking()
+            .Where(user => user.IsActive && user.PasswordHash != null);
+
+        if (schoolId.HasValue)
+        {
+            query = query.Where(user =>
+                user.Role == UserRole.SuperAdmin
+                || (user.Role == UserRole.SchoolAdmin && user.SchoolId == schoolId.Value));
+        }
+        else
+        {
+            query = query.Where(user =>
+                user.Role == UserRole.SuperAdmin || user.Role == UserRole.SchoolAdmin);
+        }
+
+        return await query
+            .Select(user => user.Id)
+            .Distinct()
             .ToListAsync(cancellationToken);
     }
 
@@ -100,19 +141,36 @@ public sealed class UserRepository : IUserRepository
         {
             case UserRole.Student:
                 var student = await _dbContext.Students.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(student?.Id, student?.SchoolId, student?.CampusId);
+                if (student is not null)
+                {
+                    user.AttachProfileContext(student.Id, student.SchoolId, student.CampusId);
+                }
+                else
+                {
+                    user.AttachProfileContext(null, user.SchoolId, user.CampusId);
+                }
+
                 break;
             case UserRole.Teacher:
                 var teacher = await _dbContext.Teachers.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(teacher?.Id, teacher?.SchoolId, teacher?.CampusId);
+                if (teacher is not null)
+                {
+                    user.AttachProfileContext(teacher.Id, teacher.SchoolId, teacher.CampusId);
+                }
+                else
+                {
+                    user.AttachProfileContext(null, user.SchoolId, user.CampusId);
+                }
+
                 break;
             case UserRole.Parent:
                 var parent = await _dbContext.Parents.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(parent?.Id, null, null);
+                user.AttachProfileContext(parent?.Id, user.SchoolId, user.CampusId);
                 break;
             case UserRole.SuperAdmin:
             case UserRole.SchoolAdmin:
-                user.AttachProfileContext(user.Id, null, null);
+                // Prefer persisted school/campus on app_users (especially SchoolAdmin).
+                user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
         }
 

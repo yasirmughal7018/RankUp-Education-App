@@ -113,4 +113,15 @@ public sealed class AuthController : ControllerBase
         var user = await _authService.GetCurrentUserAsync(cancellationToken);
         return Ok(ApiResponse<CurrentUserResponse>.Ok(user));
     }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    [EnableRateLimiting("ChangePassword")]
+    public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> ChangePasswordAsync(
+        [FromBody] ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _authService.ChangePasswordAsync(request, cancellationToken);
+        return Ok(ApiResponse<CurrentUserResponse>.Ok(user, "Password changed successfully."));
+    }
 }

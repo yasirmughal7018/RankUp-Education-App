@@ -250,6 +250,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           studentOrEmployeeId: request.studentOrEmployeeId,
           adminTarget: request.adminTarget,
           reasonMessage: request.reasonMessage,
+          cnic: request.cnic,
+          schoolId: request.schoolId,
+          campusId: request.campusId,
         );
   }
 }
@@ -350,6 +353,9 @@ class _AccountAccessRequestSheetState
   final _fullNameController = TextEditingController();
   final _mobileNumberController = TextEditingController();
   final _emailAddressController = TextEditingController();
+  final _cnicController = TextEditingController();
+  final _schoolIdController = TextEditingController();
+  final _campusIdController = TextEditingController();
   final _schoolCampusController = TextEditingController();
   final _studentOrEmployeeIdController = TextEditingController();
   final _reasonMessageController = TextEditingController();
@@ -362,6 +368,9 @@ class _AccountAccessRequestSheetState
     _fullNameController.dispose();
     _mobileNumberController.dispose();
     _emailAddressController.dispose();
+    _cnicController.dispose();
+    _schoolIdController.dispose();
+    _campusIdController.dispose();
     _schoolCampusController.dispose();
     _studentOrEmployeeIdController.dispose();
     _reasonMessageController.dispose();
@@ -387,8 +396,8 @@ class _AccountAccessRequestSheetState
               ),
               const SizedBox(height: 8),
               const Text(
-                'This sends a request to an admin. It does not create an '
-                'account automatically.',
+                'Creates a pending user only. School Admin and Super Admin '
+                'receive an in-app notification. Profiles are created after approval.',
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -410,6 +419,17 @@ class _AccountAccessRequestSheetState
                 ),
                 keyboardType: TextInputType.phone,
                 validator: _required,
+                textInputAction: TextInputAction.next,
+                onTap: _showSoftKeyboard,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _cnicController,
+                decoration: const InputDecoration(
+                  labelText: 'CNIC (Optional, unique)',
+                  prefixIcon: Icon(Icons.credit_card_outlined),
+                ),
+                keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.next,
                 onTap: _showSoftKeyboard,
               ),
@@ -441,6 +461,28 @@ class _AccountAccessRequestSheetState
                     setState(() => _userType = value);
                   }
                 },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _schoolIdController,
+                decoration: const InputDecoration(
+                  labelText: 'School ID (recommended)',
+                  prefixIcon: Icon(Icons.apartment_outlined),
+                ),
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                onTap: _showSoftKeyboard,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _campusIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Campus ID (recommended)',
+                  prefixIcon: Icon(Icons.location_city_outlined),
+                ),
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                onTap: _showSoftKeyboard,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -514,6 +556,9 @@ class _AccountAccessRequestSheetState
       return;
     }
 
+    final schoolIdText = _schoolIdController.text.trim();
+    final campusIdText = _campusIdController.text.trim();
+
     Navigator.of(context).pop(
       _AccountAccessRequest(
         fullName: _fullNameController.text.trim(),
@@ -524,6 +569,9 @@ class _AccountAccessRequestSheetState
         studentOrEmployeeId: _studentOrEmployeeIdController.text.trim(),
         adminTarget: _adminTarget,
         reasonMessage: _reasonMessageController.text.trim(),
+        cnic: _cnicController.text.trim(),
+        schoolId: int.tryParse(schoolIdText),
+        campusId: int.tryParse(campusIdText),
       ),
     );
   }
@@ -539,6 +587,9 @@ class _AccountAccessRequest {
     required this.studentOrEmployeeId,
     required this.adminTarget,
     required this.reasonMessage,
+    this.cnic,
+    this.schoolId,
+    this.campusId,
   });
 
   final String fullName;
@@ -549,6 +600,9 @@ class _AccountAccessRequest {
   final String studentOrEmployeeId;
   final String adminTarget;
   final String reasonMessage;
+  final String? cnic;
+  final int? schoolId;
+  final int? campusId;
 }
 
 String? _required(String? value) {

@@ -18,6 +18,7 @@ import {
   updateStoredTokens,
 } from "@/core/auth/tokenStorage";
 import * as authApi from "@/features/authentication/data/authApi";
+import { ChangePasswordModal } from "@/features/authentication/presentation/components/ChangePasswordModal";
 
 interface AuthContextValue {
   user: CurrentUser | null;
@@ -28,6 +29,7 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+  updateUser: (user: CurrentUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -170,6 +172,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [setActiveSession]);
 
+  const updateUser = useCallback(
+    (user: CurrentUser) => {
+      if (!sessionRef.current) {
+        return;
+      }
+
+      const nextSession = { ...sessionRef.current, user };
+      saveStoredSession(nextSession);
+      setActiveSession(nextSession);
+    },
+    [setActiveSession],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
@@ -180,11 +195,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       clearError: () => setError(null),
+      updateUser,
     }),
-    [session, isBootstrapping, isSubmitting, error, login, logout],
+    [session, isBootstrapping, isSubmitting, error, login, logout, updateUser],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const mustChangePassword = Boolean(session?.user?.mustChangePassword);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {mustChangePassword ? (
+        <ChangePasswordModal
+          onSuccess={(user) => {
+            updateUser({ ...user, mustChangePassword: false });
+          }}
+        />
+      ) : null}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

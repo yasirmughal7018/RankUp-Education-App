@@ -17,6 +17,9 @@ abstract class AuthRepository {
     required String studentOrEmployeeId,
     required String adminTarget,
     required String reasonMessage,
+    String? cnic,
+    int? schoolId,
+    int? campusId,
   });
 
   Future<AuthSession> refreshSession();

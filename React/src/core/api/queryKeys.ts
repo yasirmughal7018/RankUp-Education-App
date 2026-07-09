@@ -16,6 +16,7 @@ export const queryKeys = {
     ["questions", filters] as const,
   question: (questionId: number) => ["questions", questionId] as const,
   pendingRegistrations: () => ["admin", "registrations", "pending"] as const,
+  notifications: () => ["notifications"] as const,
   studentQuizDetail: (quizId: number) => ["student", "quizzes", quizId] as const,
   studentQuizResult: (quizId: number, attemptId: number) =>
     ["student", "quizzes", quizId, "attempts", attemptId, "result"] as const,

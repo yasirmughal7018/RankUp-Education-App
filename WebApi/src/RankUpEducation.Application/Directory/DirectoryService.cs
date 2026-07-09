@@ -211,11 +211,11 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         var passwordHash = _passwordHasher.Hash(request.Password);
-        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Student, null, schoolId, campusId);
+        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
+        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Student, null, schoolId, campusId, mobileNumber);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
         var section = string.IsNullOrWhiteSpace(request.Section) ? "A" : request.Section.Trim();
         await _users.AddStudentProfileAsync(
             new Student(user.Id, schoolId, campusId, request.RollNumber.Trim(), request.Grade, section, mobileNumber),
@@ -355,11 +355,11 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         var passwordHash = _passwordHasher.Hash(request.Password);
-        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Teacher, null, schoolId, campusId);
+        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
+        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Teacher, null, schoolId, campusId, mobileNumber);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
         await _users.AddTeacherProfileAsync(
             new Teacher(user.Id, schoolId, campusId, request.TeacherCode.Trim(), mobileNumber),
             cancellationToken);
@@ -481,12 +481,12 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         var passwordHash = _passwordHasher.Hash(request.Password);
-        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Parent);
+        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
+        var cnic = string.IsNullOrWhiteSpace(request.Cnic) ? null : request.Cnic.Trim();
+        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Parent, null, null, null, mobileNumber, cnic);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
-        var cnic = string.IsNullOrWhiteSpace(request.Cnic) ? null : request.Cnic.Trim();
         await _users.AddParentProfileAsync(new Parent(user.Id, cnic, mobileNumber), cancellationToken);
         user.AttachProfileContext(user.Id, null, null);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

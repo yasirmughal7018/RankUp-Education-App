@@ -20,20 +20,50 @@ public static class QuizLookupNames
     public static readonly string[] ApprovedStatusNames = ["Approved", "APPROVED"];
     public static readonly string[] RejectedApprovalStatusNames = ["Rejected", "Declined", "REJECTED"];
     public static readonly string[] AssignedResultNames = ["Assigned", "Not Started", "Pending"];
-    public static readonly string[] McqQuestionTypeNames = ["MCQ", "Multiple Choice", "MultipleChoice"];
-    /// <summary>
-    /// Multi-select MCQ types. Mobile maps lookup names containing "multiple" to type id 41
-    /// (multi-select UI); names containing "Multi" are treated the same on the API.
-    /// </summary>
+
+    /// <summary>Single-select option questions (exactly one correct).</summary>
+    public static readonly string[] SingleChoiceQuestionTypeNames =
+    [
+        "Single Choice",
+        "SingleChoice",
+        "MCQ"
+    ];
+
+    /// <summary>Multi-select option questions (one or more correct).</summary>
     public static readonly string[] MultiSelectQuestionTypeNames =
     [
-        "Multi Select",
-        "MultiSelect",
         "Multiple Choice",
         "MultipleChoice",
+        "Multi Select",
+        "MultiSelect",
         "Multiple"
     ];
-    public static readonly string[] DescriptiveQuestionTypeNames = ["Descriptive", "Short Answer", "ShortAnswer"];
+
+    public static readonly string[] TrueFalseQuestionTypeNames =
+    [
+        "True/False",
+        "TrueFalse",
+        "True / False"
+    ];
+
+    public static readonly string[] FillBlankQuestionTypeNames =
+    [
+        "Fill in the Blanks",
+        "Fill in the Blank",
+        "FillBlank",
+        "Fill Blanks"
+    ];
+
+    public static readonly string[] DescriptiveQuestionTypeNames =
+    [
+        "Descriptive",
+        "Short Answer",
+        "ShortAnswer"
+    ];
+
+    /// <summary>Legacy alias — single-choice style MCQ names.</summary>
+    public static readonly string[] McqQuestionTypeNames = SingleChoiceQuestionTypeNames;
+
     public static readonly string[] PendingQuestionStatusNames = ["Pending", "Draft", "Under Review"];
     public static readonly string[] ApprovedQuestionStatusNames = ["Approved", "Active", "Published"];
     public static readonly string[] RejectedQuestionStatusNames = ["Rejected", "Declined"];

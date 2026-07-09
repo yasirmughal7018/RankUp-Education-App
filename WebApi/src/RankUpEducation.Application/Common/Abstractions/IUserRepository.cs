@@ -12,9 +12,13 @@ public interface IUserRepository
 
     Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken);
 
+    Task<bool> CnicExistsAsync(string cnic, CancellationToken cancellationToken);
+
     Task AddAsync(User user, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(int take, CancellationToken cancellationToken);
+    Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(int take, int? schoolIdFilter, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<long>> ListAdminRecipientsAsync(int? schoolId, CancellationToken cancellationToken);
 
     Task<bool> HasStudentProfileAsync(long userId, CancellationToken cancellationToken);
 
