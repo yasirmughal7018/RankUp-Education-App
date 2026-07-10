@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/app/api_base_url.dart';
 import 'package:rankup_education/app/environment.dart';
+import 'package:rankup_education/core/widgets/field_label.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -114,9 +115,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   if (_step == _LoginStep.identifier) ...[
                     TextField(
                       controller: _identifierController,
-                      decoration: const InputDecoration(
-                        labelText: 'CNIC or mobile number',
-                        prefixIcon: Icon(Icons.badge_outlined),
+                      decoration: InputDecoration(
+                        label: buildFieldLabel(
+                          'CNIC or mobile number',
+                          required: true,
+                        ),
+                        prefixIcon: const Icon(Icons.badge_outlined),
                       ),
                       autocorrect: false,
                       enableSuggestions: false,
@@ -139,10 +143,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'New password',
+                      decoration: InputDecoration(
+                        label: buildFieldLabel('New password', required: true),
                         helperText: 'At least 6 characters',
-                        prefixIcon: Icon(Icons.lock_outline),
+                        prefixIcon: const Icon(Icons.lock_outline),
                       ),
                       textInputAction: TextInputAction.next,
                       onTap: _showSoftKeyboard,
@@ -151,9 +155,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextField(
                       controller: _confirmPasswordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm password',
-                        prefixIcon: Icon(Icons.lock_outline),
+                      decoration: InputDecoration(
+                        label: buildFieldLabel(
+                          'Confirm password',
+                          required: true,
+                        ),
+                        prefixIcon: const Icon(Icons.lock_outline),
                       ),
                       textInputAction: TextInputAction.done,
                       onTap: _showSoftKeyboard,
@@ -173,9 +180,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: Icon(Icons.lock_outline),
+                      decoration: InputDecoration(
+                        label: buildFieldLabel('Password', required: true),
+                        prefixIcon: const Icon(Icons.lock_outline),
                       ),
                       textInputAction: TextInputAction.done,
                       onTap: _showSoftKeyboard,
@@ -521,9 +528,12 @@ class _PasswordResetSheetState extends State<_PasswordResetSheet> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _identifierController,
-                decoration: const InputDecoration(
-                  labelText: 'CNIC or mobile number',
-                  prefixIcon: Icon(Icons.badge_outlined),
+                decoration: InputDecoration(
+                  label: buildFieldLabel(
+                    'CNIC or mobile number',
+                    required: true,
+                  ),
+                  prefixIcon: const Icon(Icons.badge_outlined),
                 ),
                 validator: _required,
                 textInputAction: TextInputAction.done,
@@ -714,9 +724,9 @@ class _AccountAccessRequestSheetState
               const SizedBox(height: 16),
               TextFormField(
                 controller: _fullNameController,
-                decoration: const InputDecoration(
-                  labelText: 'Full Name *',
-                  prefixIcon: Icon(Icons.person_outline),
+                decoration: InputDecoration(
+                  label: buildFieldLabel('Full Name', required: true),
+                  prefixIcon: const Icon(Icons.person_outline),
                 ),
                 validator: _required,
                 textInputAction: TextInputAction.next,
@@ -725,9 +735,9 @@ class _AccountAccessRequestSheetState
               const SizedBox(height: 12),
               TextFormField(
                 controller: _mobileNumberController,
-                decoration: const InputDecoration(
-                  labelText: 'Mobile Number *',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                decoration: InputDecoration(
+                  label: buildFieldLabel('Mobile Number', required: true),
+                  prefixIcon: const Icon(Icons.phone_outlined),
                 ),
                 keyboardType: TextInputType.phone,
                 validator: _required,
@@ -759,9 +769,9 @@ class _AccountAccessRequestSheetState
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _userType,
-                decoration: const InputDecoration(
-                  labelText: 'Account Type *',
-                  prefixIcon: Icon(Icons.group_outlined),
+                decoration: InputDecoration(
+                  label: buildFieldLabel('Account Type', required: true),
+                  prefixIcon: const Icon(Icons.group_outlined),
                 ),
                 items: const [
                   DropdownMenuItem(value: 'Student', child: Text('Student')),
@@ -778,11 +788,14 @@ class _AccountAccessRequestSheetState
                   ),
                   initialValue: _schoolId,
                   decoration: InputDecoration(
-                    labelText: _loadingSchools
-                        ? 'School (loading...)'
-                        : _isStudent
-                            ? 'School *'
-                            : 'School (optional)',
+                    label: buildFieldLabel(
+                      _loadingSchools
+                          ? 'School (loading...)'
+                          : _isTeacher
+                              ? 'School (optional)'
+                              : 'School',
+                      required: _isStudent,
+                    ),
                     prefixIcon: const Icon(Icons.school_outlined),
                     helperText: _isTeacher
                         ? 'Empty → Portal Admin only. Selected → School Admin + Portal Admin.'
@@ -829,11 +842,14 @@ class _AccountAccessRequestSheetState
                   ),
                   initialValue: _campusId,
                   decoration: InputDecoration(
-                    labelText: _loadingCampuses
-                        ? 'Campus (loading...)'
-                        : _isStudent
-                            ? 'Campus *'
-                            : 'Campus (optional)',
+                    label: buildFieldLabel(
+                      _loadingCampuses
+                          ? 'Campus (loading...)'
+                          : _isTeacher
+                              ? 'Campus (optional)'
+                              : 'Campus',
+                      required: _isStudent,
+                    ),
                     prefixIcon: const Icon(Icons.location_city_outlined),
                   ),
                   items: [
@@ -867,9 +883,10 @@ class _AccountAccessRequestSheetState
                 TextFormField(
                   controller: _rollNumberTeacherCodeController,
                   decoration: InputDecoration(
-                    labelText: _isTeacher
-                        ? 'Teacher code (optional)'
-                        : 'Roll number *',
+                    label: buildFieldLabel(
+                      _isTeacher ? 'Teacher code (optional)' : 'Roll number',
+                      required: _isStudent,
+                    ),
                     prefixIcon: const Icon(Icons.badge_outlined),
                   ),
                   validator: _isStudent ? _required : null,

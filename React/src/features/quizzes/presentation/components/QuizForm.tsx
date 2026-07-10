@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { QuizFormValues } from "@/features/quizzes/domain/quizTypes";
 import { validateQuizForm } from "@/features/quizzes/domain/quizTypes";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 
@@ -55,9 +56,9 @@ export function QuizForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
-          <label htmlFor="title" className="mb-1 block text-sm font-medium text-slate-700">
+          <FieldLabel htmlFor="title" required>
             Title
-          </label>
+          </FieldLabel>
           <input
             id="title"
             value={values.title}
@@ -71,9 +72,9 @@ export function QuizForm({
         </div>
 
         <div className="md:col-span-2">
-          <label htmlFor="description" className="mb-1 block text-sm font-medium text-slate-700">
+          <FieldLabel htmlFor="description" optional>
             Description
-          </label>
+          </FieldLabel>
           <textarea
             id="description"
             value={values.description}
@@ -149,12 +150,9 @@ export function QuizForm({
 
         {showContextStudentId ? (
           <div>
-            <label
-              htmlFor="contextStudentId"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="contextStudentId" optional>
               Context student ID
-            </label>
+            </FieldLabel>
             <input
               id="contextStudentId"
               type="number"
@@ -176,9 +174,9 @@ export function QuizForm({
       </div>
 
       <div>
-        <label htmlFor="instructions" className="mb-1 block text-sm font-medium text-slate-700">
+        <FieldLabel htmlFor="instructions" required>
           Instructions
-        </label>
+        </FieldLabel>
         <textarea
           id="instructions"
           value={values.instructions}
@@ -196,12 +194,9 @@ export function QuizForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label
-            htmlFor="timeLimitMinutes"
-            className="mb-1 block text-sm font-medium text-slate-700"
-          >
+          <FieldLabel htmlFor="timeLimitMinutes" optional>
             Time limit (minutes)
-          </label>
+          </FieldLabel>
           <input
             id="timeLimitMinutes"
             type="number"
@@ -221,12 +216,9 @@ export function QuizForm({
         </div>
 
         <div>
-          <label
-            htmlFor="allowedAttempts"
-            className="mb-1 block text-sm font-medium text-slate-700"
-          >
+          <FieldLabel htmlFor="allowedAttempts" optional>
             Allowed attempts
-          </label>
+          </FieldLabel>
           <input
             id="allowedAttempts"
             type="number"

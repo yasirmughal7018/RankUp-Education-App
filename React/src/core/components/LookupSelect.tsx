@@ -1,3 +1,4 @@
+import { RequiredMark } from "@/core/components/RequiredMark";
 import { useLookups } from "@/core/hooks/useLookups";
 
 interface LookupSelectProps {
@@ -35,7 +36,7 @@ export function LookupSelect({
       {label ? (
         <label className="mb-1 block text-sm font-medium text-slate-700">
           {label}
-          {required ? <span className="text-rose-600"> *</span> : null}
+          {required ? <RequiredMark /> : null}
         </label>
       ) : null}
       <select

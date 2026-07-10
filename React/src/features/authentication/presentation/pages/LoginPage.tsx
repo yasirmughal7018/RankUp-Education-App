@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { ApiError } from "@/core/api/types";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import { PageHeader } from "@/core/components/PageHeader";
 import * as authApi from "@/features/authentication/data/authApi";
 import type { LoginStatus } from "@/features/authentication/data/authApi";
@@ -183,12 +184,9 @@ export function LoginPage() {
         {step === "identifier" ? (
           <form className="space-y-4" onSubmit={handleIdentifierContinue}>
             <div>
-              <label
-                htmlFor="username"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
+              <FieldLabel htmlFor="username" required>
                 CNIC or mobile number
-              </label>
+              </FieldLabel>
               <input
                 id="username"
                 name="username"
@@ -232,12 +230,9 @@ export function LoginPage() {
         {step === "setPassword" ? (
           <form className="space-y-4" onSubmit={handleSetPassword}>
             <div>
-              <label
-                htmlFor="newPassword"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
+              <FieldLabel htmlFor="newPassword" required>
                 New password
-              </label>
+              </FieldLabel>
               <input
                 id="newPassword"
                 type="password"
@@ -253,12 +248,9 @@ export function LoginPage() {
               />
             </div>
             <div>
-              <label
-                htmlFor="confirmPassword"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
+              <FieldLabel htmlFor="confirmPassword" required>
                 Confirm password
-              </label>
+              </FieldLabel>
               <input
                 id="confirmPassword"
                 type="password"
@@ -293,12 +285,9 @@ export function LoginPage() {
         {step === "password" ? (
           <form className="space-y-4" onSubmit={handleLogin}>
             <div>
-              <label
-                htmlFor="password"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
+              <FieldLabel htmlFor="password" required>
                 Password
-              </label>
+              </FieldLabel>
               <input
                 id="password"
                 type="password"

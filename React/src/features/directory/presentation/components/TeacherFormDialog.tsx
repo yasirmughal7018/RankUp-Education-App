@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
   CreateDirectoryTeacherInput,
   DirectoryCampus,
@@ -156,12 +157,9 @@ export function TeacherFormDialog({
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div>
-            <label
-              htmlFor="teacher-full-name"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="teacher-full-name" required>
               Full name
-            </label>
+            </FieldLabel>
             <input
               id="teacher-full-name"
               type="text"
@@ -176,12 +174,9 @@ export function TeacherFormDialog({
           {!isEdit ? (
             <>
               <div>
-                <label
-                  htmlFor="teacher-username"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="teacher-username" required>
                   Username
-                </label>
+                </FieldLabel>
                 <input
                   id="teacher-username"
                   type="text"
@@ -193,12 +188,9 @@ export function TeacherFormDialog({
                 />
               </div>
               <div>
-                <label
-                  htmlFor="teacher-password"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="teacher-password" required>
                   Password
-                </label>
+                </FieldLabel>
                 <input
                   id="teacher-password"
                   type="password"
@@ -210,12 +202,9 @@ export function TeacherFormDialog({
                 />
               </div>
               <div>
-                <label
-                  htmlFor="teacher-school"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="teacher-school" required>
                   School
-                </label>
+                </FieldLabel>
                 <select
                   id="teacher-school"
                   value={schoolId}
@@ -240,12 +229,9 @@ export function TeacherFormDialog({
           )}
 
           <div>
-            <label
-              htmlFor="teacher-campus"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="teacher-campus" required>
               Campus
-            </label>
+            </FieldLabel>
             <select
               id="teacher-campus"
               value={campusId}
@@ -280,12 +266,9 @@ export function TeacherFormDialog({
           </div>
 
           <div>
-            <label
-              htmlFor="teacher-code"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="teacher-code" required>
               Teacher code
-            </label>
+            </FieldLabel>
             <input
               id="teacher-code"
               type="text"
@@ -298,12 +281,9 @@ export function TeacherFormDialog({
           </div>
 
           <div>
-            <label
-              htmlFor="teacher-mobile"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Mobile (optional)
-            </label>
+            <FieldLabel htmlFor="teacher-mobile" optional>
+              Mobile
+            </FieldLabel>
             <input
               id="teacher-mobile"
               type="text"

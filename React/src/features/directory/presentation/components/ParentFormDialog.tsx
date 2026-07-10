@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
   CreateDirectoryParentInput,
   DirectoryParent,
@@ -121,12 +122,9 @@ export function ParentFormDialog({
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div>
-            <label
-              htmlFor="parent-full-name"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="parent-full-name" required>
               Full name
-            </label>
+            </FieldLabel>
             <input
               id="parent-full-name"
               type="text"
@@ -141,12 +139,9 @@ export function ParentFormDialog({
           {!isEdit ? (
             <>
               <div>
-                <label
-                  htmlFor="parent-username"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="parent-username" required>
                   Username
-                </label>
+                </FieldLabel>
                 <input
                   id="parent-username"
                   type="text"
@@ -158,12 +153,9 @@ export function ParentFormDialog({
                 />
               </div>
               <div>
-                <label
-                  htmlFor="parent-password"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="parent-password" required>
                   Password
-                </label>
+                </FieldLabel>
                 <input
                   id="parent-password"
                   type="password"
@@ -180,12 +172,9 @@ export function ParentFormDialog({
           )}
 
           <div>
-            <label
-              htmlFor="parent-cnic"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              CNIC (optional)
-            </label>
+            <FieldLabel htmlFor="parent-cnic" optional>
+              CNIC
+            </FieldLabel>
             <input
               id="parent-cnic"
               type="text"
@@ -197,12 +186,9 @@ export function ParentFormDialog({
           </div>
 
           <div>
-            <label
-              htmlFor="parent-mobile"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Mobile (optional)
-            </label>
+            <FieldLabel htmlFor="parent-mobile" optional>
+              Mobile
+            </FieldLabel>
             <input
               id="parent-mobile"
               type="text"

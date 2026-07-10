@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import {
   QUESTION_TYPES,
   defaultOptionsForType,
@@ -339,12 +340,9 @@ export function AddQuizQuestionDialog({
               </div>
 
               <div>
-                <label
-                  htmlFor="bankMarks"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
-                  Marks override (optional)
-                </label>
+                <FieldLabel htmlFor="bankMarks" optional>
+                  Marks override
+                </FieldLabel>
                 <input
                   id="bankMarks"
                   type="number"
@@ -364,12 +362,9 @@ export function AddQuizQuestionDialog({
           ) : (
             <>
               <div>
-                <label
-                  htmlFor="questionText"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="questionText" required>
                   Question text
-                </label>
+                </FieldLabel>
                 <textarea
                   id="questionText"
                   value={values.questionText}
@@ -387,12 +382,9 @@ export function AddQuizQuestionDialog({
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label
-                    htmlFor="questionType"
-                    className="mb-1 block text-sm font-medium text-slate-700"
-                  >
+                  <FieldLabel htmlFor="questionType" required>
                     Type
-                  </label>
+                  </FieldLabel>
                   <select
                     id="questionType"
                     value={normalizeQuestionType(values.questionType)}
@@ -416,12 +408,9 @@ export function AddQuizQuestionDialog({
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="marks"
-                    className="mb-1 block text-sm font-medium text-slate-700"
-                  >
+                  <FieldLabel htmlFor="marks" required>
                     Marks
-                  </label>
+                  </FieldLabel>
                   <input
                     id="marks"
                     type="number"
@@ -440,12 +429,9 @@ export function AddQuizQuestionDialog({
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="estimatedTimeSeconds"
-                    className="mb-1 block text-sm font-medium text-slate-700"
-                  >
+                  <FieldLabel htmlFor="estimatedTimeSeconds" required>
                     Time (seconds)
-                  </label>
+                  </FieldLabel>
                   <input
                     id="estimatedTimeSeconds"
                     type="number"

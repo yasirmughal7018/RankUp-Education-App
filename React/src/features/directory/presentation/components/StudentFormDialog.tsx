@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
   CreateDirectoryStudentInput,
   DirectoryCampus,
@@ -168,12 +169,9 @@ export function StudentFormDialog({
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div>
-            <label
-              htmlFor="student-full-name"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="student-full-name" required>
               Full name
-            </label>
+            </FieldLabel>
             <input
               id="student-full-name"
               type="text"
@@ -188,12 +186,9 @@ export function StudentFormDialog({
           {!isEdit ? (
             <>
               <div>
-                <label
-                  htmlFor="student-username"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="student-username" required>
                   Username
-                </label>
+                </FieldLabel>
                 <input
                   id="student-username"
                   type="text"
@@ -205,12 +200,9 @@ export function StudentFormDialog({
                 />
               </div>
               <div>
-                <label
-                  htmlFor="student-password"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="student-password" required>
                   Password
-                </label>
+                </FieldLabel>
                 <input
                   id="student-password"
                   type="password"
@@ -222,12 +214,9 @@ export function StudentFormDialog({
                 />
               </div>
               <div>
-                <label
-                  htmlFor="student-school"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
+                <FieldLabel htmlFor="student-school" required>
                   School
-                </label>
+                </FieldLabel>
                 <select
                   id="student-school"
                   value={schoolId}
@@ -252,12 +241,9 @@ export function StudentFormDialog({
           )}
 
           <div>
-            <label
-              htmlFor="student-campus"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="student-campus" required>
               Campus
-            </label>
+            </FieldLabel>
             <select
               id="student-campus"
               value={campusId}
@@ -293,12 +279,9 @@ export function StudentFormDialog({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label
-                htmlFor="student-roll"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
+              <FieldLabel htmlFor="student-roll" required>
                 Roll number
-              </label>
+              </FieldLabel>
               <input
                 id="student-roll"
                 type="text"
@@ -310,12 +293,9 @@ export function StudentFormDialog({
               />
             </div>
             <div>
-              <label
-                htmlFor="student-grade"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
+              <FieldLabel htmlFor="student-grade" required>
                 Grade
-              </label>
+              </FieldLabel>
               <input
                 id="student-grade"
                 type="number"
@@ -328,12 +308,9 @@ export function StudentFormDialog({
               />
             </div>
             <div>
-              <label
-                htmlFor="student-section"
-                className="mb-1 block text-sm font-medium text-slate-700"
-              >
+              <FieldLabel htmlFor="student-section" required>
                 Section
-              </label>
+              </FieldLabel>
               <input
                 id="student-section"
                 type="text"
@@ -347,12 +324,9 @@ export function StudentFormDialog({
           </div>
 
           <div>
-            <label
-              htmlFor="student-mobile"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Mobile (optional)
-            </label>
+            <FieldLabel htmlFor="student-mobile" optional>
+              Mobile
+            </FieldLabel>
             <input
               id="student-mobile"
               type="text"

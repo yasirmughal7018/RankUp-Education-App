@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
   DirectorySchool,
   UpsertSchoolInput,
@@ -91,12 +92,9 @@ export function SchoolFormDialog({
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label
-              htmlFor="school-name"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="school-name" required>
               Name
-            </label>
+            </FieldLabel>
             <input
               id="school-name"
               type="text"
@@ -109,12 +107,9 @@ export function SchoolFormDialog({
           </div>
 
           <div>
-            <label
-              htmlFor="school-code"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="school-code" required>
               Code
-            </label>
+            </FieldLabel>
             <input
               id="school-code"
               type="text"

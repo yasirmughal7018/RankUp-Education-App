@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
+import { RequiredMark } from "@/core/components/RequiredMark";
 import { useLookups } from "@/core/hooks/useLookups";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import * as questionApi from "@/features/questions/data/questionApi";
@@ -165,8 +166,7 @@ export function QuestionCreatePage() {
                 New question
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Required fields are marked with{" "}
-                <span className="font-semibold text-rose-600">*</span>.
+                Required fields are marked with <RequiredMark />.
               </p>
             </div>
           </div>

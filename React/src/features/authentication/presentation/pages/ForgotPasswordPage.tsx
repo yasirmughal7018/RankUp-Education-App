@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import { PageHeader } from "@/core/components/PageHeader";
 import * as authApi from "@/features/authentication/data/authApi";
 
@@ -54,12 +55,9 @@ export function ForgotPasswordPage() {
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label
-              htmlFor="username"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="username" required>
               Username
-            </label>
+            </FieldLabel>
             <input
               id="username"
               name="username"

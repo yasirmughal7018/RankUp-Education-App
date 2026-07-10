@@ -6,6 +6,7 @@ import {
   isTrueFalseType,
   normalizeQuestionType,
 } from "@/features/questions/domain/questionTypes";
+import { RequiredMark } from "@/core/components/RequiredMark";
 
 interface QuestionOptionsEditorProps {
   questionType: string;
@@ -79,7 +80,7 @@ export function QuestionOptionsEditor({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">
-            {title} <span className="text-rose-600">*</span>
+            {title} <RequiredMark />
           </h3>
           <p className="mt-1 text-xs text-slate-500">{helper}</p>
         </div>

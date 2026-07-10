@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import { PageHeader } from "@/core/components/PageHeader";
 import * as authApi from "@/features/authentication/data/authApi";
 import type { RegisterAccountRequest } from "@/features/authentication/data/authApi";
@@ -212,9 +213,9 @@ export function RequestAccessPage() {
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="fullName" className="mb-1 block text-sm font-medium text-slate-700">
-              Full name *
-            </label>
+            <FieldLabel htmlFor="fullName" required>
+              Full name
+            </FieldLabel>
             <input
               id="fullName"
               required
@@ -226,9 +227,9 @@ export function RequestAccessPage() {
           </div>
 
           <div>
-            <label htmlFor="mobileNumber" className="mb-1 block text-sm font-medium text-slate-700">
-              Mobile number *
-            </label>
+            <FieldLabel htmlFor="mobileNumber" required>
+              Mobile number
+            </FieldLabel>
             <input
               id="mobileNumber"
               required
@@ -241,9 +242,9 @@ export function RequestAccessPage() {
           </div>
 
           <div>
-            <label htmlFor="emailAddress" className="mb-1 block text-sm font-medium text-slate-700">
-              Email (optional)
-            </label>
+            <FieldLabel htmlFor="emailAddress" optional>
+              Email
+            </FieldLabel>
             <input
               id="emailAddress"
               type="email"
@@ -255,9 +256,9 @@ export function RequestAccessPage() {
           </div>
 
           <div>
-            <label htmlFor="cnic" className="mb-1 block text-sm font-medium text-slate-700">
-              CNIC (optional)
-            </label>
+            <FieldLabel htmlFor="cnic" optional>
+              CNIC
+            </FieldLabel>
             <input
               id="cnic"
               disabled={isSubmitting}
@@ -269,9 +270,9 @@ export function RequestAccessPage() {
           </div>
 
           <div>
-            <label htmlFor="userType" className="mb-1 block text-sm font-medium text-slate-700">
-              Account type *
-            </label>
+            <FieldLabel htmlFor="userType" required>
+              Account type
+            </FieldLabel>
             <select
               id="userType"
               required
@@ -296,12 +297,13 @@ export function RequestAccessPage() {
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label
+                  <FieldLabel
                     htmlFor="schoolId"
-                    className="mb-1 block text-sm font-medium text-slate-700"
+                    required={isStudent}
+                    optional={isTeacher}
                   >
-                    School{isStudent ? " *" : " (optional)"}
-                  </label>
+                    School
+                  </FieldLabel>
                   <select
                     id="schoolId"
                     required={isStudent}
@@ -335,12 +337,13 @@ export function RequestAccessPage() {
                 </div>
 
                 <div>
-                  <label
+                  <FieldLabel
                     htmlFor="campusId"
-                    className="mb-1 block text-sm font-medium text-slate-700"
+                    required={isStudent}
+                    optional={isTeacher}
                   >
-                    Campus{isStudent ? " *" : " (optional)"}
-                  </label>
+                    Campus
+                  </FieldLabel>
                   <select
                     id="campusId"
                     required={isStudent}
@@ -372,14 +375,13 @@ export function RequestAccessPage() {
               </div>
 
               <div>
-                <label
+                <FieldLabel
                   htmlFor="rollNumberTeacherCode"
-                  className="mb-1 block text-sm font-medium text-slate-700"
+                  required={isStudent}
+                  optional={isTeacher}
                 >
-                  {isTeacher
-                    ? "Teacher code (optional)"
-                    : "Roll number *"}
-                </label>
+                  {isTeacher ? "Teacher code" : "Roll number"}
+                </FieldLabel>
                 <input
                   id="rollNumberTeacherCode"
                   required={isStudent}
@@ -398,9 +400,9 @@ export function RequestAccessPage() {
           ) : null}
 
           <div>
-            <label htmlFor="reasonMessage" className="mb-1 block text-sm font-medium text-slate-700">
-              Reason (optional)
-            </label>
+            <FieldLabel htmlFor="reasonMessage" optional>
+              Reason
+            </FieldLabel>
             <textarea
               id="reasonMessage"
               rows={3}

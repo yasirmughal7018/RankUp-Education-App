@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -154,9 +155,9 @@ export function AssignQuizDialog({
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="mode" className="mb-1 block text-sm font-medium text-slate-700">
+            <FieldLabel htmlFor="mode" required>
               Assignment mode
-            </label>
+            </FieldLabel>
             <select
               id="mode"
               value={mode}
@@ -271,9 +272,9 @@ export function AssignQuizDialog({
 
           {mode === "group" ? (
             <div>
-              <label htmlFor="groupId" className="mb-1 block text-sm font-medium text-slate-700">
+              <FieldLabel htmlFor="groupId" required>
                 Group ID
-              </label>
+              </FieldLabel>
               <input
                 id="groupId"
                 type="number"
@@ -303,9 +304,9 @@ export function AssignQuizDialog({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label htmlFor="startAt" className="mb-1 block text-sm font-medium text-slate-700">
+              <FieldLabel htmlFor="startAt" required>
                 Start
-              </label>
+              </FieldLabel>
               <input
                 id="startAt"
                 type="datetime-local"
@@ -318,9 +319,9 @@ export function AssignQuizDialog({
             </div>
 
             <div>
-              <label htmlFor="endAt" className="mb-1 block text-sm font-medium text-slate-700">
+              <FieldLabel htmlFor="endAt" required>
                 End
-              </label>
+              </FieldLabel>
               <input
                 id="endAt"
                 type="datetime-local"
@@ -334,12 +335,9 @@ export function AssignQuizDialog({
           </div>
 
           <div>
-            <label
-              htmlFor="allowedAttempts"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
+            <FieldLabel htmlFor="allowedAttempts" required>
               Allowed attempts
-            </label>
+            </FieldLabel>
             <input
               id="allowedAttempts"
               type="number"

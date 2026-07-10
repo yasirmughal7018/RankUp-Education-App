@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import {
@@ -39,15 +40,13 @@ function RequiredLabel({
   children: ReactNode;
 }) {
   return (
-    <label
+    <FieldLabel
       htmlFor={htmlFor}
+      required
       className="mb-1.5 flex items-center gap-1 text-sm font-semibold text-slate-800"
     >
       {children}
-      <span className="text-rose-600" title="Required">
-        *
-      </span>
-    </label>
+    </FieldLabel>
   );
 }
 
@@ -59,13 +58,13 @@ function OptionalLabel({
   children: ReactNode;
 }) {
   return (
-    <label
+    <FieldLabel
       htmlFor={htmlFor}
+      optional
       className="mb-1.5 block text-sm font-medium text-slate-600"
     >
       {children}
-      <span className="ml-1 text-xs font-normal text-slate-400">(optional)</span>
-    </label>
+    </FieldLabel>
   );
 }
 
