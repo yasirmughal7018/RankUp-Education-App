@@ -651,6 +651,40 @@ class _AccountAccessRequestSheetState
     super.dispose();
   }
 
+  bool get _isParent => _userType == 'Parent';
+  bool get _isStudent => _userType == 'Student';
+  bool get _isTeacher => _userType == 'Teacher';
+  bool get _showSchoolFields => _isStudent || _isTeacher;
+
+  String get _helperDescription {
+    if (_isParent) {
+      return 'Parent requests go to Portal Admin. School, campus, and roll '
+          'number are not required.';
+    }
+    if (_isTeacher) {
+      return 'School, campus, and teacher code are optional for teachers. '
+          'Empty school → Portal Admin; selected school → School Admin + '
+          'Portal Admin.';
+    }
+    return 'Students must select school and campus and enter a roll number. '
+        'The request goes to School Admin and Portal Admin.';
+  }
+
+  void _onUserTypeChanged(String? value) {
+    if (value == null) {
+      return;
+    }
+    setState(() {
+      _userType = value;
+      if (value == 'Parent') {
+        _schoolId = null;
+        _campusId = null;
+        _campuses = const [];
+        _rollNumberTeacherCodeController.clear();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
@@ -669,11 +703,7 @@ class _AccountAccessRequestSheetState
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Leave School empty to send the request to Portal Admin. '
-                'If you select a School, both School Admin and Portal Admin '
-                'can approve it.',
-              ),
+              Text(_helperDescription),
               if (_optionsError != null) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -730,7 +760,7 @@ class _AccountAccessRequestSheetState
               DropdownButtonFormField<String>(
                 initialValue: _userType,
                 decoration: const InputDecoration(
-                  labelText: 'User Type *',
+                  labelText: 'Account Type *',
                   prefixIcon: Icon(Icons.group_outlined),
                 ),
                 items: const [
@@ -738,89 +768,115 @@ class _AccountAccessRequestSheetState
                   DropdownMenuItem(value: 'Parent', child: Text('Parent')),
                   DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
                 ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _userType = value);
-                  }
-                },
+                onChanged: _onUserTypeChanged,
               ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int?>(
-                key: ValueKey('school-$_schoolId-${_schools.length}'),
-                initialValue: _schoolId,
-                decoration: InputDecoration(
-                  labelText: _loadingSchools
-                      ? 'School (loading...)'
-                      : 'School',
-                  prefixIcon: const Icon(Icons.school_outlined),
-                  helperText:
-                      'Empty → Portal Admin only. Selected → School Admin + Portal Admin.',
-                ),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    child: Text('No school (Portal Admin)'),
+              if (_showSchoolFields) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: ValueKey(
+                    'school-$_userType-$_schoolId-${_schools.length}',
                   ),
-                  ..._schools.map(
-                    (school) => DropdownMenuItem<int?>(
-                      value: school.id,
-                      child: Text(school.name),
+                  initialValue: _schoolId,
+                  decoration: InputDecoration(
+                    labelText: _loadingSchools
+                        ? 'School (loading...)'
+                        : _isStudent
+                            ? 'School *'
+                            : 'School (optional)',
+                    prefixIcon: const Icon(Icons.school_outlined),
+                    helperText: _isTeacher
+                        ? 'Empty → Portal Admin only. Selected → School Admin + Portal Admin.'
+                        : null,
+                  ),
+                  items: [
+                    DropdownMenuItem<int?>(
+                      child: Text(
+                        _isTeacher
+                            ? 'No school (Portal Admin)'
+                            : 'Select school',
+                      ),
                     ),
-                  ),
-                ],
-                onChanged: _loadingSchools
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _schoolId = value;
-                          _campusId = null;
-                          _campuses = const [];
-                        });
-                        if (value != null) {
-                          _loadCampuses(value);
-                        }
-                      },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int?>(
-                key: ValueKey(
-                  'campus-$_schoolId-$_campusId-${_campuses.length}',
-                ),
-                initialValue: _campusId,
-                decoration: InputDecoration(
-                  labelText: _loadingCampuses
-                      ? 'Campus (loading...)'
-                      : 'Campus',
-                  prefixIcon: const Icon(Icons.location_city_outlined),
-                ),
-                items: [
-                  DropdownMenuItem<int?>(
-                    child: Text(
-                      _schoolId == null
-                          ? 'Select a school first'
-                          : 'No campus',
+                    ..._schools.map(
+                      (school) => DropdownMenuItem<int?>(
+                        value: school.id,
+                        child: Text(school.name),
+                      ),
                     ),
-                  ),
-                  ..._campuses.map(
-                    (campus) => DropdownMenuItem<int?>(
-                      value: campus.id,
-                      child: Text(campus.name),
-                    ),
-                  ),
-                ],
-                onChanged: _schoolId == null || _loadingCampuses
-                    ? null
-                    : (value) => setState(() => _campusId = value),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _rollNumberTeacherCodeController,
-                decoration: const InputDecoration(
-                  labelText: 'Roll number / teacher code (Optional)',
-                  prefixIcon: Icon(Icons.badge_outlined),
+                  ],
+                  validator: (value) {
+                    if (_isStudent && value == null) {
+                      return 'School is required';
+                    }
+                    return null;
+                  },
+                  onChanged: _loadingSchools
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _schoolId = value;
+                            _campusId = null;
+                            _campuses = const [];
+                          });
+                          if (value != null) {
+                            _loadCampuses(value);
+                          }
+                        },
                 ),
-                textInputAction: TextInputAction.next,
-                onTap: _showSoftKeyboard,
-              ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: ValueKey(
+                    'campus-$_userType-$_schoolId-$_campusId-${_campuses.length}',
+                  ),
+                  initialValue: _campusId,
+                  decoration: InputDecoration(
+                    labelText: _loadingCampuses
+                        ? 'Campus (loading...)'
+                        : _isStudent
+                            ? 'Campus *'
+                            : 'Campus (optional)',
+                    prefixIcon: const Icon(Icons.location_city_outlined),
+                  ),
+                  items: [
+                    DropdownMenuItem<int?>(
+                      child: Text(
+                        _schoolId == null
+                            ? 'Select a school first'
+                            : _isTeacher
+                                ? 'No campus'
+                                : 'Select campus',
+                      ),
+                    ),
+                    ..._campuses.map(
+                      (campus) => DropdownMenuItem<int?>(
+                        value: campus.id,
+                        child: Text(campus.name),
+                      ),
+                    ),
+                  ],
+                  validator: (value) {
+                    if (_isStudent && value == null) {
+                      return 'Campus is required';
+                    }
+                    return null;
+                  },
+                  onChanged: _schoolId == null || _loadingCampuses
+                      ? null
+                      : (value) => setState(() => _campusId = value),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _rollNumberTeacherCodeController,
+                  decoration: InputDecoration(
+                    labelText: _isTeacher
+                        ? 'Teacher code (optional)'
+                        : 'Roll number *',
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                  ),
+                  validator: _isStudent ? _required : null,
+                  textInputAction: TextInputAction.next,
+                  onTap: _showSoftKeyboard,
+                ),
+              ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: _reasonMessageController,
@@ -850,17 +906,20 @@ class _AccountAccessRequestSheetState
       return;
     }
 
+    final isParent = _userType == 'Parent';
     Navigator.of(context).pop(
       _AccountAccessRequest(
         fullName: _fullNameController.text.trim(),
         mobileNumber: _mobileNumberController.text.trim(),
         emailAddress: _emailAddressController.text.trim(),
         userType: _userType,
-        rollNumberTeacherCode: _rollNumberTeacherCodeController.text.trim(),
+        rollNumberTeacherCode: isParent
+            ? ''
+            : _rollNumberTeacherCodeController.text.trim(),
         reasonMessage: _reasonMessageController.text.trim(),
         cnic: _cnicController.text.trim(),
-        schoolId: _schoolId,
-        campusId: _schoolId == null ? null : _campusId,
+        schoolId: isParent ? null : _schoolId,
+        campusId: isParent || _schoolId == null ? null : _campusId,
       ),
     );
   }

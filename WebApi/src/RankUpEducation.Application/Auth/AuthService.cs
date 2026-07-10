@@ -200,12 +200,20 @@ public sealed class AuthService : IAuthService
         }
 
         var role = ParseRegistrationRole(request.UserType);
-        var schoolId = request.SchoolId;
-        var campusId = schoolId.HasValue ? request.CampusId : null;
+
+        // Parent requests never carry school/campus/roll. Teacher fields are optional.
+        // Student requires school, campus, and roll number (enforced in ValidateRegistration).
+        var schoolId = role == UserRole.Parent ? null : request.SchoolId;
+        var campusId = role == UserRole.Parent
+            ? null
+            : schoolId.HasValue ? request.CampusId : null;
+        var rollNumberTeacherCode = role == UserRole.Parent
+            ? null
+            : request.RollNumberTeacherCode;
 
         // AdminTarget:
-        // - School Admin → School Admin + Portal Admin can approve
-        // - Portal Admin → Portal Admin only
+        // - School selected → School Admin + Portal Admin can approve
+        // - No school → Portal Admin only
         var adminTarget = schoolId.HasValue ? "School Admin" : "Portal Admin";
 
         var user = User.CreateRegistrationRequest(
@@ -220,7 +228,7 @@ public sealed class AuthService : IAuthService
             campusId,
             request.ReasonMessage,
             adminTarget,
-            request.RollNumberTeacherCode);
+            rollNumberTeacherCode);
 
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -599,14 +607,56 @@ public sealed class AuthService : IAuthService
             errors.Add("Mobile number is required.");
         }
 
+        UserRole? role = null;
         if (string.IsNullOrWhiteSpace(request.UserType))
         {
             errors.Add("User type is required.");
         }
-
-        if (request.CampusId.HasValue && !request.SchoolId.HasValue)
+        else if (!Enum.TryParse<UserRole>(request.UserType.AsTrimmedString(), true, out var parsedRole)
+            || !AllowedRegistrationRoles.Contains(parsedRole.ToString(), StringComparer.OrdinalIgnoreCase))
         {
-            errors.Add("Campus requires a school to be selected.");
+            errors.Add("User type must be Student, Parent, or Teacher.");
+        }
+        else
+        {
+            role = parsedRole;
+        }
+
+        if (role == UserRole.Parent)
+        {
+            if (request.SchoolId.HasValue || request.CampusId.HasValue)
+            {
+                errors.Add("School and campus are not used for Parent account requests.");
+            }
+
+            if (request.RollNumberTeacherCode.HasTrimmedText())
+            {
+                errors.Add("Roll number / teacher code is not used for Parent account requests.");
+            }
+        }
+        else if (role == UserRole.Student)
+        {
+            if (!request.SchoolId.HasValue || request.SchoolId.Value <= 0)
+            {
+                errors.Add("School is required for Student account requests.");
+            }
+
+            if (!request.CampusId.HasValue || request.CampusId.Value <= 0)
+            {
+                errors.Add("Campus is required for Student account requests.");
+            }
+
+            if (!request.RollNumberTeacherCode.HasTrimmedText())
+            {
+                errors.Add("Roll number is required for Student account requests.");
+            }
+        }
+        else if (role == UserRole.Teacher)
+        {
+            if (request.CampusId.HasValue && !request.SchoolId.HasValue)
+            {
+                errors.Add("Campus requires a school to be selected.");
+            }
         }
 
         if (errors.Count > 0)

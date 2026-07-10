@@ -1,4 +1,5 @@
 using RankUpEducation.Common.Utilities;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Students;
@@ -11,12 +12,12 @@ public sealed class StudentGroup : BaseEntity
         Description = string.Empty;
     }
 
-    public StudentGroup(long referralId, string groupName, string description, string creatorRole)
+    public StudentGroup(long referralId, string groupName, string description, UserRole creatorRole)
     {
         ReferralId = referralId;
         GroupName = groupName.AsTrimmedString();
         Description = description.AsTrimmedString();
-        CreatorRole = creatorRole.AsLowercase();
+        CreatorRole = creatorRole;
     }
 
     public long ReferralId { get; private set; }
@@ -26,5 +27,6 @@ public sealed class StudentGroup : BaseEntity
     public bool IsActive { get; private set; } = true;
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly UpdatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
-    public string? CreatorRole { get; private set; }
+    /// <summary>Lookup id for UserRole (Teacher/Parent) of the group owner.</summary>
+    public UserRole? CreatorRole { get; private set; }
 }

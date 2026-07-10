@@ -342,7 +342,7 @@ public sealed class QuizAssignService : IQuizAssignService
         var memberIds = await _studentScope.GetGroupMemberStudentIdsAsync(
             request.GroupId.Value,
             scope.UserId,
-            groupOwnerRole.ToString().ToLowerInvariant(),
+            groupOwnerRole,
             cancellationToken);
 
         if (memberIds.Count == 0)

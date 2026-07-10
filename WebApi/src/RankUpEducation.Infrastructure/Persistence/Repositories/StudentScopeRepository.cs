@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
@@ -96,7 +97,7 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
     public async Task<IReadOnlyList<long>> GetGroupMemberStudentIdsAsync(
         long groupId,
         long ownerUserId,
-        string creatorRole,
+        UserRole creatorRole,
         CancellationToken cancellationToken)
     {
         var groupExists = await _dbContext.StudentGroups.AsNoTracking()

@@ -85,24 +85,6 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         """;
 
     private const string UserRoleSupportSql = """
-        -- Align stored roles with UserRole lookup names (PortalAdmin replaces SuperAdmin).
-        UPDATE public.app_users
-        SET role = 'portaladmin'
-        WHERE lower(role) = 'superadmin';
-
-        ALTER TABLE public.app_users
-            DROP CONSTRAINT IF EXISTS chk_app_users_role;
-
-        ALTER TABLE public.app_users
-            ADD CONSTRAINT chk_app_users_role
-            CHECK (role = ANY (ARRAY[
-                'portaladmin'::text,
-                'schooladmin'::text,
-                'teacher'::text,
-                'student'::text,
-                'parent'::text
-            ]));
-
         -- Ensure UserRole lookup rows exist (IDs match Domain.UserRole).
         INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
         SELECT seed.id, seed.name, 'UserRole', seed.order_by, TRUE, NULL
@@ -120,6 +102,100 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             WHERE existing.id = seed.id
                OR (existing.type = 'UserRole' AND lower(existing.name) = lower(seed.name))
         );
+
+        -- Convert app_users.role from text names to lookup ids (smallint).
+        DO $migrate$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_users'
+                  AND column_name = 'role'
+                  AND data_type = 'text'
+            ) THEN
+                ALTER TABLE public.student_groups
+                    DROP CONSTRAINT IF EXISTS student_groups_refral_id_and_role_fkey;
+                ALTER TABLE public.student_groups
+                    DROP CONSTRAINT IF EXISTS chk_creator_role_type;
+                ALTER TABLE public.app_users
+                    DROP CONSTRAINT IF EXISTS chk_app_users_role;
+                ALTER TABLE public.app_users
+                    DROP CONSTRAINT IF EXISTS app_users_id_role_key;
+
+                ALTER TABLE public.app_users
+                    ADD COLUMN IF NOT EXISTS role_id int2 NULL;
+
+                UPDATE public.app_users
+                SET role_id = CASE lower(role)
+                    WHEN 'portaladmin' THEN 2010
+                    WHEN 'superadmin' THEN 2010
+                    WHEN 'schooladmin' THEN 2011
+                    WHEN 'student' THEN 2012
+                    WHEN 'teacher' THEN 2013
+                    WHEN 'parent' THEN 2014
+                    ELSE NULL
+                END
+                WHERE role_id IS NULL;
+
+                ALTER TABLE public.app_users
+                    DROP COLUMN role;
+
+                ALTER TABLE public.app_users
+                    RENAME COLUMN role_id TO role;
+
+                ALTER TABLE public.app_users
+                    ALTER COLUMN role SET NOT NULL;
+
+                ALTER TABLE public.app_users
+                    ADD CONSTRAINT app_users_id_role_key UNIQUE (id, role);
+
+                ALTER TABLE public.app_users
+                    ADD CONSTRAINT app_users_role_fkey
+                    FOREIGN KEY (role) REFERENCES public.lookups(id);
+
+                ALTER TABLE public.app_users
+                    ADD CONSTRAINT chk_app_users_role
+                    CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014]::int2[]));
+
+                -- student_groups.creator_role: text -> lookup id
+                IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'student_groups'
+                      AND column_name = 'creator_role'
+                      AND data_type IN ('character varying', 'text')
+                ) THEN
+                    ALTER TABLE public.student_groups
+                        ADD COLUMN IF NOT EXISTS creator_role_id int2 NULL;
+
+                    UPDATE public.student_groups
+                    SET creator_role_id = CASE lower(creator_role)
+                        WHEN 'teacher' THEN 2013
+                        WHEN 'parent' THEN 2014
+                        ELSE NULL
+                    END
+                    WHERE creator_role_id IS NULL;
+
+                    ALTER TABLE public.student_groups
+                        DROP COLUMN creator_role;
+
+                    ALTER TABLE public.student_groups
+                        RENAME COLUMN creator_role_id TO creator_role;
+                END IF;
+
+                ALTER TABLE public.student_groups
+                    ADD CONSTRAINT chk_creator_role_type
+                    CHECK (creator_role IS NULL OR creator_role = ANY (ARRAY[2013, 2014]::int2[]));
+
+                ALTER TABLE public.student_groups
+                    ADD CONSTRAINT student_groups_refral_id_and_role_fkey
+                    FOREIGN KEY (referral_id, creator_role)
+                    REFERENCES public.app_users(id, role);
+            END IF;
+        END
+        $migrate$;
         """;
 
     private const string RegistrationSupportSql = """

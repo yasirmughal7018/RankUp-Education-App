@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Lookups;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Quizzes;
@@ -162,7 +163,12 @@ public sealed class StudentGroupConfiguration : IEntityTypeConfiguration<Student
         builder.Property(group => group.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(group => group.CreatedDate).HasColumnName("created_date");
         builder.Property(group => group.UpdatedDate).HasColumnName("updated_date");
-        builder.Property(group => group.CreatorRole).HasColumnName("creator_role").HasMaxLength(50);
+        builder.Property(group => group.CreatorRole)
+            .HasColumnName("creator_role")
+            .HasColumnType("smallint")
+            .HasConversion(
+                role => role.HasValue ? (short?)role.Value : null,
+                value => value.HasValue ? (UserRole?)value.Value : null);
     }
 }
 
