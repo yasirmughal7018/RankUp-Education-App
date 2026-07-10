@@ -25,6 +25,7 @@ import { ParentChildResultPage } from "@/features/parent/presentation/pages/Pare
 import { ParentChildrenPage } from "@/features/parent/presentation/pages/ParentChildrenPage";
 import { QuestionManageRoute } from "@/features/questions/presentation/components/QuestionManageRoute";
 import { QuestionCreatePage } from "@/features/questions/presentation/pages/QuestionCreatePage";
+import { QuestionSessionReviewPage } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
 import { QuestionDetailPage } from "@/features/questions/presentation/pages/QuestionDetailPage";
 import { QuestionEditPage } from "@/features/questions/presentation/pages/QuestionEditPage";
 import { QuestionsPage } from "@/features/questions/presentation/pages/QuestionsPage";
@@ -97,6 +98,10 @@ export function AppRouter() {
             <Route element={<QuestionManageRoute />}>
               <Route path="questions" element={<QuestionsPage />} />
               <Route path="questions/new" element={<QuestionCreatePage />} />
+              <Route
+                path="questions/new/review"
+                element={<QuestionSessionReviewPage />}
+              />
               <Route path="questions/:questionId" element={<QuestionDetailPage />} />
               <Route
                 path="questions/:questionId/edit"

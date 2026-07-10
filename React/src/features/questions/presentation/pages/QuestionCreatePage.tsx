@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
+import { useLookups } from "@/core/hooks/useLookups";
+import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import * as questionApi from "@/features/questions/data/questionApi";
 import {
   createEmptyQuestionForm,
@@ -14,31 +16,80 @@ import {
   StatusBadge,
   getQuestionStatusTone,
 } from "@/features/questions/presentation/components/StatusBadge";
+import type { QuestionSessionReviewState } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
+
+interface CreatePageRestoreState {
+  savedQuestions?: QuestionDetail[];
+  formValues?: QuestionFormValues;
+  reviewIndex?: number;
+}
+
+function lookupName(
+  items: { id: number; name: string }[] | undefined,
+  id: number | null | undefined,
+  fallbackLabel: string,
+): string | null {
+  if (!id || id <= 0) {
+    return null;
+  }
+  return items?.find((item) => item.id === id)?.name ?? `${fallbackLabel} #${id}`;
+}
 
 export function QuestionCreatePage() {
   const navigate = useNavigate();
-  const [formValues, setFormValues] = useState(createEmptyQuestionForm);
+  const location = useLocation();
+  const restoreState = location.state as CreatePageRestoreState | null;
+
+  const [formValues, setFormValues] = useState<QuestionFormValues>(
+    () => restoreState?.formValues ?? createEmptyQuestionForm(),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [savedQuestions, setSavedQuestions] = useState<QuestionDetail[]>([]);
-  const [reviewIndex, setReviewIndex] = useState(0);
+  const [savedQuestions, setSavedQuestions] = useState<QuestionDetail[]>(
+    () => restoreState?.savedQuestions ?? [],
+  );
+  const [reviewIndex, setReviewIndex] = useState(
+    () => restoreState?.reviewIndex ?? 0,
+  );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!restoreState) {
+      return;
+    }
+    navigate(location.pathname, { replace: true, state: null });
+    // Clear one-shot restore payload after applying it to local state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount when returning from session review
+  }, []);
 
   const reviewing = savedQuestions[reviewIndex] ?? null;
   const hasSaved = savedQuestions.length > 0;
 
+  const { data: classes = [] } = useLookups(LOOKUP_TYPES.CLASS);
+  const { data: subjects = [] } = useLookups(LOOKUP_TYPES.SUBJECT);
+  const { data: topics = [] } = useLookups(
+    LOOKUP_TYPES.TOPIC,
+    formValues.subjectId > 0 ? formValues.subjectId : null,
+  );
+
   const scopeSummary = useMemo(() => {
     const parts = [
-      formValues.classId > 0 ? `Class #${formValues.classId}` : null,
-      formValues.subjectId > 0 ? `Subject #${formValues.subjectId}` : null,
-      formValues.topicId ? `Topic #${formValues.topicId}` : null,
+      lookupName(classes, formValues.classId, "Class"),
+      lookupName(subjects, formValues.subjectId, "Subject"),
+      lookupName(topics, formValues.topicId, "Topic"),
     ].filter(Boolean);
-    return parts.length > 0 ? parts.join(" · ") : "Choose class and subject first";
-  }, [formValues.classId, formValues.subjectId, formValues.topicId]);
+    return parts.length > 0
+      ? parts.join(" · ")
+      : "Choose class and subject first";
+  }, [
+    classes,
+    subjects,
+    topics,
+    formValues.classId,
+    formValues.subjectId,
+    formValues.topicId,
+  ]);
 
-  async function saveQuestion(
-    values: QuestionFormValues,
-    { continueBatch }: { continueBatch: boolean },
-  ) {
+  async function saveQuestion(values: QuestionFormValues) {
     setIsSubmitting(true);
     setSuccessMessage(null);
     try {
@@ -50,19 +101,26 @@ export function QuestionCreatePage() {
       });
 
       setFormValues(resetQuestionContent(values));
-
-      if (continueBatch) {
-        setSuccessMessage(
-          `Saved question #${created.questionId}. Class / Subject / Topic kept — add the next one.`,
-        );
-      } else {
-        setSuccessMessage(
-          `Question #${created.questionId} saved. Review it on the right, or keep adding more.`,
-        );
-      }
+      setSuccessMessage(
+        `Saved question #${created.questionId}. Class / Subject / Topic kept — add the next one.`,
+      );
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function openSessionReview() {
+    if (!hasSaved) {
+      return;
+    }
+
+    navigate("/questions/new/review", {
+      state: {
+        questions: savedQuestions,
+        index: reviewIndex,
+        formValues,
+      } satisfies QuestionSessionReviewState,
+    });
   }
 
   return (
@@ -99,7 +157,7 @@ export function QuestionCreatePage() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.7fr)]">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
@@ -117,14 +175,10 @@ export function QuestionCreatePage() {
             key={`batch-${savedQuestions.length}`}
             initialValues={formValues}
             lockScope
-            submitLabel="Save & add another"
-            secondarySubmitLabel="Save question"
+            submitLabel="Save & Add"
             isSubmitting={isSubmitting}
             onValuesChange={setFormValues}
-            onSubmit={(values) => saveQuestion(values, { continueBatch: true })}
-            onSecondarySubmit={(values) =>
-              saveQuestion(values, { continueBatch: false })
-            }
+            onSubmit={saveQuestion}
             onCancel={() => navigate("/questions")}
           />
         </div>
@@ -201,12 +255,13 @@ export function QuestionCreatePage() {
                   >
                     Previous
                   </button>
-                  <Link
-                    to={`/questions/${reviewing.questionId}`}
+                  <button
+                    type="button"
+                    onClick={openSessionReview}
                     className="text-xs font-semibold text-brand-700 hover:underline"
                   >
                     Open full detail
-                  </Link>
+                  </button>
                   <button
                     type="button"
                     disabled={reviewIndex >= savedQuestions.length - 1}
@@ -229,7 +284,9 @@ export function QuestionCreatePage() {
                             : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                         }`}
                       >
-                        <span className="font-semibold">#{question.questionId}</span>
+                        <span className="font-semibold">
+                          #{question.questionId}
+                        </span>
                         <span className="ml-2 line-clamp-1 opacity-90">
                           {question.questionText}
                         </span>
@@ -247,10 +304,13 @@ export function QuestionCreatePage() {
               <li>1. Set Class, Subject, Topic, and Difficulty once.</li>
               <li>2. Choose the question type — answer UI changes with it.</li>
               <li>
-                3. Use <strong className="text-white">Save &amp; add another</strong>{" "}
-                to keep the same scope and clear only the question fields.
+                3. Use <strong className="text-white">Save &amp; Add</strong> to
+                keep the same scope and clear only the question fields.
               </li>
-              <li>4. Review each saved question in the panel — no auto redirect.</li>
+              <li>
+                4. Open full detail to browse every question saved in this
+                session.
+              </li>
             </ul>
           </div>
         </aside>
