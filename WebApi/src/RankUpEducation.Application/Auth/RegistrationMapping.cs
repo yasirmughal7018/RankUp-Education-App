@@ -21,7 +21,6 @@ internal static class RegistrationMapping
             user.CreatedDate,
             user.ReasonMessage,
             user.AdminTarget,
-            user.SchoolCampusName,
-            user.StudentOrEmployeeId);
+            user.RollNumberTeacherCode);
     }
 }

@@ -35,11 +35,11 @@ public sealed class SchoolConfiguration : IEntityTypeConfiguration<School>
         builder.Property(school => school.Code).HasColumnName("code").HasMaxLength(100).IsRequired();
         builder.HasIndex(school => school.Code).IsUnique();
         builder.Property(school => school.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        builder.Property(school => school.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
         builder.Ignore(school => school.CreatedBy);
         builder.Ignore(school => school.CreatedAt);
         builder.Ignore(school => school.UpdatedAt);
         builder.Ignore(school => school.UpdatedBy);
-        builder.Ignore(school => school.IsDeleted);
         builder.Ignore(school => school.DeletedAt);
         builder.Ignore(school => school.DeletedBy);
     }
@@ -58,11 +58,11 @@ public sealed class CampusConfiguration : IEntityTypeConfiguration<Campus>
         builder.Property(campus => campus.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(campus => campus.CreatedDate).HasColumnName("created_date");
         builder.Property(campus => campus.ModifiedDate).HasColumnName("modified_date");
+        builder.Property(campus => campus.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
         builder.Ignore(campus => campus.CreatedAt);
         builder.Ignore(campus => campus.UpdatedAt);
         builder.Ignore(campus => campus.CreatedBy);
         builder.Ignore(campus => campus.UpdatedBy);
-        builder.Ignore(campus => campus.IsDeleted);
         builder.Ignore(campus => campus.DeletedAt);
         builder.Ignore(campus => campus.DeletedBy);
     }
@@ -75,10 +75,6 @@ public sealed class StudentConfiguration : IEntityTypeConfiguration<Student>
         builder.ToTable("app_user_students");
         builder.HasKey(student => student.Id);
         builder.Property(student => student.Id).HasColumnName("student_id").ValueGeneratedNever();
-        builder.Property(student => student.SchoolId).HasColumnName("school_id").IsRequired();
-        builder.Property(student => student.CampusId).HasColumnName("campus_id").IsRequired();
-        builder.Property(student => student.StudentRollNumber).HasColumnName("student_roll_number").HasMaxLength(50).IsRequired();
-        builder.Property(student => student.Cnic).HasColumnName("cnic").HasMaxLength(13);
         builder.Property(student => student.Grade).HasColumnName("grade").IsRequired();
         builder.Property(student => student.Section).HasColumnName("section").IsRequired();
         builder.Property(student => student.MobileNumber).HasColumnName("mobile_number").HasMaxLength(40);
@@ -105,7 +101,6 @@ public sealed class ParentConfiguration : IEntityTypeConfiguration<Parent>
         builder.ToTable("app_user_parents");
         builder.HasKey(parent => parent.Id);
         builder.Property(parent => parent.Id).HasColumnName("parent_id").ValueGeneratedNever();
-        builder.Property(parent => parent.Cnic).HasColumnName("cnic").HasMaxLength(13);
         builder.Property(parent => parent.MobileNumber).HasColumnName("mobile_number").HasMaxLength(40);
         builder.Property(parent => parent.ModifiedDate).HasColumnName("modified_date");
         builder.Ignore(parent => parent.CreatedAt);
@@ -125,10 +120,6 @@ public sealed class TeacherConfiguration : IEntityTypeConfiguration<Teacher>
         builder.ToTable("app_user_teachers");
         builder.HasKey(teacher => teacher.Id);
         builder.Property(teacher => teacher.Id).HasColumnName("teacher_id").ValueGeneratedNever();
-        builder.Property(teacher => teacher.SchoolId).HasColumnName("school_id").IsRequired();
-        builder.Property(teacher => teacher.CampusId).HasColumnName("campus_id").IsRequired();
-        builder.Property(teacher => teacher.TeacherCode).HasColumnName("teacher_code").HasMaxLength(50).IsRequired();
-        builder.Property(teacher => teacher.Cnic).HasColumnName("cnic").HasMaxLength(13);
         builder.Property(teacher => teacher.MobileNumber).HasColumnName("mobile_number").HasMaxLength(40);
         builder.Property(teacher => teacher.ModifiedDate).HasColumnName("modified_date");
         builder.Ignore(teacher => teacher.CreatedAt);

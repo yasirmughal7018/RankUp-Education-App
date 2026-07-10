@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import * as authApi from "@/features/authentication/data/authApi";
@@ -8,17 +8,6 @@ const inputClassName =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
 
 const USER_TYPES = ["Student", "Parent", "Teacher"] as const;
-const ADMIN_TARGETS = ["School Admin", "Portal Admin"] as const;
-
-function parseOptionalId(value: string): number | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
 export function RequestAccessPage() {
   const [form, setForm] = useState({
@@ -27,13 +16,15 @@ export function RequestAccessPage() {
     emailAddress: "",
     cnic: "",
     userType: "Student" as RegisterAccountRequest["userType"],
-    schoolCampusName: "",
     schoolId: "",
     campusId: "",
-    studentOrEmployeeId: "",
-    adminTarget: "School Admin",
+    rollNumberTeacherCode: "",
     reasonMessage: "",
   });
+  const [schools, setSchools] = useState<authApi.RegistrationSchoolOption[]>([]);
+  const [campuses, setCampuses] = useState<authApi.RegistrationCampusOption[]>([]);
+  const [isLoadingSchools, setIsLoadingSchools] = useState(true);
+  const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -42,11 +33,72 @@ export function RequestAccessPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingSchools(true);
+    void authApi
+      .listRegistrationSchools()
+      .then((items) => {
+        if (!cancelled) {
+          setSchools(items);
+        }
+      })
+      .catch((caught: { message?: string }) => {
+        if (!cancelled) {
+          setError(caught.message || "Unable to load schools.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingSchools(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const schoolId = Number(form.schoolId);
+    if (!form.schoolId || !Number.isFinite(schoolId)) {
+      setCampuses([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingCampuses(true);
+    void authApi
+      .listRegistrationCampuses(schoolId)
+      .then((items) => {
+        if (!cancelled) {
+          setCampuses(items);
+        }
+      })
+      .catch((caught: { message?: string }) => {
+        if (!cancelled) {
+          setError(caught.message || "Unable to load campuses.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingCampuses(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.schoolId]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSuccessMessage(null);
     setIsSubmitting(true);
+
+    const schoolId = form.schoolId ? Number(form.schoolId) : null;
+    const campusId = form.campusId ? Number(form.campusId) : null;
 
     try {
       const response = await authApi.registerAccount({
@@ -54,17 +106,20 @@ export function RequestAccessPage() {
         mobileNumber: form.mobileNumber.trim(),
         emailAddress: form.emailAddress.trim() || null,
         userType: form.userType,
-        schoolCampusName: form.schoolCampusName.trim() || null,
-        studentOrEmployeeId: form.studentOrEmployeeId.trim() || null,
-        adminTarget: form.adminTarget,
+        rollNumberTeacherCode: form.rollNumberTeacherCode.trim() || null,
+        adminTarget: schoolId ? "School Admin" : "Portal Admin",
         reasonMessage: form.reasonMessage.trim() || null,
-        schoolId: parseOptionalId(form.schoolId),
-        campusId: parseOptionalId(form.campusId),
+        schoolId,
+        campusId: schoolId ? campusId : null,
         cnic: form.cnic.trim() || null,
       });
 
+      const routing = schoolId
+        ? "School Admin and Portal Admin"
+        : "Portal Admin";
+
       setSuccessMessage(
-        `Request submitted for ${response.fullName}. Username will be ${response.username} after admin approval.`,
+        `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. Username will be ${response.username} after approval.`,
       );
       setForm({
         fullName: "",
@@ -72,13 +127,12 @@ export function RequestAccessPage() {
         emailAddress: "",
         cnic: "",
         userType: "Student",
-        schoolCampusName: "",
         schoolId: "",
         campusId: "",
-        studentOrEmployeeId: "",
-        adminTarget: "School Admin",
+        rollNumberTeacherCode: "",
         reasonMessage: "",
       });
+      setCampuses([]);
     } catch (caught) {
       const apiError = caught as { message?: string };
       setError(apiError.message || "Unable to submit account request.");
@@ -92,7 +146,7 @@ export function RequestAccessPage() {
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <PageHeader
           title="Request account access"
-          description="Creates a pending user only. School Admin and Super Admin receive in-app notifications to review your request. Accounts are not activated until approved."
+          description="Creates a pending user only. Leave School empty to send the request to Portal Admin. If you select a School, both School Admin and Portal Admin can approve it."
         />
 
         {successMessage ? (
@@ -168,113 +222,100 @@ export function RequestAccessPage() {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="userType" className="mb-1 block text-sm font-medium text-slate-700">
-                Account type *
-              </label>
-              <select
-                id="userType"
-                required
-                disabled={isSubmitting}
-                value={form.userType}
-                onChange={(event) =>
-                  updateField(
-                    "userType",
-                    event.target.value as RegisterAccountRequest["userType"],
-                  )
-                }
-                className={inputClassName}
-              >
-                {USER_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="adminTarget" className="mb-1 block text-sm font-medium text-slate-700">
-                Admin target *
-              </label>
-              <select
-                id="adminTarget"
-                required
-                disabled={isSubmitting}
-                value={form.adminTarget}
-                onChange={(event) => updateField("adminTarget", event.target.value)}
-                className={inputClassName}
-              >
-                {ADMIN_TARGETS.map((target) => (
-                  <option key={target} value={target}>
-                    {target}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           <div>
-            <label htmlFor="schoolCampusName" className="mb-1 block text-sm font-medium text-slate-700">
-              School / campus name (optional)
+            <label htmlFor="userType" className="mb-1 block text-sm font-medium text-slate-700">
+              Account type *
             </label>
-            <input
-              id="schoolCampusName"
+            <select
+              id="userType"
+              required
               disabled={isSubmitting}
-              value={form.schoolCampusName}
-              onChange={(event) => updateField("schoolCampusName", event.target.value)}
+              value={form.userType}
+              onChange={(event) =>
+                updateField(
+                  "userType",
+                  event.target.value as RegisterAccountRequest["userType"],
+                )
+              }
               className={inputClassName}
-            />
+            >
+              {USER_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="schoolId" className="mb-1 block text-sm font-medium text-slate-700">
-                School ID
-                {form.userType === "Student" || form.userType === "Teacher"
-                  ? " (recommended)"
-                  : " (optional)"}
+                School
               </label>
-              <input
+              <select
                 id="schoolId"
-                type="number"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isLoadingSchools}
                 value={form.schoolId}
-                onChange={(event) => updateField("schoolId", event.target.value)}
+                onChange={(event) => {
+                  updateField("schoolId", event.target.value);
+                  updateField("campusId", "");
+                }}
                 className={inputClassName}
-              />
+              >
+                <option value="">
+                  {isLoadingSchools ? "Loading schools..." : "No school (Portal Admin)"}
+                </option>
+                {schools.map((school) => (
+                  <option key={school.id} value={school.id}>
+                    {school.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Empty → Portal Admin only. Selected → School Admin + Portal Admin.
+              </p>
             </div>
+
             <div>
               <label htmlFor="campusId" className="mb-1 block text-sm font-medium text-slate-700">
-                Campus ID
-                {form.userType === "Student" || form.userType === "Teacher"
-                  ? " (recommended)"
-                  : " (optional)"}
+                Campus
               </label>
-              <input
+              <select
                 id="campusId"
-                type="number"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !form.schoolId || isLoadingCampuses}
                 value={form.campusId}
                 onChange={(event) => updateField("campusId", event.target.value)}
                 className={inputClassName}
-              />
+              >
+                <option value="">
+                  {!form.schoolId
+                    ? "Select a school first"
+                    : isLoadingCampuses
+                      ? "Loading campuses..."
+                      : "No campus"}
+                </option>
+                {campuses.map((campus) => (
+                  <option key={campus.id} value={campus.id}>
+                    {campus.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div>
-            <label htmlFor="studentOrEmployeeId" className="mb-1 block text-sm font-medium text-slate-700">
-              Student / employee ID (optional)
+            <label htmlFor="rollNumberTeacherCode" className="mb-1 block text-sm font-medium text-slate-700">
+              Roll number / teacher code (optional)
             </label>
             <input
-              id="studentOrEmployeeId"
+              id="rollNumberTeacherCode"
               disabled={isSubmitting}
-              value={form.studentOrEmployeeId}
+              value={form.rollNumberTeacherCode}
               onChange={(event) =>
-                updateField("studentOrEmployeeId", event.target.value)
+                updateField("rollNumberTeacherCode", event.target.value)
               }
               className={inputClassName}
+              placeholder="Student roll number or teacher code"
             />
           </div>
 

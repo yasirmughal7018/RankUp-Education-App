@@ -6,19 +6,44 @@ import { useAuth } from "@/features/authentication/presentation/context/AuthProv
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isSubmitting, error, clearError } = useAuth();
+  const { login, setInitialPassword, isSubmitting, error, clearError } =
+    useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [firstLogin, setFirstLogin] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const redirectPath =
     (location.state as { from?: string } | null)?.from ?? "/dashboard";
 
+  const displayError = localError ?? error;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     clearError();
+    setLocalError(null);
+
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      setLocalError("CNIC or mobile number is required.");
+      return;
+    }
 
     try {
-      await login(username.trim(), password);
+      if (firstLogin) {
+        if (password.length < 6) {
+          setLocalError("Password must be at least 6 characters.");
+          return;
+        }
+        if (password !== confirmPassword) {
+          setLocalError("Password and confirmation do not match.");
+          return;
+        }
+        await setInitialPassword(trimmedUsername, password);
+      } else {
+        await login(trimmedUsername, password);
+      }
       navigate(redirectPath, { replace: true });
     } catch {
       // Error state is handled by AuthProvider.
@@ -30,15 +55,23 @@ export function LoginPage() {
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <PageHeader
           title="Sign in"
-          description="Use your RankUp Education account. Role is resolved by the backend after login."
+          description={
+            firstLogin
+              ? "After admin approval, set your own password here to sign in."
+              : "Sign in with your CNIC or mobile number and password."
+          }
         />
 
-        {error ? (
+        {displayError ? (
           <div
             role="alert"
-            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            className={
+              displayError.toLowerCase().includes("not approved")
+                ? "mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                : "mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            }
           >
-            {error}
+            {displayError}
           </div>
         ) : null}
 
@@ -48,7 +81,7 @@ export function LoginPage() {
               htmlFor="username"
               className="mb-1 block text-sm font-medium text-slate-700"
             >
-              Username
+              CNIC or mobile number
             </label>
             <input
               id="username"
@@ -58,7 +91,7 @@ export function LoginPage() {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
-              placeholder="Enter username"
+              placeholder="Enter CNIC or mobile number"
               required
               disabled={isSubmitting}
             />
@@ -69,21 +102,69 @@ export function LoginPage() {
               htmlFor="password"
               className="mb-1 block text-sm font-medium text-slate-700"
             >
-              Password
+              {firstLogin ? "New password" : "Password"}
             </label>
             <input
               id="password"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={firstLogin ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
-              placeholder="Enter password"
-              required
+              placeholder={
+                firstLogin
+                  ? "At least 6 characters"
+                  : "Your password"
+              }
+              required={!firstLogin}
+              minLength={firstLogin ? 6 : undefined}
               disabled={isSubmitting}
             />
           </div>
+
+          {firstLogin ? (
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+                placeholder="Re-enter password"
+                required
+                minLength={6}
+                disabled={isSubmitting}
+              />
+            </div>
+          ) : null}
+
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-slate-300"
+              checked={firstLogin}
+              disabled={isSubmitting}
+              onChange={(event) => {
+                setFirstLogin(event.target.checked);
+                setPassword("");
+                setConfirmPassword("");
+                setLocalError(null);
+                clearError();
+              }}
+            />
+            <span>
+              First login after approval — I need to set my password
+            </span>
+          </label>
 
           <div className="flex items-center justify-between text-sm">
             <Link
@@ -105,7 +186,13 @@ export function LoginPage() {
             disabled={isSubmitting}
             className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isSubmitting ? "Signing in..." : "Sign in"}
+            {isSubmitting
+              ? firstLogin
+                ? "Setting password..."
+                : "Signing in..."
+              : firstLogin
+                ? "Set password and sign in"
+                : "Sign in"}
           </button>
         </form>
 

@@ -16,6 +16,17 @@ Content-Type: application/json
 
 ###
 
+# First login after approval (no prior password)
+POST {{RankUpEducation.Api_HostAddress}}/api/auth/set-initial-password
+Content-Type: application/json
+
+{
+  "username": "03XXXXXXXXX",
+  "newPassword": "YourNewPassword1"
+}
+
+###
+
 @accessToken = {{login.response.body.data.accessToken}}
 @refreshToken = {{login.response.body.data.refreshToken}}
 

@@ -28,7 +28,7 @@ export interface CurrentUser {
   schoolId: number | null;
   campusId: number | null;
   permissions: string[];
-  mustChangePassword: boolean;
+  mustChangePassword?: boolean | null;
 }
 
 export interface AuthTokensResponse {

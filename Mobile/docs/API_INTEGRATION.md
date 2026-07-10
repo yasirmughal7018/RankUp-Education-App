@@ -90,18 +90,29 @@ Account access request:
   "mobileNumber": "+923001234567",
   "emailAddress": "parent@example.com",
   "userType": "Student",
-  "schoolCampusName": "RankUp Campus",
-  "studentOrEmployeeId": "STU-001",
-  "adminTarget": "School Admin",
+  "schoolId": 1,
+  "campusId": 2,
+  "rollNumberTeacherCode": "STU-001",
   "reasonMessage": "Please create my account."
 }
 ```
+
+Omit `schoolId` to set Admin Target to Portal Admin only. With `schoolId`, Admin Target is School Admin (School Admin + Portal Admin can approve).
+
+Username priority: CNIC if provided, otherwise mobile number. Login accepts CNIC or mobile number.
+
+`must_change_password`: `true` = must change; `null`/`false` = no force. After the user changes password once → `false`.
+
+Public options (anonymous):
+
+- `GET /auth/registration-options/schools`
+- `GET /auth/registration-options/schools/{schoolId}/campuses`
 
 ## Security Rules
 
 - Create accounts from the admin system only; do not allow mobile registration.
 - Treat account access requests as pending admin approvals, not automatic account creation.
-- Use username/password login only; OTP is not required for mobile login.
+- Use CNIC or mobile number with password for login; OTP is not required for mobile login.
 - Store access and refresh tokens only in secure storage.
 - Do not use CNIC or B-Form as passwords.
 - Never log tokens, CNIC, B-Form, phone numbers, or private child data.

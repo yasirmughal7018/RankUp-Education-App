@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Directory;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
@@ -100,6 +101,26 @@ public sealed class DirectoryService : IDirectoryService
         EnsureSchoolAccess(schoolId);
         var items = await _directory.ListCampusesAsync(schoolId, cancellationToken);
         return new CampusListResponse(items);
+    }
+
+    public async Task<SchoolListResponse> ListPublicSchoolsAsync(CancellationToken cancellationToken)
+    {
+        var items = await _directory.ListSchoolsAsync(cancellationToken);
+        return new SchoolListResponse(items.Where(school => school.IsActive).ToArray());
+    }
+
+    public async Task<CampusListResponse> ListPublicCampusesAsync(long schoolId, CancellationToken cancellationToken)
+    {
+        var school = await _directory.GetSchoolAsync(schoolId, cancellationToken)
+            ?? throw new NotFoundAppException("School was not found.");
+
+        if (!school.IsActive)
+        {
+            throw new NotFoundAppException("School was not found.");
+        }
+
+        var items = await _directory.ListCampusesAsync(schoolId, cancellationToken);
+        return new CampusListResponse(items.Where(campus => campus.IsActive).ToArray());
     }
 
     public async Task<CampusResponse> CreateCampusAsync(
@@ -204,21 +225,22 @@ public sealed class DirectoryService : IDirectoryService
         var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
         await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
 
-        var username = request.Username.Trim();
+        var username = request.Username.AsTrimmedString();
         if (await _users.UsernameExistsAsync(username, cancellationToken))
         {
             throw new ValidationAppException(["Username is already taken."]);
         }
 
         var passwordHash = _passwordHasher.Hash(request.Password);
-        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
-        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Student, null, schoolId, campusId, mobileNumber);
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var user = new User(username, passwordHash, request.FullName.AsTrimmedString(), UserRole.Student, null, schoolId, campusId, mobileNumber);
+        user.SetRollNumberTeacherCode(request.RollNumber.AsTrimmedString());
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var section = string.IsNullOrWhiteSpace(request.Section) ? "A" : request.Section.Trim();
+        var section = request.Section.AsTrimmedOrDefault("A");
         await _users.AddStudentProfileAsync(
-            new Student(user.Id, schoolId, campusId, request.RollNumber.Trim(), request.Grade, section, mobileNumber),
+            new Student(user.Id, request.Grade, section, mobileNumber),
             cancellationToken);
         user.AttachProfileContext(user.Id, schoolId, campusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -227,7 +249,7 @@ public sealed class DirectoryService : IDirectoryService
             user.Id,
             user.FullName,
             user.Username,
-            request.RollNumber.Trim(),
+            request.RollNumber.AsTrimmedString(),
             request.Grade,
             section,
             schoolId,
@@ -245,37 +267,34 @@ public sealed class DirectoryService : IDirectoryService
 
         var student = await _directory.GetStudentEntityAsync(studentId, cancellationToken)
             ?? throw new NotFoundAppException("Student was not found.");
-        EnsureSchoolAccess(student.SchoolId);
+
+        var user = await _users.GetByIdAsync(studentId, cancellationToken)
+            ?? throw new NotFoundAppException("Student was not found.");
+        EnsureSchoolAccess(user.SchoolId);
 
         var campus = await _directory.GetCampusAsync(request.CampusId, cancellationToken)
             ?? throw new NotFoundAppException("Campus was not found.");
-        if (campus.SchoolId != student.SchoolId)
+        if (user.SchoolId is null || campus.SchoolId != user.SchoolId)
         {
             throw new ValidationAppException(["Campus must belong to the student's school."]);
         }
 
-        var user = await _users.GetByIdAsync(studentId, cancellationToken)
-            ?? throw new NotFoundAppException("Student was not found.");
-
         user.UpdateProfile(request.FullName);
-        student.Update(
-            request.CampusId,
-            request.RollNumber,
-            request.Grade,
-            request.Section,
-            request.MobileNumber);
-        user.AttachProfileContext(user.Id, student.SchoolId, request.CampusId);
+        user.AssignSchoolCampus(user.SchoolId, request.CampusId);
+        user.SetRollNumberTeacherCode(request.RollNumber);
+        student.Update(request.Grade, request.Section, request.MobileNumber);
+        user.AttachProfileContext(user.Id, user.SchoolId, request.CampusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new DirectoryStudentResponse(
             student.Id,
             user.FullName,
             user.Username,
-            student.StudentRollNumber,
+            user.RollNumberTeacherCode ?? string.Empty,
             student.Grade,
             student.Section,
-            student.SchoolId,
-            student.CampusId,
+            user.SchoolId ?? 0,
+            user.CampusId ?? 0,
             user.IsActive);
     }
 
@@ -304,7 +323,8 @@ public sealed class DirectoryService : IDirectoryService
                 continue;
             }
 
-            if (IsSchoolAdmin() && _currentUser.SchoolId != student.SchoolId)
+            var user = await _users.GetByIdAsync(studentId, cancellationToken);
+            if (IsSchoolAdmin() && (user is null || _currentUser.SchoolId != user.SchoolId))
             {
                 continue;
             }
@@ -348,20 +368,21 @@ public sealed class DirectoryService : IDirectoryService
         var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
         await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
 
-        var username = request.Username.Trim();
+        var username = request.Username.AsTrimmedString();
         if (await _users.UsernameExistsAsync(username, cancellationToken))
         {
             throw new ValidationAppException(["Username is already taken."]);
         }
 
         var passwordHash = _passwordHasher.Hash(request.Password);
-        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
-        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Teacher, null, schoolId, campusId, mobileNumber);
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var user = new User(username, passwordHash, request.FullName.AsTrimmedString(), UserRole.Teacher, null, schoolId, campusId, mobileNumber);
+        user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         await _users.AddTeacherProfileAsync(
-            new Teacher(user.Id, schoolId, campusId, request.TeacherCode.Trim(), mobileNumber),
+            new Teacher(user.Id, mobileNumber),
             cancellationToken);
         user.AttachProfileContext(user.Id, schoolId, campusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -370,7 +391,7 @@ public sealed class DirectoryService : IDirectoryService
             user.Id,
             user.FullName,
             user.Username,
-            request.TeacherCode.Trim(),
+            request.TeacherCode.AsTrimmedString(),
             schoolId,
             campusId,
             user.IsActive);
@@ -386,30 +407,32 @@ public sealed class DirectoryService : IDirectoryService
 
         var teacher = await _directory.GetTeacherEntityAsync(teacherId, cancellationToken)
             ?? throw new NotFoundAppException("Teacher was not found.");
-        EnsureSchoolAccess(teacher.SchoolId);
+
+        var user = await _users.GetByIdAsync(teacherId, cancellationToken)
+            ?? throw new NotFoundAppException("Teacher was not found.");
+        EnsureSchoolAccess(user.SchoolId);
 
         var campus = await _directory.GetCampusAsync(request.CampusId, cancellationToken)
             ?? throw new NotFoundAppException("Campus was not found.");
-        if (campus.SchoolId != teacher.SchoolId)
+        if (user.SchoolId is null || campus.SchoolId != user.SchoolId)
         {
             throw new ValidationAppException(["Campus must belong to the teacher's school."]);
         }
 
-        var user = await _users.GetByIdAsync(teacherId, cancellationToken)
-            ?? throw new NotFoundAppException("Teacher was not found.");
-
         user.UpdateProfile(request.FullName);
-        teacher.Update(request.CampusId, request.TeacherCode, request.MobileNumber);
-        user.AttachProfileContext(user.Id, teacher.SchoolId, request.CampusId);
+        user.AssignSchoolCampus(user.SchoolId, request.CampusId);
+        user.SetRollNumberTeacherCode(request.TeacherCode);
+        teacher.Update(request.MobileNumber);
+        user.AttachProfileContext(user.Id, user.SchoolId, request.CampusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new DirectoryTeacherResponse(
             teacher.Id,
             user.FullName,
             user.Username,
-            teacher.TeacherCode,
-            teacher.SchoolId,
-            teacher.CampusId,
+            user.RollNumberTeacherCode ?? string.Empty,
+            user.SchoolId ?? 0,
+            user.CampusId ?? 0,
             user.IsActive);
     }
 
@@ -438,7 +461,8 @@ public sealed class DirectoryService : IDirectoryService
                 continue;
             }
 
-            if (IsSchoolAdmin() && _currentUser.SchoolId != teacher.SchoolId)
+            var user = await _users.GetByIdAsync(teacherId, cancellationToken);
+            if (IsSchoolAdmin() && (user is null || _currentUser.SchoolId != user.SchoolId))
             {
                 continue;
             }
@@ -474,20 +498,20 @@ public sealed class DirectoryService : IDirectoryService
         EnsureAdmin();
         ValidateCreateParentRequest(request);
 
-        var username = request.Username.Trim();
+        var username = request.Username.AsTrimmedString();
         if (await _users.UsernameExistsAsync(username, cancellationToken))
         {
             throw new ValidationAppException(["Username is already taken."]);
         }
 
         var passwordHash = _passwordHasher.Hash(request.Password);
-        var mobileNumber = string.IsNullOrWhiteSpace(request.MobileNumber) ? null : request.MobileNumber.Trim();
-        var cnic = string.IsNullOrWhiteSpace(request.Cnic) ? null : request.Cnic.Trim();
-        var user = new User(username, passwordHash, request.FullName.Trim(), UserRole.Parent, null, null, null, mobileNumber, cnic);
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var cnic = request.Cnic.AsTrimmedOrNull();
+        var user = new User(username, passwordHash, request.FullName.AsTrimmedString(), UserRole.Parent, null, null, null, mobileNumber, cnic);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        await _users.AddParentProfileAsync(new Parent(user.Id, cnic, mobileNumber), cancellationToken);
+        await _users.AddParentProfileAsync(new Parent(user.Id, mobileNumber), cancellationToken);
         user.AttachProfileContext(user.Id, null, null);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -509,7 +533,8 @@ public sealed class DirectoryService : IDirectoryService
             ?? throw new NotFoundAppException("Parent was not found.");
 
         user.UpdateProfile(request.FullName);
-        parent.Update(request.Cnic, request.MobileNumber);
+        user.UpdateContactInfo(request.MobileNumber, request.Cnic);
+        parent.Update(request.MobileNumber);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var linkedCount = await _directory.CountParentStudentLinksAsync(parentId, cancellationToken);
@@ -567,11 +592,11 @@ public sealed class DirectoryService : IDirectoryService
 
         var student = await _directory.GetStudentEntityAsync(request.StudentId, cancellationToken)
             ?? throw new NotFoundAppException("Student was not found.");
-        EnsureSchoolAccess(student.SchoolId);
+        var studentUser = await _users.GetByIdAsync(request.StudentId, cancellationToken)
+            ?? throw new NotFoundAppException("Student was not found.");
+        EnsureSchoolAccess(studentUser.SchoolId);
 
-        var relationship = string.IsNullOrWhiteSpace(request.Relationship)
-            ? "Guardian"
-            : request.Relationship.Trim();
+        var relationship = request.Relationship.AsTrimmedOrDefault("Guardian");
 
         await _directory.LinkParentStudentAsync(parentId, request.StudentId, relationship, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -585,7 +610,8 @@ public sealed class DirectoryService : IDirectoryService
         var student = await _directory.GetStudentEntityAsync(studentId, cancellationToken);
         if (student is not null)
         {
-            EnsureSchoolAccess(student.SchoolId);
+            var studentUser = await _users.GetByIdAsync(studentId, cancellationToken);
+            EnsureSchoolAccess(studentUser?.SchoolId);
         }
 
         await _directory.UnlinkParentStudentAsync(parentId, studentId, cancellationToken);
@@ -597,7 +623,9 @@ public sealed class DirectoryService : IDirectoryService
         EnsureAdmin();
         var student = await _directory.GetStudentEntityAsync(studentId, cancellationToken)
             ?? throw new NotFoundAppException("Student was not found.");
-        EnsureSchoolAccess(student.SchoolId);
+        var user = await _users.GetByIdAsync(studentId, cancellationToken)
+            ?? throw new NotFoundAppException("Student was not found.");
+        EnsureSchoolAccess(user.SchoolId);
         await _directory.SetUserActiveAsync(studentId, isActive, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -607,7 +635,9 @@ public sealed class DirectoryService : IDirectoryService
         EnsureAdmin();
         var teacher = await _directory.GetTeacherEntityAsync(teacherId, cancellationToken)
             ?? throw new NotFoundAppException("Teacher was not found.");
-        EnsureSchoolAccess(teacher.SchoolId);
+        var user = await _users.GetByIdAsync(teacherId, cancellationToken)
+            ?? throw new NotFoundAppException("Teacher was not found.");
+        EnsureSchoolAccess(user.SchoolId);
         await _directory.SetUserActiveAsync(teacherId, isActive, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -859,8 +889,19 @@ public sealed class DirectoryService : IDirectoryService
         => ParseRole() == UserRole.SchoolAdmin;
 
     private void EnsureSchoolAccess(long schoolId)
+        => EnsureSchoolAccess((int?)schoolId);
+
+    private void EnsureSchoolAccess(int? schoolId)
     {
-        if (IsSchoolAdmin() && _currentUser.SchoolId != schoolId)
+        if (!IsSchoolAdmin())
+        {
+            return;
+        }
+
+        var adminSchoolId = _currentUser.SchoolId
+            ?? throw new ForbiddenAppException("School context was not found.");
+
+        if (schoolId is null || schoolId.Value != adminSchoolId)
         {
             throw new ForbiddenAppException("You can only access resources in your school.");
         }

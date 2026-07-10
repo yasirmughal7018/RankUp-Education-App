@@ -27,6 +27,7 @@ interface AuthContextValue {
   isSubmitting: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
+  setInitialPassword: (username: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
   updateUser: (user: CurrentUser) => void;
@@ -157,6 +158,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setActiveSession],
   );
 
+  const setInitialPassword = useCallback(
+    async (username: string, newPassword: string) => {
+      setIsSubmitting(true);
+      setError(null);
+
+      try {
+        const nextSession = await authApi.setInitialPassword({
+          username,
+          newPassword,
+        });
+        saveStoredSession(nextSession);
+        setActiveSession(nextSession);
+      } catch (caught) {
+        const apiError = caught as ApiError;
+        setError(apiError.message || "Unable to set password.");
+        throw caught;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [setActiveSession],
+  );
+
   const logout = useCallback(async () => {
     const refreshToken =
       sessionRef.current?.refreshToken ?? readStoredRefreshToken();
@@ -193,14 +217,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isSubmitting,
       error,
       login,
+      setInitialPassword,
       logout,
       clearError: () => setError(null),
       updateUser,
     }),
-    [session, isBootstrapping, isSubmitting, error, login, logout, updateUser],
+    [
+      session,
+      isBootstrapping,
+      isSubmitting,
+      error,
+      login,
+      setInitialPassword,
+      logout,
+      updateUser,
+    ],
   );
 
-  const mustChangePassword = Boolean(session?.user?.mustChangePassword);
+  const mustChangePassword = session?.user?.mustChangePassword === true;
 
   return (
     <AuthContext.Provider value={value}>

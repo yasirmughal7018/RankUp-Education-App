@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
@@ -28,6 +29,34 @@ public sealed class UserRepository : IUserRepository
             .FirstOrDefaultAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken), cancellationToken);
     }
 
+    public async Task<User?> GetByLoginIdentifierAsync(string identifier, CancellationToken cancellationToken)
+    {
+        var normalized = identifier.AsLowercase();
+
+        // Priority: username → CNIC → mobile number.
+        var byUsername = await _dbContext.Users
+            .FirstOrDefaultAsync(user => user.Username.ToLower() == normalized, cancellationToken);
+        if (byUsername is not null)
+        {
+            return await WithProfileContextAsync(Task.FromResult<User?>(byUsername), cancellationToken);
+        }
+
+        var byCnic = await _dbContext.Users
+            .FirstOrDefaultAsync(
+                user => user.Cnic != null && user.Cnic.ToLower() == normalized,
+                cancellationToken);
+        if (byCnic is not null)
+        {
+            return await WithProfileContextAsync(Task.FromResult<User?>(byCnic), cancellationToken);
+        }
+
+        var byMobile = await _dbContext.Users
+            .FirstOrDefaultAsync(
+                user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized,
+                cancellationToken);
+        return await WithProfileContextAsync(Task.FromResult(byMobile), cancellationToken);
+    }
+
     public Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken)
     {
         return _dbContext.RefreshTokens.FirstOrDefaultAsync(token => token.TokenHash == tokenHash, cancellationToken);
@@ -40,9 +69,17 @@ public sealed class UserRepository : IUserRepository
 
     public Task<bool> CnicExistsAsync(string cnic, CancellationToken cancellationToken)
     {
-        var normalized = cnic.Trim();
+        var normalized = cnic.AsTrimmedString();
         return _dbContext.Users.AnyAsync(
             user => user.Cnic != null && user.Cnic.ToLower() == normalized.ToLower(),
+            cancellationToken);
+    }
+
+    public Task<bool> MobileNumberExistsAsync(string mobileNumber, CancellationToken cancellationToken)
+    {
+        var normalized = mobileNumber.AsTrimmedString();
+        return _dbContext.Users.AnyAsync(
+            user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized.ToLower(),
             cancellationToken);
     }
 
@@ -57,11 +94,15 @@ public sealed class UserRepository : IUserRepository
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Users.AsNoTracking()
-            .Where(user => !user.IsActive && user.PasswordHash == null);
+            .Where(user => !user.IsActive && (user.PasswordHash == null || user.PasswordHash == ""));
 
         if (schoolIdFilter.HasValue)
         {
-            query = query.Where(user => user.SchoolId == null || user.SchoolId == schoolIdFilter.Value);
+            // School Admin: only "School Admin" target requests for their school.
+            // Portal Admin target requests are SuperAdmin-only.
+            query = query.Where(user =>
+                user.SchoolId == schoolIdFilter.Value
+                && user.AdminTarget == "School Admin");
         }
 
         return await query
@@ -70,21 +111,28 @@ public sealed class UserRepository : IUserRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<long>> ListAdminRecipientsAsync(int? schoolId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<long>> ListAdminRecipientsAsync(
+        string? adminTarget,
+        int? schoolId,
+        CancellationToken cancellationToken)
     {
         var query = _dbContext.Users.AsNoTracking()
             .Where(user => user.IsActive && user.PasswordHash != null);
 
-        if (schoolId.HasValue)
+        var isSchoolAdminTarget = string.Equals(adminTarget, "School Admin", StringComparison.OrdinalIgnoreCase)
+            && schoolId.HasValue;
+
+        if (isSchoolAdminTarget)
         {
+            // School Admin target: notify Portal Admin (SuperAdmin) and that school's School Admins.
             query = query.Where(user =>
                 user.Role == UserRole.SuperAdmin
-                || (user.Role == UserRole.SchoolAdmin && user.SchoolId == schoolId.Value));
+                || (user.Role == UserRole.SchoolAdmin && user.SchoolId == schoolId!.Value));
         }
         else
         {
-            query = query.Where(user =>
-                user.Role == UserRole.SuperAdmin || user.Role == UserRole.SchoolAdmin);
+            // Portal Admin target: Portal Admin (SuperAdmin) only.
+            query = query.Where(user => user.Role == UserRole.SuperAdmin);
         }
 
         return await query
@@ -141,27 +189,11 @@ public sealed class UserRepository : IUserRepository
         {
             case UserRole.Student:
                 var student = await _dbContext.Students.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                if (student is not null)
-                {
-                    user.AttachProfileContext(student.Id, student.SchoolId, student.CampusId);
-                }
-                else
-                {
-                    user.AttachProfileContext(null, user.SchoolId, user.CampusId);
-                }
-
+                user.AttachProfileContext(student?.Id, user.SchoolId, user.CampusId);
                 break;
             case UserRole.Teacher:
                 var teacher = await _dbContext.Teachers.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                if (teacher is not null)
-                {
-                    user.AttachProfileContext(teacher.Id, teacher.SchoolId, teacher.CampusId);
-                }
-                else
-                {
-                    user.AttachProfileContext(null, user.SchoolId, user.CampusId);
-                }
-
+                user.AttachProfileContext(teacher?.Id, user.SchoolId, user.CampusId);
                 break;
             case UserRole.Parent:
                 var parent = await _dbContext.Parents.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);

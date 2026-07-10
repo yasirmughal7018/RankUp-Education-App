@@ -29,12 +29,12 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             from relation in _dbContext.ParentStudentRelations.AsNoTracking()
             join student in _dbContext.Students.AsNoTracking() on relation.StudentId equals student.Id
             join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
-            where relation.ParentId == parentId && relation.IsActive && !student.IsDeleted
+            where relation.ParentId == parentId && relation.IsActive
             orderby user.FullName
             select new LinkedStudentInfo(
                 student.Id,
                 user.FullName,
-                student.StudentRollNumber,
+                user.RollNumberTeacherCode ?? string.Empty,
                 student.Grade,
                 student.Section,
                 relation.Relationship))
@@ -43,9 +43,11 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
 
     public async Task<StudentSchoolContext?> GetStudentSchoolContextAsync(long studentId, CancellationToken cancellationToken)
     {
-        return await _dbContext.Students.AsNoTracking()
-            .Where(student => student.Id == studentId && !student.IsDeleted)
-            .Select(student => new StudentSchoolContext(student.SchoolId, student.CampusId, student.Grade))
+        return await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where student.Id == studentId
+            select new StudentSchoolContext(user.SchoolId ?? 0, user.CampusId ?? 0, student.Grade))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -65,13 +67,14 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
         int campusId,
         CancellationToken cancellationToken)
     {
-        return _dbContext.Students.AsNoTracking()
-            .AnyAsync(
-                student => student.Id == studentId
-                    && student.SchoolId == schoolId
-                    && student.CampusId == campusId
-                    && !student.IsDeleted,
-                cancellationToken);
+        return (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where student.Id == studentId
+                && user.SchoolId == schoolId
+                && user.CampusId == campusId
+            select student.Id)
+            .AnyAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<long>> GetStudentIdsInSchoolByGradeAsync(
@@ -80,12 +83,13 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
         short gradeId,
         CancellationToken cancellationToken)
     {
-        return await _dbContext.Students.AsNoTracking()
-            .Where(student => student.SchoolId == schoolId
-                && student.CampusId == campusId
+        return await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where user.SchoolId == schoolId
+                && user.CampusId == campusId
                 && student.Grade == gradeId
-                && !student.IsDeleted)
-            .Select(student => student.Id)
+            select student.Id)
             .ToListAsync(cancellationToken);
     }
 

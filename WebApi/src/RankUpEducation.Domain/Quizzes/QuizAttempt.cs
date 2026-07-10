@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
@@ -15,7 +16,7 @@ public sealed class QuizAttempt : BaseEntity
         StudentId = studentId;
         NumberOfQuestionAttempt = numberOfQuestionAttempt;
         StatusId = statusId;
-        DeviceId = deviceId.Trim();
+        DeviceId = deviceId.AsTrimmedString();
     }
 
     public long QuizId { get; private set; }

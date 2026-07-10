@@ -6,11 +6,18 @@ public interface IAuthService
 {
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// First login after approval: set password without a prior password, then issue tokens.
+    /// </summary>
+    Task<LoginResponse> SetInitialPasswordAsync(
+        SetInitialPasswordRequest request,
+        CancellationToken cancellationToken);
+
     Task<RegisterAccountResponse> RegisterAccountAsync(RegisterAccountRequest request, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<PendingRegistrationResponse>> ListPendingRegistrationsAsync(int take, CancellationToken cancellationToken);
 
-    Task<CurrentUserResponse> ApproveRegistrationAsync(long userId, ApproveRegistrationRequest request, CancellationToken cancellationToken);
+    Task<CurrentUserResponse> ApproveRegistrationAsync(long userId, CancellationToken cancellationToken);
 
     Task RejectRegistrationAsync(long userId, CancellationToken cancellationToken);
 

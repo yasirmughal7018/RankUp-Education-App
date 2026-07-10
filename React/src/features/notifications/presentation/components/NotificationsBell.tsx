@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as notificationsApi from "@/features/notifications/data/notificationsApi";
 
@@ -19,6 +19,7 @@ function formatCreatedAt(value: string): string {
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: queryKeys.notifications(),
@@ -61,11 +62,21 @@ export function NotificationsBell() {
     };
   }, [open]);
 
+  async function openApprovals() {
+    setOpen(false);
+    try {
+      await notificationsApi.markNotificationCategoryRead("RegistrationRequest");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+    } catch {
+      // Approvals page still opens even if mark-read fails.
+    }
+  }
+
   return (
     <div className="relative" ref={containerRef}>
       <button
         type="button"
-        aria-label="Notifications"
+        aria-label="Registration approval notifications"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         className="relative rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
@@ -95,10 +106,10 @@ export function NotificationsBell() {
         <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="border-b border-slate-100 px-4 py-3">
             <p className="text-sm font-semibold text-slate-900">
-              Registration requests
+              Account access requests
             </p>
             <p className="text-xs text-slate-500">
-              Recent in-app notifications
+              Open the approval screen to review and approve
             </p>
           </div>
 
@@ -121,7 +132,7 @@ export function NotificationsBell() {
                   <li key={item.id}>
                     <Link
                       to="/admin/registrations"
-                      onClick={() => setOpen(false)}
+                      onClick={() => void openApprovals()}
                       className={[
                         "block px-4 py-3 transition hover:bg-slate-50",
                         item.isRead ? "bg-white" : "bg-brand-50/40",
@@ -146,10 +157,10 @@ export function NotificationsBell() {
           <div className="border-t border-slate-100 px-4 py-2">
             <Link
               to="/admin/registrations"
-              onClick={() => setOpen(false)}
+              onClick={() => void openApprovals()}
               className="text-xs font-medium text-brand-700 hover:text-brand-800"
             >
-              View pending registrations
+              Open registration approvals
             </Link>
           </div>
         </div>

@@ -31,11 +31,20 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         await _dbContext.Database.ExecuteSqlRawAsync(RegistrationSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserIdentitySupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(SchoolSoftDeleteSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(NotificationSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
+
+    private const string SchoolSoftDeleteSupportSql = """
+        ALTER TABLE public.schools
+            ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE public.school_campuses
+            ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+        """;
 
     private const string QuestionSupportSql = """
         ALTER TABLE public.questions
@@ -84,9 +93,15 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_users
             DROP CONSTRAINT IF EXISTS chk_app_users_password_when_active;
 
+        -- Active users normally need a password. Exception: approved accounts
+        -- awaiting first-login password setup (must_change_password = true).
         ALTER TABLE public.app_users
             ADD CONSTRAINT chk_app_users_password_when_active
-            CHECK (is_active = false OR password_hash IS NOT NULL);
+            CHECK (
+                is_active = false
+                OR password_hash IS NOT NULL
+                OR must_change_password IS TRUE
+            );
 
         CREATE INDEX IF NOT EXISTS ix_app_users_pending_registration
             ON public.app_users (requested_at DESC NULLS LAST)
@@ -119,7 +134,10 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             ADD COLUMN IF NOT EXISTS email VARCHAR(120) NULL;
 
         ALTER TABLE public.app_users
-            ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+            ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NULL;
+
+        ALTER TABLE public.app_users
+            ALTER COLUMN must_change_password DROP NOT NULL;
 
         ALTER TABLE public.app_users
             ADD COLUMN IF NOT EXISTS reason_message VARCHAR(1000) NULL;
@@ -128,10 +146,103 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             ADD COLUMN IF NOT EXISTS admin_target VARCHAR(80) NULL;
 
         ALTER TABLE public.app_users
-            ADD COLUMN IF NOT EXISTS school_campus_name VARCHAR(200) NULL;
+            ADD COLUMN IF NOT EXISTS roll_number_teacher_code VARCHAR(80) NULL;
+
+        -- Migrate legacy identity columns into app_users before dropping them.
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_users'
+                  AND column_name = 'student_or_employee_id'
+            ) THEN
+                UPDATE public.app_users
+                SET roll_number_teacher_code = COALESCE(
+                    NULLIF(BTRIM(roll_number_teacher_code), ''),
+                    NULLIF(BTRIM(student_or_employee_id), ''))
+                WHERE roll_number_teacher_code IS NULL
+                   OR BTRIM(roll_number_teacher_code) = '';
+            END IF;
+
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_user_students'
+                  AND column_name = 'student_roll_number'
+            ) THEN
+                UPDATE public.app_users u
+                SET roll_number_teacher_code = COALESCE(
+                    NULLIF(BTRIM(u.roll_number_teacher_code), ''),
+                    NULLIF(BTRIM(s.student_roll_number), '')),
+                    school_id = COALESCE(u.school_id, s.school_id),
+                    campus_id = COALESCE(u.campus_id, s.campus_id)
+                FROM public.app_user_students s
+                WHERE s.student_id = u.id;
+            END IF;
+
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_user_teachers'
+                  AND column_name = 'teacher_code'
+            ) THEN
+                UPDATE public.app_users u
+                SET roll_number_teacher_code = COALESCE(
+                    NULLIF(BTRIM(u.roll_number_teacher_code), ''),
+                    NULLIF(BTRIM(t.teacher_code), '')),
+                    school_id = COALESCE(u.school_id, t.school_id),
+                    campus_id = COALESCE(u.campus_id, t.campus_id)
+                FROM public.app_user_teachers t
+                WHERE t.teacher_id = u.id;
+            END IF;
+
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_user_parents'
+                  AND column_name = 'cnic'
+            ) THEN
+                UPDATE public.app_users u
+                SET cnic = COALESCE(NULLIF(BTRIM(u.cnic), ''), NULLIF(BTRIM(p.cnic), ''))
+                FROM public.app_user_parents p
+                WHERE p.parent_id = u.id
+                  AND (u.cnic IS NULL OR BTRIM(u.cnic) = '');
+            END IF;
+        END $$;
 
         ALTER TABLE public.app_users
-            ADD COLUMN IF NOT EXISTS student_or_employee_id VARCHAR(80) NULL;
+            DROP COLUMN IF EXISTS school_campus_name;
+
+        ALTER TABLE public.app_users
+            DROP COLUMN IF EXISTS student_or_employee_id;
+
+        ALTER TABLE public.app_user_students
+            DROP COLUMN IF EXISTS school_id;
+
+        ALTER TABLE public.app_user_students
+            DROP COLUMN IF EXISTS campus_id;
+
+        ALTER TABLE public.app_user_students
+            DROP COLUMN IF EXISTS cnic;
+
+        ALTER TABLE public.app_user_students
+            DROP COLUMN IF EXISTS student_roll_number;
+
+        ALTER TABLE public.app_user_teachers
+            DROP COLUMN IF EXISTS school_id;
+
+        ALTER TABLE public.app_user_teachers
+            DROP COLUMN IF EXISTS campus_id;
+
+        ALTER TABLE public.app_user_teachers
+            DROP COLUMN IF EXISTS cnic;
+
+        ALTER TABLE public.app_user_teachers
+            DROP COLUMN IF EXISTS teacher_code;
+
+        ALTER TABLE public.app_user_parents
+            DROP COLUMN IF EXISTS cnic;
 
         CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_cnic_unique
             ON public.app_users (cnic)

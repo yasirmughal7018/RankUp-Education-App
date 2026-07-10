@@ -1,5 +1,6 @@
 import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/storage/token_store.dart';
+import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
@@ -61,6 +62,17 @@ class RoleAwareAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<AuthSession> setInitialPassword({
+    required String identifier,
+    required String newPassword,
+  }) {
+    return _apiRepository.setInitialPassword(
+      identifier: identifier,
+      newPassword: newPassword,
+    );
+  }
+
+  @override
   Future<void> requestPasswordReset({required String identifier}) {
     return _repositoryForLogin(identifier).requestPasswordReset(
       identifier: identifier,
@@ -73,9 +85,7 @@ class RoleAwareAuthRepository implements AuthRepository {
     required String mobileNumber,
     required String emailAddress,
     required String userType,
-    required String schoolCampusName,
-    required String studentOrEmployeeId,
-    required String adminTarget,
+    required String rollNumberTeacherCode,
     required String reasonMessage,
     String? cnic,
     int? schoolId,
@@ -86,9 +96,7 @@ class RoleAwareAuthRepository implements AuthRepository {
       mobileNumber: mobileNumber,
       emailAddress: emailAddress,
       userType: userType,
-      schoolCampusName: schoolCampusName,
-      studentOrEmployeeId: studentOrEmployeeId,
-      adminTarget: adminTarget,
+      rollNumberTeacherCode: rollNumberTeacherCode,
       reasonMessage: reasonMessage,
       cnic: cnic,
       schoolId: schoolId,
@@ -97,8 +105,29 @@ class RoleAwareAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<List<({int id, String name})>> listRegistrationSchools() {
+    return _apiRepository.listRegistrationSchools();
+  }
+
+  @override
+  Future<List<({int id, String name})>> listRegistrationCampuses(int schoolId) {
+    return _apiRepository.listRegistrationCampuses(schoolId);
+  }
+
+  @override
   Future<AuthSession> refreshSession() async {
     return (await _repositoryForSession()).refreshSession();
+  }
+
+  @override
+  Future<AppUser> changePassword({
+    required String newPassword,
+    String? currentPassword,
+  }) async {
+    return (await _repositoryForSession()).changePassword(
+      newPassword: newPassword,
+      currentPassword: currentPassword,
+    );
   }
 
   @override

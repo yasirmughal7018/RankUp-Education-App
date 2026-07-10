@@ -33,6 +33,10 @@ public interface IDirectoryService
 
     Task ActivateCampusAsync(long campusId, CancellationToken cancellationToken);
 
+    Task<SchoolListResponse> ListPublicSchoolsAsync(CancellationToken cancellationToken);
+
+    Task<CampusListResponse> ListPublicCampusesAsync(long schoolId, CancellationToken cancellationToken);
+
     Task<DirectoryStudentListResponse> ListStudentsAsync(
         int? schoolId,
         int? campusId,

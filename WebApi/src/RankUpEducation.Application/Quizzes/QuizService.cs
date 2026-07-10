@@ -1,6 +1,7 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
@@ -247,7 +248,7 @@ public sealed class QuizService : IQuizService
             studentId,
             attemptNumber,
             inProgressStatusId,
-            request.DeviceId.Trim());
+            request.DeviceId.AsTrimmedString());
         attempt.Begin(inProgressStatusId);
 
         var quizQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken);
@@ -406,7 +407,7 @@ public sealed class QuizService : IQuizService
             var isDescriptive = QuizQuestionHelper.IsDescriptiveType(question.QuestionTypeName)
                 || (!isFillBlank
                     && selectedOptionIds.Count == 0
-                    && !string.IsNullOrWhiteSpace(submitted.SubmittedText));
+                    && submitted.SubmittedText.HasTrimmedText());
 
             if (isMultiSelect && selectedOptionIds.Count > 0)
             {
@@ -420,13 +421,13 @@ public sealed class QuizService : IQuizService
                     question.Marks);
                 obtainedMarks += awardedMarks;
             }
-            else if (isFillBlank && !string.IsNullOrWhiteSpace(submitted.SubmittedText))
+            else if (isFillBlank && submitted.SubmittedText.HasTrimmedText())
             {
-                var submittedText = submitted.SubmittedText.Trim();
+                var submittedText = submitted.SubmittedText.AsTrimmedString();
                 var matched = question.Options.FirstOrDefault(option =>
                     option.IsCorrect
                     && string.Equals(
-                        option.OptionText.Trim(),
+                        option.OptionText.AsTrimmedString(),
                         submittedText,
                         StringComparison.OrdinalIgnoreCase));
                 isCorrect = matched is not null;
@@ -570,7 +571,7 @@ public sealed class QuizService : IQuizService
             .Where(question =>
                 question.SelectedOptionIds.Count > 0
                 || question.SelectedOptionId is not null
-                || !string.IsNullOrWhiteSpace(question.SubmittedText))
+                || question.SubmittedText.HasTrimmedText())
             .Select(question => new SavedQuizAnswerResponse(
                 question.QuestionId,
                 question.SelectedOptionId,
@@ -599,7 +600,7 @@ public sealed class QuizService : IQuizService
     {
         await _attempts.RemoveAttemptAnswersAsync(attemptQuestionId, cancellationToken);
 
-        if (selectedOptionIds.Count == 0 && string.IsNullOrWhiteSpace(submittedText))
+        if (selectedOptionIds.Count == 0 && !submittedText.HasTrimmedText())
         {
             return;
         }

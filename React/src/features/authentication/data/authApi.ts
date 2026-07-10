@@ -14,8 +14,30 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SetInitialPasswordRequest {
+  username: string;
+  newPassword: string;
+}
+
 export async function login(request: LoginRequest): Promise<AuthSession> {
   const response = await apiRequest<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: request,
+    skipAuth: true,
+  });
+
+  return {
+    accessToken: response.accessToken,
+    refreshToken: response.refreshToken,
+    user: response.user,
+  };
+}
+
+/** First login after approval: set password and receive a session (no prior password). */
+export async function setInitialPassword(
+  request: SetInitialPasswordRequest,
+): Promise<AuthSession> {
+  const response = await apiRequest<LoginResponse>("/auth/set-initial-password", {
     method: "POST",
     body: request,
     skipAuth: true,
@@ -60,9 +82,8 @@ export interface RegisterAccountRequest {
   mobileNumber: string;
   emailAddress?: string | null;
   userType: "Student" | "Parent" | "Teacher";
-  schoolCampusName?: string | null;
-  studentOrEmployeeId?: string | null;
-  adminTarget: string;
+  rollNumberTeacherCode?: string | null;
+  adminTarget?: string | null;
   reasonMessage?: string | null;
   schoolId?: number | null;
   campusId?: number | null;
@@ -70,8 +91,8 @@ export interface RegisterAccountRequest {
 }
 
 export interface ChangePasswordRequest {
-  currentPassword: string;
   newPassword: string;
+  currentPassword?: string | null;
 }
 
 export interface RegisterAccountResponse {
@@ -79,6 +100,41 @@ export interface RegisterAccountResponse {
   username: string;
   fullName: string;
   role: string;
+}
+
+export interface RegistrationSchoolOption {
+  id: number;
+  name: string;
+  code: string;
+  isActive: boolean;
+}
+
+export interface RegistrationCampusOption {
+  id: number;
+  schoolId: number;
+  name: string;
+  address: string | null;
+  isActive: boolean;
+}
+
+export async function listRegistrationSchools(): Promise<
+  RegistrationSchoolOption[]
+> {
+  const response = await apiRequest<{ items: RegistrationSchoolOption[] }>(
+    "/auth/registration-options/schools",
+    { skipAuth: true },
+  );
+  return response.items;
+}
+
+export async function listRegistrationCampuses(
+  schoolId: number,
+): Promise<RegistrationCampusOption[]> {
+  const response = await apiRequest<{ items: RegistrationCampusOption[] }>(
+    `/auth/registration-options/schools/${schoolId}/campuses`,
+    { skipAuth: true },
+  );
+  return response.items;
 }
 
 export async function requestPasswordReset(username: string): Promise<void> {

@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Notifications;
@@ -14,9 +15,9 @@ public sealed class Notification : AuditableEntity
     public Notification(long userId, string title, string body, string category)
     {
         UserId = userId;
-        Title = title.Trim();
-        Body = body.Trim();
-        Category = category.Trim();
+        Title = title.AsTrimmedString();
+        Body = body.AsTrimmedString();
+        Category = category.AsTrimmedString();
         IsRead = false;
     }
 

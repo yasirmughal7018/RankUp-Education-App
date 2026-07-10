@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Notifications;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Common;
 using RankUpEducation.Contracts.Notifications;
 
@@ -32,5 +33,34 @@ public sealed class NotificationsController : ControllerBase
 
         var response = await _notifications.ListForUserAsync(userId, take, cancellationToken);
         return Ok(ApiResponse<NotificationListResponse>.Ok(response));
+    }
+
+    [HttpPost("{notificationId:long}/read")]
+    public async Task<ActionResult<ApiResponse<object?>>> MarkReadAsync(
+        long notificationId,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+
+        await _notifications.MarkReadAsync(userId, notificationId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Notification marked as read."));
+    }
+
+    [HttpPost("read-category")]
+    public async Task<ActionResult<ApiResponse<object?>>> MarkCategoryReadAsync(
+        [FromQuery] string category,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+
+        if (!category.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Category is required."]);
+        }
+
+        await _notifications.MarkCategoryReadAsync(userId, category.AsTrimmedString(), cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Notifications marked as read."));
     }
 }

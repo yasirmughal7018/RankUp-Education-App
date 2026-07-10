@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Quizzes;
@@ -73,7 +74,7 @@ internal sealed class QuizManageGuard
 
     public async Task<short> ResolveQuestionTypeIdAsync(string questionType, CancellationToken cancellationToken)
     {
-        var normalized = questionType.Trim();
+        var normalized = questionType.AsTrimmedString();
 
         string[][] candidateGroups =
         [

@@ -80,6 +80,31 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> setInitialPassword({
+    required String identifier,
+    required String newPassword,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      final session = await _repository.setInitialPassword(
+        identifier: identifier,
+        newPassword: newPassword,
+      );
+      state = state.copyWith(user: session.user, isLoading: false);
+      await _notifications.registerDeviceToken(session.user.id);
+    } on AppException catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.message);
+      rethrow;
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+      rethrow;
+    }
+  }
+
   Future<void> requestPasswordReset({required String identifier}) async {
     state = state.copyWith(
       isLoading: true,
@@ -102,9 +127,7 @@ class AuthController extends StateNotifier<AuthState> {
     required String mobileNumber,
     required String emailAddress,
     required String userType,
-    required String schoolCampusName,
-    required String studentOrEmployeeId,
-    required String adminTarget,
+    required String rollNumberTeacherCode,
     required String reasonMessage,
     String? cnic,
     int? schoolId,
@@ -121,20 +144,49 @@ class AuthController extends StateNotifier<AuthState> {
         mobileNumber: mobileNumber,
         emailAddress: emailAddress,
         userType: userType,
-        schoolCampusName: schoolCampusName,
-        studentOrEmployeeId: studentOrEmployeeId,
-        adminTarget: adminTarget,
+        rollNumberTeacherCode: rollNumberTeacherCode,
         reasonMessage: reasonMessage,
         cnic: cnic,
         schoolId: schoolId,
         campusId: campusId,
       );
+      final routing = schoolId != null
+          ? 'School Admin and Portal Admin'
+          : 'Portal Admin';
       state = state.copyWith(
         isLoading: false,
-        successMessage: 'Account request sent to $adminTarget.',
+        successMessage: 'Account request sent to $routing.',
       );
     } on Exception catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.toString());
+    }
+  }
+
+  Future<void> changePassword({
+    required String newPassword,
+    String? currentPassword,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      final user = await _repository.changePassword(
+        newPassword: newPassword,
+        currentPassword: currentPassword,
+      );
+      state = state.copyWith(
+        user: user,
+        isLoading: false,
+        successMessage: 'Password updated. You can continue.',
+      );
+    } on AppException catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.message);
+      rethrow;
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+      rethrow;
     }
   }
 

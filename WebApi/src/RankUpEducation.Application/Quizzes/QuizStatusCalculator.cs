@@ -1,3 +1,5 @@
+using RankUpEducation.Common.Utilities;
+
 namespace RankUpEducation.Application.Quizzes;
 
 public static class QuizStatusCalculator
@@ -55,7 +57,7 @@ public static class QuizStatusCalculator
 
     public static IReadOnlyList<string> ParseInstructions(string instructions)
     {
-        if (string.IsNullOrWhiteSpace(instructions))
+        if (!instructions.HasTrimmedText())
         {
             return Array.Empty<string>();
         }

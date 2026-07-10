@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Questions;
@@ -25,14 +26,14 @@ public sealed class Question : BaseEntity
         short estimatedTimeSeconds,
         short marks)
     {
-        QuestionText = questionText.Trim();
+        QuestionText = questionText.AsTrimmedString();
         QuestionTypeId = questionTypeId;
         ClassId = classId;
         SubjectId = subjectId;
         TopicId = topicId;
         DifficultyLevel = difficultyLevel;
         StatusId = statusId;
-        CreatedBy = createdBy.Trim();
+        CreatedBy = createdBy.AsTrimmedString();
         EstimatedTimeSeconds = estimatedTimeSeconds;
         Marks = marks;
     }
@@ -70,7 +71,7 @@ public sealed class Question : BaseEntity
         string? hint,
         string? explanation)
     {
-        QuestionText = questionText.Trim();
+        QuestionText = questionText.AsTrimmedString();
         QuestionTypeId = questionTypeId;
         ClassId = classId;
         SubjectId = subjectId;
@@ -78,8 +79,8 @@ public sealed class Question : BaseEntity
         DifficultyLevel = difficultyLevel;
         EstimatedTimeSeconds = estimatedTimeSeconds;
         Marks = marks;
-        Hint = string.IsNullOrWhiteSpace(hint) ? null : hint.Trim();
-        Explanation = string.IsNullOrWhiteSpace(explanation) ? null : explanation.Trim();
+        Hint = hint.AsTrimmedOrNull();
+        Explanation = explanation.AsTrimmedOrNull();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -107,7 +108,7 @@ public sealed class Question : BaseEntity
     public void Approve(string approvedBy, short approvedStatusId)
     {
         StatusId = approvedStatusId;
-        ApprovedBy = approvedBy.Trim();
+        ApprovedBy = approvedBy.AsTrimmedString();
         IsAiApproved = false;
         RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -117,7 +118,7 @@ public sealed class Question : BaseEntity
     public void ApproveByAi(string approvedBy, short approvedStatusId)
     {
         StatusId = approvedStatusId;
-        ApprovedBy = approvedBy.Trim();
+        ApprovedBy = approvedBy.AsTrimmedString();
         IsAiApproved = true;
         RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -130,11 +131,12 @@ public sealed class Question : BaseEntity
         ApprovedBy = null;
         IsAiApproved = false;
         IsActive = false;
-        RejectionReason = string.IsNullOrWhiteSpace(reason)
+        var trimmedReason = reason.AsTrimmedOrNull();
+        RejectionReason = trimmedReason is null
             ? null
-            : reason.Trim().Length > 1000
-                ? reason.Trim()[..1000]
-                : reason.Trim();
+            : trimmedReason.Length > 1000
+                ? trimmedReason[..1000]
+                : trimmedReason;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

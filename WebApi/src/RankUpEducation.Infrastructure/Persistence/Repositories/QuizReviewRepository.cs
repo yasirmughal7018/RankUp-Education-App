@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
@@ -262,7 +263,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     marked?.IsCorrect ?? false,
                     selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
                     submittedText,
-                    string.IsNullOrWhiteSpace(feedback) ? null : feedback,
+                    feedback.AsTrimmedOrNull(),
                     requiresReview,
                     item.QuizReviewId,
                     selectedOptionIds);

@@ -52,4 +52,22 @@ public sealed class NotificationService : INotificationService
                 notification.IsRead,
                 notification.CreatedAt)).ToArray());
     }
+
+    public async Task MarkReadAsync(long userId, long notificationId, CancellationToken cancellationToken)
+    {
+        var notification = await _notifications.GetByIdForUserAsync(notificationId, userId, cancellationToken);
+        if (notification is null)
+        {
+            return;
+        }
+
+        notification.MarkRead();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task MarkCategoryReadAsync(long userId, string category, CancellationToken cancellationToken)
+    {
+        await _notifications.MarkCategoryReadAsync(userId, category, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 }

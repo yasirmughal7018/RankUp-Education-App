@@ -43,6 +43,11 @@ class AuthSessionModel extends AuthSession {
           'attendance.mark',
           'message.send',
         ],
+      UserRole.schoolAdmin || UserRole.superAdmin => [
+          'dashboard.view',
+          'registration.approve',
+          'notification.view',
+        ],
     };
 
     return AuthSessionModel(

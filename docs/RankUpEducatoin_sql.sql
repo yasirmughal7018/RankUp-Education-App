@@ -16,13 +16,22 @@ CREATE TABLE public.app_users (
 	email varchar(200) NULL,
 	last_login_at timestamptz NULL,
 	requested_at timestamptz NULL,
+	mobile_number varchar(40) NULL,
+	cnic varchar(20) NULL,
+	school_id int4 NULL,
+	campus_id int4 NULL,
+	must_change_password bool NULL,
+	reason_message varchar(1000) NULL,
+	admin_target varchar(80) NULL,
+	roll_number_teacher_code varchar(80) NULL,
 	CONSTRAINT app_users_id_role_key UNIQUE (id, role),
 	CONSTRAINT app_users_pkey PRIMARY KEY (id),
 	CONSTRAINT app_users_username_key UNIQUE (username),
-	CONSTRAINT chk_app_users_password_when_active CHECK (((is_active = false) OR (password_hash IS NOT NULL))),
+	CONSTRAINT chk_app_users_password_when_active CHECK (((is_active = false) OR (password_hash IS NOT NULL) OR (must_change_password IS TRUE))),
 	CONSTRAINT chk_app_users_role CHECK ((role = ANY (ARRAY['superadmin'::text, 'schooladmin'::text, 'teacher'::text, 'student'::text, 'parent'::text])))
 );
 CREATE UNIQUE INDEX ix_app_users_email ON public.app_users USING btree (email) WHERE (email IS NOT NULL);
+CREATE UNIQUE INDEX ix_app_users_cnic_unique ON public.app_users USING btree (cnic) WHERE (cnic IS NOT NULL);
 CREATE INDEX ix_app_users_pending_registration ON public.app_users USING btree (requested_at DESC NULLS LAST) WHERE (is_active = false);
 
 
@@ -37,6 +46,7 @@ CREATE TABLE public.schools (
 	"name" varchar(200) NOT NULL,
 	code varchar(100) NOT NULL,
 	is_active bool DEFAULT true NOT NULL,
+	is_deleted bool DEFAULT false NOT NULL,
 	created_date date DEFAULT CURRENT_DATE NOT NULL,
 	CONSTRAINT schools_code_key UNIQUE (code),
 	CONSTRAINT schools_pkey PRIMARY KEY (id)
@@ -51,7 +61,6 @@ CREATE TABLE public.schools (
 
 CREATE TABLE public.app_user_parents (
 	parent_id int8 NOT NULL,
-	cnic varchar(13) NULL,
 	modified_date timestamptz DEFAULT now() NOT NULL,
 	mobile_number varchar(40) NULL,
 	CONSTRAINT app_user_parents_pkey PRIMARY KEY (parent_id),
@@ -165,6 +174,7 @@ CREATE TABLE public.school_campuses (
 	"name" varchar(200) NOT NULL,
 	address varchar(300) NOT NULL,
 	is_active bool DEFAULT true NOT NULL,
+	is_deleted bool DEFAULT false NOT NULL,
 	created_date date DEFAULT CURRENT_DATE NOT NULL,
 	modified_date date DEFAULT CURRENT_DATE NOT NULL,
 	CONSTRAINT school_campuses_pkey PRIMARY KEY (id),
@@ -202,18 +212,12 @@ CREATE TABLE public.student_groups (
 
 CREATE TABLE public.app_user_students (
 	student_id int8 NOT NULL,
-	school_id int4 NOT NULL,
-	campus_id int4 NOT NULL,
-	student_roll_number varchar(50) NOT NULL,
-	cnic varchar(13) NULL,
 	grade int2 NOT NULL,
 	"section" text NOT NULL,
 	modified_date timestamptz DEFAULT now() NOT NULL,
 	mobile_number varchar(40) NULL,
 	CONSTRAINT app_user_students_pkey PRIMARY KEY (student_id),
-	CONSTRAINT app_user_students_campus_id_fkey FOREIGN KEY (campus_id) REFERENCES public.school_campuses(id),
 	CONSTRAINT app_user_students_grade_fkey FOREIGN KEY (grade) REFERENCES public.lookups(id),
-	CONSTRAINT app_user_students_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id),
 	CONSTRAINT app_user_students_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.app_users(id)
 );
 
@@ -226,15 +230,9 @@ CREATE TABLE public.app_user_students (
 
 CREATE TABLE public.app_user_teachers (
 	teacher_id int8 NOT NULL,
-	school_id int4 NOT NULL,
-	campus_id int4 NOT NULL,
-	teacher_code varchar(50) NOT NULL,
-	cnic varchar(13) NULL,
 	modified_date timestamptz DEFAULT now() NOT NULL,
 	mobile_number varchar(40) NULL,
 	CONSTRAINT app_user_teachers_pkey PRIMARY KEY (teacher_id),
-	CONSTRAINT app_user_teachers_campus_id_fkey FOREIGN KEY (campus_id) REFERENCES public.school_campuses(id),
-	CONSTRAINT app_user_teachers_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id),
 	CONSTRAINT app_user_teachers_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.app_users(id)
 );
 

@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Classes;
@@ -13,7 +14,7 @@ public sealed class SchoolClass : SoftDeleteEntity
     {
         SchoolId = schoolId;
         CampusId = campusId;
-        Name = name.Trim();
+        Name = name.AsTrimmedString();
     }
 
     public long SchoolId { get; private set; }

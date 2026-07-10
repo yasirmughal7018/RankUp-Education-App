@@ -1,5 +1,6 @@
-import { useState } from "react";
-import type { ApproveRegistrationRequest, PendingRegistration } from "@/features/admin/domain/registrationTypes";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { PendingRegistration } from "@/features/admin/domain/registrationTypes";
 import { isRegistrationActionRole } from "@/features/admin/domain/registrationTypes";
 import { ApproveRegistrationDialog } from "@/features/admin/presentation/components/ApproveRegistrationDialog";
 import {
@@ -8,6 +9,9 @@ import {
   useRejectRegistrationMutation,
 } from "@/features/admin/presentation/hooks/useRegistrationQueries";
 import { PageHeader } from "@/core/components/PageHeader";
+import { queryKeys } from "@/core/api/queryKeys";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import * as notificationsApi from "@/features/notifications/data/notificationsApi";
 
 function formatRequestedAt(value: string | null | undefined): string {
   if (!value) {
@@ -27,28 +31,21 @@ function formatRequestedAt(value: string | null | undefined): string {
 }
 
 function formatSchoolCampus(registration: PendingRegistration): string {
-  const parts: string[] = [];
-
-  if (registration.schoolCampusName) {
-    parts.push(registration.schoolCampusName);
+  if (registration.schoolId == null) {
+    return "No school (Portal Admin)";
   }
 
-  if (registration.schoolId != null || registration.campusId != null) {
-    const ids = [
-      registration.schoolId != null ? `School ${registration.schoolId}` : null,
-      registration.campusId != null ? `Campus ${registration.campusId}` : null,
-    ]
-      .filter(Boolean)
-      .join(" / ");
-    if (ids) {
-      parts.push(ids);
-    }
-  }
+  const parts = [
+    `School ${registration.schoolId}`,
+    registration.campusId != null ? `Campus ${registration.campusId}` : null,
+  ].filter(Boolean);
 
-  return parts.length > 0 ? parts.join(" · ") : "—";
+  return parts.join(" / ");
 }
 
 export function PendingRegistrationsPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: registrations = [], isLoading, error, refetch, isFetching } =
     usePendingRegistrationsQuery();
   const approveRegistration = useApproveRegistrationMutation();
@@ -62,20 +59,28 @@ export function PendingRegistrationsPage() {
   const isSubmitting =
     approveRegistration.isPending || rejectRegistration.isPending;
 
-  async function handleApprove(
-    registration: PendingRegistration,
-    request: ApproveRegistrationRequest,
-  ) {
+  const isPortalAdmin = user?.role === "SuperAdmin";
+  const roleLabel = isPortalAdmin ? "Portal Admin" : "School Admin";
+
+  useEffect(() => {
+    void notificationsApi
+      .markNotificationCategoryRead("RegistrationRequest")
+      .then(() =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications() }),
+      )
+      .catch(() => undefined);
+  }, [queryClient]);
+
+  async function handleApprove(registration: PendingRegistration) {
     setActionError(null);
     setSuccessMessage(null);
 
     try {
-      await approveRegistration.mutateAsync({
-        userId: registration.id,
-        request,
-      });
+      await approveRegistration.mutateAsync(registration.id);
       setSelectedRegistration(null);
-      setSuccessMessage(`${registration.fullName} was approved successfully.`);
+      setSuccessMessage(
+        `${registration.fullName} was approved. They must set a password on first login.`,
+      );
     } catch (caught) {
       const apiError = caught as { message?: string };
       setActionError(apiError.message || "Unable to approve registration.");
@@ -107,17 +112,26 @@ export function PendingRegistrationsPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
-        title="Pending registrations"
-        description="Review account access requests and approve or reject new Student, Parent, and Teacher accounts."
+        title="Registration approvals"
+        description={
+          isPortalAdmin
+            ? "Portal Admin view: review request details and approve. No fields or password are changed. The user sets their password on first login."
+            : "School Admin view: review request details and approve for your school. No fields or password are changed. The user sets their password on first login."
+        }
         action={
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching || isSubmitting}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+              {roleLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching || isSubmitting}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+            >
+              Refresh
+            </button>
+          </div>
         }
       />
 
@@ -160,6 +174,9 @@ export function PendingRegistrationsPage() {
                     School / campus
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Admin target
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Created
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
@@ -194,6 +211,9 @@ export function PendingRegistrationsPage() {
                       </td>
                       <td className="max-w-[12rem] px-4 py-3 text-slate-700">
                         {formatSchoolCampus(registration)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {registration.adminTarget ?? "—"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">
                         {formatRequestedAt(createdDisplay)}
@@ -237,7 +257,7 @@ export function PendingRegistrationsPage() {
           registration={selectedRegistration}
           isSubmitting={approveRegistration.isPending}
           onClose={() => setSelectedRegistration(null)}
-          onSubmit={handleApprove}
+          onConfirm={handleApprove}
         />
       ) : null}
     </div>

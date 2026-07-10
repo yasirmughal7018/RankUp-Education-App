@@ -1,4 +1,4 @@
-import { apiRequest } from "@/core/api/apiClient";
+import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 
 export interface NotificationItem {
   id: number;
@@ -18,5 +18,20 @@ export async function listNotifications(
 ): Promise<NotificationListResponse> {
   return apiRequest<NotificationListResponse>(
     `/notifications?take=${take}`,
+  );
+}
+
+export async function markNotificationRead(notificationId: number): Promise<void> {
+  await apiRequestVoid(`/notifications/${notificationId}/read`, {
+    method: "POST",
+  });
+}
+
+export async function markNotificationCategoryRead(
+  category: string,
+): Promise<void> {
+  await apiRequestVoid(
+    `/notifications/read-category?category=${encodeURIComponent(category)}`,
+    { method: "POST" },
   );
 }

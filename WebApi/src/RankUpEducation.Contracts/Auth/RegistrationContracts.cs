@@ -5,9 +5,8 @@ public sealed record RegisterAccountRequest(
     string MobileNumber,
     string? EmailAddress,
     string UserType,
-    string? SchoolCampusName,
-    string? StudentOrEmployeeId,
-    string AdminTarget,
+    string? RollNumberTeacherCode,
+    string? AdminTarget,
     string? ReasonMessage,
     int? SchoolId = null,
     int? CampusId = null,
@@ -33,16 +32,7 @@ public sealed record PendingRegistrationResponse(
     DateOnly? CreatedDate,
     string? ReasonMessage,
     string? AdminTarget,
-    string? SchoolCampusName,
-    string? StudentOrEmployeeId);
+    string? RollNumberTeacherCode);
 
-public sealed record ApproveRegistrationRequest(
-    string Password,
-    int? SchoolId,
-    int? CampusId,
-    string? StudentRollNumber,
-    short? Grade,
-    string? Section,
-    string? TeacherCode,
-    string? MobileNumber,
-    string? Cnic);
+/// <summary>Approve uses registration details as submitted. No password or field edits.</summary>
+public sealed record ApproveRegistrationRequest();

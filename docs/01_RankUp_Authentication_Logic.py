@@ -1,14 +1,16 @@
 """Generate RankUp Education Authentication & Login Logic DOCX documentation."""
 
+from pathlib import Path
+
 from docx import Document
 from docx.enum.section import WD_SECTION_START
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
-OUTPUT = "docs/RankUp_Authentication_Logic.docx"
+DOCS_DIR = Path(__file__).resolve().parent
+OUTPUT = DOCS_DIR / "RankUp_Authentication_Logic.docx"
 
 
 def set_cell_shading(cell, fill):
@@ -175,108 +177,126 @@ def build_doc():
 
     doc.add_paragraph("RankUp Education — Authentication & Login Logic", style="Title")
     doc.add_paragraph(
-        "Web API, database model, JWT tokens, registration workflow, class hierarchy, and request flows.",
+        "Web API, React portal, Flutter mobile — username rules, login identifiers, "
+        "registration approval, must-change-password, and notifications.",
         style="Subtitle",
     )
 
     add_table(
         doc,
         ["Prepared for", "Scope", "Auth model"],
-        [["RankUp Education workspace", "WebApi + Flutter Mobile", "JWT access token + hashed refresh token"]],
+        [[
+            "RankUp Education workspace",
+            "WebApi + React + Flutter Mobile",
+            "JWT access token + hashed refresh token",
+        ]],
         [2200, 3200, 3960],
     )
 
     doc.add_heading("1. Executive Summary", level=1)
     for item in [
         "All authenticated API calls use a Bearer JWT access token.",
-        "Login validates username and password against app_users. Only is_active = true with a non-null password_hash may sign in.",
-        "Registration creates an inactive app_users row. Admin approval activates the account, sets a password, and creates the role profile.",
-        "Five roles: SuperAdmin, SchoolAdmin, Teacher, Student, Parent.",
-        "Mobile uses one login screen; role comes from the API response after authentication.",
-        "All API responses use ApiResponse<T> with success, message, data, and errors.",
+        "Login accepts CNIC or mobile number (also matches stored username). Only is_active=true with a non-null password_hash may sign in.",
+        "Username priority: CNIC if provided, otherwise mobile. When CNIC is set, username becomes CNIC.",
+        "Registration creates an inactive app_users row with identity fields persisted. Approval activates, sets password, forces password change, and creates a slim role profile.",
+        "admin_target School Admin → School Admin + Portal Admin can approve; Portal Admin → Portal Admin only. Eligible admins get in-app notifications.",
+        "must_change_password: true = must change; null/false = no force; after user changes password once → false.",
+        "Five roles: SuperAdmin (Portal Admin), SchoolAdmin, Teacher, Student, Parent.",
     ]:
         add_bullet(doc, item)
 
     add_note(
         doc,
-        "Important",
-        "Extra registration form fields (email, school name, reason) are validated but NOT persisted. "
-        "Only username (mobile), display_name, role, requested_at, is_active, and password_hash are stored.",
-        "FFF8E8",
+        "Current model",
+        "Registration fields are persisted on app_users. School/campus/CNIC/roll/teacher code live on app_users; "
+        "profile tables keep role-specific fields only (e.g. student grade/section).",
+        "EEF8F1",
     )
 
-    doc.add_heading("2. Solution Architecture", level=1)
-    doc.add_heading("2.1 Web API layers", level=2)
+    doc.add_heading("2. Username & Login Rules", level=1)
+    doc.add_heading("2.1 Username priority", level=2)
+    for item in [
+        "If CNIC is provided → username = CNIC (and cnic column is set).",
+        "If CNIC is absent → username = mobile_number.",
+        "On approval, if CNIC is set/updated → username is updated to CNIC when needed.",
+    ]:
+        add_bullet(doc, item)
+
+    doc.add_heading("2.2 Login identifiers", level=2)
+    add_code(
+        doc,
+        "GetByLoginIdentifierAsync(identifier):\n"
+        "  1. Match app_users.username\n"
+        "  2. Else match app_users.cnic\n"
+        "  3. Else match app_users.mobile_number\n"
+        "Clients send the identifier in the username JSON field.",
+    )
+
+    doc.add_heading("2.3 must_change_password", level=2)
     add_table(
         doc,
-        ["Layer", "Project", "Responsibility"],
+        ["Value", "Meaning"],
         [
-            ["API", "RankUpEducation.Api", "HTTP endpoints, JWT middleware, rate limiting"],
-            ["Application", "RankUpEducation.Application", "AuthService, business rules, permissions"],
-            ["Contracts", "RankUpEducation.Contracts", "Request/response DTOs"],
-            ["Domain", "RankUpEducation.Domain", "User, RefreshToken, UserRole"],
-            ["Infrastructure", "RankUpEducation.Infrastructure", "EF Core, JWT, password hashing"],
-            ["Common", "RankUpEducation.Common", "CORS, rate limiting, health checks"],
+            ["null or false", "No forced password change"],
+            ["true", "User must change password (set on admin approval)"],
+            ["After change-password", "Set to false"],
         ],
-        [1400, 2800, 5160],
+        [2800, 6560],
     )
 
-    doc.add_heading("2.2 Mobile layers", level=2)
+    doc.add_heading("3. Admin Target & Approval Routing", level=1)
     add_table(
         doc,
-        ["Layer", "Path", "Responsibility"],
+        ["admin_target", "When set", "Who can approve", "Who is notified"],
         [
-            ["Presentation", "features/authentication/presentation/", "LoginPage, AuthController"],
-            ["Domain", "features/authentication/domain/", "AuthRepository, entities"],
-            ["Data", "features/authentication/data/", "ApiAuthRepository, datasources, models"],
-            ["Core", "core/storage/token_store.dart", "Secure token persistence"],
+            [
+                "School Admin",
+                "School selected",
+                "School Admin (same school) + Portal Admin",
+                "Matching School Admins + SuperAdmins",
+            ],
+            [
+                "Portal Admin",
+                "No school selected",
+                "Portal Admin (SuperAdmin) only",
+                "SuperAdmins only",
+            ],
         ],
-        [1600, 3600, 4160],
+        [1800, 1800, 3000, 2760],
     )
+    add_bullet(doc, "Notifications use app_notifications with category RegistrationRequest.")
 
-    doc.add_heading("3. Database Model", level=1)
-    doc.add_heading("3.1 app_users columns", level=2)
+    doc.add_heading("4. Database Model — app_users", level=1)
     add_table(
         doc,
         ["Column", "Type", "Purpose"],
         [
-            ["id", "BIGINT", "Primary key"],
-            ["username", "VARCHAR(50)", "Unique login id (mobile for self-registration)"],
-            ["display_name", "VARCHAR(50)", "Full name"],
-            ["role", "TEXT", "superadmin | schooladmin | teacher | student | parent"],
-            ["password_hash", "TEXT NULL", "PBKDF2 hash; NULL while pending"],
-            ["is_active", "BOOLEAN", "Login gate"],
-            ["requested_at", "TIMESTAMPTZ", "Registration submission time"],
+            ["username", "VARCHAR(50)", "CNIC if present, else mobile"],
+            ["mobile_number", "VARCHAR(40)", "Contact + alternate login id"],
+            ["cnic", "VARCHAR(20)", "Unique when set; preferred username"],
+            ["school_id / campus_id", "INTEGER NULL", "Scope owned on user"],
+            ["must_change_password", "BOOLEAN NULL", "true = force; null/false = no force"],
+            ["admin_target", "VARCHAR(80)", "School Admin | Portal Admin"],
+            ["roll_number_teacher_code", "VARCHAR(80)", "Student roll or teacher code"],
+            ["reason_message / email", "VARCHAR", "Optional registration fields"],
+            ["password_hash", "TEXT NULL", "NULL while pending"],
+            ["is_active / requested_at", "bool / timestamptz", "Pending vs active gate"],
         ],
-        [2200, 1800, 5360],
+        [2600, 1800, 4960],
     )
 
     add_code(doc, "Pending: is_active = false AND password_hash IS NULL\nActive:   is_active = true  AND password_hash IS NOT NULL")
 
-    doc.add_heading("3.2 Supporting tables", level=2)
+    doc.add_heading("4.1 Slim profile tables", level=2)
     add_table(
         doc,
-        ["Table", "Purpose"],
+        ["Table", "Keeps", "Moved to app_users"],
         [
-            ["refresh_tokens", "Hashed refresh tokens with expiry and revocation"],
-            ["device_sessions", "Device registration and push tokens"],
-            ["app_user_students / teachers / parents", "Role profiles with mobile_number on approval"],
+            ["app_user_students", "grade, section, mobile", "school_id, campus_id, cnic, roll"],
+            ["app_user_teachers", "mobile", "school_id, campus_id, cnic, teacher_code"],
+            ["app_user_parents", "mobile", "cnic"],
         ],
-        [3200, 6160],
-    )
-
-    doc.add_heading("4. Roles & Permissions", level=1)
-    add_table(
-        doc,
-        ["Role", "DB value", "Sample permissions"],
-        [
-            ["SuperAdmin", "superadmin", "platform.manage, registration.review"],
-            ["SchoolAdmin", "schooladmin", "school.manage, registration.review, quiz.manage"],
-            ["Teacher", "teacher", "quiz.create, quiz.assign, attendance.mark"],
-            ["Student", "student", "quiz.attempt, dashboard.view"],
-            ["Parent", "parent", "child.view, dashboard.view"],
-        ],
-        [1800, 1800, 5760],
+        [2400, 2800, 4160],
     )
 
     doc.add_heading("5. API Endpoints", level=1)
@@ -284,30 +304,35 @@ def build_doc():
         doc,
         ["Method", "Route", "Auth", "Description"],
         [
-            ["POST", "/api/auth/login", "Anonymous", "Login with username + password"],
-            ["POST", "/api/auth/register", "Anonymous", "Submit registration request"],
-            ["GET", "/api/auth/registrations/pending", "Admin", "List pending registrations"],
-            ["POST", "/api/auth/registrations/{id}/approve", "Admin", "Activate user + create profile"],
+            ["POST", "/api/auth/login", "Anonymous", "CNIC or mobile + password"],
+            ["POST", "/api/auth/register", "Anonymous", "Pending user + notify admins"],
+            ["GET", "/api/auth/registration-options/schools", "Anonymous", "School dropdown"],
+            ["GET", "/api/auth/registration-options/schools/{id}/campuses", "Anonymous", "Campus dropdown"],
+            ["GET", "/api/auth/registrations/pending", "Admin", "List pending (scoped)"],
+            ["POST", "/api/auth/registrations/{id}/approve", "Admin", "Activate + force password change"],
             ["POST", "/api/auth/registrations/{id}/reject", "Admin", "Delete pending request"],
+            ["POST", "/api/auth/change-password", "JWT", "Clears must_change_password"],
             ["POST", "/api/auth/token/refresh", "Anonymous", "Refresh access token"],
             ["POST", "/api/auth/logout", "Anonymous", "Revoke refresh token"],
-            ["GET", "/api/auth/me", "Bearer JWT", "Current user profile"],
+            ["GET", "/api/auth/me", "JWT", "Current user profile"],
             ["POST", "/api/auth/password-reset/request", "Anonymous", "Admin-mediated reset"],
         ],
-        [900, 3200, 1200, 4060],
+        [900, 3600, 1200, 3660],
     )
 
     doc.add_heading("6. Registration Flow", level=1)
     add_code(
         doc,
-        "Mobile → POST /api/auth/register\n"
-        "  → AuthService.RegisterAccountAsync()\n"
-        "  → INSERT app_users (username=mobile, display_name, role,\n"
-        "                      is_active=false, password_hash=NULL, requested_at=now())\n\n"
+        "Client → POST /api/auth/register\n"
+        "  → username = CNIC ?? mobile\n"
+        "  → admin_target = schoolId ? School Admin : Portal Admin\n"
+        "  → INSERT pending app_users\n"
+        "  → notify eligible admins (RegistrationRequest)\n\n"
         "Admin → POST /api/auth/registrations/{id}/approve\n"
-        "  → INSERT profile row (student | teacher | parent)\n"
-        "  → user.Activate(passwordHash)\n"
-        "  → is_active = true",
+        "  → enforce admin_target rules\n"
+        "  → if CNIC set → username = CNIC\n"
+        "  → INSERT slim profile\n"
+        "  → Activate + RequirePasswordChange (true)",
     )
 
     doc.add_heading("6.1 Approve payload by role", level=2)
@@ -317,7 +342,7 @@ def build_doc():
         [
             ["Student", "password, schoolId, campusId, grade, studentRollNumber"],
             ["Teacher", "password, schoolId, campusId, teacherCode"],
-            ["Parent", "password (optional cnic)"],
+            ["Parent", "password (optional cnic / mobile)"],
         ],
         [1800, 7560],
     )
@@ -325,42 +350,16 @@ def build_doc():
     doc.add_heading("7. Login Flow", level=1)
     add_code(
         doc,
-        "Mobile → POST /api/auth/login { username, password }\n"
-        "  1. UserRepository.GetByUsernameAsync()\n"
-        "  2. Attach profile context (schoolId, campusId, profileId)\n"
-        "  3. user.EnsureCanLogin() — active + password required\n"
+        "Client → POST /api/auth/login { username: CNIC|mobile, password }\n"
+        "  1. GetByLoginIdentifierAsync()\n"
+        "  2. Attach profile context\n"
+        "  3. EnsureCanLogin()\n"
         "  4. PasswordHasher.Verify()\n"
-        "  5. IssueRefreshToken() → INSERT refresh_tokens (hashed)\n"
-        "  6. JwtTokenService.CreateAccessToken()\n"
-        "  → LoginResponse { accessToken, refreshToken, user }",
+        "  5. IssueRefreshToken + CreateAccessToken\n"
+        "  → LoginResponse includes mustChangePassword",
     )
 
-    doc.add_heading("7.1 Login failure cases", level=2)
-    add_table(
-        doc,
-        ["Condition", "HTTP", "Message"],
-        [
-            ["Unknown username / wrong password", "401", "Invalid username or password"],
-            ["Pending registration", "401", "This account is pending admin approval"],
-            ["Inactive account", "401", "This account is not active"],
-            ["Validation error", "400", "Errors array in ApiResponse"],
-        ],
-        [3600, 1200, 4560],
-    )
-
-    doc.add_heading("8. Token Refresh & Logout", level=1)
-    add_code(
-        doc,
-        "Refresh: POST /api/auth/token/refresh\n"
-        "  → Hash refresh token (SHA-256 hex)\n"
-        "  → Lookup refresh_tokens, verify active\n"
-        "  → Revoke old token, issue new pair\n\n"
-        "Logout: POST /api/auth/logout\n"
-        "  → Revoke refresh token row\n"
-        "  → Mobile clears TokenStore + local cache",
-    )
-
-    doc.add_heading("9. JWT Claims", level=1)
+    doc.add_heading("8. JWT Claims", level=1)
     add_table(
         doc,
         ["Claim", "Source"],
@@ -369,87 +368,49 @@ def build_doc():
             ["name", "app_users.username"],
             ["role", "UserRole enum"],
             ["permissions", "AuthPermissions.ForRole()"],
-            ["profileId", "Profile table id (student_id / teacher_id / parent_id)"],
-            ["schoolId / campusId", "From profile when applicable (int)"],
+            ["profileId", "Profile table id"],
+            ["schoolId / campusId", "app_users.school_id / campus_id"],
         ],
         [2800, 6560],
     )
+    add_bullet(doc, "mustChangePassword is returned on login/me/change-password responses, not as a JWT claim.")
 
-    doc.add_heading("10. Class Hierarchy — Web API", level=1)
-    add_code(
-        doc,
-        "Api.Controllers.AuthController\n"
-        "Application.Auth.AuthService : IAuthService\n"
-        "Application.Auth.AuthMapping / RegistrationMapping\n"
-        "Application.Auth.AuthPermissions\n"
-        "Infrastructure.Authentication.JwtTokenService : ITokenService\n"
-        "Infrastructure.Authentication.PasswordHasher : IPasswordHasher\n"
-        "Infrastructure.Authentication.CurrentUserService : ICurrentUserService\n"
-        "Infrastructure.Persistence.Repositories.UserRepository : IUserRepository\n"
-        "Domain.Auth.User, RefreshToken, DeviceSession, UserRole\n"
-        "Contracts.Auth.* (LoginRequest, LoginResponse, RegisterAccountRequest, etc.)",
-    )
-
-    doc.add_heading("10.1 User domain methods", level=2)
-    add_table(
-        doc,
-        ["Method", "Purpose"],
-        [
-            ["CreateRegistrationRequest()", "Factory for pending registration"],
-            ["EnsureCanLogin()", "Blocks inactive or passwordless accounts"],
-            ["Activate(passwordHash)", "Sets password and is_active = true"],
-            ["AttachProfileContext()", "Loads school/campus/profile from profile tables"],
-            ["AddRefreshToken()", "Links refresh token to user"],
-        ],
-        [3600, 5760],
-    )
-
-    doc.add_heading("10.2 Class Hierarchy — Mobile", level=1)
-    add_code(
-        doc,
-        "presentation/login_page.dart, auth_controller.dart\n"
-        "domain/repositories/auth_repository.dart\n"
-        "domain/entities/app_user.dart, auth_session.dart, user_role.dart\n"
-        "data/repositories/api_auth_repository.dart\n"
-        "data/datasources/auth_remote_datasource.dart\n"
-        "data/models/app_user_model.dart, auth_session_model.dart",
-    )
-
-    doc.add_heading("11. Security", level=1)
+    doc.add_heading("9. Security", level=1)
     for item in [
         "Passwords: PBKDF2-SHA256, 100,000 iterations.",
         "Refresh tokens stored as SHA-256 hex only.",
         "Login rate limit: 8 requests per 60 seconds.",
-        "Password reset does not reveal whether username exists.",
+        "Password reset does not reveal whether the identifier exists.",
         "JWT signing key configured in appsettings.json → Jwt:SigningKey.",
     ]:
         add_bullet(doc, item)
 
-    doc.add_heading("12. Configuration", level=1)
+    doc.add_heading("10. Configuration", level=1)
     add_table(
         doc,
         ["Setting", "Location", "Notes"],
         [
             ["JWT issuer / audience / key", "appsettings.json → Jwt", "AccessTokenMinutes default 30"],
             ["Database", "ConnectionStrings:DefaultConnection", "PostgreSQL"],
-            ["Registration schema", "Database:EnsureApiSupportTables", "Auto-applies on startup"],
+            ["Schema support", "Database:EnsureApiSupportTables", "Auto-applies on startup"],
             ["Mobile mocks", "USE_MOCKS=true", "Uses MockAuthRepository"],
         ],
         [2800, 3200, 3360],
     )
 
-    doc.add_heading("13. Related Source Files", level=1)
+    doc.add_heading("11. Related Source Files", level=1)
     add_table(
         doc,
         ["Area", "File"],
         [
             ["API controller", "WebApi/src/RankUpEducation.Api/Controllers/AuthController.cs"],
             ["Business logic", "WebApi/src/RankUpEducation.Application/Auth/AuthService.cs"],
-            ["JWT service", "WebApi/src/RankUpEducation.Infrastructure/Authentication/JwtTokenService.cs"],
             ["User repository", "WebApi/src/RankUpEducation.Infrastructure/Persistence/Repositories/UserRepository.cs"],
-            ["Registration SQL", "docs/RankUpEducation_app_users_registration.sql"],
+            ["Schema initializer", "WebApi/src/RankUpEducation.Infrastructure/Persistence/ApiSupportSchemaInitializer.cs"],
+            ["Baseline SQL", "docs/RankUpEducatoin_sql.sql"],
+            ["HTML / DOCX / builder", "docs/RankUp_Authentication_Logic.html|.docx|.py"],
+            ["React auth", "React/src/features/authentication/"],
             ["Mobile login", "Mobile/lib/features/authentication/presentation/pages/login_page.dart"],
-            ["Mobile API client", "Mobile/lib/features/authentication/data/datasources/auth_remote_datasource.dart"],
         ],
         [2400, 6960],
     )
@@ -457,11 +418,13 @@ def build_doc():
     add_note(
         doc,
         "Version",
-        "Reflects app_users registration model without JSONB column or account_requests table.",
+        "Aligned with current application logic (Jul 2026): CNIC/mobile username & login, "
+        "persisted registration identity, slim profiles, admin_target routing, must_change_password, "
+        "and in-app registration notifications.",
     )
 
     doc.core_properties.title = "RankUp Education — Authentication & Login Logic"
-    doc.core_properties.subject = "Authentication, login, registration, JWT, and class hierarchy"
+    doc.core_properties.subject = "Authentication, login, registration, JWT, admin target, must-change-password"
     doc.save(OUTPUT)
 
 

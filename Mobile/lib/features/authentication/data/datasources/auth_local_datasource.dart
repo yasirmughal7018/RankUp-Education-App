@@ -12,16 +12,7 @@ class AuthLocalDataSource {
   final FlutterSecureStorage _storage;
 
   Future<void> saveUser(AppUser user) {
-    final model = AppUserModel(
-      id: user.id,
-      name: user.name,
-      role: user.role,
-      permissions: user.permissions,
-      schoolId: user.schoolId,
-      campusId: user.campusId,
-      profileId: user.profileId,
-    );
-
+    final model = AppUserModel.fromEntity(user);
     return _storage.write(key: _userKey, value: jsonEncode(model.toJson()));
   }
 

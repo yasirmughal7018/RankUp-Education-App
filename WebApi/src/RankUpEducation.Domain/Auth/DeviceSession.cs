@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Auth;
@@ -18,7 +19,7 @@ public sealed class DeviceSession : BaseEntity
         DateTimeOffset lastSeenAt)
     {
         UserId = userId;
-        DeviceId = deviceId.Trim();
+        DeviceId = deviceId.AsTrimmedString();
         Platform = platform;
         PushToken = pushToken;
         AppVersion = appVersion;

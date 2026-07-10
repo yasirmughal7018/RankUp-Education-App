@@ -9,6 +9,7 @@ class AppUser {
     required this.schoolId,
     required this.campusId,
     required this.profileId,
+    this.mustChangePassword = false,
   });
 
   final String id;
@@ -18,4 +19,27 @@ class AppUser {
   final String schoolId;
   final String campusId;
   final String profileId;
+  final bool mustChangePassword;
+
+  AppUser copyWith({
+    String? id,
+    String? name,
+    UserRole? role,
+    List<String>? permissions,
+    String? schoolId,
+    String? campusId,
+    String? profileId,
+    bool? mustChangePassword,
+  }) {
+    return AppUser(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      role: role ?? this.role,
+      permissions: permissions ?? this.permissions,
+      schoolId: schoolId ?? this.schoolId,
+      campusId: campusId ?? this.campusId,
+      profileId: profileId ?? this.profileId,
+      mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+    );
+  }
 }

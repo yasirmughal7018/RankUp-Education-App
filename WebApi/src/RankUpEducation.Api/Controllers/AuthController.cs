@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using RankUpEducation.Application.Auth;
+using RankUpEducation.Application.Directory;
 using RankUpEducation.Contracts.Auth;
 using RankUpEducation.Contracts.Common;
+using RankUpEducation.Contracts.Directory;
 
 namespace RankUpEducation.Api.Controllers;
 
@@ -30,6 +32,20 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<LoginResponse>.Ok(result, "Login successful."));
     }
 
+    /// <summary>
+    /// First login after admin approval: set password and receive tokens (no prior password).
+    /// </summary>
+    [HttpPost("set-initial-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("Login")]
+    public async Task<ActionResult<ApiResponse<LoginResponse>>> SetInitialPasswordAsync(
+        [FromBody] SetInitialPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.SetInitialPasswordAsync(request, cancellationToken);
+        return Ok(ApiResponse<LoginResponse>.Ok(result, "Password set. You are now signed in."));
+    }
+
     [HttpPost("register")]
     [AllowAnonymous]
     [EnableRateLimiting("UsersAnonymous")]
@@ -39,6 +55,29 @@ public sealed class AuthController : ControllerBase
     {
         var result = await _authService.RegisterAccountAsync(request, cancellationToken);
         return Ok(ApiResponse<RegisterAccountResponse>.Ok(result, "Registration request sent to admin."));
+    }
+
+    [HttpGet("registration-options/schools")]
+    [AllowAnonymous]
+    [EnableRateLimiting("UsersAnonymous")]
+    public async Task<ActionResult<ApiResponse<SchoolListResponse>>> ListRegistrationSchoolsAsync(
+        [FromServices] IDirectoryService directoryService,
+        CancellationToken cancellationToken)
+    {
+        var response = await directoryService.ListPublicSchoolsAsync(cancellationToken);
+        return Ok(ApiResponse<SchoolListResponse>.Ok(response));
+    }
+
+    [HttpGet("registration-options/schools/{schoolId:long}/campuses")]
+    [AllowAnonymous]
+    [EnableRateLimiting("UsersAnonymous")]
+    public async Task<ActionResult<ApiResponse<CampusListResponse>>> ListRegistrationCampusesAsync(
+        long schoolId,
+        [FromServices] IDirectoryService directoryService,
+        CancellationToken cancellationToken)
+    {
+        var response = await directoryService.ListPublicCampusesAsync(schoolId, cancellationToken);
+        return Ok(ApiResponse<CampusListResponse>.Ok(response));
     }
 
     [HttpGet("registrations/pending")]
@@ -55,11 +94,10 @@ public sealed class AuthController : ControllerBase
     [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> ApproveRegistrationAsync(
         long userId,
-        [FromBody] ApproveRegistrationRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _authService.ApproveRegistrationAsync(userId, request, cancellationToken);
-        return Ok(ApiResponse<CurrentUserResponse>.Ok(result, "Registration approved."));
+        var result = await _authService.ApproveRegistrationAsync(userId, cancellationToken);
+        return Ok(ApiResponse<CurrentUserResponse>.Ok(result, "Registration approved. User must set a password on first login."));
     }
 
     [HttpPost("registrations/{userId:long}/reject")]

@@ -31,6 +31,23 @@ class AuthRemoteDataSource {
     );
   }
 
+  Future<AuthSession> setInitialPassword({
+    required String identifier,
+    required String newPassword,
+  }) async {
+    if (kDebugMode) {
+      debugPrint(
+        'AuthRemoteDataSource.setInitialPassword -> POST /auth/set-initial-password '
+        '(username: $identifier)',
+      );
+    }
+
+    return _requestSession(
+      '/auth/set-initial-password',
+      data: {'username': identifier, 'newPassword': newPassword},
+    );
+  }
+
   Future<void> requestPasswordReset({required String identifier}) {
     return _requestVoid(
       '/auth/password-reset/request',
@@ -43,30 +60,75 @@ class AuthRemoteDataSource {
     required String mobileNumber,
     required String emailAddress,
     required String userType,
-    required String schoolCampusName,
-    required String studentOrEmployeeId,
-    required String adminTarget,
+    required String rollNumberTeacherCode,
     required String reasonMessage,
     String? cnic,
     int? schoolId,
     int? campusId,
   }) {
+    final adminTarget = schoolId != null ? 'School Admin' : 'Portal Admin';
     return _requestVoid(
       '/auth/register',
       data: {
         'fullName': fullName,
         'mobileNumber': mobileNumber,
-        'emailAddress': emailAddress,
+        'emailAddress': emailAddress.isEmpty ? null : emailAddress,
         'userType': userType,
-        'schoolCampusName': schoolCampusName,
-        'studentOrEmployeeId': studentOrEmployeeId,
+        'rollNumberTeacherCode':
+            rollNumberTeacherCode.isEmpty ? null : rollNumberTeacherCode,
         'adminTarget': adminTarget,
-        'reasonMessage': reasonMessage,
+        'reasonMessage': reasonMessage.isEmpty ? null : reasonMessage,
         if (cnic != null && cnic.isNotEmpty) 'cnic': cnic,
         if (schoolId != null) 'schoolId': schoolId,
-        if (campusId != null) 'campusId': campusId,
+        if (schoolId != null && campusId != null) 'campusId': campusId,
       },
     );
+  }
+
+  Future<List<({int id, String name})>> listRegistrationSchools() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/auth/registration-options/schools',
+        options: Options(extra: {'skipAuthRefresh': true}),
+      );
+      final payload = _unwrap(response.data);
+      final items = payload['items'] as List<dynamic>? ?? const [];
+      return items
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (item) => (
+              id: (item['id'] as num).toInt(),
+              name: item['name'] as String? ?? 'School ${item['id']}',
+            ),
+          )
+          .toList();
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
+  Future<List<({int id, String name})>> listRegistrationCampuses(
+    int schoolId,
+  ) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/auth/registration-options/schools/$schoolId/campuses',
+        options: Options(extra: {'skipAuthRefresh': true}),
+      );
+      final payload = _unwrap(response.data);
+      final items = payload['items'] as List<dynamic>? ?? const [];
+      return items
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (item) => (
+              id: (item['id'] as num).toInt(),
+              name: item['name'] as String? ?? 'Campus ${item['id']}',
+            ),
+          )
+          .toList();
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
   }
 
   Future<AuthTokensModel> refreshToken({required String refreshToken}) async {
@@ -86,6 +148,26 @@ class AuthRemoteDataSource {
   Future<AppUser> getCurrentUser() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/auth/me');
+      final payload = _unwrap(response.data);
+      return AppUserModel.fromJson(payload);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
+  Future<AppUser> changePassword({
+    required String newPassword,
+    String? currentPassword,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/change-password',
+        data: {
+          'newPassword': newPassword,
+          if (currentPassword != null && currentPassword.isNotEmpty)
+            'currentPassword': currentPassword,
+        },
+      );
       final payload = _unwrap(response.data);
       return AppUserModel.fromJson(payload);
     } on DioException catch (error) {

@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Auth;
@@ -25,16 +26,16 @@ public sealed class User : SoftDeleteEntity
         string? cnic = null,
         string? emailAddress = null)
     {
-        Username = username.Trim();
+        Username = username.AsTrimmedString();
         PasswordHash = passwordHash;
-        FullName = fullName.Trim();
+        FullName = fullName.AsTrimmedString();
         Role = role;
         ProfileId = profileId;
         SchoolId = schoolId;
         CampusId = campusId;
-        MobileNumber = NormalizeOptional(mobileNumber);
-        Cnic = NormalizeOptional(cnic);
-        EmailAddress = NormalizeOptional(emailAddress);
+        MobileNumber = mobileNumber.AsTrimmedOrNull();
+        Cnic = cnic.AsTrimmedOrNull();
+        EmailAddress = emailAddress.AsNormalizedEmailOrNull();
         CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
         MustChangePassword = false;
@@ -50,11 +51,11 @@ public sealed class User : SoftDeleteEntity
     public string? MobileNumber { get; private set; }
     public string? Cnic { get; private set; }
     public string? EmailAddress { get; private set; }
-    public bool MustChangePassword { get; private set; }
+    public bool? MustChangePassword { get; private set; }
     public string? ReasonMessage { get; private set; }
     public string? AdminTarget { get; private set; }
-    public string? SchoolCampusName { get; private set; }
-    public string? StudentOrEmployeeId { get; private set; }
+    /// <summary>Student roll number or teacher code (shared identity field).</summary>
+    public string? RollNumberTeacherCode { get; private set; }
     public DateOnly? CreatedDate { get; private set; }
     public DateOnly? ModifiedDate { get; private set; }
     public bool IsActive { get; private set; }
@@ -63,7 +64,10 @@ public sealed class User : SoftDeleteEntity
     public IReadOnlyCollection<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyCollection<DeviceSession> DeviceSessions => _deviceSessions;
 
-    public bool IsPendingRegistration => !IsActive && string.IsNullOrWhiteSpace(PasswordHash);
+    public bool IsPendingRegistration => !IsActive && !PasswordHash.HasTrimmedText();
+
+    /// <summary>Approved by admin but user has not set a password yet.</summary>
+    public bool NeedsPasswordSetup => IsActive && !PasswordHash.HasTrimmedText();
 
     public static User CreateRegistrationRequest(
         string username,
@@ -77,47 +81,78 @@ public sealed class User : SoftDeleteEntity
         int? campusId = null,
         string? reasonMessage = null,
         string? adminTarget = null,
-        string? schoolCampusName = null,
-        string? studentOrEmployeeId = null)
+        string? rollNumberTeacherCode = null)
     {
         return new User
         {
-            Username = username.Trim(),
-            FullName = fullName.Trim(),
+            Username = username.AsTrimmedString(),
+            FullName = fullName.AsTrimmedString(),
             Role = role,
             PasswordHash = null,
             IsActive = false,
             RequestedAt = requestedAt,
-            MobileNumber = mobileNumber.Trim(),
-            EmailAddress = NormalizeOptional(emailAddress),
-            Cnic = NormalizeOptional(cnic),
+            MobileNumber = mobileNumber.AsTrimmedString(),
+            EmailAddress = emailAddress.AsNormalizedEmailOrNull(),
+            Cnic = cnic.AsTrimmedOrNull(),
             SchoolId = schoolId,
             CampusId = campusId,
             CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            ReasonMessage = NormalizeOptional(reasonMessage),
-            AdminTarget = NormalizeOptional(adminTarget),
-            SchoolCampusName = NormalizeOptional(schoolCampusName),
-            StudentOrEmployeeId = NormalizeOptional(studentOrEmployeeId),
-            MustChangePassword = false
+            ReasonMessage = reasonMessage.AsTrimmedOrNull(),
+            AdminTarget = adminTarget.AsTrimmedOrNull(),
+            RollNumberTeacherCode = rollNumberTeacherCode.AsTrimmedOrNull(),
+            MustChangePassword = null
         };
     }
 
     public void EnsureCanLogin()
     {
-        if (!IsActive || IsDeleted)
+        if (IsDeleted)
         {
             throw new BusinessRuleException("This account is not active.");
         }
 
-        if (string.IsNullOrWhiteSpace(PasswordHash))
+        // Pending registration: inactive and no password until an admin approves.
+        if (IsPendingRegistration)
         {
-            throw new BusinessRuleException("This account is pending admin approval.");
+            throw new BusinessRuleException(
+                "Your login is not approved yet. Please wait for admin approval.");
         }
+
+        if (!IsActive)
+        {
+            throw new BusinessRuleException("This account is not active.");
+        }
+
+        // NeedsPasswordSetup is allowed through LoginAsync (password setup path).
+        // Callers that require a full password must check NeedsPasswordSetup separately.
+    }
+
+    public void EnsureHasPassword()
+    {
+        if (!PasswordHash.HasTrimmedText())
+        {
+            throw new BusinessRuleException(
+                "You must set a password before continuing.");
+        }
+    }
+
+    /// <summary>Approve registration without setting a password. User must set one on first login.</summary>
+    public void ApprovePendingRegistration()
+    {
+        if (!IsPendingRegistration)
+        {
+            throw new BusinessRuleException("This user is not a pending registration request.");
+        }
+
+        IsActive = true;
+        PasswordHash = null;
+        MustChangePassword = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     public void Activate(string passwordHash)
     {
-        if (string.IsNullOrWhiteSpace(passwordHash))
+        if (!passwordHash.HasTrimmedText())
         {
             throw new BusinessRuleException("Password is required to activate the account.");
         }
@@ -128,13 +163,26 @@ public sealed class User : SoftDeleteEntity
 
     public void RequirePasswordChange()
     {
+        // true = user must change password on next login.
         MustChangePassword = true;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     public void ClearPasswordChangeRequirement()
     {
+        // null/false = no forced change required (after user changes once → false).
         MustChangePassword = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetUsername(string username)
+    {
+        if (!username.HasTrimmedText())
+        {
+            throw new BusinessRuleException("Username is required.");
+        }
+
+        Username = username.AsTrimmedString();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -155,22 +203,28 @@ public sealed class User : SoftDeleteEntity
 
     public void UpdateContactInfo(string? mobileNumber, string? cnic)
     {
-        if (!string.IsNullOrWhiteSpace(mobileNumber))
+        if (mobileNumber.HasTrimmedText())
         {
-            MobileNumber = mobileNumber.Trim();
+            MobileNumber = mobileNumber.AsTrimmedString();
         }
 
-        if (!string.IsNullOrWhiteSpace(cnic))
+        if (cnic.HasTrimmedText())
         {
-            Cnic = cnic.Trim();
+            Cnic = cnic.AsTrimmedString();
         }
 
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    public void SetRollNumberTeacherCode(string? rollNumberTeacherCode)
+    {
+        RollNumberTeacherCode = rollNumberTeacherCode.AsTrimmedOrNull();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
     public void UpdateProfile(string fullName)
     {
-        FullName = fullName.Trim();
+        FullName = fullName.AsTrimmedString();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -182,7 +236,7 @@ public sealed class User : SoftDeleteEntity
 
     public void SetPasswordHash(string passwordHash)
     {
-        if (string.IsNullOrWhiteSpace(passwordHash))
+        if (!passwordHash.HasTrimmedText())
         {
             throw new BusinessRuleException("Password hash is required.");
         }
@@ -219,7 +273,4 @@ public sealed class User : SoftDeleteEntity
 
         existing.Update(deviceSession.Platform, deviceSession.PushToken, deviceSession.AppVersion, deviceSession.LastSeenAt);
     }
-
-    private static string? NormalizeOptional(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

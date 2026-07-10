@@ -1,9 +1,16 @@
+import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 
 abstract class AuthRepository {
   Future<AuthSession> login({
     required String identifier,
     required String password,
+  });
+
+  /// First login after approval: set password and receive a session.
+  Future<AuthSession> setInitialPassword({
+    required String identifier,
+    required String newPassword,
   });
 
   Future<void> requestPasswordReset({required String identifier});
@@ -13,16 +20,23 @@ abstract class AuthRepository {
     required String mobileNumber,
     required String emailAddress,
     required String userType,
-    required String schoolCampusName,
-    required String studentOrEmployeeId,
-    required String adminTarget,
+    required String rollNumberTeacherCode,
     required String reasonMessage,
     String? cnic,
     int? schoolId,
     int? campusId,
   });
 
+  Future<List<({int id, String name})>> listRegistrationSchools();
+
+  Future<List<({int id, String name})>> listRegistrationCampuses(int schoolId);
+
   Future<AuthSession> refreshSession();
+
+  Future<AppUser> changePassword({
+    required String newPassword,
+    String? currentPassword,
+  });
 
   Future<void> logout();
 

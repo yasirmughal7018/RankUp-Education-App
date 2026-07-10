@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Questions;
@@ -13,8 +14,8 @@ public sealed class QuestionAcceptedAnswer : BaseEntity
     public QuestionAcceptedAnswer(long questionId, string answerText)
     {
         QuestionId = questionId;
-        AnswerText = answerText.Trim();
-        NormalizedAnswer = answerText.Trim().ToLowerInvariant();
+        AnswerText = answerText.AsTrimmedString();
+        NormalizedAnswer = answerText.AsLowercase();
     }
 
     public long QuestionId { get; private set; }

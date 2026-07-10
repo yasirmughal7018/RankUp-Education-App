@@ -1,5 +1,5 @@
 namespace RankUpEducation.Contracts.Auth;
 
 public sealed record ChangePasswordRequest(
-    string CurrentPassword,
-    string NewPassword);
+    string NewPassword,
+    string? CurrentPassword = null);

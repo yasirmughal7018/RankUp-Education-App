@@ -29,4 +29,30 @@ public sealed class NotificationRepository : INotificationRepository
             .Take(take)
             .ToListAsync(cancellationToken);
     }
+
+    public Task<Notification?> GetByIdForUserAsync(
+        long notificationId,
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.Notifications
+            .FirstOrDefaultAsync(
+                notification => notification.Id == notificationId && notification.UserId == userId,
+                cancellationToken);
+    }
+
+    public async Task MarkCategoryReadAsync(long userId, string category, CancellationToken cancellationToken)
+    {
+        var items = await _dbContext.Notifications
+            .Where(notification =>
+                notification.UserId == userId
+                && notification.Category == category
+                && !notification.IsRead)
+            .ToListAsync(cancellationToken);
+
+        foreach (var item in items)
+        {
+            item.MarkRead();
+        }
+    }
 }

@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Attendance;
@@ -14,7 +15,7 @@ public sealed class AttendanceRecord : AuditableEntity
         StudentId = studentId;
         ClassId = classId;
         AttendanceDate = attendanceDate;
-        Status = status.Trim();
+        Status = status.AsTrimmedString();
     }
 
     public long StudentId { get; private set; }

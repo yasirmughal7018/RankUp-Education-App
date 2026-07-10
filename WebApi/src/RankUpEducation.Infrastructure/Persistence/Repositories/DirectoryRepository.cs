@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Directory;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Directory;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
@@ -84,29 +85,51 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
     public async Task<IReadOnlyList<CampusResponse>> ListCampusesAsync(long schoolId, CancellationToken cancellationToken)
     {
-        return await _dbContext.Campuses.AsNoTracking()
+        var campuses = await _dbContext.Campuses.AsNoTracking()
             .Where(campus => campus.SchoolId == schoolId && !campus.IsDeleted)
             .OrderBy(campus => campus.Name)
+            .Select(campus => new
+            {
+                campus.Id,
+                campus.SchoolId,
+                campus.Name,
+                campus.Address,
+                campus.IsActive,
+            })
+            .ToListAsync(cancellationToken);
+
+        return campuses
             .Select(campus => new CampusResponse(
                 campus.Id,
                 campus.SchoolId,
                 campus.Name,
-                string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
+                campus.Address.AsTrimmedOrNull(),
                 campus.IsActive))
-            .ToListAsync(cancellationToken);
+            .ToArray();
     }
 
     public async Task<CampusResponse?> GetCampusAsync(long campusId, CancellationToken cancellationToken)
     {
-        return await _dbContext.Campuses.AsNoTracking()
-            .Where(campus => campus.Id == campusId && !campus.IsDeleted)
-            .Select(campus => new CampusResponse(
+        var campus = await _dbContext.Campuses.AsNoTracking()
+            .Where(item => item.Id == campusId && !item.IsDeleted)
+            .Select(item => new
+            {
+                item.Id,
+                item.SchoolId,
+                item.Name,
+                item.Address,
+                item.IsActive,
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return campus is null
+            ? null
+            : new CampusResponse(
                 campus.Id,
                 campus.SchoolId,
                 campus.Name,
-                string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
-                campus.IsActive))
-            .FirstOrDefaultAsync(cancellationToken);
+                campus.Address.AsTrimmedOrNull(),
+                campus.IsActive);
     }
 
     public async Task<CampusResponse> CreateCampusAsync(
@@ -124,7 +147,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
             campus.Id,
             campus.SchoolId,
             campus.Name,
-            string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
+            campus.Address.AsTrimmedOrNull(),
             campus.IsActive);
     }
 
@@ -149,7 +172,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
             campus.Id,
             campus.SchoolId,
             campus.Name,
-            string.IsNullOrWhiteSpace(campus.Address) ? null : campus.Address,
+            campus.Address.AsTrimmedOrNull(),
             campus.IsActive);
     }
 
@@ -190,12 +213,12 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         if (schoolId is not null)
         {
-            query = query.Where(row => row.student.SchoolId == schoolId.Value);
+            query = query.Where(row => row.user.SchoolId == schoolId.Value);
         }
 
         if (campusId is not null)
         {
-            query = query.Where(row => row.student.CampusId == campusId.Value);
+            query = query.Where(row => row.user.CampusId == campusId.Value);
         }
 
         if (grade is not null)
@@ -203,13 +226,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
             query = query.Where(row => row.student.Grade == grade.Value);
         }
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (search.HasTrimmedText())
         {
-            var term = search.Trim();
+            var term = search.AsTrimmedString();
             query = query.Where(row =>
                 row.user.FullName.Contains(term)
                 || row.user.Username.Contains(term)
-                || row.student.StudentRollNumber.Contains(term));
+                || (row.user.RollNumberTeacherCode != null && row.user.RollNumberTeacherCode.Contains(term)));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -221,11 +244,11 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 row.student.Id,
                 row.user.FullName,
                 row.user.Username,
-                row.student.StudentRollNumber,
+                row.user.RollNumberTeacherCode ?? string.Empty,
                 row.student.Grade,
                 row.student.Section,
-                row.student.SchoolId,
-                row.student.CampusId,
+                row.user.SchoolId ?? 0,
+                row.user.CampusId ?? 0,
                 row.user.IsActive))
             .ToListAsync(cancellationToken);
 
@@ -248,21 +271,21 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         if (schoolId is not null)
         {
-            query = query.Where(row => row.teacher.SchoolId == schoolId.Value);
+            query = query.Where(row => row.user.SchoolId == schoolId.Value);
         }
 
         if (campusId is not null)
         {
-            query = query.Where(row => row.teacher.CampusId == campusId.Value);
+            query = query.Where(row => row.user.CampusId == campusId.Value);
         }
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (search.HasTrimmedText())
         {
-            var term = search.Trim();
+            var term = search.AsTrimmedString();
             query = query.Where(row =>
                 row.user.FullName.Contains(term)
                 || row.user.Username.Contains(term)
-                || row.teacher.TeacherCode.Contains(term));
+                || (row.user.RollNumberTeacherCode != null && row.user.RollNumberTeacherCode.Contains(term)));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -274,9 +297,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 row.teacher.Id,
                 row.user.FullName,
                 row.user.Username,
-                row.teacher.TeacherCode,
-                row.teacher.SchoolId,
-                row.teacher.CampusId,
+                row.user.RollNumberTeacherCode ?? string.Empty,
+                row.user.SchoolId ?? 0,
+                row.user.CampusId ?? 0,
                 row.user.IsActive))
             .ToListAsync(cancellationToken);
 
@@ -295,9 +318,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
             where !parent.IsDeleted && user.Role == UserRole.Parent
             select new { parent, user };
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (search.HasTrimmedText())
         {
-            var term = search.Trim();
+            var term = search.AsTrimmedString();
             query = query.Where(row =>
                 row.user.FullName.Contains(term) || row.user.Username.Contains(term));
         }

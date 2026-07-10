@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Parents;
@@ -13,7 +14,7 @@ public sealed class ParentStudentRelation : BaseEntity
     {
         ParentId = parentId;
         StudentId = studentId;
-        Relationship = relationship.Trim();
+        Relationship = relationship.AsTrimmedString();
     }
 
     public long ParentId { get; private set; }
@@ -24,7 +25,7 @@ public sealed class ParentStudentRelation : BaseEntity
 
     public void Activate(string relationship)
     {
-        Relationship = relationship.Trim();
+        Relationship = relationship.AsTrimmedString();
         IsActive = true;
     }
 

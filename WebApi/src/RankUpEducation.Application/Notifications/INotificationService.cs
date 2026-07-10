@@ -12,4 +12,8 @@ public interface INotificationService
         CancellationToken cancellationToken);
 
     Task<NotificationListResponse> ListForUserAsync(long userId, int take, CancellationToken cancellationToken);
+
+    Task MarkReadAsync(long userId, long notificationId, CancellationToken cancellationToken);
+
+    Task MarkCategoryReadAsync(long userId, string category, CancellationToken cancellationToken);
 }

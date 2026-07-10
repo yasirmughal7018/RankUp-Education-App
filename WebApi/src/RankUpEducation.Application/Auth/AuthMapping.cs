@@ -9,6 +9,9 @@ internal static class AuthMapping
     {
         var permissions = AuthPermissions.ForRole(user.Role);
 
+        // Force true when the account is approved but has no password yet.
+        var mustChangePassword = user.MustChangePassword == true || user.NeedsPasswordSetup;
+
         return new CurrentUserResponse(
             user.Id,
             user.Username,
@@ -19,6 +22,6 @@ internal static class AuthMapping
             user.SchoolId,
             user.CampusId,
             permissions,
-            user.MustChangePassword);
+            mustChangePassword);
     }
 }

@@ -1,6 +1,7 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Notifications;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Auth;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
@@ -46,7 +47,7 @@ public sealed class AuthService : IAuthService
     {
         ValidateLogin(request);
 
-        var user = await _users.GetByUsernameAsync(request.Username.Trim(), cancellationToken)
+        var user = await _users.GetByLoginIdentifierAsync(request.Username.AsTrimmedString(), cancellationToken)
             ?? throw new AuthenticationAppException("Invalid username or password.");
 
         try
@@ -56,6 +57,24 @@ public sealed class AuthService : IAuthService
         catch (BusinessRuleException exception)
         {
             throw new AuthenticationAppException(exception.Message);
+        }
+
+        if (user.NeedsPasswordSetup)
+        {
+            // Approved account with no password yet: allow sign-in so the user can set one.
+            var setupRefreshToken = IssueRefreshToken(user);
+            user.RecordLogin(_dateTimeProvider.UtcNow);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new LoginResponse(
+                _tokenService.CreateAccessToken(user),
+                setupRefreshToken,
+                user.ToCurrentUserResponse());
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Password))
+        {
+            throw new ValidationAppException(["Password is required."]);
         }
 
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash!))
@@ -73,45 +92,117 @@ public sealed class AuthService : IAuthService
             user.ToCurrentUserResponse());
     }
 
+    public async Task<LoginResponse> SetInitialPasswordAsync(
+        SetInitialPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            throw new ValidationAppException(["CNIC or mobile number is required."]);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            throw new ValidationAppException(["New password is required."]);
+        }
+
+        if (request.NewPassword.Length < 6)
+        {
+            throw new ValidationAppException(["New password must be at least 6 characters."]);
+        }
+
+        var user = await _users.GetByLoginIdentifierAsync(request.Username.AsTrimmedString(), cancellationToken)
+            ?? throw new AuthenticationAppException("Invalid username or password.");
+
+        try
+        {
+            user.EnsureCanLogin();
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new AuthenticationAppException(exception.Message);
+        }
+
+        if (!user.NeedsPasswordSetup)
+        {
+            throw new ValidationAppException([
+                "Password is already set. Sign in with your password."]);
+        }
+
+        user.SetPasswordHash(_passwordHasher.Hash(request.NewPassword));
+        user.ClearPasswordChangeRequirement();
+
+        var refreshToken = IssueRefreshToken(user);
+        user.RecordLogin(_dateTimeProvider.UtcNow);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new LoginResponse(
+            _tokenService.CreateAccessToken(user),
+            refreshToken,
+            user.ToCurrentUserResponse());
+    }
+
     public async Task<RegisterAccountResponse> RegisterAccountAsync(
         RegisterAccountRequest request,
         CancellationToken cancellationToken)
     {
         ValidateRegistration(request);
 
-        var username = request.MobileNumber.Trim();
+        var mobileNumber = request.MobileNumber.AsTrimmedString();
+        var cnic = request.Cnic.AsTrimmedOrNull();
+
+        // Username priority: CNIC if present, otherwise mobile number.
+        var username = cnic ?? mobileNumber;
+
         if (await _users.UsernameExistsAsync(username, cancellationToken))
         {
-            throw new ValidationAppException(["An account or request already exists for this mobile number."]);
+            throw new ValidationAppException([
+                cnic is null
+                    ? "An account or request already exists for this mobile number."
+                    : "An account or request already exists for this CNIC."]);
         }
 
-        var cnic = string.IsNullOrWhiteSpace(request.Cnic) ? null : request.Cnic.Trim();
         if (cnic is not null && await _users.CnicExistsAsync(cnic, cancellationToken))
         {
             throw new ValidationAppException(["An account already exists for this CNIC."]);
         }
 
+        if (await _users.MobileNumberExistsAsync(mobileNumber, cancellationToken))
+        {
+            throw new ValidationAppException(["An account or request already exists for this mobile number."]);
+        }
+
         var role = ParseRegistrationRole(request.UserType);
+        var schoolId = request.SchoolId;
+        var campusId = schoolId.HasValue ? request.CampusId : null;
+
+        // AdminTarget:
+        // - School Admin → School Admin + Portal Admin can approve
+        // - Portal Admin → Portal Admin only
+        var adminTarget = schoolId.HasValue ? "School Admin" : "Portal Admin";
+
         var user = User.CreateRegistrationRequest(
             username,
-            request.FullName.Trim(),
+            request.FullName.AsTrimmedString(),
             role,
             _dateTimeProvider.UtcNow,
-            username,
-            request.EmailAddress,
+            mobileNumber,
+            request.EmailAddress.AsNormalizedEmailOrNull(),
             cnic,
-            request.SchoolId,
-            request.CampusId,
+            schoolId,
+            campusId,
             request.ReasonMessage,
-            request.AdminTarget,
-            request.SchoolCampusName,
-            request.StudentOrEmployeeId);
+            adminTarget,
+            request.RollNumberTeacherCode);
 
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // In-app DB notifications only (category RegistrationRequest). Push is NoOp — do not rely on it.
-        var recipientIds = await _users.ListAdminRecipientsAsync(user.SchoolId, cancellationToken);
+        // In-app notifications for eligible admins already logged into RankUp Education.
+        var recipientIds = await _users.ListAdminRecipientsAsync(
+            user.AdminTarget,
+            user.SchoolId,
+            cancellationToken);
         await _notifications.CreateAsync(
             recipientIds,
             "New registration request",
@@ -142,11 +233,9 @@ public sealed class AuthService : IAuthService
 
     public async Task<CurrentUserResponse> ApproveRegistrationAsync(
         long userId,
-        ApproveRegistrationRequest request,
         CancellationToken cancellationToken)
     {
         EnsureRegistrationReviewer();
-        ValidateApprovalPassword(request);
 
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundAppException("Registration request was not found.");
@@ -156,26 +245,28 @@ public sealed class AuthService : IAuthService
             throw new BusinessRuleException("This user is not a pending registration request.");
         }
 
-        EnsureCanApproveRegistration(user, request);
+        EnsureCanApproveRegistration(user);
 
-        if (!string.IsNullOrWhiteSpace(request.Cnic)
-            && !string.Equals(request.Cnic.Trim(), user.Cnic, StringComparison.OrdinalIgnoreCase)
-            && await _users.CnicExistsAsync(request.Cnic.Trim(), cancellationToken))
+        // Username priority: when CNIC is already on the request, username becomes CNIC.
+        var resolvedCnic = user.Cnic.AsTrimmedOrNull();
+        if (resolvedCnic is not null
+            && !string.Equals(user.Username, resolvedCnic, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ValidationAppException(["An account already exists for this CNIC."]);
+            if (await _users.UsernameExistsAsync(resolvedCnic, cancellationToken))
+            {
+                throw new ValidationAppException(["An account already exists for this CNIC username."]);
+            }
+
+            user.SetUsername(resolvedCnic);
         }
 
-        user.AssignSchoolCampus(request.SchoolId, request.CampusId);
-        user.UpdateContactInfo(request.MobileNumber, request.Cnic);
+        var mobileNumber = user.MobileNumber.HasTrimmedText()
+            ? user.MobileNumber!
+            : user.Username;
 
-        var mobileNumber = string.IsNullOrWhiteSpace(user.MobileNumber)
-            ? user.Username
-            : user.MobileNumber;
+        await CreateProfileForRoleAsync(user, mobileNumber, cancellationToken);
 
-        await CreateProfileForRoleAsync(user, request, mobileNumber, cancellationToken);
-
-        user.Activate(_passwordHasher.Hash(request.Password));
-        user.RequirePasswordChange();
+        user.ApprovePendingRegistration();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var activated = await _users.GetByIdAsync(userId, cancellationToken)
@@ -206,7 +297,7 @@ public sealed class AuthService : IAuthService
     {
         ValidateRefreshToken(request);
 
-        var tokenHash = _tokenService.HashToken(request.RefreshToken.Trim());
+        var tokenHash = _tokenService.HashToken(request.RefreshToken.AsTrimmedString());
         var storedToken = await _users.GetRefreshTokenByHashAsync(tokenHash, cancellationToken)
             ?? throw new AuthenticationAppException("Invalid refresh token.");
 
@@ -233,7 +324,7 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException(["Username is required."]);
         }
 
-        _ = await _users.GetByUsernameAsync(request.Username.Trim(), cancellationToken);
+        _ = await _users.GetByLoginIdentifierAsync(request.Username.AsTrimmedString(), cancellationToken);
     }
 
     public async Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken)
@@ -253,17 +344,38 @@ public sealed class AuthService : IAuthService
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundAppException("User account was not found.");
 
-        user.EnsureCanLogin();
-
-        if (string.IsNullOrWhiteSpace(request.CurrentPassword)
-            || string.IsNullOrWhiteSpace(request.NewPassword))
+        try
         {
-            throw new ValidationAppException(["Current password and new password are required."]);
+            user.EnsureCanLogin();
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new AuthenticationAppException(exception.Message);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            throw new ValidationAppException(["New password is required."]);
         }
 
         if (request.NewPassword.Length < 6)
         {
             throw new ValidationAppException(["New password must be at least 6 characters."]);
+        }
+
+        if (user.NeedsPasswordSetup)
+        {
+            user.SetPasswordHash(_passwordHasher.Hash(request.NewPassword));
+            user.ClearPasswordChangeRequirement();
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return user.ToCurrentUserResponse();
+        }
+
+        user.EnsureHasPassword();
+
+        if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+        {
+            throw new ValidationAppException(["Current password is required."]);
         }
 
         if (!_passwordHasher.Verify(request.CurrentPassword, user.PasswordHash!))
@@ -290,7 +402,7 @@ public sealed class AuthService : IAuthService
             return;
         }
 
-        var tokenHash = _tokenService.HashToken(request.RefreshToken.Trim());
+        var tokenHash = _tokenService.HashToken(request.RefreshToken.AsTrimmedString());
         var storedToken = await _users.GetRefreshTokenByHashAsync(tokenHash, cancellationToken);
         storedToken?.Revoke(_dateTimeProvider.UtcNow);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -298,7 +410,6 @@ public sealed class AuthService : IAuthService
 
     private async Task CreateProfileForRoleAsync(
         User user,
-        ApproveRegistrationRequest request,
         string mobileNumber,
         CancellationToken cancellationToken)
     {
@@ -310,27 +421,15 @@ public sealed class AuthService : IAuthService
                     throw new BusinessRuleException("Student profile already exists.");
                 }
 
-                if (user.SchoolId is null || user.CampusId is null || request.Grade is null)
+                if (user.SchoolId is null || user.CampusId is null)
                 {
-                    throw new ValidationAppException(["School, campus, and grade are required to approve a student."]);
+                    throw new ValidationAppException(
+                        ["School and campus are required on the registration request before approval."]);
                 }
 
-                if (string.IsNullOrWhiteSpace(request.StudentRollNumber))
-                {
-                    throw new ValidationAppException(["Student roll number is required."]);
-                }
-
-                var section = string.IsNullOrWhiteSpace(request.Section) ? "A" : request.Section.Trim();
-                // Sync mobile onto profile for backward-compatible directory queries.
+                // Grade/section are not collected at request time; use defaults until profile is updated later.
                 await _users.AddStudentProfileAsync(
-                    new Student(
-                        user.Id,
-                        user.SchoolId.Value,
-                        user.CampusId.Value,
-                        request.StudentRollNumber.Trim(),
-                        request.Grade.Value,
-                        section,
-                        mobileNumber),
+                    new Student(user.Id, grade: 1, section: "A", mobileNumber),
                     cancellationToken);
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
@@ -343,21 +442,12 @@ public sealed class AuthService : IAuthService
 
                 if (user.SchoolId is null || user.CampusId is null)
                 {
-                    throw new ValidationAppException(["School and campus are required to approve a teacher."]);
-                }
-
-                if (string.IsNullOrWhiteSpace(request.TeacherCode))
-                {
-                    throw new ValidationAppException(["Teacher code is required."]);
+                    throw new ValidationAppException(
+                        ["School and campus are required on the registration request before approval."]);
                 }
 
                 await _users.AddTeacherProfileAsync(
-                    new Teacher(
-                        user.Id,
-                        user.SchoolId.Value,
-                        user.CampusId.Value,
-                        request.TeacherCode.Trim(),
-                        mobileNumber),
+                    new Teacher(user.Id, mobileNumber),
                     cancellationToken);
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
@@ -369,7 +459,7 @@ public sealed class AuthService : IAuthService
                 }
 
                 await _users.AddParentProfileAsync(
-                    new Parent(user.Id, user.Cnic, mobileNumber),
+                    new Parent(user.Id, mobileNumber),
                     cancellationToken);
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
@@ -379,34 +469,26 @@ public sealed class AuthService : IAuthService
         }
     }
 
-    private void EnsureCanApproveRegistration(User user, ApproveRegistrationRequest request)
+    private void EnsureCanApproveRegistration(User user)
     {
         if (!IsSchoolAdmin())
         {
             return;
         }
 
+        // Portal Admin target → SuperAdmin (Portal Admin) only.
+        if (IsPortalAdminTarget(user))
+        {
+            throw new ForbiddenAppException(
+                "Portal Admin requests can only be approved by Portal Admin.");
+        }
+
         var adminSchoolId = _currentUser.SchoolId
             ?? throw new ForbiddenAppException("School context was not found.");
 
-        if (user.SchoolId.HasValue && user.SchoolId != adminSchoolId)
+        if (!user.SchoolId.HasValue || user.SchoolId != adminSchoolId)
         {
             throw new ForbiddenAppException("You can only approve registrations for your school.");
-        }
-
-        if (!user.SchoolId.HasValue)
-        {
-            var assignedSchoolId = request.SchoolId ?? adminSchoolId;
-            if (assignedSchoolId != adminSchoolId)
-            {
-                throw new ForbiddenAppException("You can only assign registrations to your school.");
-            }
-
-            // Ensure school is set on approve when the pending user had none.
-            if (!request.SchoolId.HasValue)
-            {
-                user.AssignSchoolCampus(adminSchoolId, request.CampusId);
-            }
         }
     }
 
@@ -417,14 +499,24 @@ public sealed class AuthService : IAuthService
             return;
         }
 
+        if (IsPortalAdminTarget(user))
+        {
+            throw new ForbiddenAppException(
+                "Portal Admin requests can only be rejected by Portal Admin.");
+        }
+
         var adminSchoolId = _currentUser.SchoolId
             ?? throw new ForbiddenAppException("School context was not found.");
 
-        if (user.SchoolId.HasValue && user.SchoolId != adminSchoolId)
+        if (!user.SchoolId.HasValue || user.SchoolId != adminSchoolId)
         {
             throw new ForbiddenAppException("You can only reject registrations for your school.");
         }
     }
+
+    private static bool IsPortalAdminTarget(User user)
+        => string.Equals(user.AdminTarget, "Portal Admin", StringComparison.OrdinalIgnoreCase)
+            || !user.SchoolId.HasValue;
 
     private void EnsureRegistrationReviewer()
     {
@@ -441,7 +533,7 @@ public sealed class AuthService : IAuthService
 
     private static UserRole ParseRegistrationRole(string userType)
     {
-        if (!Enum.TryParse<UserRole>(userType.Trim(), true, out var role)
+        if (!Enum.TryParse<UserRole>(userType.AsTrimmedString(), true, out var role)
             || !AllowedRegistrationRoles.Contains(role.ToString(), StringComparer.OrdinalIgnoreCase))
         {
             throw new ValidationAppException(["User type must be Student, Parent, or Teacher."]);
@@ -460,20 +552,9 @@ public sealed class AuthService : IAuthService
 
     private static void ValidateLogin(LoginRequest request)
     {
-        var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(request.Username))
         {
-            errors.Add("Username is required.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Password))
-        {
-            errors.Add("Password is required.");
-        }
-
-        if (errors.Count > 0)
-        {
-            throw new ValidationAppException(errors);
+            throw new ValidationAppException(["CNIC or mobile number is required."]);
         }
     }
 
@@ -496,22 +577,14 @@ public sealed class AuthService : IAuthService
             errors.Add("User type is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.AdminTarget))
+        if (request.CampusId.HasValue && !request.SchoolId.HasValue)
         {
-            errors.Add("Admin target is required.");
+            errors.Add("Campus requires a school to be selected.");
         }
 
         if (errors.Count > 0)
         {
             throw new ValidationAppException(errors);
-        }
-    }
-
-    private static void ValidateApprovalPassword(ApproveRegistrationRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-        {
-            throw new ValidationAppException(["Password must be at least 6 characters."]);
         }
     }
 

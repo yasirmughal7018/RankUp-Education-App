@@ -10,6 +10,7 @@ class AppUserModel extends AppUser {
     required super.schoolId,
     required super.campusId,
     required super.profileId,
+    super.mustChangePassword = false,
   });
 
   factory AppUserModel.fromJson(Map<String, dynamic> json) {
@@ -21,6 +22,20 @@ class AppUserModel extends AppUser {
       schoolId: _readString(json, ['schoolId']),
       campusId: _readString(json, ['campusId']),
       profileId: _readString(json, ['profileId']),
+      mustChangePassword: _readBool(json, ['mustChangePassword']),
+    );
+  }
+
+  factory AppUserModel.fromEntity(AppUser user) {
+    return AppUserModel(
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      permissions: user.permissions,
+      schoolId: user.schoolId,
+      campusId: user.campusId,
+      profileId: user.profileId,
+      mustChangePassword: user.mustChangePassword,
     );
   }
 
@@ -33,6 +48,7 @@ class AppUserModel extends AppUser {
       'schoolId': schoolId,
       'campusId': campusId,
       'profileId': profileId,
+      'mustChangePassword': mustChangePassword,
     };
   }
 }
@@ -49,6 +65,17 @@ String _readString(Map<String, dynamic> json, List<String> keys) {
   }
 
   return '';
+}
+
+bool _readBool(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value is bool) {
+      return value;
+    }
+  }
+
+  return false;
 }
 
 List<String> _readStringList(Object? value) {

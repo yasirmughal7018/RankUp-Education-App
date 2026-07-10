@@ -10,7 +10,6 @@ const inputClassName =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
 
 export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,12 +20,12 @@ export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {
     setError(null);
 
     if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters.");
+      setError("Password must be at least 6 characters.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError("New password and confirmation do not match.");
+      setError("Password and confirmation do not match.");
       return;
     }
 
@@ -34,13 +33,12 @@ export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {
 
     try {
       const user = await authApi.changePassword({
-        currentPassword,
         newPassword,
       });
       onSuccess(user);
     } catch (caught) {
       const apiError = caught as ApiError;
-      setError(apiError.message || "Unable to change password.");
+      setError(apiError.message || "Unable to set password.");
     } finally {
       setIsSubmitting(false);
     }
@@ -58,11 +56,11 @@ export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {
           id="change-password-title"
           className="text-xl font-semibold text-slate-900"
         >
-          Change your password
+          Set your password
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          You must set a new password before continuing. This is required after
-          an admin creates your account.
+          Your account was approved. You must set a password before you can use
+          the application.
         </p>
 
         {error ? (
@@ -74,35 +72,17 @@ export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div>
             <label
-              htmlFor="currentPassword"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Current password
-            </label>
-            <input
-              id="currentPassword"
-              type="password"
-              required
-              autoFocus
-              disabled={isSubmitting}
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-              className={inputClassName}
-            />
-          </div>
-
-          <div>
-            <label
               htmlFor="newPassword"
               className="mb-1 block text-sm font-medium text-slate-700"
             >
-              New password
+              Password
             </label>
             <input
               id="newPassword"
               type="password"
               required
               minLength={6}
+              autoFocus
               disabled={isSubmitting}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
@@ -115,7 +95,7 @@ export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {
               htmlFor="confirmPassword"
               className="mb-1 block text-sm font-medium text-slate-700"
             >
-              Confirm new password
+              Confirm password
             </label>
             <input
               id="confirmPassword"
@@ -134,7 +114,7 @@ export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {
             disabled={isSubmitting}
             className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isSubmitting ? "Updating..." : "Update password"}
+            {isSubmitting ? "Saving..." : "Save password and continue"}
           </button>
         </form>
       </div>

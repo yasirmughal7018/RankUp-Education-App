@@ -4,8 +4,9 @@ import { PageHeader } from "@/core/components/PageHeader";
 
 const adminLinks = [
   {
-    title: "Pending registrations",
-    description: "Review and approve Student, Parent, and Teacher account requests.",
+    title: "Registration approvals",
+    description:
+      "Approve account access requests from in-app notifications (School Admin and Portal Admin).",
     href: "/admin/registrations",
   },
   {

@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
@@ -257,7 +258,7 @@ public sealed class QuizManageService : IQuizManageService
         quiz.Reject(rejectedStatusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        var reason = request.Reason.AsTrimmedOrNull();
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new RejectQuizResponse(quizId, "Rejected", lifecycleName, reason);
     }

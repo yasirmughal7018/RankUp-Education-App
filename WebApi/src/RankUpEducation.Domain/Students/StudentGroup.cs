@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Students;
@@ -13,9 +14,9 @@ public sealed class StudentGroup : BaseEntity
     public StudentGroup(long referralId, string groupName, string description, string creatorRole)
     {
         ReferralId = referralId;
-        GroupName = groupName.Trim();
-        Description = description.Trim();
-        CreatorRole = creatorRole.Trim().ToLowerInvariant();
+        GroupName = groupName.AsTrimmedString();
+        Description = description.AsTrimmedString();
+        CreatorRole = creatorRole.AsLowercase();
     }
 
     public long ReferralId { get; private set; }
