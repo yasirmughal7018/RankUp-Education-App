@@ -31,7 +31,7 @@ class AuthRemoteDataSource {
     );
   }
 
-  Future<AuthSession> setInitialPassword({
+  Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,
   }) async {
@@ -42,7 +42,7 @@ class AuthRemoteDataSource {
       );
     }
 
-    return _requestSession(
+    return _requestVoid(
       '/auth/set-initial-password',
       data: {'username': identifier, 'newPassword': newPassword},
     );

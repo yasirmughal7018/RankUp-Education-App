@@ -164,12 +164,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       try {
-        const nextSession = await authApi.setInitialPassword({
+        await authApi.setInitialPassword({
           username,
           newPassword,
         });
-        saveStoredSession(nextSession);
-        setActiveSession(nextSession);
       } catch (caught) {
         const apiError = caught as ApiError;
         setError(apiError.message || "Unable to set password.");
@@ -178,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsSubmitting(false);
       }
     },
-    [setActiveSession],
+    [],
   );
 
   const logout = useCallback(async () => {

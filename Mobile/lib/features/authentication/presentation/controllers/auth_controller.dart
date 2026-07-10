@@ -90,12 +90,15 @@ class AuthController extends StateNotifier<AuthState> {
       clearSuccess: true,
     );
     try {
-      final session = await _repository.setInitialPassword(
+      await _repository.setInitialPassword(
         identifier: identifier,
         newPassword: newPassword,
       );
-      state = state.copyWith(user: session.user, isLoading: false);
-      await _notifications.registerDeviceToken(session.user.id);
+      state = state.copyWith(
+        isLoading: false,
+        successMessage:
+            'Password set successfully. Sign in with your new password.',
+      );
     } on AppException catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.message);
       rethrow;

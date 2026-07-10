@@ -66,6 +66,7 @@ export interface QuestionListFilters {
   subjectId?: number;
   classId?: number;
   pendingApprovalOnly?: boolean;
+  eligibleForQuizOnly?: boolean;
 }
 
 /** Sticky scope kept while adding multiple questions. */
@@ -144,6 +145,21 @@ export function isPendingQuestionStatus(status: string): boolean {
 export function isApprovedQuestionStatus(status: string): boolean {
   const normalized = status.toLowerCase();
   return ["approved", "active", "published"].includes(normalized);
+}
+
+/** Eligible for quiz bank attach: human ApprovedBy + AI approved + active. */
+export function isEligibleForQuizQuestion(question: {
+  isActive: boolean;
+  approvedBy: string | null;
+  isAiApproved: boolean;
+  status: string;
+}): boolean {
+  return (
+    question.isActive &&
+    Boolean(question.approvedBy?.trim()) &&
+    question.isAiApproved &&
+    isApprovedQuestionStatus(question.status)
+  );
 }
 
 export function normalizeQuestionType(type: string): QuestionType {

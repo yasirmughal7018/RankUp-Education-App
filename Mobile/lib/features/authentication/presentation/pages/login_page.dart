@@ -227,7 +227,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           )
                         : Icon(_firstLogin ? Icons.lock_open : Icons.login),
                     label: Text(
-                      _firstLogin ? 'Set password and sign in' : 'Login',
+                      _firstLogin ? 'Set password' : 'Login',
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -256,9 +256,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Request access first. After School Admin or Portal '
-                              'Admin approves, check “First login after approval” '
-                              'and set your own password to sign in.',
+                              'Request access first. After approval, check '
+                              '“First login after approval”, set your password, '
+                              'then sign in with that password.',
                             ),
                           ),
                         ],
@@ -301,6 +301,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               identifier: identifier,
               newPassword: newPassword,
             );
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _firstLogin = false;
+          _passwordController.clear();
+          _confirmPasswordController.clear();
+        });
       } catch (_) {
         // Error is shown via authState.errorMessage.
       }

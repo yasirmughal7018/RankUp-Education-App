@@ -24,6 +24,7 @@ public sealed class QuestionsController : ControllerBase
         [FromQuery] short? subjectId,
         [FromQuery] short? classId,
         [FromQuery] bool pendingApprovalOnly = false,
+        [FromQuery] bool eligibleForQuizOnly = false,
         CancellationToken cancellationToken = default)
     {
         var response = await _questionService.ListAsync(
@@ -31,6 +32,7 @@ public sealed class QuestionsController : ControllerBase
             subjectId,
             classId,
             pendingApprovalOnly,
+            eligibleForQuizOnly,
             cancellationToken);
         return Ok(ApiResponse<QuestionListResponse>.Ok(response));
     }

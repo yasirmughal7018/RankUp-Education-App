@@ -33,21 +33,15 @@ export async function login(request: LoginRequest): Promise<AuthSession> {
   };
 }
 
-/** First login after approval: set password and receive a session (no prior password). */
+/** After approval: set password only. Does not create a session — user must sign in next. */
 export async function setInitialPassword(
   request: SetInitialPasswordRequest,
-): Promise<AuthSession> {
-  const response = await apiRequest<LoginResponse>("/auth/set-initial-password", {
+): Promise<void> {
+  await apiRequestVoid("/auth/set-initial-password", {
     method: "POST",
     body: request,
     skipAuth: true,
   });
-
-  return {
-    accessToken: response.accessToken,
-    refreshToken: response.refreshToken,
-    user: response.user,
-  };
 }
 
 export async function refreshTokens(

@@ -40,15 +40,10 @@ public sealed class QuestionRepository : IQuestionRepository
         short? subjectId,
         short? classId,
         bool pendingApprovalOnly,
+        bool eligibleForQuizOnly,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Questions.AsNoTracking().AsQueryable();
-
-        if (createdByUserId.HasValue)
-        {
-            var createdBy = createdByUserId.Value.ToString();
-            query = query.Where(question => question.CreatedBy == createdBy);
-        }
 
         if (isActive.HasValue)
         {
@@ -63,6 +58,15 @@ public sealed class QuestionRepository : IQuestionRepository
         if (classId.HasValue)
         {
             query = query.Where(question => question.ClassId == classId.Value);
+        }
+
+        if (eligibleForQuizOnly)
+        {
+            query = query.Where(question =>
+                question.IsActive
+                && question.IsAiApproved
+                && question.ApprovedBy != null
+                && question.ApprovedBy != "");
         }
 
         var rows = await query
@@ -106,8 +110,17 @@ public sealed class QuestionRepository : IQuestionRepository
                 .ToHashSet()
             : null;
 
+        var approvedStatusIds = eligibleForQuizOnly
+            ? lookupNames
+                .Where(pair => QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
+                    name.Equals(pair.Value, StringComparison.OrdinalIgnoreCase)))
+                .Select(pair => pair.Key)
+                .ToHashSet()
+            : null;
+
         return rows
             .Where(row => pendingStatusIds is null || pendingStatusIds.Contains(row.StatusId))
+            .Where(row => approvedStatusIds is null || approvedStatusIds.Contains(row.StatusId))
             .Select(row => new QuestionListItem(
                 row.Id,
                 row.QuestionText,

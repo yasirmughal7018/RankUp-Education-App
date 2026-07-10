@@ -380,6 +380,8 @@ public sealed class QuizManageService : IQuizManageService
                 sourceQuestion.Hint,
                 sourceQuestion.Explanation);
 
+            question.MarkFullyApproved(scope.UserId.ToString(), questionStatusId);
+
             await _questions.AddQuestionAsync(question, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -1,6 +1,7 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Questions;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Questions;
@@ -14,6 +15,7 @@ public interface IQuestionService
         short? subjectId,
         short? classId,
         bool pendingApprovalOnly,
+        bool eligibleForQuizOnly,
         CancellationToken cancellationToken);
 
     Task<QuestionListResponse> ListPendingApprovalAsync(CancellationToken cancellationToken);
@@ -70,6 +72,7 @@ public sealed class QuestionService : IQuestionService
         short? subjectId,
         short? classId,
         bool pendingApprovalOnly,
+        bool eligibleForQuizOnly,
         CancellationToken cancellationToken)
     {
         var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
@@ -80,6 +83,7 @@ public sealed class QuestionService : IQuestionService
             subjectId,
             classId,
             pendingApprovalOnly,
+            eligibleForQuizOnly,
             cancellationToken);
 
         return new QuestionListResponse(items.Select(QuestionMapping.ToSummaryResponse).ToArray());
@@ -94,6 +98,7 @@ public sealed class QuestionService : IQuestionService
             subjectId: null,
             classId: null,
             pendingApprovalOnly: true,
+            eligibleForQuizOnly: false,
             cancellationToken);
 
         return new QuestionListResponse(items.Select(QuestionMapping.ToSummaryResponse).ToArray());
@@ -200,23 +205,21 @@ public sealed class QuestionService : IQuestionService
     }
 
     /// <summary>
-    /// Marks the question as AI-approved after heuristic validation.
-    /// This is an AI-approval marker (role-gated), not external LLM scoring.
+    /// Second approval step after human approve. Sets <c>IsAiApproved</c> only.
     /// </summary>
     public async Task<QuestionApprovalResponse> ApproveAiAsync(long questionId, CancellationToken cancellationToken)
     {
-        var scope = QuestionScopeResolver.RequireAiApprovalScope(_currentUser);
+        QuestionScopeResolver.RequireAiApprovalScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        await EnsurePendingAsync(question, cancellationToken);
+        await EnsureHumanApprovedAsync(question, cancellationToken);
 
         var questionTypeName = await _lookups.GetLookupNameAsync(question.QuestionTypeId, cancellationToken);
         QuestionAiApprovalValidator.EnsureReadyForAiApproval(question, questionTypeName);
 
-        var approvedStatusId = await RequireApprovedStatusIdAsync(cancellationToken);
-        question.ApproveByAi(scope.UserId.ToString(), approvedStatusId);
+        question.MarkAiApproved();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var statusName = await _lookups.GetLookupNameAsync(approvedStatusId, cancellationToken);
+        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
         return ToApprovalResponse(questionId, statusName, question);
     }
 
@@ -329,6 +332,21 @@ public sealed class QuestionService : IQuestionService
         if (!IsPendingStatus(statusName))
         {
             throw new BusinessRuleException("Only pending questions can be approved or rejected.");
+        }
+    }
+
+    private async Task EnsureHumanApprovedAsync(Question question, CancellationToken cancellationToken)
+    {
+        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
+        if (!IsApprovedStatus(statusName) || !question.ApprovedBy.HasTrimmedText())
+        {
+            throw new BusinessRuleException(
+                "Question must be human-approved before AI approval.");
+        }
+
+        if (question.IsAiApproved)
+        {
+            throw new BusinessRuleException("Question is already AI-approved.");
         }
     }
 

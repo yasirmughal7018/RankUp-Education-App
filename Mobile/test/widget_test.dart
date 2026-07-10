@@ -78,7 +78,7 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthSession> setInitialPassword({
+  Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,
   }) {

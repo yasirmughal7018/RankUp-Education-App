@@ -33,17 +33,19 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// First login after admin approval: set password and receive tokens (no prior password).
+    /// After admin approval: set password only. User must sign in afterward with that password.
     /// </summary>
     [HttpPost("set-initial-password")]
     [AllowAnonymous]
     [EnableRateLimiting("Login")]
-    public async Task<ActionResult<ApiResponse<LoginResponse>>> SetInitialPasswordAsync(
+    public async Task<ActionResult<ApiResponse<object?>>> SetInitialPasswordAsync(
         [FromBody] SetInitialPasswordRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _authService.SetInitialPasswordAsync(request, cancellationToken);
-        return Ok(ApiResponse<LoginResponse>.Ok(result, "Password set. You are now signed in."));
+        await _authService.SetInitialPasswordAsync(request, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(
+            null,
+            "Password set successfully. Sign in with your new password."));
     }
 
     [HttpPost("register")]

@@ -16,7 +16,7 @@ Content-Type: application/json
 
 ###
 
-# First login after approval (no prior password)
+# After approval: set password only (then sign in with /auth/login)
 POST {{RankUpEducation.Api_HostAddress}}/api/auth/set-initial-password
 Content-Type: application/json
 

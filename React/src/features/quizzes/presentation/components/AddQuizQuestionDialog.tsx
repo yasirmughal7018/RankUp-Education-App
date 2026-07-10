@@ -85,6 +85,7 @@ export function AddQuizQuestionDialog({
       activeFilter: "true" as const,
       subjectId: subjectId && subjectId > 0 ? subjectId : ("" as const),
       classId: classId && classId > 0 ? classId : ("" as const),
+      eligibleForQuizOnly: true,
     }),
     [classId, subjectId],
   );
@@ -222,7 +223,7 @@ export function AddQuizQuestionDialog({
           {isEdit
             ? "Update this question on the quiz."
             : mode === "bank"
-              ? "Attach an approved question from the question bank."
+              ? "Attach a fully approved question (human + AI) from the question bank."
               : "Creates a new question and attaches it to this quiz."}
         </p>
 
@@ -269,7 +270,7 @@ export function AddQuizQuestionDialog({
                   htmlFor="bankSearch"
                   className="mb-1 block text-sm font-medium text-slate-700"
                 >
-                  Search approved questions
+                  Search fully approved questions
                 </label>
                 <input
                   id="bankSearch"
@@ -280,7 +281,7 @@ export function AddQuizQuestionDialog({
                   placeholder="Search by text, type, or ID"
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Showing active approved questions
+                  Showing questions with both human and AI approval
                   {classId || subjectId
                     ? " filtered by this quiz class/subject."
                     : "."}
@@ -300,7 +301,8 @@ export function AddQuizQuestionDialog({
                   </div>
                 ) : filteredBankQuestions.length === 0 ? (
                   <div className="px-4 py-6 text-center text-sm text-slate-600">
-                    No matching approved questions found.
+                    No matching fully approved questions found.
+                    Questions need both human and AI approval.
                   </div>
                 ) : (
                   <ul className="divide-y divide-slate-200">

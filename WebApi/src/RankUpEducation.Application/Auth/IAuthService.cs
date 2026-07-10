@@ -7,9 +7,9 @@ public interface IAuthService
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// First login after approval: set password without a prior password, then issue tokens.
+    /// First visit after approval: set password only (no session). User must sign in afterward.
     /// </summary>
-    Task<LoginResponse> SetInitialPasswordAsync(
+    Task SetInitialPasswordAsync(
         SetInitialPasswordRequest request,
         CancellationToken cancellationToken);
 

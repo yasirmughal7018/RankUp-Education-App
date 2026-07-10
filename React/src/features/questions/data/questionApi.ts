@@ -26,6 +26,10 @@ function buildListQuery(filters: QuestionListFilters = {}): string {
     params.set("pendingApprovalOnly", "true");
   }
 
+  if (filters.eligibleForQuizOnly) {
+    params.set("eligibleForQuizOnly", "true");
+  }
+
   const query = params.toString();
   return query ? `?${query}` : "";
 }

@@ -110,6 +110,9 @@ public sealed class QuizQuestionService : IQuizQuestionService
             request.Hint,
             request.Explanation);
 
+        // Inline quiz questions are created ready for use (both approval flags).
+        question.MarkFullyApproved(scope.UserId.ToString(), questionStatusId);
+
         await _questions.AddQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         await ReplaceOptionsAsync(question.Id, request.Options, cancellationToken);
@@ -147,11 +150,17 @@ public sealed class QuizQuestionService : IQuizQuestionService
         }
 
         var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
-        var isApproved = QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
+        var isApprovedStatus = QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
             name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
-        if (!isApproved)
+        if (!isApprovedStatus)
         {
             throw new BusinessRuleException("Only approved question-bank items can be attached to a quiz.");
+        }
+
+        if (!question.IsEligibleForQuiz)
+        {
+            throw new BusinessRuleException(
+                "Question must be both human-approved (ApprovedBy) and AI-approved before it can be added to a quiz.");
         }
 
         if (question.ClassId != quiz.ClassId || question.SubjectId != quiz.SubjectId)

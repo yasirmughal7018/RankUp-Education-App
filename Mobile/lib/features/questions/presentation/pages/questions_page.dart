@@ -86,7 +86,9 @@ class _QuestionCard extends StatelessWidget {
         ),
         subtitle: Text(
           '${question.questionType} · ${question.marks} marks'
-          '${question.isAiApproved ? ' · AI approved' : ''}',
+          '${question.approvedBy != null && question.approvedBy!.isNotEmpty ? ' · Human approved' : ''}'
+          '${question.isAiApproved ? ' · AI approved' : ''}'
+          '${question.approvedBy != null && question.approvedBy!.isNotEmpty && question.isAiApproved ? ' · Quiz ready' : ''}',
         ),
         trailing: Chip(
           label: Text(question.status),

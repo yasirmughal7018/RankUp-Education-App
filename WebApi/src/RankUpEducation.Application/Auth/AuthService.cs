@@ -61,15 +61,8 @@ public sealed class AuthService : IAuthService
 
         if (user.NeedsPasswordSetup)
         {
-            // Approved account with no password yet: allow sign-in so the user can set one.
-            var setupRefreshToken = IssueRefreshToken(user);
-            user.RecordLogin(_dateTimeProvider.UtcNow);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            return new LoginResponse(
-                _tokenService.CreateAccessToken(user),
-                setupRefreshToken,
-                user.ToCurrentUserResponse());
+            throw new AuthenticationAppException(
+                "Your account is approved. Set your password on the login screen first, then sign in.");
         }
 
         if (string.IsNullOrWhiteSpace(request.Password))
@@ -92,7 +85,7 @@ public sealed class AuthService : IAuthService
             user.ToCurrentUserResponse());
     }
 
-    public async Task<LoginResponse> SetInitialPasswordAsync(
+    public async Task SetInitialPasswordAsync(
         SetInitialPasswordRequest request,
         CancellationToken cancellationToken)
     {
@@ -131,15 +124,7 @@ public sealed class AuthService : IAuthService
 
         user.SetPasswordHash(_passwordHasher.Hash(request.NewPassword));
         user.ClearPasswordChangeRequirement();
-
-        var refreshToken = IssueRefreshToken(user);
-        user.RecordLogin(_dateTimeProvider.UtcNow);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return new LoginResponse(
-            _tokenService.CreateAccessToken(user),
-            refreshToken,
-            user.ToCurrentUserResponse());
     }
 
     public async Task<RegisterAccountResponse> RegisterAccountAsync(

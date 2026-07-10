@@ -123,7 +123,7 @@ public sealed class User : SoftDeleteEntity
             throw new BusinessRuleException("This account is not active.");
         }
 
-        // NeedsPasswordSetup is allowed through LoginAsync (password setup path).
+        // NeedsPasswordSetup: login is blocked until password is set via set-initial-password.
         // Callers that require a full password must check NeedsPasswordSetup separately.
     }
 

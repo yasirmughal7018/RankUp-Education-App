@@ -35,20 +35,14 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthSession> setInitialPassword({
+  Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,
-  }) async {
-    final session = await _remoteDataSource.setInitialPassword(
+  }) {
+    return _remoteDataSource.setInitialPassword(
       identifier: identifier,
       newPassword: newPassword,
     );
-    await _tokenStore.saveTokens(
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
-    );
-    await _localDataSource.saveUser(session.user);
-    return session;
   }
 
   @override

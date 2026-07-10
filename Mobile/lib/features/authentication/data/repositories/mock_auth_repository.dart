@@ -28,7 +28,7 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthSession> setInitialPassword({
+  Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,
   }) async {

@@ -92,6 +92,13 @@ export function QuestionDetailPage() {
 
   const isPending = isPendingQuestionStatus(question.status);
   const isApproved = isApprovedQuestionStatus(question.status);
+  const awaitsAiApproval =
+    isApproved && Boolean(question.approvedBy?.trim()) && !question.isAiApproved;
+  const isQuizReady =
+    isApproved &&
+    question.isActive &&
+    Boolean(question.approvedBy?.trim()) &&
+    question.isAiApproved;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -130,8 +137,16 @@ export function QuestionDetailPage() {
             label={question.isActive ? "Active" : "Inactive"}
             tone={question.isActive ? "success" : "default"}
           />
+          {question.approvedBy ? (
+            <StatusBadge label="Human approved" tone="success" />
+          ) : null}
           {question.isAiApproved ? (
             <StatusBadge label="AI approved" tone="success" />
+          ) : awaitsAiApproval ? (
+            <StatusBadge label="Awaiting AI approval" tone="warning" />
+          ) : null}
+          {isQuizReady ? (
+            <StatusBadge label="Quiz ready" tone="success" />
           ) : null}
         </div>
 
@@ -193,28 +208,13 @@ export function QuestionDetailPage() {
               onClick={() =>
                 void runAction(
                   () => approveQuestion.mutateAsync(),
-                  "Question approved.",
+                  "Question human-approved. Awaiting AI approval for quiz use.",
                 )
               }
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
             >
               Approve
             </button>
-            {canAiApprove ? (
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() =>
-                  void runAction(
-                    () => approveQuestionAi.mutateAsync(),
-                    "Question AI-approved.",
-                  )
-                }
-                className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-50 disabled:opacity-70"
-              >
-                AI approve
-              </button>
-            ) : null}
             <button
               type="button"
               disabled={isSubmitting}
@@ -229,6 +229,22 @@ export function QuestionDetailPage() {
               Reject
             </button>
           </>
+        ) : null}
+
+        {canAiApprove && awaitsAiApproval ? (
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() =>
+              void runAction(
+                () => approveQuestionAi.mutateAsync(),
+                "Question AI-approved. It is now eligible for quizzes.",
+              )
+            }
+            className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-50 disabled:opacity-70"
+          >
+            AI approve
+          </button>
         ) : null}
 
         {canApprove && isPending && showRejectReason ? (

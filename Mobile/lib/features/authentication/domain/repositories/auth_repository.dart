@@ -7,8 +7,8 @@ abstract class AuthRepository {
     required String password,
   });
 
-  /// First login after approval: set password and receive a session.
-  Future<AuthSession> setInitialPassword({
+  /// After approval: set password only (no session). User must sign in afterward.
+  Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,
   });

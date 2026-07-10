@@ -105,6 +105,9 @@ public sealed class Question : BaseEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>
+    /// Human approval (School Admin / Portal Admin). AI approval is a separate second step.
+    /// </summary>
     public void Approve(string approvedBy, short approvedStatusId)
     {
         StatusId = approvedStatusId;
@@ -115,7 +118,32 @@ public sealed class Question : BaseEntity
         IsActive = true;
     }
 
-    public void ApproveByAi(string approvedBy, short approvedStatusId)
+    /// <summary>
+    /// Second approval step: AI approval. Requires human <see cref="ApprovedBy"/> first.
+    /// </summary>
+    public void MarkAiApproved()
+    {
+        if (!ApprovedBy.HasTrimmedText())
+        {
+            throw new BusinessRuleException(
+                "Question must be human-approved (ApprovedBy) before AI approval.");
+        }
+
+        if (IsAiApproved)
+        {
+            throw new BusinessRuleException("Question is already AI-approved.");
+        }
+
+        IsAiApproved = true;
+        RejectionReason = null;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        IsActive = true;
+    }
+
+    /// <summary>
+    /// Marks both human and AI approval in one step (e.g. questions created directly on a quiz).
+    /// </summary>
+    public void MarkFullyApproved(string approvedBy, short approvedStatusId)
     {
         StatusId = approvedStatusId;
         ApprovedBy = approvedBy.AsTrimmedString();
@@ -124,6 +152,12 @@ public sealed class Question : BaseEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
     }
+
+    /// <summary>
+    /// Quiz bank eligibility: active + human approved + AI approved.
+    /// </summary>
+    public bool IsEligibleForQuiz
+        => IsActive && ApprovedBy.HasTrimmedText() && IsAiApproved;
 
     public void Reject(short rejectedStatusId, string? reason)
     {

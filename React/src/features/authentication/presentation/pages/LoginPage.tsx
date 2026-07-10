@@ -13,6 +13,7 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstLogin, setFirstLogin] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const redirectPath =
     (location.state as { from?: string } | null)?.from ?? "/dashboard";
@@ -23,6 +24,7 @@ export function LoginPage() {
     event.preventDefault();
     clearError();
     setLocalError(null);
+    setSuccessMessage(null);
 
     const trimmedUsername = username.trim();
     if (!trimmedUsername) {
@@ -41,9 +43,16 @@ export function LoginPage() {
           return;
         }
         await setInitialPassword(trimmedUsername, password);
-      } else {
-        await login(trimmedUsername, password);
+        setFirstLogin(false);
+        setPassword("");
+        setConfirmPassword("");
+        setSuccessMessage(
+          "Password set successfully. Sign in with your new password.",
+        );
+        return;
       }
+
+      await login(trimmedUsername, password);
       navigate(redirectPath, { replace: true });
     } catch {
       // Error state is handled by AuthProvider.
@@ -57,16 +66,26 @@ export function LoginPage() {
           title="Sign in"
           description={
             firstLogin
-              ? "After admin approval, set your own password here to sign in."
+              ? "After admin approval, set your password here. Then sign in with it."
               : "Sign in with your CNIC or mobile number and password."
           }
         />
+
+        {successMessage ? (
+          <div
+            role="status"
+            className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          >
+            {successMessage}
+          </div>
+        ) : null}
 
         {displayError ? (
           <div
             role="alert"
             className={
-              displayError.toLowerCase().includes("not approved")
+              displayError.toLowerCase().includes("not approved") ||
+              displayError.toLowerCase().includes("set your password")
                 ? "mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
                 : "mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
             }
@@ -113,11 +132,9 @@ export function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
               placeholder={
-                firstLogin
-                  ? "At least 6 characters"
-                  : "Your password"
+                firstLogin ? "At least 6 characters" : "Your password"
               }
-              required={!firstLogin}
+              required
               minLength={firstLogin ? 6 : undefined}
               disabled={isSubmitting}
             />
@@ -158,6 +175,7 @@ export function LoginPage() {
                 setPassword("");
                 setConfirmPassword("");
                 setLocalError(null);
+                setSuccessMessage(null);
                 clearError();
               }}
             />
@@ -188,10 +206,10 @@ export function LoginPage() {
           >
             {isSubmitting
               ? firstLogin
-                ? "Setting password..."
+                ? "Saving password..."
                 : "Signing in..."
               : firstLogin
-                ? "Set password and sign in"
+                ? "Set password"
                 : "Sign in"}
           </button>
         </form>

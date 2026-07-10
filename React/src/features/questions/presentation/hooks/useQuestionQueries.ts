@@ -8,6 +8,7 @@ export interface QuestionListFilters {
   activeFilter: "" | "true" | "false";
   subjectId: number | "";
   classId: number | "";
+  eligibleForQuizOnly?: boolean;
 }
 
 function buildQuestionFilters(filters: QuestionListFilters) {
@@ -19,6 +20,7 @@ function buildQuestionFilters(filters: QuestionListFilters) {
         : filters.activeFilter === "true",
     subjectId: filters.subjectId === "" ? undefined : filters.subjectId,
     classId: filters.classId === "" ? undefined : filters.classId,
+    eligibleForQuizOnly: filters.eligibleForQuizOnly === true,
   };
 }
 
@@ -35,6 +37,7 @@ export function useQuestionsQuery(filters: QuestionListFilters) {
             isActive: normalized.isActive,
             subjectId: normalized.subjectId,
             classId: normalized.classId,
+            eligibleForQuizOnly: normalized.eligibleForQuizOnly,
           }),
   });
 }
