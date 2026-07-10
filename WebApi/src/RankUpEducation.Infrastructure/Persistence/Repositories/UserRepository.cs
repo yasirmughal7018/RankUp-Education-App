@@ -99,7 +99,7 @@ public sealed class UserRepository : IUserRepository
         if (schoolIdFilter.HasValue)
         {
             // School Admin: only "School Admin" target requests for their school.
-            // Portal Admin target requests are SuperAdmin-only.
+            // Portal Admin target requests are PortalAdmin-only.
             query = query.Where(user =>
                 user.SchoolId == schoolIdFilter.Value
                 && user.AdminTarget == "School Admin");
@@ -124,15 +124,15 @@ public sealed class UserRepository : IUserRepository
 
         if (isSchoolAdminTarget)
         {
-            // School Admin target: notify Portal Admin (SuperAdmin) and that school's School Admins.
+            // School Admin target: notify Portal Admin (PortalAdmin) and that school's School Admins.
             query = query.Where(user =>
-                user.Role == UserRole.SuperAdmin
+                user.Role == UserRole.PortalAdmin
                 || (user.Role == UserRole.SchoolAdmin && user.SchoolId == schoolId!.Value));
         }
         else
         {
-            // Portal Admin target: Portal Admin (SuperAdmin) only.
-            query = query.Where(user => user.Role == UserRole.SuperAdmin);
+            // Portal Admin target: Portal Admin (PortalAdmin) only.
+            query = query.Where(user => user.Role == UserRole.PortalAdmin);
         }
 
         return await query
@@ -199,7 +199,7 @@ public sealed class UserRepository : IUserRepository
                 var parent = await _dbContext.Parents.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
                 user.AttachProfileContext(parent?.Id, user.SchoolId, user.CampusId);
                 break;
-            case UserRole.SuperAdmin:
+            case UserRole.PortalAdmin:
             case UserRole.SchoolAdmin:
                 // Prefer persisted school/campus on app_users (especially SchoolAdmin).
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);

@@ -160,7 +160,7 @@ class _PendingRegistrationsPageState
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
     final async = ref.watch(pendingRegistrationsProvider);
-    final isPortalAdmin = user?.role == UserRole.superAdmin;
+    final isPortalAdmin = user?.role == UserRole.portalAdmin;
     final roleLabel = isPortalAdmin ? 'Portal Admin' : 'School Admin';
     final theme = Theme.of(context);
 

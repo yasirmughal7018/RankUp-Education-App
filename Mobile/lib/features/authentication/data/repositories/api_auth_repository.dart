@@ -35,6 +35,13 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({String status, String message})> getLoginStatus({
+    required String identifier,
+  }) {
+    return _remoteDataSource.getLoginStatus(identifier: identifier);
+  }
+
+  @override
   Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,

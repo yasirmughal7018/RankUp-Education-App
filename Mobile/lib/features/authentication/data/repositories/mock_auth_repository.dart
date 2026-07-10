@@ -28,6 +28,23 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({String status, String message})> getLoginStatus({
+    required String identifier,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    final normalized = identifier.trim().toLowerCase();
+    if (normalized == 'student-demo' ||
+        normalized == 'parent-demo' ||
+        normalized == 'teacher-demo') {
+      return (
+        status: 'Ready',
+        message: 'Enter your password to sign in.',
+      );
+    }
+    throw StateError('Unknown demo account.');
+  }
+
+  @override
   Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,

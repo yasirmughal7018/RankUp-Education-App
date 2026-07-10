@@ -29,7 +29,11 @@ AppException mapDioException(DioException error) {
   }
 
   if (statusCode == 422 || statusCode == 400) {
-    return ValidationException(_messageFrom(data), _errorsFrom(data));
+    final errors = _errorsFrom(data);
+    return ValidationException.fromApi(
+      message: _messageFrom(data),
+      errors: errors,
+    );
   }
 
   if (statusCode == 429) {

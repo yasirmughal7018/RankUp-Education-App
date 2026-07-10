@@ -153,7 +153,7 @@ class QuizRemoteDataSource {
 
     final response = ApiResponse<Object?>.fromJson(json, (data) => data);
     if (!response.success) {
-      throw ValidationException(response.message, response.errors);
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
     }
   }
 
@@ -171,7 +171,7 @@ class QuizRemoteDataSource {
     );
 
     if (!response.success) {
-      throw ValidationException(response.message, response.errors);
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
     }
 
     return mapper(response.data);
@@ -188,7 +188,7 @@ class QuizRemoteDataSource {
     final response = ApiResponse<T>.fromJson(json, mapper);
 
     if (!response.success) {
-      throw ValidationException(response.message, response.errors);
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
     }
 
     return response.data;

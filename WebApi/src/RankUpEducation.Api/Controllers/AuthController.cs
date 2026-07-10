@@ -33,6 +33,20 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Step 1 of login: check whether the account needs a password or can sign in.
+    /// </summary>
+    [HttpPost("login-status")]
+    [AllowAnonymous]
+    [EnableRateLimiting("Login")]
+    public async Task<ActionResult<ApiResponse<LoginStatusResponse>>> GetLoginStatusAsync(
+        [FromBody] LoginStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.GetLoginStatusAsync(request, cancellationToken);
+        return Ok(ApiResponse<LoginStatusResponse>.Ok(result));
+    }
+
+    /// <summary>
     /// After admin approval: set password only. User must sign in afterward with that password.
     /// </summary>
     [HttpPost("set-initial-password")]
@@ -83,7 +97,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpGet("registrations/pending")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<PendingRegistrationResponse>>>> ListPendingRegistrationsAsync(
         [FromQuery] int take,
         CancellationToken cancellationToken)
@@ -93,7 +107,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("registrations/{userId:long}/approve")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> ApproveRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)
@@ -103,7 +117,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("registrations/{userId:long}/reject")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> RejectRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)

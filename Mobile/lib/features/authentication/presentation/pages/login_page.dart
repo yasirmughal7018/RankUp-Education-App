@@ -12,12 +12,15 @@ class LoginPage extends ConsumerStatefulWidget {
   ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
+enum _LoginStep { identifier, setPassword, password }
+
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _firstLogin = false;
+  _LoginStep _step = _LoginStep.identifier;
   String? _localError;
+  String? _infoMessage;
 
   @override
   void dispose() {
@@ -37,6 +40,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final authModeLabel = environment.usesApiAuth
         ? 'API login (calls POST /auth/login)'
         : 'Offline demo mode (student/parent/teacher-demo only)';
+    final busy = authState.isLoading;
 
     return Scaffold(
       body: SafeArea(
@@ -61,7 +65,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Students, parents and teachers in one learning system.',
+                    _step == _LoginStep.setPassword
+                        ? 'Set your password, then sign in.'
+                        : _step == _LoginStep.password
+                            ? 'Enter your password to sign in.'
+                            : 'Enter CNIC or mobile number to continue.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyLarge,
                   ),
@@ -103,47 +111,42 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ],
                     const SizedBox(height: 16),
                   ],
-                  TextField(
-                    controller: _identifierController,
-                    decoration: const InputDecoration(
-                      labelText: 'CNIC or mobile number',
-                      prefixIcon: Icon(Icons.badge_outlined),
+                  if (_step == _LoginStep.identifier) ...[
+                    TextField(
+                      controller: _identifierController,
+                      decoration: const InputDecoration(
+                        labelText: 'CNIC or mobile number',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      keyboardType: TextInputType.text,
+                      textInputAction: TextInputAction.done,
+                      onTap: _showSoftKeyboard,
+                      onSubmitted: (_) {
+                        if (!busy) {
+                          _continueFromIdentifier();
+                        }
+                      },
                     ),
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    enabled: true,
-                    keyboardType: TextInputType.text,
-                    showCursor: true,
-                    textInputAction: TextInputAction.next,
-                    onTap: _showSoftKeyboard,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: _firstLogin ? 'New password' : 'Password',
-                      helperText: _firstLogin
-                          ? 'At least 6 characters'
-                          : null,
-                      prefixIcon: const Icon(Icons.lock_outline),
+                  ],
+                  if (_step == _LoginStep.setPassword) ...[
+                    Text(
+                      'Account: ${_identifierController.text.trim()}',
+                      style: theme.textTheme.bodyMedium,
                     ),
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    enabled: true,
-                    keyboardType: TextInputType.visiblePassword,
-                    showCursor: true,
-                    textInputAction: _firstLogin
-                        ? TextInputAction.next
-                        : TextInputAction.done,
-                    onTap: _showSoftKeyboard,
-                    onSubmitted: (_) {
-                      if (!_firstLogin && !authState.isLoading) {
-                        _submit();
-                      }
-                    },
-                  ),
-                  if (_firstLogin) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'New password',
+                        helperText: 'At least 6 characters',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                      textInputAction: TextInputAction.next,
+                      onTap: _showSoftKeyboard,
+                    ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _confirmPasswordController,
@@ -152,38 +155,55 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         labelText: 'Confirm password',
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      keyboardType: TextInputType.visiblePassword,
-                      showCursor: true,
                       textInputAction: TextInputAction.done,
                       onTap: _showSoftKeyboard,
                       onSubmitted: (_) {
-                        if (!authState.isLoading) {
-                          _submit();
+                        if (!busy) {
+                          _submitSetPassword();
                         }
                       },
                     ),
                   ],
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _firstLogin,
-                    onChanged: authState.isLoading
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _firstLogin = value ?? false;
-                              _localError = null;
-                              _passwordController.clear();
-                              _confirmPasswordController.clear();
-                            });
-                          },
-                    title: const Text(
-                      'First login after approval — set my password',
+                  if (_step == _LoginStep.password) ...[
+                    Text(
+                      'Account: ${_identifierController.text.trim()}',
+                      style: theme.textTheme.bodyMedium,
                     ),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onTap: _showSoftKeyboard,
+                      onSubmitted: (_) {
+                        if (!busy) {
+                          _submitLogin();
+                        }
+                      },
+                    ),
+                  ],
+                  if (_infoMessage != null) ...[
+                    const SizedBox(height: 12),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          _infoMessage!,
+                          style: TextStyle(
+                            color: theme.colorScheme.onTertiaryContainer,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   if (_localError != null || authState.errorMessage != null) ...[
                     const SizedBox(height: 12),
                     DecoratedBox(
@@ -219,28 +239,62 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ],
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: authState.isLoading ? null : _submit,
-                    icon: authState.isLoading
+                    onPressed: busy
+                        ? null
+                        : () {
+                            switch (_step) {
+                              case _LoginStep.identifier:
+                                _continueFromIdentifier();
+                              case _LoginStep.setPassword:
+                                _submitSetPassword();
+                              case _LoginStep.password:
+                                _submitLogin();
+                            }
+                          },
+                    icon: busy
                         ? const SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Icon(_firstLogin ? Icons.lock_open : Icons.login),
+                        : Icon(
+                            _step == _LoginStep.setPassword
+                                ? Icons.lock_open
+                                : _step == _LoginStep.password
+                                    ? Icons.login
+                                    : Icons.arrow_forward,
+                          ),
                     label: Text(
-                      _firstLogin ? 'Set password' : 'Login',
+                      _step == _LoginStep.setPassword
+                          ? 'Set password'
+                          : _step == _LoginStep.password
+                              ? 'Login'
+                              : 'Continue',
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: authState.isLoading ? null : _openPasswordReset,
-                    icon: const Icon(Icons.lock_reset),
-                    label: const Text('Forgot password?'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: authState.isLoading ? null : _openAccessRequest,
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    label: const Text('Request account access'),
-                  ),
+                  if (_step != _LoginStep.identifier) ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: busy ? null : _backToIdentifier,
+                      child: Text(
+                        _step == _LoginStep.password
+                            ? 'Use a different CNIC / mobile'
+                            : 'Back',
+                      ),
+                    ),
+                  ],
+                  if (_step == _LoginStep.identifier) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: busy ? null : _openPasswordReset,
+                      icon: const Icon(Icons.lock_reset),
+                      label: const Text('Forgot password?'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: busy ? null : _openAccessRequest,
+                      icon: const Icon(Icons.person_add_alt_1_outlined),
+                      label: const Text('Request account access'),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   DecoratedBox(
                     decoration: BoxDecoration(
@@ -256,9 +310,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Request access first. After approval, check '
-                              '“First login after approval”, set your password, '
-                              'then sign in with that password.',
+                              'Enter CNIC or mobile first. If your account was '
+                              'just approved, you will set a password, then sign '
+                              'in again with that password.',
                             ),
                           ),
                         ],
@@ -274,8 +328,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  Future<void> _submit() async {
-    setState(() => _localError = null);
+  void _backToIdentifier() {
+    setState(() {
+      _step = _LoginStep.identifier;
+      _localError = null;
+      _infoMessage = null;
+      _passwordController.clear();
+      _confirmPasswordController.clear();
+    });
+  }
+
+  Future<void> _continueFromIdentifier() async {
+    setState(() {
+      _localError = null;
+      _infoMessage = null;
+    });
 
     final identifier = _identifierController.text.trim();
     if (identifier.isEmpty) {
@@ -283,40 +350,77 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
 
-    if (_firstLogin) {
-      final newPassword = _passwordController.text;
-      if (newPassword.length < 6) {
-        setState(() => _localError = 'Password must be at least 6 characters.');
-        return;
-      }
-      if (newPassword != _confirmPasswordController.text) {
-        setState(
-          () => _localError = 'Password and confirmation do not match.',
-        );
+    try {
+      final result = await ref
+          .read(authControllerProvider.notifier)
+          .getLoginStatus(identifier: identifier);
+      if (!mounted) {
         return;
       }
 
-      try {
-        await ref.read(authControllerProvider.notifier).setInitialPassword(
-              identifier: identifier,
-              newPassword: newPassword,
-            );
-        if (!mounted) {
-          return;
+      setState(() {
+        _passwordController.clear();
+        _confirmPasswordController.clear();
+        if (result.status == 'PendingApproval') {
+          _infoMessage = result.message;
+          _step = _LoginStep.identifier;
+        } else if (result.status == 'NeedsPasswordSetup') {
+          _infoMessage = result.message;
+          _step = _LoginStep.setPassword;
+        } else {
+          _infoMessage = null;
+          _step = _LoginStep.password;
         }
-        setState(() {
-          _firstLogin = false;
-          _passwordController.clear();
-          _confirmPasswordController.clear();
-        });
-      } catch (_) {
-        // Error is shown via authState.errorMessage.
+      });
+    } catch (_) {
+      // Error shown via authState.errorMessage.
+    }
+  }
+
+  Future<void> _submitSetPassword() async {
+    setState(() => _localError = null);
+
+    final newPassword = _passwordController.text;
+    if (newPassword.length < 6) {
+      setState(() => _localError = 'Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword != _confirmPasswordController.text) {
+      setState(
+        () => _localError = 'Password and confirmation do not match.',
+      );
+      return;
+    }
+
+    try {
+      await ref.read(authControllerProvider.notifier).setInitialPassword(
+            identifier: _identifierController.text.trim(),
+            newPassword: newPassword,
+          );
+      if (!mounted) {
+        return;
       }
+      setState(() {
+        _step = _LoginStep.password;
+        _infoMessage = null;
+        _passwordController.clear();
+        _confirmPasswordController.clear();
+      });
+    } catch (_) {
+      // Error shown via authState.errorMessage.
+    }
+  }
+
+  Future<void> _submitLogin() async {
+    setState(() => _localError = null);
+
+    if (_passwordController.text.isEmpty) {
+      setState(() => _localError = 'Password is required.');
       return;
     }
 
     await ref.read(authControllerProvider.notifier).login(
-          identifier: identifier,
+          identifier: _identifierController.text.trim(),
           password: _passwordController.text,
         );
   }

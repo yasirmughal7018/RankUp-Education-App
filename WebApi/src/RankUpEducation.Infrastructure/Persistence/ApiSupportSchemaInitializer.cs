@@ -35,6 +35,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(NotificationSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
 
@@ -81,6 +82,44 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         SELECT base.max_id + missing.rn, missing.name, 'QuestionType', missing.order_by, TRUE, NULL
         FROM missing
         CROSS JOIN base;
+        """;
+
+    private const string UserRoleSupportSql = """
+        -- Align stored roles with UserRole lookup names (PortalAdmin replaces SuperAdmin).
+        UPDATE public.app_users
+        SET role = 'portaladmin'
+        WHERE lower(role) = 'superadmin';
+
+        ALTER TABLE public.app_users
+            DROP CONSTRAINT IF EXISTS chk_app_users_role;
+
+        ALTER TABLE public.app_users
+            ADD CONSTRAINT chk_app_users_role
+            CHECK (role = ANY (ARRAY[
+                'portaladmin'::text,
+                'schooladmin'::text,
+                'teacher'::text,
+                'student'::text,
+                'parent'::text
+            ]));
+
+        -- Ensure UserRole lookup rows exist (IDs match Domain.UserRole).
+        INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
+        SELECT seed.id, seed.name, 'UserRole', seed.order_by, TRUE, NULL
+        FROM (
+            VALUES
+                (2010, 'PortalAdmin'::varchar, 0::smallint),
+                (2011, 'SchoolAdmin', 0),
+                (2012, 'Student', 0),
+                (2013, 'Teacher', 0),
+                (2014, 'Parent', 0)
+        ) AS seed(id, name, order_by)
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.lookups existing
+            WHERE existing.id = seed.id
+               OR (existing.type = 'UserRole' AND lower(existing.name) = lower(seed.name))
+        );
         """;
 
     private const string RegistrationSupportSql = """

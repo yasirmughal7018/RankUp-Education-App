@@ -3,7 +3,7 @@ import { canViewReports } from "@/features/reports/domain/reportTypes";
 
 describe("canViewReports", () => {
   it("allows admin and teacher roles", () => {
-    expect(canViewReports("SuperAdmin")).toBe(true);
+    expect(canViewReports("PortalAdmin")).toBe(true);
     expect(canViewReports("SchoolAdmin")).toBe(true);
     expect(canViewReports("Teacher")).toBe(true);
   });

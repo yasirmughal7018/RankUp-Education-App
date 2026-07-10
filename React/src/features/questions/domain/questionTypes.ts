@@ -119,7 +119,7 @@ export const QUESTION_TYPE_META: Record<
 };
 
 export const QUESTION_MANAGER_ROLES: UserRole[] = [
-  "SuperAdmin",
+  "PortalAdmin",
   "SchoolAdmin",
   "Teacher",
   "Parent",
@@ -134,7 +134,7 @@ export function canApproveQuestions(role: UserRole): boolean {
 }
 
 export function canAiApproveQuestions(role: UserRole): boolean {
-  return role === "SuperAdmin";
+  return role === "PortalAdmin";
 }
 
 export function isPendingQuestionStatus(status: string): boolean {

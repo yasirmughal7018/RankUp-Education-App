@@ -1,30 +1,54 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import type { ApiError } from "@/core/api/types";
 import { PageHeader } from "@/core/components/PageHeader";
+import * as authApi from "@/features/authentication/data/authApi";
+import type { LoginStatus } from "@/features/authentication/data/authApi";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+
+type LoginStep = "identifier" | "setPassword" | "password";
+
+const inputClassName =
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, setInitialPassword, isSubmitting, error, clearError } =
     useAuth();
+
+  const [step, setStep] = useState<LoginStep>("identifier");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [firstLogin, setFirstLogin] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const redirectPath =
     (location.state as { from?: string } | null)?.from ?? "/dashboard";
 
+  const busy = isSubmitting || checkingStatus;
   const displayError = localError ?? error;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function resetMessages() {
     clearError();
     setLocalError(null);
+    setInfoMessage(null);
     setSuccessMessage(null);
+  }
+
+  function goBackToIdentifier() {
+    resetMessages();
+    setPassword("");
+    setConfirmPassword("");
+    setStep("identifier");
+  }
+
+  async function handleIdentifierContinue(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    resetMessages();
 
     const trimmedUsername = username.trim();
     if (!trimmedUsername) {
@@ -32,44 +56,98 @@ export function LoginPage() {
       return;
     }
 
+    setCheckingStatus(true);
     try {
-      if (firstLogin) {
-        if (password.length < 6) {
-          setLocalError("Password must be at least 6 characters.");
-          return;
-        }
-        if (password !== confirmPassword) {
-          setLocalError("Password and confirmation do not match.");
-          return;
-        }
-        await setInitialPassword(trimmedUsername, password);
-        setFirstLogin(false);
-        setPassword("");
-        setConfirmPassword("");
-        setSuccessMessage(
-          "Password set successfully. Sign in with your new password.",
-        );
-        return;
-      }
-
-      await login(trimmedUsername, password);
-      navigate(redirectPath, { replace: true });
-    } catch {
-      // Error state is handled by AuthProvider.
+      const status = await authApi.getLoginStatus(trimmedUsername);
+      applyLoginStatus(status.status, status.message);
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      setLocalError(apiError.message || "Unable to check account.");
+    } finally {
+      setCheckingStatus(false);
     }
   }
+
+  function applyLoginStatus(status: LoginStatus, message: string) {
+    setPassword("");
+    setConfirmPassword("");
+
+    if (status === "PendingApproval") {
+      setInfoMessage(message);
+      setStep("identifier");
+      return;
+    }
+
+    if (status === "NeedsPasswordSetup") {
+      setInfoMessage(message);
+      setStep("setPassword");
+      return;
+    }
+
+    setStep("password");
+  }
+
+  async function handleSetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    resetMessages();
+
+    if (password.length < 6) {
+      setLocalError("Password must be at least 6 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setLocalError("Password and confirmation do not match.");
+      return;
+    }
+
+    try {
+      await setInitialPassword(username.trim(), password);
+      setPassword("");
+      setConfirmPassword("");
+      setStep("password");
+      setSuccessMessage(
+        "Password set successfully. Sign in with your new password.",
+      );
+    } catch {
+      // AuthProvider sets error.
+    }
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    resetMessages();
+
+    if (!password.trim()) {
+      setLocalError("Password is required.");
+      return;
+    }
+
+    try {
+      await login(username.trim(), password);
+      navigate(redirectPath, { replace: true });
+    } catch {
+      // AuthProvider sets error.
+    }
+  }
+
+  const title =
+    step === "setPassword"
+      ? "Set your password"
+      : step === "password"
+        ? "Enter password"
+        : "Sign in";
+
+  const description =
+    step === "setPassword"
+      ? "Your account is approved. Create a password, then sign in with it."
+      : step === "password"
+        ? `Sign in as ${username.trim()}`
+        : "Enter your CNIC or mobile number to continue.";
 
   return (
     <div className="mx-auto flex max-w-6xl justify-center px-4 py-10 sm:px-6">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <PageHeader
-          title="Sign in"
-          description={
-            firstLogin
-              ? "After admin approval, set your password here. Then sign in with it."
-              : "Sign in with your CNIC or mobile number and password."
-          }
-        />
+        <PageHeader title={title} description={description} />
 
         {successMessage ? (
           <div
@@ -80,12 +158,20 @@ export function LoginPage() {
           </div>
         ) : null}
 
+        {infoMessage ? (
+          <div
+            role="status"
+            className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            {infoMessage}
+          </div>
+        ) : null}
+
         {displayError ? (
           <div
             role="alert"
             className={
-              displayError.toLowerCase().includes("not approved") ||
-              displayError.toLowerCase().includes("set your password")
+              displayError.toLowerCase().includes("not approved")
                 ? "mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
                 : "mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
             }
@@ -94,53 +180,78 @@ export function LoginPage() {
           </div>
         ) : null}
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div>
-            <label
-              htmlFor="username"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              CNIC or mobile number
-            </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
-              placeholder="Enter CNIC or mobile number"
-              required
-              disabled={isSubmitting}
-            />
-          </div>
+        {step === "identifier" ? (
+          <form className="space-y-4" onSubmit={handleIdentifierContinue}>
+            <div>
+              <label
+                htmlFor="username"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                CNIC or mobile number
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                className={inputClassName}
+                placeholder="Enter CNIC or mobile number"
+                required
+                disabled={busy}
+                autoFocus
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              {firstLogin ? "New password" : "Password"}
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete={firstLogin ? "new-password" : "current-password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
-              placeholder={
-                firstLogin ? "At least 6 characters" : "Your password"
-              }
-              required
-              minLength={firstLogin ? 6 : undefined}
-              disabled={isSubmitting}
-            />
-          </div>
+            <div className="flex items-center justify-between text-sm">
+              <Link
+                to="/forgot-password"
+                className="font-medium text-brand-700 hover:text-brand-800"
+              >
+                Forgot password?
+              </Link>
+              <Link
+                to="/request-access"
+                className="font-medium text-brand-700 hover:text-brand-800"
+              >
+                Request account access
+              </Link>
+            </div>
 
-          {firstLogin ? (
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {checkingStatus ? "Checking..." : "Continue"}
+            </button>
+          </form>
+        ) : null}
+
+        {step === "setPassword" ? (
+          <form className="space-y-4" onSubmit={handleSetPassword}>
+            <div>
+              <label
+                htmlFor="newPassword"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                New password
+              </label>
+              <input
+                id="newPassword"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className={inputClassName}
+                placeholder="At least 6 characters"
+                required
+                minLength={6}
+                disabled={busy}
+                autoFocus
+              />
+            </div>
             <div>
               <label
                 htmlFor="confirmPassword"
@@ -150,69 +261,74 @@ export function LoginPage() {
               </label>
               <input
                 id="confirmPassword"
-                name="confirmPassword"
                 type="password"
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+                className={inputClassName}
                 placeholder="Re-enter password"
                 required
                 minLength={6}
-                disabled={isSubmitting}
+                disabled={busy}
               />
             </div>
-          ) : null}
-
-          <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-slate-300"
-              checked={firstLogin}
-              disabled={isSubmitting}
-              onChange={(event) => {
-                setFirstLogin(event.target.checked);
-                setPassword("");
-                setConfirmPassword("");
-                setLocalError(null);
-                setSuccessMessage(null);
-                clearError();
-              }}
-            />
-            <span>
-              First login after approval — I need to set my password
-            </span>
-          </label>
-
-          <div className="flex items-center justify-between text-sm">
-            <Link
-              to="/forgot-password"
-              className="font-medium text-brand-700 hover:text-brand-800"
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Forgot password?
-            </Link>
-            <Link
-              to="/request-access"
-              className="font-medium text-brand-700 hover:text-brand-800"
+              {isSubmitting ? "Saving password..." : "Set password"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={goBackToIdentifier}
+              className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
             >
-              Request account access
-            </Link>
-          </div>
+              Back
+            </button>
+          </form>
+        ) : null}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {isSubmitting
-              ? firstLogin
-                ? "Saving password..."
-                : "Signing in..."
-              : firstLogin
-                ? "Set password"
-                : "Sign in"}
-          </button>
-        </form>
+        {step === "password" ? (
+          <form className="space-y-4" onSubmit={handleLogin}>
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-1 block text-sm font-medium text-slate-700"
+              >
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className={inputClassName}
+                placeholder="Your password"
+                required
+                disabled={busy}
+                autoFocus
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSubmitting ? "Signing in..." : "Sign in"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={goBackToIdentifier}
+              className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+            >
+              Use a different CNIC / mobile
+            </button>
+          </form>
+        ) : null}
 
         <p className="mt-6 text-center text-sm text-slate-500">
           <Link to="/" className="font-medium text-brand-700 hover:text-brand-800">

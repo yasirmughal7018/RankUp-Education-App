@@ -12,7 +12,7 @@ import { canManageQuizzes } from "@/features/quizzes/domain/quizTypes";
 import { canTakeStudentQuizzes } from "@/features/student/domain/studentQuizTypes";
 
 const roleModules: Record<UserRole, string[]> = {
-  SuperAdmin: [
+  PortalAdmin: [
     "Approve registration requests",
     "Approve questions and quizzes",
     "Manage the school directory",

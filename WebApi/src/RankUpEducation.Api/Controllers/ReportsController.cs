@@ -19,7 +19,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpGet("quiz-summary")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher")]
     public async Task<ActionResult<ApiResponse<QuizSummaryReportResponse>>> GetQuizSummaryAsync(
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
@@ -30,7 +30,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpGet("quizzes/{quizId:long}/performance")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher")]
     public async Task<ActionResult<ApiResponse<QuizPerformanceReportResponse>>> GetQuizPerformanceAsync(
         long quizId,
         CancellationToken cancellationToken)
@@ -49,7 +49,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpGet("rankings")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher")]
     public async Task<ActionResult<ApiResponse<RankingReportResponse>>> GetRankingsAsync(
         [FromQuery] long? quizId,
         CancellationToken cancellationToken)

@@ -1,10 +1,13 @@
 namespace RankUpEducation.Domain.Auth;
 
+/// <summary>
+/// Application roles. Numeric values match lookups.id for type = UserRole.
+/// </summary>
 public enum UserRole
 {
-    SuperAdmin = 1,
-    SchoolAdmin = 2,
-    Teacher = 3,
-    Student = 4,
-    Parent = 5
+    PortalAdmin = 2010,
+    SchoolAdmin = 2011,
+    Student = 2012,
+    Teacher = 2013,
+    Parent = 2014
 }

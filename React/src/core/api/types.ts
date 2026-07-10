@@ -12,7 +12,7 @@ export interface ApiError {
 }
 
 export type UserRole =
-  | "SuperAdmin"
+  | "PortalAdmin"
   | "SchoolAdmin"
   | "Teacher"
   | "Student"
@@ -46,7 +46,7 @@ export interface AuthSession {
   user: CurrentUser;
 }
 
-export const ADMIN_ROLES: UserRole[] = ["SuperAdmin", "SchoolAdmin"];
+export const ADMIN_ROLES: UserRole[] = ["PortalAdmin", "SchoolAdmin"];
 
 export function isAdminRole(role: UserRole): boolean {
   return ADMIN_ROLES.includes(role);
@@ -54,7 +54,7 @@ export function isAdminRole(role: UserRole): boolean {
 
 export function getDashboardLabel(role: UserRole): string {
   switch (role) {
-    case "SuperAdmin":
+    case "PortalAdmin":
       return "Platform Administration";
     case "SchoolAdmin":
       return "School Administration";

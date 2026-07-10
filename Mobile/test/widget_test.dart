@@ -13,24 +13,19 @@ void main() {
     await _pumpLoginApp(tester);
 
     expect(find.text('RankUp Education'), findsOneWidget);
-    expect(find.text('Login'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
   });
 
   testWidgets('login text fields are editable', (tester) async {
     await _pumpLoginApp(tester);
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Username or ID'),
+      find.widgetWithText(TextField, 'CNIC or mobile number'),
       'teacher-demo',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Password'),
-      'password',
     );
     await tester.pump();
 
     expect(find.text('teacher-demo'), findsOneWidget);
-    expect(find.text('password'), findsOneWidget);
   });
 
   testWidgets('password reset field is editable', (tester) async {
@@ -81,6 +76,13 @@ class _FakeAuthRepository implements AuthRepository {
   Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<({String status, String message})> getLoginStatus({
+    required String identifier,
   }) {
     throw UnimplementedError();
   }

@@ -5,13 +5,23 @@ Accept: application/json
 
 ###
 
-# Login (Student, Parent, Teacher, SchoolAdmin, SuperAdmin)
+# Login (Student, Parent, Teacher, SchoolAdmin, PortalAdmin)
 POST {{RankUpEducation.Api_HostAddress}}/api/auth/login
 Content-Type: application/json
 
 {
   "username": "student-demo",
   "password": "password"
+}
+
+###
+
+# Login status (step 1: CNIC/mobile only)
+POST {{RankUpEducation.Api_HostAddress}}/api/auth/login-status
+Content-Type: application/json
+
+{
+  "username": "03XXXXXXXXX"
 }
 
 ###

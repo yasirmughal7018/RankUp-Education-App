@@ -63,7 +63,7 @@ public sealed class QuizzesController : ControllerBase
     }
 
     [HttpGet("pending-approval")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<PendingQuizApprovalListResponse>>> ListPendingApprovalAsync(
         CancellationToken cancellationToken)
     {
@@ -285,7 +285,7 @@ public sealed class QuizzesController : ControllerBase
     }
 
     [HttpPost("{quizId:long}/reject")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<RejectQuizResponse>>> RejectAsync(
         long quizId,
         [FromBody] RejectQuizRequest? request,

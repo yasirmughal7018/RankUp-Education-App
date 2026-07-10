@@ -100,7 +100,7 @@ public sealed class QuizService : IQuizService
                 subject,
                 grade,
                 cancellationToken),
-            UserRole.SuperAdmin => await _quizzes.ListForSchoolAsync(
+            UserRole.PortalAdmin => await _quizzes.ListForSchoolAsync(
                 null,
                 search,
                 subject,
@@ -148,7 +148,7 @@ public sealed class QuizService : IQuizService
             }
         }
 
-        if (role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.SuperAdmin or UserRole.Parent)
+        if (role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin or UserRole.Parent)
         {
             var list = await ListAsync(null, null, null, cancellationToken);
             var summary = list.Items.FirstOrDefault(item => item.Id == quizId)

@@ -17,7 +17,9 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.FullName).HasColumnName("display_name").HasMaxLength(50);
         builder.Property(user => user.Role)
             .HasColumnName("role")
-            .HasConversion(role => role.ToString().ToLowerInvariant(), value => Enum.Parse<UserRole>(value, true))
+            .HasConversion(
+                role => role.ToString().ToLowerInvariant(),
+                value => ParseStoredRole(value))
             .IsRequired();
         builder.HasIndex(user => new { user.Id, user.Role }).IsUnique();
         builder.Property(user => user.IsActive).HasColumnName("is_active").HasDefaultValue(false);
@@ -61,5 +63,18 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Navigation(user => user.RefreshTokens).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(user => user.DeviceSessions).UsePropertyAccessMode(PropertyAccessMode.Field);
+    }
+
+    /// <summary>
+    /// Maps DB role text to <see cref="UserRole"/>. Accepts legacy <c>superadmin</c>.
+    /// </summary>
+    private static UserRole ParseStoredRole(string value)
+    {
+        if (string.Equals(value, "superadmin", StringComparison.OrdinalIgnoreCase))
+        {
+            return UserRole.PortalAdmin;
+        }
+
+        return Enum.Parse<UserRole>(value, ignoreCase: true);
     }
 }

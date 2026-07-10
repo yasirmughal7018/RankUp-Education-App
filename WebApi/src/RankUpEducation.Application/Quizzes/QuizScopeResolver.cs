@@ -46,7 +46,7 @@ public static class QuizScopeResolver
     public static QuizManageScope RequireApprovalScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.SchoolAdmin or UserRole.SuperAdmin))
+        if (role is not (UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("Only school administrators can approve quizzes.");
         }

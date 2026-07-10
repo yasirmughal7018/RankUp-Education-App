@@ -19,6 +19,26 @@ export interface SetInitialPasswordRequest {
   newPassword: string;
 }
 
+export type LoginStatus =
+  | "PendingApproval"
+  | "NeedsPasswordSetup"
+  | "Ready";
+
+export interface LoginStatusResponse {
+  status: LoginStatus;
+  message: string;
+}
+
+export async function getLoginStatus(
+  username: string,
+): Promise<LoginStatusResponse> {
+  return apiRequest<LoginStatusResponse>("/auth/login-status", {
+    method: "POST",
+    body: { username },
+    skipAuth: true,
+  });
+}
+
 export async function login(request: LoginRequest): Promise<AuthSession> {
   const response = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",

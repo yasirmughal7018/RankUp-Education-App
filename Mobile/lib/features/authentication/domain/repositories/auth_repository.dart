@@ -7,6 +7,11 @@ abstract class AuthRepository {
     required String password,
   });
 
+  /// Step 1: check whether account needs password setup or can sign in.
+  Future<({String status, String message})> getLoginStatus({
+    required String identifier,
+  });
+
   /// After approval: set password only (no session). User must sign in afterward.
   Future<void> setInitialPassword({
     required String identifier,

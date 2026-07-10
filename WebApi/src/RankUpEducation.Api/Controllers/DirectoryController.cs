@@ -19,7 +19,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpGet("schools")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<SchoolListResponse>>> ListSchoolsAsync(
         CancellationToken cancellationToken)
     {
@@ -28,7 +28,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("schools")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<SchoolResponse>>> CreateSchoolAsync(
         [FromBody] UpsertSchoolRequest request,
         CancellationToken cancellationToken)
@@ -38,7 +38,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPut("schools/{schoolId:long}")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<SchoolResponse>>> UpdateSchoolAsync(
         long schoolId,
         [FromBody] UpsertSchoolRequest request,
@@ -49,7 +49,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("schools/{schoolId:long}/deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateSchoolAsync(
         long schoolId,
         CancellationToken cancellationToken)
@@ -59,7 +59,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("schools/{schoolId:long}/activate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateSchoolAsync(
         long schoolId,
         CancellationToken cancellationToken)
@@ -69,7 +69,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpGet("schools/{schoolId:long}/campuses")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<CampusListResponse>>> ListCampusesAsync(
         long schoolId,
         CancellationToken cancellationToken)
@@ -79,7 +79,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("schools/{schoolId:long}/campuses")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<CampusResponse>>> CreateCampusAsync(
         long schoolId,
         [FromBody] UpsertCampusRequest request,
@@ -90,7 +90,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPut("campuses/{campusId:long}")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<CampusResponse>>> UpdateCampusAsync(
         long campusId,
         [FromBody] UpsertCampusRequest request,
@@ -101,7 +101,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("campuses/{campusId:long}/deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateCampusAsync(
         long campusId,
         CancellationToken cancellationToken)
@@ -111,7 +111,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("campuses/{campusId:long}/activate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateCampusAsync(
         long campusId,
         CancellationToken cancellationToken)
@@ -121,7 +121,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpGet("students")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher")]
     public async Task<ActionResult<ApiResponse<DirectoryStudentListResponse>>> ListStudentsAsync(
         [FromQuery] int? schoolId,
         [FromQuery] int? campusId,
@@ -143,7 +143,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("students")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryStudentResponse>>> CreateStudentAsync(
         [FromBody] CreateDirectoryStudentRequest request,
         CancellationToken cancellationToken)
@@ -153,7 +153,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPut("students/{studentId:long}")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryStudentResponse>>> UpdateStudentAsync(
         long studentId,
         [FromBody] UpdateDirectoryStudentRequest request,
@@ -164,7 +164,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("students/{studentId:long}/activate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateStudentAsync(
         long studentId,
         CancellationToken cancellationToken)
@@ -174,7 +174,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("students/{studentId:long}/deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateStudentAsync(
         long studentId,
         CancellationToken cancellationToken)
@@ -184,7 +184,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("students/bulk-deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateStudentsAsync(
         [FromBody] BulkDeactivateRequest request,
         CancellationToken cancellationToken)
@@ -194,7 +194,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpGet("teachers")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherListResponse>>> ListTeachersAsync(
         [FromQuery] int? schoolId,
         [FromQuery] int? campusId,
@@ -214,7 +214,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("teachers")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> CreateTeacherAsync(
         [FromBody] CreateDirectoryTeacherRequest request,
         CancellationToken cancellationToken)
@@ -224,7 +224,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPut("teachers/{teacherId:long}")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> UpdateTeacherAsync(
         long teacherId,
         [FromBody] UpdateDirectoryTeacherRequest request,
@@ -235,7 +235,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("teachers/{teacherId:long}/activate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateTeacherAsync(
         long teacherId,
         CancellationToken cancellationToken)
@@ -245,7 +245,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("teachers/{teacherId:long}/deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateTeacherAsync(
         long teacherId,
         CancellationToken cancellationToken)
@@ -255,7 +255,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("teachers/bulk-deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateTeachersAsync(
         [FromBody] BulkDeactivateRequest request,
         CancellationToken cancellationToken)
@@ -265,7 +265,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpGet("parents")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentListResponse>>> ListParentsAsync(
         [FromQuery] string? search,
         [FromQuery] int pageNumber = 1,
@@ -277,7 +277,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("parents")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> CreateParentAsync(
         [FromBody] CreateDirectoryParentRequest request,
         CancellationToken cancellationToken)
@@ -287,7 +287,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPut("parents/{parentId:long}")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> UpdateParentAsync(
         long parentId,
         [FromBody] UpdateDirectoryParentRequest request,
@@ -298,7 +298,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("parents/{parentId:long}/activate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateParentAsync(
         long parentId,
         CancellationToken cancellationToken)
@@ -308,7 +308,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("parents/{parentId:long}/deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateParentAsync(
         long parentId,
         CancellationToken cancellationToken)
@@ -318,7 +318,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("parents/bulk-deactivate")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateParentsAsync(
         [FromBody] BulkDeactivateRequest request,
         CancellationToken cancellationToken)
@@ -328,7 +328,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpPost("parents/{parentId:long}/students")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<LinkParentStudentResponse>>> LinkParentStudentAsync(
         long parentId,
         [FromBody] LinkParentStudentRequest request,
@@ -339,7 +339,7 @@ public sealed class DirectoryController : ControllerBase
     }
 
     [HttpDelete("parents/{parentId:long}/students/{studentId:long}")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> UnlinkParentStudentAsync(
         long parentId,
         long studentId,

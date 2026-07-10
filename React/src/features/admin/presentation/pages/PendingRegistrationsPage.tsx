@@ -59,7 +59,7 @@ export function PendingRegistrationsPage() {
   const isSubmitting =
     approveRegistration.isPending || rejectRegistration.isPending;
 
-  const isPortalAdmin = user?.role === "SuperAdmin";
+  const isPortalAdmin = user?.role === "PortalAdmin";
   const roleLabel = isPortalAdmin ? "Portal Admin" : "School Admin";
 
   useEffect(() => {

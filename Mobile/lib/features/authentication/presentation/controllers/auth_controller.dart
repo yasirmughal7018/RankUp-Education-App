@@ -80,6 +80,27 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<({String status, String message})> getLoginStatus({
+    required String identifier,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      final result = await _repository.getLoginStatus(identifier: identifier);
+      state = state.copyWith(isLoading: false);
+      return result;
+    } on AppException catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.message);
+      rethrow;
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+      rethrow;
+    }
+  }
+
   Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,

@@ -112,19 +112,19 @@ npm run preview
 | `/` | Public | Home — project overview |
 | `/login` | Guest only | Login — calls `POST /api/auth/login` |
 | `/dashboard` | Authenticated | Role-based dashboard |
-| `/admin` | SuperAdmin, SchoolAdmin | Administration overview |
-| `/admin/registrations` | SuperAdmin, SchoolAdmin | Pending account requests |
-| `/admin/quiz-approvals` | SuperAdmin, SchoolAdmin | Approve teacher quizzes |
-| `/admin/directory` | SuperAdmin, SchoolAdmin | Directory overview |
-| `/admin/directory/schools` | SuperAdmin, SchoolAdmin | Schools + campuses |
-| `/admin/directory/students` | SuperAdmin, SchoolAdmin | Students search |
-| `/admin/directory/teachers` | SuperAdmin, SchoolAdmin | Teachers search |
-| `/admin/directory/parents` | SuperAdmin, SchoolAdmin | Parents + link/unlink students |
-| `/reports` | SuperAdmin, SchoolAdmin, Teacher | Quiz summary, rankings, performance |
-| `/questions` | Teacher, Parent, SchoolAdmin, SuperAdmin | Question bank list |
-| `/questions/new` | Teacher, Parent, SchoolAdmin, SuperAdmin | Create question |
-| `/questions/:id` | Teacher, Parent, SchoolAdmin, SuperAdmin | Question detail |
-| `/questions/:id/edit` | Teacher, Parent, SchoolAdmin, SuperAdmin | Edit question |
+| `/admin` | PortalAdmin, SchoolAdmin | Administration overview |
+| `/admin/registrations` | PortalAdmin, SchoolAdmin | Pending account requests |
+| `/admin/quiz-approvals` | PortalAdmin, SchoolAdmin | Approve teacher quizzes |
+| `/admin/directory` | PortalAdmin, SchoolAdmin | Directory overview |
+| `/admin/directory/schools` | PortalAdmin, SchoolAdmin | Schools + campuses |
+| `/admin/directory/students` | PortalAdmin, SchoolAdmin | Students search |
+| `/admin/directory/teachers` | PortalAdmin, SchoolAdmin | Teachers search |
+| `/admin/directory/parents` | PortalAdmin, SchoolAdmin | Parents + link/unlink students |
+| `/reports` | PortalAdmin, SchoolAdmin, Teacher | Quiz summary, rankings, performance |
+| `/questions` | Teacher, Parent, SchoolAdmin, PortalAdmin | Question bank list |
+| `/questions/new` | Teacher, Parent, SchoolAdmin, PortalAdmin | Create question |
+| `/questions/:id` | Teacher, Parent, SchoolAdmin, PortalAdmin | Question detail |
+| `/questions/:id/edit` | Teacher, Parent, SchoolAdmin, PortalAdmin | Edit question |
 | `/quizzes` | Teacher, Parent | Quiz list and management |
 | `/quizzes/new` | Teacher, Parent | Create quiz |
 | `/quizzes/:id` | Teacher, Parent | Quiz detail, questions, publish, assign |
@@ -172,8 +172,8 @@ List / search:
 
 School / campus CRUD (Schools page):
 
-- `POST /api/directory/schools` — create school (**SuperAdmin** only); body `{ name, code, isActive }`
-- `PUT /api/directory/schools/{schoolId}` — update school (**SuperAdmin**, **SchoolAdmin**)
+- `POST /api/directory/schools` — create school (**PortalAdmin** only); body `{ name, code, isActive }`
+- `PUT /api/directory/schools/{schoolId}` — update school (**PortalAdmin**, **SchoolAdmin**)
 - `POST /api/directory/schools/{schoolId}/activate`
 - `POST /api/directory/schools/{schoolId}/deactivate`
 - `POST /api/directory/schools/{schoolId}/campuses` — body `{ name, address?, isActive }`
@@ -236,7 +236,7 @@ Timed attempts show a countdown and auto-submit when time expires. Answers are r
 5. On `401`, the app refreshes tokens via `POST /api/auth/token/refresh`.
 6. Logout calls `POST /api/auth/logout` and clears local storage.
 
-Supported roles from the API: `SuperAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
+Supported roles from the API: `PortalAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
 
 ## API Integration
 

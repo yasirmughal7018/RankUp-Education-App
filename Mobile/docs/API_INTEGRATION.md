@@ -130,7 +130,7 @@ Standalone question management under `/api/questions`.
 | Create question | `POST` | `/api/questions` |
 | Update question | `PUT` | `/api/questions/{questionId}` |
 | Approve | `POST` | `/api/questions/{questionId}/approve` |
-| AI approve (SuperAdmin) | `POST` | `/api/questions/{questionId}/approve-ai` |
+| AI approve (PortalAdmin) | `POST` | `/api/questions/{questionId}/approve-ai` |
 | Reject | `POST` | `/api/questions/{questionId}/reject` |
 | Activate | `POST` | `/api/questions/{questionId}/activate` |
 | Deactivate | `POST` | `/api/questions/{questionId}/deactivate` |

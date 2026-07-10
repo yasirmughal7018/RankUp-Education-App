@@ -28,7 +28,7 @@ CREATE TABLE public.app_users (
 	CONSTRAINT app_users_pkey PRIMARY KEY (id),
 	CONSTRAINT app_users_username_key UNIQUE (username),
 	CONSTRAINT chk_app_users_password_when_active CHECK (((is_active = false) OR (password_hash IS NOT NULL) OR (must_change_password IS TRUE))),
-	CONSTRAINT chk_app_users_role CHECK ((role = ANY (ARRAY['superadmin'::text, 'schooladmin'::text, 'teacher'::text, 'student'::text, 'parent'::text])))
+	CONSTRAINT chk_app_users_role CHECK ((role = ANY (ARRAY['portaladmin'::text, 'schooladmin'::text, 'teacher'::text, 'student'::text, 'parent'::text])))
 );
 CREATE UNIQUE INDEX ix_app_users_email ON public.app_users USING btree (email) WHERE (email IS NOT NULL);
 CREATE UNIQUE INDEX ix_app_users_cnic_unique ON public.app_users USING btree (cnic) WHERE (cnic IS NOT NULL);

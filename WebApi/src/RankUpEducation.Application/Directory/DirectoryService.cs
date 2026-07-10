@@ -706,7 +706,7 @@ public sealed class DirectoryService : IDirectoryService
     private void EnsureAdmin()
     {
         var role = ParseRole();
-        if (role is not (UserRole.SuperAdmin or UserRole.SchoolAdmin))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin))
         {
             throw new ForbiddenAppException("Only administrators can manage the directory.");
         }
@@ -879,7 +879,7 @@ public sealed class DirectoryService : IDirectoryService
     private void EnsureDirectoryReader()
     {
         var role = ParseRole();
-        if (role is not (UserRole.SuperAdmin or UserRole.SchoolAdmin or UserRole.Teacher))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher))
         {
             throw new ForbiddenAppException("You do not have access to the student directory.");
         }

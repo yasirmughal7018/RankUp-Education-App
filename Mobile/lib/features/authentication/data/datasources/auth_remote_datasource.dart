@@ -31,6 +31,25 @@ class AuthRemoteDataSource {
     );
   }
 
+  Future<({String status, String message})> getLoginStatus({
+    required String identifier,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/login-status',
+        data: {'username': identifier},
+        options: Options(extra: {'skipAuthRefresh': true}),
+      );
+      final payload = _unwrap(response.data);
+      return (
+        status: payload['status'] as String? ?? 'Ready',
+        message: payload['message'] as String? ?? '',
+      );
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
   Future<void> setInitialPassword({
     required String identifier,
     required String newPassword,
@@ -217,7 +236,10 @@ Map<String, dynamic> _unwrap(Map<String, dynamic>? json) {
   );
 
   if (!response.success) {
-    throw ValidationException(response.message, response.errors);
+    throw ValidationException.fromApi(
+      message: response.message,
+      errors: response.errors,
+    );
   }
 
   return response.data;

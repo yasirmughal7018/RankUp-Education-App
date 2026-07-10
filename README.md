@@ -76,7 +76,7 @@ More detail: [`Mobile/README.md`](Mobile/README.md)
 
 ## Roles
 
-API-backed roles used across clients: `SuperAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
+API-backed roles used across clients: `PortalAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
 
 ## Repository layout
 

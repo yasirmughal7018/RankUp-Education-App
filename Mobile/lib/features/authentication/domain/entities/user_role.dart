@@ -1,4 +1,4 @@
-enum UserRole { student, parent, teacher, schoolAdmin, superAdmin }
+enum UserRole { student, parent, teacher, schoolAdmin, portalAdmin }
 
 UserRole parseUserRole(String value) {
   final normalized = value.trim().toLowerCase().replaceAll('_', '');
@@ -7,13 +7,14 @@ UserRole parseUserRole(String value) {
     'parent' => UserRole.parent,
     'teacher' => UserRole.teacher,
     'schooladmin' => UserRole.schoolAdmin,
-    'superadmin' => UserRole.superAdmin,
+    // PortalAdmin is the current API/DB name; superadmin is legacy.
+    'portaladmin' || 'superadmin' => UserRole.portalAdmin,
     _ => UserRole.student,
   };
 }
 
 bool isAdminRole(UserRole role) {
-  return role == UserRole.schoolAdmin || role == UserRole.superAdmin;
+  return role == UserRole.schoolAdmin || role == UserRole.portalAdmin;
 }
 
 extension UserRoleLabel on UserRole {
@@ -23,7 +24,7 @@ extension UserRoleLabel on UserRole {
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
       UserRole.schoolAdmin => 'School Admin',
-      UserRole.superAdmin => 'Portal Admin',
+      UserRole.portalAdmin => 'Portal Admin',
     };
   }
 
@@ -33,7 +34,7 @@ extension UserRoleLabel on UserRole {
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
       UserRole.schoolAdmin => 'SchoolAdmin',
-      UserRole.superAdmin => 'SuperAdmin',
+      UserRole.portalAdmin => 'PortalAdmin',
     };
   }
 }

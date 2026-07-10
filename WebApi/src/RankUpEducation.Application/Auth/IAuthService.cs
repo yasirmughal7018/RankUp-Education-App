@@ -7,6 +7,13 @@ public interface IAuthService
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Checks whether the account is pending, needs first password, or can sign in.
+    /// </summary>
+    Task<LoginStatusResponse> GetLoginStatusAsync(
+        LoginStatusRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// First visit after approval: set password only (no session). User must sign in afterward.
     /// </summary>
     Task SetInitialPasswordAsync(

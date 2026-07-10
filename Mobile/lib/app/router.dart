@@ -150,7 +150,7 @@ String _dashboardPath(UserRole role) {
     UserRole.student => '/student',
     UserRole.parent => '/parent',
     UserRole.teacher => '/teacher',
-    UserRole.schoolAdmin || UserRole.superAdmin => '/admin',
+    UserRole.schoolAdmin || UserRole.portalAdmin => '/admin',
   };
 }
 
@@ -275,7 +275,7 @@ List<_NavDestination> _destinationsFor(UserRole role) {
           Icons.person,
         ),
       ],
-    UserRole.schoolAdmin || UserRole.superAdmin => const [
+    UserRole.schoolAdmin || UserRole.portalAdmin => const [
         _NavDestination('Home', '/admin', Icons.home_outlined, Icons.home),
         _NavDestination(
           'Approvals',

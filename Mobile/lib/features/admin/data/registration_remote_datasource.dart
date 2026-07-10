@@ -68,7 +68,7 @@ List<dynamic> _unwrapList(Map<String, dynamic>? json) {
   );
 
   if (!response.success) {
-    throw ValidationException(response.message, response.errors);
+    throw ValidationException.fromApi(message: response.message, errors: response.errors);
   }
 
   return response.data;

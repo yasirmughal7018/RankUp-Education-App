@@ -167,7 +167,7 @@ export function DirectorySchoolsPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Schools"
-        description="Manage schools and campuses. SuperAdmin and SchoolAdmin can create, edit, and activate."
+        description="Manage schools and campuses. PortalAdmin and SchoolAdmin can create, edit, and activate."
         action={
           <div className="flex flex-wrap gap-2">
             <button

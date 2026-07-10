@@ -85,6 +85,48 @@ public sealed class AuthService : IAuthService
             user.ToCurrentUserResponse());
     }
 
+    public async Task<LoginStatusResponse> GetLoginStatusAsync(
+        LoginStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            throw new ValidationAppException(["CNIC or mobile number is required."]);
+        }
+
+        var user = await _users.GetByLoginIdentifierAsync(request.Username.AsTrimmedString(), cancellationToken)
+            ?? throw new AuthenticationAppException(
+                "No account found for this CNIC or mobile number.");
+
+        if (user.IsDeleted)
+        {
+            throw new AuthenticationAppException("This account is not active.");
+        }
+
+        if (user.IsPendingRegistration)
+        {
+            return new LoginStatusResponse(
+                "PendingApproval",
+                "Your login is not approved yet. Please wait for admin approval.");
+        }
+
+        if (!user.IsActive)
+        {
+            throw new AuthenticationAppException("This account is not active.");
+        }
+
+        if (user.NeedsPasswordSetup)
+        {
+            return new LoginStatusResponse(
+                "NeedsPasswordSetup",
+                "Your account is approved. Set your password to continue, then sign in.");
+        }
+
+        return new LoginStatusResponse(
+            "Ready",
+            "Enter your password to sign in.");
+    }
+
     public async Task SetInitialPasswordAsync(
         SetInitialPasswordRequest request,
         CancellationToken cancellationToken)
@@ -461,7 +503,7 @@ public sealed class AuthService : IAuthService
             return;
         }
 
-        // Portal Admin target → SuperAdmin (Portal Admin) only.
+        // Portal Admin target → PortalAdmin (Portal Admin) only.
         if (IsPortalAdminTarget(user))
         {
             throw new ForbiddenAppException(
@@ -506,7 +548,7 @@ public sealed class AuthService : IAuthService
     private void EnsureRegistrationReviewer()
     {
         var role = _currentUser.Role;
-        if (!string.Equals(role, UserRole.SuperAdmin.ToString(), StringComparison.OrdinalIgnoreCase)
+        if (!string.Equals(role, UserRole.PortalAdmin.ToString(), StringComparison.OrdinalIgnoreCase)
             && !string.Equals(role, UserRole.SchoolAdmin.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             throw new ForbiddenAppException("Only admins can review registration requests.");

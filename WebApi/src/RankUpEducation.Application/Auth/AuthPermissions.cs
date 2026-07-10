@@ -8,7 +8,7 @@ public static class AuthPermissions
     {
         return role switch
         {
-            UserRole.SuperAdmin =>
+            UserRole.PortalAdmin =>
             [
                 "platform.manage",
                 "school.manage",
