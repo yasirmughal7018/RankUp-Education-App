@@ -161,7 +161,12 @@ class _PendingRegistrationsPageState
     final user = ref.watch(authControllerProvider).user;
     final async = ref.watch(pendingRegistrationsProvider);
     final isPortalAdmin = user?.role == UserRole.portalAdmin;
-    final roleLabel = isPortalAdmin ? 'Portal Admin' : 'School Admin';
+    final roleLabel = switch (user?.role) {
+      UserRole.portalAdmin => 'Portal Admin',
+      UserRole.schoolAdmin => 'School Admin',
+      UserRole.campusAdmin => 'Campus Admin',
+      _ => 'Admin',
+    };
     final theme = Theme.of(context);
 
     return Scaffold(

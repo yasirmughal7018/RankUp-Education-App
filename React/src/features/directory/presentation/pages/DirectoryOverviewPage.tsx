@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/core/components/Card";
 import { PageHeader } from "@/core/components/PageHeader";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 
 const directoryLinks = [
   {
@@ -25,7 +26,30 @@ const directoryLinks = [
   },
 ];
 
+const schoolAdminsLink = {
+  title: "School Admins",
+  description: "Create and manage school admin accounts (PortalAdmin only).",
+  href: "/admin/directory/school-admins",
+};
+
+const campusAdminsLink = {
+  title: "Campus Admins",
+  description: "Create and manage campus admin accounts.",
+  href: "/admin/directory/campus-admins",
+};
+
 export function DirectoryOverviewPage() {
+  const { user } = useAuth();
+  const isPortalAdmin = user?.role === "PortalAdmin";
+  const isSchoolAdmin = user?.role === "SchoolAdmin";
+  const canManageCampusAdmins = isPortalAdmin || isSchoolAdmin;
+
+  const links = [
+    ...directoryLinks,
+    ...(canManageCampusAdmins ? [campusAdminsLink] : []),
+    ...(isPortalAdmin ? [schoolAdminsLink] : []),
+  ];
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
@@ -42,7 +66,7 @@ export function DirectoryOverviewPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2">
-        {directoryLinks.map((item) => (
+        {links.map((item) => (
           <Card key={item.href} title={item.title} description={item.description}>
             <Link
               to={item.href}

@@ -118,6 +118,17 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<AuthSession> switchRole(String role) async {
+    final session = await _remoteDataSource.switchRole(role);
+    await _tokenStore.saveTokens(
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    );
+    await _localDataSource.saveUser(session.user);
+    return session;
+  }
+
+  @override
   Future<AppUser> changePassword({
     required String newPassword,
     String? currentPassword,

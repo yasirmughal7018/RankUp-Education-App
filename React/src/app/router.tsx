@@ -13,7 +13,9 @@ import { LoginPage } from "@/features/authentication/presentation/pages/LoginPag
 import { RequestAccessPage } from "@/features/authentication/presentation/pages/RequestAccessPage";
 import { DashboardPage } from "@/features/dashboard/presentation/pages/DashboardPage";
 import { DirectoryOverviewPage } from "@/features/directory/presentation/pages/DirectoryOverviewPage";
+import { DirectoryCampusAdminsPage } from "@/features/directory/presentation/pages/DirectoryCampusAdminsPage";
 import { DirectoryParentsPage } from "@/features/directory/presentation/pages/DirectoryParentsPage";
+import { DirectorySchoolAdminsPage } from "@/features/directory/presentation/pages/DirectorySchoolAdminsPage";
 import { DirectorySchoolsPage } from "@/features/directory/presentation/pages/DirectorySchoolsPage";
 import { DirectoryStudentsPage } from "@/features/directory/presentation/pages/DirectoryStudentsPage";
 import { DirectoryTeachersPage } from "@/features/directory/presentation/pages/DirectoryTeachersPage";
@@ -88,6 +90,14 @@ export function AppRouter() {
               <Route
                 path="admin/directory/parents"
                 element={<DirectoryParentsPage />}
+              />
+              <Route
+                path="admin/directory/school-admins"
+                element={<DirectorySchoolAdminsPage />}
+              />
+              <Route
+                path="admin/directory/campus-admins"
+                element={<DirectoryCampusAdminsPage />}
               />
             </Route>
 

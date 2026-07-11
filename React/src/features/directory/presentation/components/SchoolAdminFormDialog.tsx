@@ -2,36 +2,45 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
-  CreateDirectoryParentInput,
-  DirectoryParent,
-  UpdateDirectoryParentInput,
+  CreateDirectorySchoolAdminInput,
+  DirectorySchool,
+  DirectorySchoolAdmin,
+  UpdateDirectorySchoolAdminInput,
 } from "@/features/directory/domain/directoryTypes";
 
-type ParentFormSubmit =
-  | { mode: "create"; input: CreateDirectoryParentInput }
-  | { mode: "edit"; input: UpdateDirectoryParentInput };
+type SchoolAdminFormSubmit =
+  | { mode: "create"; input: CreateDirectorySchoolAdminInput }
+  | { mode: "edit"; input: UpdateDirectorySchoolAdminInput };
 
-interface ParentFormDialogProps {
-  parent?: DirectoryParent | null;
+interface SchoolAdminFormDialogProps {
+  schoolAdmin?: DirectorySchoolAdmin | null;
+  schools: DirectorySchool[];
   isSubmitting: boolean;
   onClose: () => void;
-  onSubmit: (payload: ParentFormSubmit) => Promise<void>;
+  onSubmit: (payload: SchoolAdminFormSubmit) => Promise<void>;
 }
 
 const inputClassName =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
 
-export function ParentFormDialog({
-  parent,
+export function SchoolAdminFormDialog({
+  schoolAdmin,
+  schools,
   isSubmitting,
   onClose,
   onSubmit,
-}: ParentFormDialogProps) {
-  const isEdit = parent != null;
-  const [fullName, setFullName] = useState(parent?.fullName ?? "");
-  const [username, setUsername] = useState(parent?.username ?? "");
-  const [cnic, setCnic] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
+}: SchoolAdminFormDialogProps) {
+  const isEdit = schoolAdmin != null;
+  const [fullName, setFullName] = useState(schoolAdmin?.fullName ?? "");
+  const [username, setUsername] = useState(schoolAdmin?.username ?? "");
+  const [schoolId, setSchoolId] = useState(
+    schoolAdmin?.schoolId ? String(schoolAdmin.schoolId) : "",
+  );
+  const [mobileNumber, setMobileNumber] = useState(
+    schoolAdmin?.mobileNumber ?? "",
+  );
+  const [cnic, setCnic] = useState(schoolAdmin?.cnic ?? "");
+  const [emailAddress, setEmailAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,13 +59,19 @@ export function ParentFormDialog({
     setError(null);
 
     const trimmedName = fullName.trim();
+    const parsedSchoolId = Number(schoolId);
     if (!trimmedName) {
       setError("Full name is required.");
       return;
     }
+    if (!parsedSchoolId || parsedSchoolId < 1) {
+      setError("Select a school.");
+      return;
+    }
 
-    const trimmedCnic = cnic.trim() || null;
     const mobile = mobileNumber.trim() || null;
+    const trimmedCnic = cnic.trim() || null;
+    const email = emailAddress.trim() || null;
 
     try {
       if (isEdit) {
@@ -64,8 +79,10 @@ export function ParentFormDialog({
           mode: "edit",
           input: {
             fullName: trimmedName,
-            cnic: trimmedCnic,
+            schoolId: parsedSchoolId,
             mobileNumber: mobile,
+            cnic: trimmedCnic,
+            emailAddress: email,
           },
         });
       } else {
@@ -79,14 +96,16 @@ export function ParentFormDialog({
           input: {
             fullName: trimmedName,
             username: trimmedUsername,
-            cnic: trimmedCnic,
+            schoolId: parsedSchoolId,
             mobileNumber: mobile,
+            cnic: trimmedCnic,
+            emailAddress: email,
           },
         });
       }
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError.message ?? "Unable to save parent.");
+      setError(apiError.message ?? "Unable to save school admin.");
     }
   }
 
@@ -95,20 +114,20 @@ export function ParentFormDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="parent-form-title"
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+        aria-labelledby="school-admin-form-title"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
       >
         <div className="mb-6">
           <h2
-            id="parent-form-title"
+            id="school-admin-form-title"
             className="text-xl font-semibold text-slate-900"
           >
-            {isEdit ? "Edit parent" : "Create parent"}
+            {isEdit ? "Edit school admin" : "Create school admin"}
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
-              ? `Update details for ${parent.fullName}.`
-              : "Add a new parent to the directory. User must set password on first login."}
+              ? `Update details for ${schoolAdmin.fullName}.`
+              : "Add a new school admin. User must set password on first login."}
           </p>
         </div>
 
@@ -120,11 +139,11 @@ export function ParentFormDialog({
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div>
-            <FieldLabel htmlFor="parent-full-name" required>
+            <FieldLabel htmlFor="school-admin-full-name" required>
               Full name
             </FieldLabel>
             <input
-              id="parent-full-name"
+              id="school-admin-full-name"
               type="text"
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
@@ -135,32 +154,67 @@ export function ParentFormDialog({
           </div>
 
           {!isEdit ? (
-            <>
-              <div>
-                <FieldLabel htmlFor="parent-username" required>
-                  Username
-                </FieldLabel>
-                <input
-                  id="parent-username"
-                  type="text"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  className={inputClassName}
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-            </>
+            <div>
+              <FieldLabel htmlFor="school-admin-username" required>
+                Username
+              </FieldLabel>
+              <input
+                id="school-admin-username"
+                type="text"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                className={inputClassName}
+                required
+                disabled={isSubmitting}
+              />
+            </div>
           ) : (
-            <p className="text-sm text-slate-500">Username {parent.username}</p>
+            <p className="text-sm text-slate-500">
+              Username {schoolAdmin.username}
+            </p>
           )}
 
           <div>
-            <FieldLabel htmlFor="parent-cnic" optional>
+            <FieldLabel htmlFor="school-admin-school" required>
+              School
+            </FieldLabel>
+            <select
+              id="school-admin-school"
+              value={schoolId}
+              onChange={(event) => setSchoolId(event.target.value)}
+              className={inputClassName}
+              required
+              disabled={isSubmitting}
+            >
+              <option value="">Select school</option>
+              {schools.map((school) => (
+                <option key={school.id} value={school.id}>
+                  {school.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="school-admin-mobile" optional>
+              Mobile
+            </FieldLabel>
+            <input
+              id="school-admin-mobile"
+              type="text"
+              value={mobileNumber}
+              onChange={(event) => setMobileNumber(event.target.value)}
+              className={inputClassName}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="school-admin-cnic" optional>
               CNIC
             </FieldLabel>
             <input
-              id="parent-cnic"
+              id="school-admin-cnic"
               type="text"
               value={cnic}
               onChange={(event) => setCnic(event.target.value)}
@@ -170,14 +224,14 @@ export function ParentFormDialog({
           </div>
 
           <div>
-            <FieldLabel htmlFor="parent-mobile" optional>
-              Mobile
+            <FieldLabel htmlFor="school-admin-email" optional>
+              Email
             </FieldLabel>
             <input
-              id="parent-mobile"
-              type="text"
-              value={mobileNumber}
-              onChange={(event) => setMobileNumber(event.target.value)}
+              id="school-admin-email"
+              type="email"
+              value={emailAddress}
+              onChange={(event) => setEmailAddress(event.target.value)}
               className={inputClassName}
               disabled={isSubmitting}
             />
@@ -201,7 +255,7 @@ export function ParentFormDialog({
                 ? "Saving..."
                 : isEdit
                   ? "Save changes"
-                  : "Create parent"}
+                  : "Create school admin"}
             </button>
           </div>
         </form>

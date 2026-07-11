@@ -127,6 +127,11 @@ class RoleAwareAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<AuthSession> switchRole(String role) async {
+    return (await _repositoryForSession()).switchRole(role);
+  }
+
+  @override
   Future<AppUser> changePassword({
     required String newPassword,
     String? currentPassword,

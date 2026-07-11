@@ -38,6 +38,8 @@ abstract class AuthRepository {
 
   Future<AuthSession> refreshSession();
 
+  Future<AuthSession> switchRole(String role);
+
   Future<AppUser> changePassword({
     required String newPassword,
     String? currentPassword,

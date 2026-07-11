@@ -6,6 +6,7 @@ class AppUserModel extends AppUser {
     required super.id,
     required super.name,
     required super.role,
+    required super.roles,
     required super.permissions,
     required super.schoolId,
     required super.campusId,
@@ -14,10 +15,14 @@ class AppUserModel extends AppUser {
   });
 
   factory AppUserModel.fromJson(Map<String, dynamic> json) {
+    final role = parseUserRole(_readString(json, ['role']));
+    final roles = _readRoles(json['roles'], fallback: role);
+
     return AppUserModel(
       id: _readString(json, ['id', 'userId']),
       name: _readString(json, ['name', 'fullName', 'displayName']),
-      role: parseUserRole(_readString(json, ['role'])),
+      role: role,
+      roles: roles,
       permissions: _readStringList(json['permissions']),
       schoolId: _readString(json, ['schoolId']),
       campusId: _readString(json, ['campusId']),
@@ -31,6 +36,7 @@ class AppUserModel extends AppUser {
       id: user.id,
       name: user.name,
       role: user.role,
+      roles: user.roles,
       permissions: user.permissions,
       schoolId: user.schoolId,
       campusId: user.campusId,
@@ -43,7 +49,8 @@ class AppUserModel extends AppUser {
     return {
       'id': id,
       'name': name,
-      'role': role.name,
+      'role': role.apiName,
+      'roles': roles.map((role) => role.apiName).toList(),
       'permissions': permissions,
       'schoolId': schoolId,
       'campusId': campusId,
@@ -84,4 +91,15 @@ List<String> _readStringList(Object? value) {
   }
 
   return const [];
+}
+
+List<UserRole> _readRoles(Object? value, {required UserRole fallback}) {
+  if (value is List && value.isNotEmpty) {
+    return value
+        .map((item) => parseUserRole(item.toString()))
+        .toSet()
+        .toList();
+  }
+
+  return [fallback];
 }

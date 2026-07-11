@@ -6,10 +6,16 @@ public interface IUserRepository
 {
     Task<User?> GetByIdAsync(long id, CancellationToken cancellationToken);
 
+    Task<User?> GetByIdForRoleAsync(long id, UserRole activeRole, CancellationToken cancellationToken);
+
     Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken);
 
     /// <summary>Resolves login by username, CNIC, or mobile number (in that priority).</summary>
     Task<User?> GetByLoginIdentifierAsync(string identifier, CancellationToken cancellationToken);
+
+    Task<User?> GetByMobileNumberAsync(string mobileNumber, CancellationToken cancellationToken);
+
+    Task<User?> GetByCnicAsync(string cnic, CancellationToken cancellationToken);
 
     Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken);
 
@@ -21,9 +27,17 @@ public interface IUserRepository
 
     Task AddAsync(User user, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(int take, int? schoolIdFilter, CancellationToken cancellationToken);
+    Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(
+        int take,
+        int? schoolIdFilter,
+        int? campusIdFilter,
+        CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<long>> ListAdminRecipientsAsync(string? adminTarget, int? schoolId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<long>> ListAdminRecipientsAsync(
+        string? adminTarget,
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken);
 
     Task<bool> HasStudentProfileAsync(long userId, CancellationToken cancellationToken);
 

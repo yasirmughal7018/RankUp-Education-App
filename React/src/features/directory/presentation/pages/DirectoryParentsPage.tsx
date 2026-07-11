@@ -129,7 +129,9 @@ export function DirectoryParentsPage() {
       const created = await createMutation.mutateAsync(
         payload.input as CreateDirectoryParentInput,
       );
-      setSuccessMessage(`Created parent ${created.fullName}.`);
+      setSuccessMessage(
+        `Created parent ${created.fullName}. User must set password on first login.`,
+      );
     } else if (parentDialog && parentDialog !== "create") {
       await updateMutation.mutateAsync({
         parentId: parentDialog.parentId,

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import { PageHeader } from "@/core/components/PageHeader";
+import { SearchableSelect } from "@/core/components/SearchableSelect";
 import * as authApi from "@/features/authentication/data/authApi";
 import type { RegisterAccountRequest } from "@/features/authentication/data/authApi";
 
@@ -304,30 +305,35 @@ export function RequestAccessPage() {
                   >
                     School
                   </FieldLabel>
-                  <select
+                  <SearchableSelect
                     id="schoolId"
                     required={isStudent}
                     disabled={isSubmitting || isLoadingSchools}
                     value={form.schoolId}
-                    onChange={(event) => {
-                      updateField("schoolId", event.target.value);
-                      updateField("campusId", "");
-                    }}
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      {isLoadingSchools
+                    allowEmpty
+                    emptyLabel={
+                      isLoadingSchools
                         ? "Loading schools..."
                         : isTeacher
                           ? "No school (Portal Admin)"
-                          : "Select school"}
-                    </option>
-                    {schools.map((school) => (
-                      <option key={school.id} value={school.id}>
-                        {school.name}
-                      </option>
-                    ))}
-                  </select>
+                          : "Select school"
+                    }
+                    placeholder={
+                      isLoadingSchools
+                        ? "Loading schools..."
+                        : isTeacher
+                          ? "No school (Portal Admin)"
+                          : "Select school"
+                    }
+                    options={schools.map((school) => ({
+                      value: String(school.id),
+                      label: school.name,
+                    }))}
+                    onChange={(next) => {
+                      updateField("schoolId", next);
+                      updateField("campusId", "");
+                    }}
+                  />
                   {isTeacher ? (
                     <p className="mt-1 text-xs text-slate-500">
                       Empty → Portal Admin only. Selected → School Admin + Portal
@@ -344,33 +350,38 @@ export function RequestAccessPage() {
                   >
                     Campus
                   </FieldLabel>
-                  <select
+                  <SearchableSelect
                     id="campusId"
                     required={isStudent}
                     disabled={
                       isSubmitting || !form.schoolId || isLoadingCampuses
                     }
                     value={form.campusId}
-                    onChange={(event) =>
-                      updateField("campusId", event.target.value)
-                    }
-                    className={inputClassName}
-                  >
-                    <option value="">
-                      {!form.schoolId
+                    allowEmpty
+                    emptyLabel={
+                      !form.schoolId
                         ? "Select a school first"
                         : isLoadingCampuses
                           ? "Loading campuses..."
                           : isTeacher
                             ? "No campus"
-                            : "Select campus"}
-                    </option>
-                    {campuses.map((campus) => (
-                      <option key={campus.id} value={campus.id}>
-                        {campus.name}
-                      </option>
-                    ))}
-                  </select>
+                            : "Select campus"
+                    }
+                    placeholder={
+                      !form.schoolId
+                        ? "Select a school first"
+                        : isLoadingCampuses
+                          ? "Loading campuses..."
+                          : isTeacher
+                            ? "No campus"
+                            : "Select campus"
+                    }
+                    options={campuses.map((campus) => ({
+                      value: String(campus.id),
+                      label: campus.name,
+                    }))}
+                    onChange={(next) => updateField("campusId", next)}
+                  />
                 </div>
               </div>
 

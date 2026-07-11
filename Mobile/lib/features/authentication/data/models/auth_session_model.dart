@@ -43,7 +43,9 @@ class AuthSessionModel extends AuthSession {
           'attendance.mark',
           'message.send',
         ],
-      UserRole.schoolAdmin || UserRole.portalAdmin => [
+      UserRole.schoolAdmin ||
+      UserRole.campusAdmin ||
+      UserRole.portalAdmin => [
           'dashboard.view',
           'registration.approve',
           'notification.view',
@@ -55,6 +57,7 @@ class AuthSessionModel extends AuthSession {
         id: 'mock-${role.name}-001',
         name: '${role.label} Demo',
         role: role,
+        roles: [role],
         permissions: permissions,
         schoolId: 'school-demo',
         campusId: 'campus-main',

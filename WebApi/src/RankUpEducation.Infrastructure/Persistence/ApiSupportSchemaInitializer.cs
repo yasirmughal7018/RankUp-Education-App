@@ -36,6 +36,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
 
@@ -94,7 +95,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2011, 'SchoolAdmin', 0),
                 (2012, 'Student', 0),
                 (2013, 'Teacher', 0),
-                (2014, 'Parent', 0)
+                (2014, 'Parent', 0),
+                (2015, 'CampusAdmin', 0)
         ) AS seed(id, name, order_by)
         WHERE NOT EXISTS (
             SELECT 1
@@ -134,6 +136,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                     WHEN 'student' THEN 2012
                     WHEN 'teacher' THEN 2013
                     WHEN 'parent' THEN 2014
+                    WHEN 'campusadmin' THEN 2015
                     ELSE NULL
                 END
                 WHERE role_id IS NULL;
@@ -156,7 +159,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
                 ALTER TABLE public.app_users
                     ADD CONSTRAINT chk_app_users_role
-                    CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014]::int2[]));
+                    CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015]::int2[]));
 
                 -- student_groups.creator_role: text -> lookup id
                 IF EXISTS (
@@ -196,6 +199,70 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             END IF;
         END
         $migrate$;
+
+        -- Ensure CampusAdmin (2015) is allowed on already-migrated databases.
+        ALTER TABLE public.app_users DROP CONSTRAINT IF EXISTS chk_app_users_role;
+        ALTER TABLE public.app_users
+            ADD CONSTRAINT chk_app_users_role
+            CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015]::int2[]));
+        """;
+
+    private const string AppUserRolesSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_user_roles (
+            user_id bigint NOT NULL,
+            role int2 NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            CONSTRAINT app_user_roles_pkey PRIMARY KEY (user_id, role),
+            CONSTRAINT app_user_roles_user_id_fkey
+                FOREIGN KEY (user_id) REFERENCES public.app_users(id) ON DELETE CASCADE,
+            CONSTRAINT app_user_roles_role_fkey
+                FOREIGN KEY (role) REFERENCES public.lookups(id),
+            CONSTRAINT chk_app_user_roles_role
+                CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015]::int2[]))
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_roles_role
+            ON public.app_user_roles (role);
+
+        -- Backfill from primary role on app_users.
+        INSERT INTO public.app_user_roles (user_id, role, created_at)
+        SELECT u.id, u.role, now()
+        FROM public.app_users u
+        WHERE u.role IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.app_user_roles r
+              WHERE r.user_id = u.id AND r.role = u.role
+          );
+
+        -- Ensure roles referenced by student_groups exist before retargeting the FK.
+        INSERT INTO public.app_user_roles (user_id, role, created_at)
+        SELECT DISTINCT g.referral_id, g.creator_role, now()
+        FROM public.student_groups g
+        WHERE g.creator_role IS NOT NULL
+          AND g.referral_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.app_user_roles r
+              WHERE r.user_id = g.referral_id AND r.role = g.creator_role
+          );
+
+        DO $fk$
+        BEGIN
+            ALTER TABLE public.student_groups
+                DROP CONSTRAINT IF EXISTS student_groups_refral_id_and_role_fkey;
+
+            ALTER TABLE public.student_groups
+                ADD CONSTRAINT student_groups_refral_id_and_role_fkey
+                FOREIGN KEY (referral_id, creator_role)
+                REFERENCES public.app_user_roles(user_id, role);
+        EXCEPTION
+            WHEN duplicate_object THEN NULL;
+        END
+        $fk$;
+
+        ALTER TABLE public.refresh_tokens
+            ADD COLUMN IF NOT EXISTS active_role int2 NULL;
         """;
 
     private const string RegistrationSupportSql = """

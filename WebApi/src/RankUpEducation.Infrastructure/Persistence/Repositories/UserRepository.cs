@@ -19,14 +19,18 @@ public sealed class UserRepository : IUserRepository
 
     public Task<User?> GetByIdAsync(long id, CancellationToken cancellationToken)
     {
-        return WithProfileContextAsync(_dbContext.Users
-            .FirstOrDefaultAsync(user => user.Id == id, cancellationToken), cancellationToken);
+        return WithProfileContextAsync(
+            UsersWithRoles().FirstOrDefaultAsync(user => user.Id == id, cancellationToken),
+            activeRole: null,
+            cancellationToken);
     }
 
     public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken)
     {
-        return WithProfileContextAsync(_dbContext.Users
-            .FirstOrDefaultAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken), cancellationToken);
+        return WithProfileContextAsync(
+            UsersWithRoles().FirstOrDefaultAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken),
+            activeRole: null,
+            cancellationToken);
     }
 
     public async Task<User?> GetByLoginIdentifierAsync(string identifier, CancellationToken cancellationToken)
@@ -34,27 +38,57 @@ public sealed class UserRepository : IUserRepository
         var normalized = identifier.AsLowercase();
 
         // Priority: username → CNIC → mobile number.
-        var byUsername = await _dbContext.Users
+        var byUsername = await UsersWithRoles()
             .FirstOrDefaultAsync(user => user.Username.ToLower() == normalized, cancellationToken);
         if (byUsername is not null)
         {
-            return await WithProfileContextAsync(Task.FromResult<User?>(byUsername), cancellationToken);
+            return await WithProfileContextAsync(Task.FromResult<User?>(byUsername), null, cancellationToken);
         }
 
-        var byCnic = await _dbContext.Users
+        var byCnic = await UsersWithRoles()
             .FirstOrDefaultAsync(
                 user => user.Cnic != null && user.Cnic.ToLower() == normalized,
                 cancellationToken);
         if (byCnic is not null)
         {
-            return await WithProfileContextAsync(Task.FromResult<User?>(byCnic), cancellationToken);
+            return await WithProfileContextAsync(Task.FromResult<User?>(byCnic), null, cancellationToken);
         }
 
-        var byMobile = await _dbContext.Users
+        var byMobile = await UsersWithRoles()
             .FirstOrDefaultAsync(
                 user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized,
                 cancellationToken);
-        return await WithProfileContextAsync(Task.FromResult(byMobile), cancellationToken);
+        return await WithProfileContextAsync(Task.FromResult(byMobile), null, cancellationToken);
+    }
+
+    public Task<User?> GetByMobileNumberAsync(string mobileNumber, CancellationToken cancellationToken)
+    {
+        var normalized = mobileNumber.AsTrimmedString().ToLowerInvariant();
+        return WithProfileContextAsync(
+            UsersWithRoles().FirstOrDefaultAsync(
+                user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized,
+                cancellationToken),
+            activeRole: null,
+            cancellationToken);
+    }
+
+    public Task<User?> GetByCnicAsync(string cnic, CancellationToken cancellationToken)
+    {
+        var normalized = cnic.AsTrimmedString().ToLowerInvariant();
+        return WithProfileContextAsync(
+            UsersWithRoles().FirstOrDefaultAsync(
+                user => user.Cnic != null && user.Cnic.ToLower() == normalized,
+                cancellationToken),
+            activeRole: null,
+            cancellationToken);
+    }
+
+    public Task<User?> GetByIdForRoleAsync(long id, UserRole activeRole, CancellationToken cancellationToken)
+    {
+        return WithProfileContextAsync(
+            UsersWithRoles().FirstOrDefaultAsync(user => user.Id == id, cancellationToken),
+            activeRole,
+            cancellationToken);
     }
 
     public Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken)
@@ -91,15 +125,27 @@ public sealed class UserRepository : IUserRepository
     public async Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(
         int take,
         int? schoolIdFilter,
+        int? campusIdFilter,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Users.AsNoTracking()
             .Where(user => !user.IsActive && (user.PasswordHash == null || user.PasswordHash == ""));
 
-        if (schoolIdFilter.HasValue)
+        if (campusIdFilter.HasValue)
+        {
+            // Campus Admin: school-target requests for their campus only.
+            query = query.Where(user =>
+                user.CampusId == campusIdFilter.Value
+                && user.AdminTarget == "School Admin");
+
+            if (schoolIdFilter.HasValue)
+            {
+                query = query.Where(user => user.SchoolId == schoolIdFilter.Value);
+            }
+        }
+        else if (schoolIdFilter.HasValue)
         {
             // School Admin: only "School Admin" target requests for their school.
-            // Portal Admin target requests are PortalAdmin-only.
             query = query.Where(user =>
                 user.SchoolId == schoolIdFilter.Value
                 && user.AdminTarget == "School Admin");
@@ -114,6 +160,7 @@ public sealed class UserRepository : IUserRepository
     public async Task<IReadOnlyList<long>> ListAdminRecipientsAsync(
         string? adminTarget,
         int? schoolId,
+        int? campusId,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Users.AsNoTracking()
@@ -124,15 +171,18 @@ public sealed class UserRepository : IUserRepository
 
         if (isSchoolAdminTarget)
         {
-            // School Admin target: notify Portal Admin (PortalAdmin) and that school's School Admins.
             query = query.Where(user =>
-                user.Role == UserRole.PortalAdmin
-                || (user.Role == UserRole.SchoolAdmin && user.SchoolId == schoolId!.Value));
+                user.RoleAssignments.Any(assignment => assignment.Role == UserRole.PortalAdmin)
+                || (user.RoleAssignments.Any(assignment => assignment.Role == UserRole.SchoolAdmin)
+                    && user.SchoolId == schoolId!.Value)
+                || (user.RoleAssignments.Any(assignment => assignment.Role == UserRole.CampusAdmin)
+                    && user.SchoolId == schoolId!.Value
+                    && (!campusId.HasValue || user.CampusId == campusId.Value)));
         }
         else
         {
-            // Portal Admin target: Portal Admin (PortalAdmin) only.
-            query = query.Where(user => user.Role == UserRole.PortalAdmin);
+            query = query.Where(user =>
+                user.RoleAssignments.Any(assignment => assignment.Role == UserRole.PortalAdmin));
         }
 
         return await query
@@ -177,7 +227,13 @@ public sealed class UserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
-    private async Task<User?> WithProfileContextAsync(Task<User?> userTask, CancellationToken cancellationToken)
+    private IQueryable<User> UsersWithRoles()
+        => _dbContext.Users.Include(user => user.RoleAssignments);
+
+    private async Task<User?> WithProfileContextAsync(
+        Task<User?> userTask,
+        UserRole? activeRole,
+        CancellationToken cancellationToken)
     {
         var user = await userTask;
         if (user is null)
@@ -185,7 +241,13 @@ public sealed class UserRepository : IUserRepository
             return null;
         }
 
-        switch (user.Role)
+        var role = activeRole ?? user.Role;
+        if (!user.HasRole(role))
+        {
+            role = user.Role;
+        }
+
+        switch (role)
         {
             case UserRole.Student:
                 var student = await _dbContext.Students.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
@@ -201,7 +263,7 @@ public sealed class UserRepository : IUserRepository
                 break;
             case UserRole.PortalAdmin:
             case UserRole.SchoolAdmin:
-                // Prefer persisted school/campus on app_users (especially SchoolAdmin).
+            case UserRole.CampusAdmin:
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
         }

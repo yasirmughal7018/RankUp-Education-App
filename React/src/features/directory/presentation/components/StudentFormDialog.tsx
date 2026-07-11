@@ -35,7 +35,6 @@ export function StudentFormDialog({
   const isEdit = student != null;
   const [fullName, setFullName] = useState(student?.fullName ?? "");
   const [username, setUsername] = useState(student?.username ?? "");
-  const [password, setPassword] = useState("");
   const [schoolId, setSchoolId] = useState(
     student?.schoolId ? String(student.schoolId) : "",
   );
@@ -110,8 +109,8 @@ export function StudentFormDialog({
       } else {
         const trimmedUsername = username.trim();
         const parsedSchoolId = Number(schoolId);
-        if (!trimmedUsername || !password.trim()) {
-          setError("Username and password are required.");
+        if (!trimmedUsername) {
+          setError("Username is required.");
           return;
         }
         if (!parsedSchoolId || parsedSchoolId < 1) {
@@ -123,7 +122,6 @@ export function StudentFormDialog({
           input: {
             fullName: trimmedName,
             username: trimmedUsername,
-            password: password.trim(),
             schoolId: parsedSchoolId,
             campusId: parsedCampusId,
             rollNumber: trimmedRoll,
@@ -157,7 +155,7 @@ export function StudentFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${student.fullName}.`
-              : "Add a new student to the directory."}
+              : "Add a new student to the directory. User must set password on first login."}
           </p>
         </div>
 
@@ -194,20 +192,6 @@ export function StudentFormDialog({
                   type="text"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
-                  className={inputClassName}
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="student-password" required>
-                  Password
-                </FieldLabel>
-                <input
-                  id="student-password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
                   className={inputClassName}
                   required
                   disabled={isSubmitting}

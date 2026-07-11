@@ -9,7 +9,13 @@ import {
   type ReactNode,
 } from "react";
 import { configureApiAuth } from "@/core/api/apiClient";
-import type { ApiError, AuthSession, CurrentUser } from "@/core/api/types";
+import {
+  normalizeCurrentUser,
+  type ApiError,
+  type AuthSession,
+  type CurrentUser,
+  type UserRole,
+} from "@/core/api/types";
 import {
   clearStoredSession,
   readStoredRefreshToken,
@@ -28,6 +34,7 @@ interface AuthContextValue {
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
   setInitialPassword: (username: string, newPassword: string) => Promise<void>;
+  switchRole: (role: UserRole) => Promise<CurrentUser>;
   logout: () => Promise<void>;
   clearError: () => void;
   updateUser: (user: CurrentUser) => void;
@@ -44,6 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
 
   const setActiveSession = useCallback((nextSession: AuthSession | null) => {
+    if (nextSession) {
+      nextSession = {
+        ...nextSession,
+        user: normalizeCurrentUser(nextSession.user),
+      };
+    }
     sessionRef.current = nextSession;
     setSession(nextSession);
   }, []);
@@ -194,13 +207,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [setActiveSession]);
 
+  const switchRole = useCallback(
+    async (role: UserRole) => {
+      setIsSubmitting(true);
+      setError(null);
+
+      try {
+        const nextSession = await authApi.switchRole(role);
+        saveStoredSession(nextSession);
+        setActiveSession(nextSession);
+        return normalizeCurrentUser(nextSession.user);
+      } catch (caught) {
+        const apiError = caught as ApiError;
+        setError(apiError.message || "Unable to switch role.");
+        throw caught;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [setActiveSession],
+  );
+
   const updateUser = useCallback(
     (user: CurrentUser) => {
       if (!sessionRef.current) {
         return;
       }
 
-      const nextSession = { ...sessionRef.current, user };
+      const nextSession = {
+        ...sessionRef.current,
+        user: normalizeCurrentUser(user),
+      };
       saveStoredSession(nextSession);
       setActiveSession(nextSession);
     },
@@ -216,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       login,
       setInitialPassword,
+      switchRole,
       logout,
       clearError: () => setError(null),
       updateUser,
@@ -227,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       login,
       setInitialPassword,
+      switchRole,
       logout,
       updateUser,
     ],

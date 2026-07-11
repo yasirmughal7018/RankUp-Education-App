@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
 import 'package:rankup_education/core/notifications/notification_service.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
+import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
 class AuthState {
@@ -204,6 +205,28 @@ class AuthController extends StateNotifier<AuthState> {
         user: user,
         isLoading: false,
         successMessage: 'Password updated. You can continue.',
+      );
+    } on AppException catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.message);
+      rethrow;
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> switchRole(String role) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      final session = await _repository.switchRole(role);
+      state = state.copyWith(
+        user: session.user,
+        isLoading: false,
+        successMessage: 'Switched to ${session.user.role.label}.',
       );
     } on AppException catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.message);

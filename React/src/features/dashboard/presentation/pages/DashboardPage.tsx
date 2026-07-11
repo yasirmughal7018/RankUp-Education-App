@@ -24,6 +24,11 @@ const roleModules: Record<UserRole, string[]> = {
     "Manage the school directory",
     "View quiz reports and rankings",
   ],
+  CampusAdmin: [
+    "Approve account requests",
+    "Manage campus directory (students, teachers, parents)",
+    "Approve teacher quizzes",
+  ],
   Teacher: [
     "Create and assign quizzes",
     "Monitor live quiz attempts",
@@ -44,12 +49,19 @@ const roleModules: Record<UserRole, string[]> = {
 };
 
 function quickLinksForRole(role: UserRole): Array<{ label: string; href: string }> {
-  if (isAdminRole(role)) {
+  if (role === "PortalAdmin" || role === "SchoolAdmin") {
     return [
       { label: "Registrations", href: "/admin/registrations" },
       { label: "Directory", href: "/admin/directory" },
       { label: "Reports", href: "/reports" },
       { label: "Question bank", href: "/questions" },
+    ];
+  }
+
+  if (role === "CampusAdmin") {
+    return [
+      { label: "Registrations", href: "/admin/registrations" },
+      { label: "Directory", href: "/admin/directory" },
     ];
   }
 

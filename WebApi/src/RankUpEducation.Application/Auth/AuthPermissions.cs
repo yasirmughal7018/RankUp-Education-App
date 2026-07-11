@@ -25,6 +25,12 @@ public static class AuthPermissions
                 "quiz.manage",
                 "worksheet.manage"
             ],
+            UserRole.CampusAdmin =>
+            [
+                "campus.manage",
+                "user.manage",
+                "registration.review"
+            ],
             UserRole.Teacher =>
             [
                 "dashboard.view",

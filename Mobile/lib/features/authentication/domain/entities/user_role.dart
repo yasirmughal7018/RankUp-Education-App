@@ -1,12 +1,12 @@
-enum UserRole { student, parent, teacher, schoolAdmin, portalAdmin }
+enum UserRole { student, parent, teacher, schoolAdmin, campusAdmin, portalAdmin }
 
 UserRole parseUserRole(String value) {
-  final normalized = value.trim().toLowerCase().replaceAll('_', '');
-  return switch (normalized) {
+  return switch (value.trim().toLowerCase()) {
     'student' => UserRole.student,
     'parent' => UserRole.parent,
     'teacher' => UserRole.teacher,
     'schooladmin' => UserRole.schoolAdmin,
+    'campusadmin' => UserRole.campusAdmin,
     // PortalAdmin is the current API/DB name; superadmin is legacy.
     'portaladmin' || 'superadmin' => UserRole.portalAdmin,
     _ => UserRole.student,
@@ -14,7 +14,9 @@ UserRole parseUserRole(String value) {
 }
 
 bool isAdminRole(UserRole role) {
-  return role == UserRole.schoolAdmin || role == UserRole.portalAdmin;
+  return role == UserRole.schoolAdmin ||
+      role == UserRole.campusAdmin ||
+      role == UserRole.portalAdmin;
 }
 
 extension UserRoleLabel on UserRole {
@@ -24,6 +26,7 @@ extension UserRoleLabel on UserRole {
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
       UserRole.schoolAdmin => 'School Admin',
+      UserRole.campusAdmin => 'Campus Admin',
       UserRole.portalAdmin => 'Portal Admin',
     };
   }
@@ -34,6 +37,7 @@ extension UserRoleLabel on UserRole {
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
       UserRole.schoolAdmin => 'SchoolAdmin',
+      UserRole.campusAdmin => 'CampusAdmin',
       UserRole.portalAdmin => 'PortalAdmin',
     };
   }

@@ -153,6 +153,8 @@ String _dashboardPath(UserRole role) {
     UserRole.student => '/student',
     UserRole.parent => '/parent',
     UserRole.teacher => '/teacher',
-    UserRole.schoolAdmin || UserRole.portalAdmin => '/admin',
+    UserRole.schoolAdmin ||
+    UserRole.campusAdmin ||
+    UserRole.portalAdmin => '/admin',
   };
 }

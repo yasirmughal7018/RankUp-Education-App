@@ -2,47 +2,59 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
-  CreateDirectoryTeacherInput,
+  CreateDirectoryCampusAdminInput,
   DirectoryCampus,
+  DirectoryCampusAdmin,
   DirectorySchool,
-  DirectoryTeacher,
-  UpdateDirectoryTeacherInput,
+  UpdateDirectoryCampusAdminInput,
 } from "@/features/directory/domain/directoryTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 
-type TeacherFormSubmit =
-  | { mode: "create"; input: CreateDirectoryTeacherInput }
-  | { mode: "edit"; input: UpdateDirectoryTeacherInput };
+type CampusAdminFormSubmit =
+  | { mode: "create"; input: CreateDirectoryCampusAdminInput }
+  | { mode: "edit"; input: UpdateDirectoryCampusAdminInput };
 
-interface TeacherFormDialogProps {
-  teacher?: DirectoryTeacher | null;
+interface CampusAdminFormDialogProps {
+  campusAdmin?: DirectoryCampusAdmin | null;
   schools: DirectorySchool[];
+  /** When set, school is fixed (SchoolAdmin managing their own school). */
+  lockSchoolId?: number | null;
   isSubmitting: boolean;
   onClose: () => void;
-  onSubmit: (payload: TeacherFormSubmit) => Promise<void>;
+  onSubmit: (payload: CampusAdminFormSubmit) => Promise<void>;
 }
 
 const inputClassName =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
 
-export function TeacherFormDialog({
-  teacher,
+export function CampusAdminFormDialog({
+  campusAdmin,
   schools,
+  lockSchoolId = null,
   isSubmitting,
   onClose,
   onSubmit,
-}: TeacherFormDialogProps) {
-  const isEdit = teacher != null;
-  const [fullName, setFullName] = useState(teacher?.fullName ?? "");
-  const [username, setUsername] = useState(teacher?.username ?? "");
+}: CampusAdminFormDialogProps) {
+  const isEdit = campusAdmin != null;
+  const schoolLocked = lockSchoolId != null && lockSchoolId > 0;
+
+  const [fullName, setFullName] = useState(campusAdmin?.fullName ?? "");
+  const [username, setUsername] = useState(campusAdmin?.username ?? "");
   const [schoolId, setSchoolId] = useState(
-    teacher?.schoolId ? String(teacher.schoolId) : "",
+    schoolLocked
+      ? String(lockSchoolId)
+      : campusAdmin?.schoolId
+        ? String(campusAdmin.schoolId)
+        : "",
   );
   const [campusId, setCampusId] = useState(
-    teacher?.campusId ? String(teacher.campusId) : "",
+    campusAdmin?.campusId ? String(campusAdmin.campusId) : "",
   );
-  const [teacherCode, setTeacherCode] = useState(teacher?.teacherCode ?? "");
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [mobileNumber, setMobileNumber] = useState(
+    campusAdmin?.mobileNumber ?? "",
+  );
+  const [cnic, setCnic] = useState(campusAdmin?.cnic ?? "");
+  const [emailAddress, setEmailAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;
@@ -61,21 +73,25 @@ export function TeacherFormDialog({
   }, [isSubmitting, onClose]);
 
   useEffect(() => {
-    if (!isEdit) {
+    if (!isEdit && !schoolLocked) {
       setCampusId("");
     }
-  }, [schoolId, isEdit]);
+  }, [schoolId, isEdit, schoolLocked]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
     const trimmedName = fullName.trim();
-    const trimmedCode = teacherCode.trim();
+    const parsedSchoolId = schoolLocked ? lockSchoolId! : Number(schoolId);
     const parsedCampusId = Number(campusId);
 
-    if (!trimmedName || !trimmedCode) {
-      setError("Name and teacher code are required.");
+    if (!trimmedName) {
+      setError("Full name is required.");
+      return;
+    }
+    if (!parsedSchoolId || parsedSchoolId < 1) {
+      setError("Select a school.");
       return;
     }
     if (!parsedCampusId || parsedCampusId < 1) {
@@ -84,6 +100,8 @@ export function TeacherFormDialog({
     }
 
     const mobile = mobileNumber.trim() || null;
+    const trimmedCnic = cnic.trim() || null;
+    const email = emailAddress.trim() || null;
 
     try {
       if (isEdit) {
@@ -91,20 +109,17 @@ export function TeacherFormDialog({
           mode: "edit",
           input: {
             fullName: trimmedName,
+            schoolId: parsedSchoolId,
             campusId: parsedCampusId,
-            teacherCode: trimmedCode,
             mobileNumber: mobile,
+            cnic: trimmedCnic,
+            emailAddress: email,
           },
         });
       } else {
         const trimmedUsername = username.trim();
-        const parsedSchoolId = Number(schoolId);
         if (!trimmedUsername) {
           setError("Username is required.");
-          return;
-        }
-        if (!parsedSchoolId || parsedSchoolId < 1) {
-          setError("Select a school.");
           return;
         }
         await onSubmit({
@@ -114,36 +129,42 @@ export function TeacherFormDialog({
             username: trimmedUsername,
             schoolId: parsedSchoolId,
             campusId: parsedCampusId,
-            teacherCode: trimmedCode,
             mobileNumber: mobile,
+            cnic: trimmedCnic,
+            emailAddress: email,
           },
         });
       }
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError.message ?? "Unable to save teacher.");
+      setError(apiError.message ?? "Unable to save campus admin.");
     }
   }
+
+  const lockedSchoolName =
+    schools.find((school) => school.id === lockSchoolId)?.name ??
+    campusAdmin?.schoolName ??
+    (schoolLocked ? `School #${lockSchoolId}` : null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-8">
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="teacher-form-title"
+        aria-labelledby="campus-admin-form-title"
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
       >
         <div className="mb-6">
           <h2
-            id="teacher-form-title"
+            id="campus-admin-form-title"
             className="text-xl font-semibold text-slate-900"
           >
-            {isEdit ? "Edit teacher" : "Create teacher"}
+            {isEdit ? "Edit campus admin" : "Create campus admin"}
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
-              ? `Update details for ${teacher.fullName}.`
-              : "Add a new teacher to the directory. User must set password on first login."}
+              ? `Update details for ${campusAdmin.fullName}.`
+              : "Add a new campus admin. User must set password on first login."}
           </p>
         </div>
 
@@ -155,11 +176,11 @@ export function TeacherFormDialog({
 
         <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div>
-            <FieldLabel htmlFor="teacher-full-name" required>
+            <FieldLabel htmlFor="campus-admin-full-name" required>
               Full name
             </FieldLabel>
             <input
-              id="teacher-full-name"
+              id="campus-admin-full-name"
               type="text"
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
@@ -170,61 +191,76 @@ export function TeacherFormDialog({
           </div>
 
           {!isEdit ? (
-            <>
-              <div>
-                <FieldLabel htmlFor="teacher-username" required>
-                  Username
-                </FieldLabel>
-                <input
-                  id="teacher-username"
-                  type="text"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  className={inputClassName}
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="teacher-school" required>
-                  School
-                </FieldLabel>
-                <select
-                  id="teacher-school"
-                  value={schoolId}
-                  onChange={(event) => setSchoolId(event.target.value)}
-                  className={inputClassName}
-                  required
-                  disabled={isSubmitting}
-                >
-                  <option value="">Select school</option>
-                  {schools.map((school) => (
-                    <option key={school.id} value={school.id}>
-                      {school.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
+            <div>
+              <FieldLabel htmlFor="campus-admin-username" required>
+                Username
+              </FieldLabel>
+              <input
+                id="campus-admin-username"
+                type="text"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                className={inputClassName}
+                required
+                disabled={isSubmitting}
+              />
+            </div>
           ) : (
             <p className="text-sm text-slate-500">
-              Username {teacher.username} · School ID {teacher.schoolId}
+              Username {campusAdmin.username}
             </p>
           )}
 
+          {schoolLocked ? (
+            <div>
+              <FieldLabel htmlFor="campus-admin-school-locked" required>
+                School
+              </FieldLabel>
+              <input
+                id="campus-admin-school-locked"
+                type="text"
+                value={lockedSchoolName ?? ""}
+                className={inputClassName}
+                disabled
+                readOnly
+              />
+            </div>
+          ) : (
+            <div>
+              <FieldLabel htmlFor="campus-admin-school" required>
+                School
+              </FieldLabel>
+              <select
+                id="campus-admin-school"
+                value={schoolId}
+                onChange={(event) => setSchoolId(event.target.value)}
+                className={inputClassName}
+                required
+                disabled={isSubmitting}
+              >
+                <option value="">Select school</option>
+                {schools.map((school) => (
+                  <option key={school.id} value={school.id}>
+                    {school.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
-            <FieldLabel htmlFor="teacher-campus" required>
+            <FieldLabel htmlFor="campus-admin-campus" required>
               Campus
             </FieldLabel>
             <select
-              id="teacher-campus"
+              id="campus-admin-campus"
               value={campusId}
               onChange={(event) => setCampusId(event.target.value)}
               className={inputClassName}
               required
               disabled={
                 isSubmitting ||
-                (!isEdit && !selectedSchoolId) ||
+                (!schoolLocked && !selectedSchoolId) ||
                 campusesLoading
               }
             >
@@ -236,8 +272,8 @@ export function TeacherFormDialog({
                   ? campuses
                   : ([
                       {
-                        id: teacher.campusId,
-                        name: `Campus ${teacher.campusId}`,
+                        id: campusAdmin.campusId,
+                        name: campusAdmin.campusName || `Campus ${campusAdmin.campusId}`,
                       },
                     ] as Pick<DirectoryCampus, "id" | "name">[])
                 : campuses
@@ -250,29 +286,42 @@ export function TeacherFormDialog({
           </div>
 
           <div>
-            <FieldLabel htmlFor="teacher-code" required>
-              Teacher code
+            <FieldLabel htmlFor="campus-admin-mobile" optional>
+              Mobile
             </FieldLabel>
             <input
-              id="teacher-code"
+              id="campus-admin-mobile"
               type="text"
-              value={teacherCode}
-              onChange={(event) => setTeacherCode(event.target.value)}
+              value={mobileNumber}
+              onChange={(event) => setMobileNumber(event.target.value)}
               className={inputClassName}
-              required
               disabled={isSubmitting}
             />
           </div>
 
           <div>
-            <FieldLabel htmlFor="teacher-mobile" optional>
-              Mobile
+            <FieldLabel htmlFor="campus-admin-cnic" optional>
+              CNIC
             </FieldLabel>
             <input
-              id="teacher-mobile"
+              id="campus-admin-cnic"
               type="text"
-              value={mobileNumber}
-              onChange={(event) => setMobileNumber(event.target.value)}
+              value={cnic}
+              onChange={(event) => setCnic(event.target.value)}
+              className={inputClassName}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="campus-admin-email" optional>
+              Email
+            </FieldLabel>
+            <input
+              id="campus-admin-email"
+              type="email"
+              value={emailAddress}
+              onChange={(event) => setEmailAddress(event.target.value)}
               className={inputClassName}
               disabled={isSubmitting}
             />
@@ -296,7 +345,7 @@ export function TeacherFormDialog({
                 ? "Saving..."
                 : isEdit
                   ? "Save changes"
-                  : "Create teacher"}
+                  : "Create campus admin"}
             </button>
           </div>
         </form>

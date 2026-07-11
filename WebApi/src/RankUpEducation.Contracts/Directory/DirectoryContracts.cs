@@ -32,7 +32,6 @@ public sealed record DirectoryStudentResponse(
 public sealed record CreateDirectoryStudentRequest(
     string FullName,
     string Username,
-    string Password,
     int SchoolId,
     int CampusId,
     string RollNumber,
@@ -66,7 +65,6 @@ public sealed record DirectoryTeacherResponse(
 public sealed record CreateDirectoryTeacherRequest(
     string FullName,
     string Username,
-    string Password,
     int SchoolId,
     int CampusId,
     string TeacherCode,
@@ -94,7 +92,6 @@ public sealed record DirectoryParentResponse(
 public sealed record CreateDirectoryParentRequest(
     string FullName,
     string Username,
-    string Password,
     string? Cnic = null,
     string? MobileNumber = null);
 
@@ -114,3 +111,71 @@ public sealed record LinkParentStudentResponse(
 public sealed record BulkDeactivateRequest(IReadOnlyList<long> Ids);
 
 public sealed record BulkActionResponse(int AffectedCount);
+
+public sealed record DirectorySchoolAdminListResponse(
+    IReadOnlyList<DirectorySchoolAdminResponse> Items,
+    int PageNumber,
+    int PageSize,
+    int TotalCount);
+
+public sealed record DirectorySchoolAdminResponse(
+    long UserId,
+    string FullName,
+    string Username,
+    int SchoolId,
+    string SchoolName,
+    string? MobileNumber,
+    string? Cnic,
+    bool IsActive,
+    bool NeedsPasswordSetup);
+
+public sealed record CreateDirectorySchoolAdminRequest(
+    string FullName,
+    string Username,
+    int SchoolId,
+    string? MobileNumber = null,
+    string? Cnic = null,
+    string? EmailAddress = null);
+
+public sealed record UpdateDirectorySchoolAdminRequest(
+    string FullName,
+    int SchoolId,
+    string? MobileNumber = null,
+    string? Cnic = null,
+    string? EmailAddress = null);
+
+public sealed record DirectoryCampusAdminListResponse(
+    IReadOnlyList<DirectoryCampusAdminResponse> Items,
+    int PageNumber,
+    int PageSize,
+    int TotalCount);
+
+public sealed record DirectoryCampusAdminResponse(
+    long UserId,
+    string FullName,
+    string Username,
+    int SchoolId,
+    string SchoolName,
+    int CampusId,
+    string CampusName,
+    string? MobileNumber,
+    string? Cnic,
+    bool IsActive,
+    bool NeedsPasswordSetup);
+
+public sealed record CreateDirectoryCampusAdminRequest(
+    string FullName,
+    string Username,
+    int SchoolId,
+    int CampusId,
+    string? MobileNumber = null,
+    string? Cnic = null,
+    string? EmailAddress = null);
+
+public sealed record UpdateDirectoryCampusAdminRequest(
+    string FullName,
+    int SchoolId,
+    int CampusId,
+    string? MobileNumber = null,
+    string? Cnic = null,
+    string? EmailAddress = null);

@@ -144,7 +144,9 @@ export function DirectoryStudentsPage() {
       const created = await createMutation.mutateAsync(
         payload.input as CreateDirectoryStudentInput,
       );
-      setSuccessMessage(`Created student ${created.fullName}.`);
+      setSuccessMessage(
+        `Created student ${created.fullName}. User must set password on first login.`,
+      );
     } else if (studentDialog && studentDialog !== "create") {
       await updateMutation.mutateAsync({
         studentId: studentDialog.studentId,

@@ -32,6 +32,16 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<LoginResponse>.Ok(result, "Login successful."));
     }
 
+    [HttpPost("switch-role")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<LoginResponse>>> SwitchRoleAsync(
+        [FromBody] SwitchRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.SwitchRoleAsync(request, cancellationToken);
+        return Ok(ApiResponse<LoginResponse>.Ok(result, "Active role updated."));
+    }
+
     /// <summary>
     /// Step 1 of login: check whether the account needs a password or can sign in.
     /// </summary>
@@ -92,12 +102,12 @@ public sealed class AuthController : ControllerBase
         [FromServices] IDirectoryService directoryService,
         CancellationToken cancellationToken)
     {
-        var response = await directoryService.ListPublicCampusesAsync(schoolId, cancellationToken);
+            var response = await directoryService.ListPublicCampusesAsync(schoolId, cancellationToken);
         return Ok(ApiResponse<CampusListResponse>.Ok(response));
     }
 
     [HttpGet("registrations/pending")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<PendingRegistrationResponse>>>> ListPendingRegistrationsAsync(
         [FromQuery] int take,
         CancellationToken cancellationToken)
@@ -107,7 +117,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("registrations/{userId:long}/approve")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> ApproveRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)
@@ -117,7 +127,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("registrations/{userId:long}/reject")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> RejectRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)

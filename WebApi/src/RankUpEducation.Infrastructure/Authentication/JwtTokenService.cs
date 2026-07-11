@@ -21,17 +21,24 @@ public sealed class JwtTokenService : ITokenService
         _dateTimeProvider = dateTimeProvider;
     }
 
-    public string CreateAccessToken(User user)
+    public string CreateAccessToken(User user, UserRole activeRole)
     {
+        if (!user.HasRole(activeRole))
+        {
+            activeRole = user.Role;
+        }
+
+        var allRoles = string.Join(',', user.Roles.Select(role => role.ToString()));
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new("userId", user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new(ClaimTypes.Role, user.Role.ToString()),
-            new("role", user.Role.ToString()),
-            new("permissions", string.Join(',', AuthPermissions.ForRole(user.Role)))
+            new(ClaimTypes.Role, activeRole.ToString()),
+            new("role", activeRole.ToString()),
+            new("roles", allRoles),
+            new("permissions", string.Join(',', AuthPermissions.ForRole(activeRole)))
         };
 
         AddOptionalClaim(claims, "schoolId", user.SchoolId);

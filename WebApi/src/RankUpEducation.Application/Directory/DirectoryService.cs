@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Directory;
 using RankUpEducation.Domain.Auth;
+using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
@@ -13,20 +14,17 @@ public sealed class DirectoryService : IDirectoryService
 {
     private readonly IDirectoryRepository _directory;
     private readonly IUserRepository _users;
-    private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _unitOfWork;
 
     public DirectoryService(
         IDirectoryRepository directory,
         IUserRepository users,
-        IPasswordHasher passwordHasher,
         ICurrentUserService currentUser,
         IUnitOfWork unitOfWork)
     {
         _directory = directory;
         _users = users;
-        _passwordHasher = passwordHasher;
         _currentUser = currentUser;
         _unitOfWork = unitOfWork;
     }
@@ -35,7 +33,7 @@ public sealed class DirectoryService : IDirectoryService
     {
         EnsureAdmin();
         var items = await _directory.ListSchoolsAsync(cancellationToken);
-        if (IsSchoolAdmin())
+        if (IsSchoolAdmin() || IsCampusAdmin())
         {
             items = items.Where(school => school.Id == _currentUser.SchoolId).ToArray();
         }
@@ -47,7 +45,7 @@ public sealed class DirectoryService : IDirectoryService
         UpsertSchoolRequest request,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         ValidateSchoolRequest(request);
         var school = await _directory.CreateSchoolAsync(
             request.Name,
@@ -62,7 +60,7 @@ public sealed class DirectoryService : IDirectoryService
         UpsertSchoolRequest request,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         EnsureSchoolAccess(schoolId);
         ValidateSchoolRequest(request);
         var school = await _directory.UpdateSchoolAsync(
@@ -77,7 +75,7 @@ public sealed class DirectoryService : IDirectoryService
 
     public async Task DeactivateSchoolAsync(long schoolId, CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         EnsureSchoolAccess(schoolId);
         if (!await _directory.SetSchoolActiveAsync(schoolId, false, cancellationToken))
         {
@@ -87,7 +85,7 @@ public sealed class DirectoryService : IDirectoryService
 
     public async Task ActivateSchoolAsync(long schoolId, CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         EnsureSchoolAccess(schoolId);
         if (!await _directory.SetSchoolActiveAsync(schoolId, true, cancellationToken))
         {
@@ -100,6 +98,11 @@ public sealed class DirectoryService : IDirectoryService
         EnsureAdmin();
         EnsureSchoolAccess(schoolId);
         var items = await _directory.ListCampusesAsync(schoolId, cancellationToken);
+        if (IsCampusAdmin())
+        {
+            items = items.Where(campus => campus.Id == _currentUser.CampusId).ToArray();
+        }
+
         return new CampusListResponse(items);
     }
 
@@ -128,7 +131,7 @@ public sealed class DirectoryService : IDirectoryService
         UpsertCampusRequest request,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         EnsureSchoolAccess(schoolId);
         ValidateCampusRequest(request);
 
@@ -150,7 +153,7 @@ public sealed class DirectoryService : IDirectoryService
         UpsertCampusRequest request,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         ValidateCampusRequest(request);
 
         var existing = await _directory.GetCampusAsync(campusId, cancellationToken)
@@ -168,7 +171,7 @@ public sealed class DirectoryService : IDirectoryService
 
     public async Task DeactivateCampusAsync(long campusId, CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         var existing = await _directory.GetCampusAsync(campusId, cancellationToken)
             ?? throw new NotFoundAppException("Campus was not found.");
         EnsureSchoolAccess(existing.SchoolId);
@@ -181,7 +184,7 @@ public sealed class DirectoryService : IDirectoryService
 
     public async Task ActivateCampusAsync(long campusId, CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsureSchoolManager();
         var existing = await _directory.GetCampusAsync(campusId, cancellationToken)
             ?? throw new NotFoundAppException("Campus was not found.");
         EnsureSchoolAccess(existing.SchoolId);
@@ -231,9 +234,20 @@ public sealed class DirectoryService : IDirectoryService
             throw new ValidationAppException(["Username is already taken."]);
         }
 
-        var passwordHash = _passwordHasher.Hash(request.Password);
         var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
-        var user = new User(username, passwordHash, request.FullName.AsTrimmedString(), UserRole.Student, null, schoolId, campusId, mobileNumber);
+        if (mobileNumber is not null && await _users.MobileNumberExistsAsync(mobileNumber, cancellationToken))
+        {
+            throw new ValidationAppException(["An account already exists for this mobile number."]);
+        }
+
+        // Auto-approved; user sets password on first login.
+        var user = User.CreateProvisionedAccount(
+            username,
+            request.FullName.AsTrimmedString(),
+            UserRole.Student,
+            schoolId,
+            campusId,
+            mobileNumber);
         user.SetRollNumberTeacherCode(request.RollNumber.AsTrimmedString());
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -271,6 +285,7 @@ public sealed class DirectoryService : IDirectoryService
         var user = await _users.GetByIdAsync(studentId, cancellationToken)
             ?? throw new NotFoundAppException("Student was not found.");
         EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
 
         var campus = await _directory.GetCampusAsync(request.CampusId, cancellationToken)
             ?? throw new NotFoundAppException("Campus was not found.");
@@ -368,15 +383,33 @@ public sealed class DirectoryService : IDirectoryService
         var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
         await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
 
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic: null, cancellationToken);
+        if (existing is not null)
+        {
+            return await AddTeacherRoleToExistingUserAsync(
+                existing,
+                request,
+                schoolId,
+                campusId,
+                mobileNumber,
+                cancellationToken);
+        }
+
         var username = request.Username.AsTrimmedString();
         if (await _users.UsernameExistsAsync(username, cancellationToken))
         {
             throw new ValidationAppException(["Username is already taken."]);
         }
 
-        var passwordHash = _passwordHasher.Hash(request.Password);
-        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
-        var user = new User(username, passwordHash, request.FullName.AsTrimmedString(), UserRole.Teacher, null, schoolId, campusId, mobileNumber);
+        // Auto-approved; user sets password on first login.
+        var user = User.CreateProvisionedAccount(
+            username,
+            request.FullName.AsTrimmedString(),
+            UserRole.Teacher,
+            schoolId,
+            campusId,
+            mobileNumber);
         user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -411,6 +444,7 @@ public sealed class DirectoryService : IDirectoryService
         var user = await _users.GetByIdAsync(teacherId, cancellationToken)
             ?? throw new NotFoundAppException("Teacher was not found.");
         EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
 
         var campus = await _directory.GetCampusAsync(request.CampusId, cancellationToken)
             ?? throw new NotFoundAppException("Campus was not found.");
@@ -498,16 +532,27 @@ public sealed class DirectoryService : IDirectoryService
         EnsureAdmin();
         ValidateCreateParentRequest(request);
 
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var cnic = request.Cnic.AsTrimmedOrNull();
+        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic, cancellationToken);
+        if (existing is not null)
+        {
+            return await AddParentRoleToExistingUserAsync(existing, request, mobileNumber, cnic, cancellationToken);
+        }
+
         var username = request.Username.AsTrimmedString();
         if (await _users.UsernameExistsAsync(username, cancellationToken))
         {
             throw new ValidationAppException(["Username is already taken."]);
         }
 
-        var passwordHash = _passwordHasher.Hash(request.Password);
-        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
-        var cnic = request.Cnic.AsTrimmedOrNull();
-        var user = new User(username, passwordHash, request.FullName.AsTrimmedString(), UserRole.Parent, null, null, null, mobileNumber, cnic);
+        // Auto-approved; user sets password on first login.
+        var user = User.CreateProvisionedAccount(
+            username,
+            request.FullName.AsTrimmedString(),
+            UserRole.Parent,
+            mobileNumber: mobileNumber,
+            cnic: cnic);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -626,6 +671,7 @@ public sealed class DirectoryService : IDirectoryService
         var user = await _users.GetByIdAsync(studentId, cancellationToken)
             ?? throw new NotFoundAppException("Student was not found.");
         EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
         await _directory.SetUserActiveAsync(studentId, isActive, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -638,6 +684,7 @@ public sealed class DirectoryService : IDirectoryService
         var user = await _users.GetByIdAsync(teacherId, cancellationToken)
             ?? throw new NotFoundAppException("Teacher was not found.");
         EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
         await _directory.SetUserActiveAsync(teacherId, isActive, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -671,6 +718,20 @@ public sealed class DirectoryService : IDirectoryService
 
     private (int SchoolId, int CampusId) ResolveCreateSchoolCampus(int requestSchoolId, int requestCampusId)
     {
+        if (IsCampusAdmin())
+        {
+            var scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            var scopedCampusId = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+            if (requestSchoolId != scopedSchoolId || requestCampusId != scopedCampusId)
+            {
+                throw new ForbiddenAppException("You can only create users in your campus.");
+            }
+
+            return (scopedSchoolId, scopedCampusId);
+        }
+
         if (IsSchoolAdmin())
         {
             var scopedSchoolId = _currentUser.SchoolId
@@ -693,6 +754,451 @@ public sealed class DirectoryService : IDirectoryService
         return (safePageNumber, safePageSize);
     }
 
+    public async Task<DirectorySchoolAdminListResponse> ListSchoolAdminsAsync(
+        int? schoolId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        EnsurePortalAdmin();
+        var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
+        var (items, totalCount) = await _directory.ListSchoolAdminsAsync(
+            schoolId,
+            search,
+            safePageNumber,
+            safePageSize,
+            cancellationToken);
+        return new DirectorySchoolAdminListResponse(items, safePageNumber, safePageSize, totalCount);
+    }
+
+    public async Task<DirectorySchoolAdminResponse> CreateSchoolAdminAsync(
+        CreateDirectorySchoolAdminRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsurePortalAdmin();
+        ValidateCreateSchoolAdminRequest(request);
+
+        if (!await _directory.SchoolExistsAsync(request.SchoolId, cancellationToken))
+        {
+            throw new NotFoundAppException("School was not found.");
+        }
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var cnic = request.Cnic.AsTrimmedOrNull();
+        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic, cancellationToken);
+        if (existing is not null)
+        {
+            try
+            {
+                existing.AddRole(UserRole.SchoolAdmin, DateTimeOffset.UtcNow);
+            }
+            catch (BusinessRuleException exception)
+            {
+                throw new ValidationAppException([exception.Message]);
+            }
+
+            existing.UpdateProfile(request.FullName.AsTrimmedString());
+            existing.AssignSchoolCampus(request.SchoolId, campusId: null);
+            existing.UpdateContactInfo(mobileNumber, cnic, request.EmailAddress);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var existingSchool = await _directory.GetSchoolAsync(request.SchoolId, cancellationToken);
+            return new DirectorySchoolAdminResponse(
+                existing.Id,
+                existing.FullName,
+                existing.Username,
+                request.SchoolId,
+                existingSchool?.Name ?? "—",
+                existing.MobileNumber,
+                existing.Cnic,
+                existing.IsActive,
+                existing.NeedsPasswordSetup);
+        }
+
+        var username = request.Username.AsTrimmedString();
+        if (await _users.UsernameExistsAsync(username, cancellationToken))
+        {
+            throw new ValidationAppException(["Username is already taken."]);
+        }
+
+        // Auto-approved; School Admin sets password on first login.
+        var user = User.CreateProvisionedAccount(
+            username,
+            request.FullName.AsTrimmedString(),
+            UserRole.SchoolAdmin,
+            request.SchoolId,
+            campusId: null,
+            mobileNumber,
+            cnic,
+            request.EmailAddress);
+        await _users.AddAsync(user, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var school = await _directory.GetSchoolAsync(request.SchoolId, cancellationToken);
+        return new DirectorySchoolAdminResponse(
+            user.Id,
+            user.FullName,
+            user.Username,
+            request.SchoolId,
+            school?.Name ?? "—",
+            user.MobileNumber,
+            user.Cnic,
+            user.IsActive,
+            user.NeedsPasswordSetup);
+    }
+
+    public async Task<DirectorySchoolAdminResponse> UpdateSchoolAdminAsync(
+        long userId,
+        UpdateDirectorySchoolAdminRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsurePortalAdmin();
+        ValidateUpdateSchoolAdminRequest(request);
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("School admin was not found.");
+        if (!user.HasRole(UserRole.SchoolAdmin))
+        {
+            throw new NotFoundAppException("School admin was not found.");
+        }
+
+        if (!await _directory.SchoolExistsAsync(request.SchoolId, cancellationToken))
+        {
+            throw new NotFoundAppException("School was not found.");
+        }
+
+        user.UpdateProfile(request.FullName);
+        user.AssignSchoolCampus(request.SchoolId, null);
+        user.UpdateContactInfo(request.MobileNumber, request.Cnic, request.EmailAddress ?? string.Empty);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var school = await _directory.GetSchoolAsync(request.SchoolId, cancellationToken);
+        return new DirectorySchoolAdminResponse(
+            user.Id,
+            user.FullName,
+            user.Username,
+            request.SchoolId,
+            school?.Name ?? "—",
+            user.MobileNumber,
+            user.Cnic,
+            user.IsActive,
+            user.NeedsPasswordSetup);
+    }
+
+    public async Task ActivateSchoolAdminAsync(long userId, CancellationToken cancellationToken)
+    {
+        await SetSchoolAdminActiveAsync(userId, true, cancellationToken);
+    }
+
+    public async Task DeactivateSchoolAdminAsync(long userId, CancellationToken cancellationToken)
+    {
+        await SetSchoolAdminActiveAsync(userId, false, cancellationToken);
+    }
+
+    public async Task<DirectoryCampusAdminListResponse> ListCampusAdminsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        EnsureCanManageCampusAdmins();
+        var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
+        var scopedSchoolId = schoolId;
+        if (IsSchoolAdmin())
+        {
+            scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+        }
+
+        var (items, totalCount) = await _directory.ListCampusAdminsAsync(
+            scopedSchoolId,
+            campusId,
+            search,
+            safePageNumber,
+            safePageSize,
+            cancellationToken);
+        return new DirectoryCampusAdminListResponse(items, safePageNumber, safePageSize, totalCount);
+    }
+
+    public async Task<DirectoryCampusAdminResponse> CreateCampusAdminAsync(
+        CreateDirectoryCampusAdminRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCanManageCampusAdmins();
+        ValidateCreateCampusAdminRequest(request);
+
+        var schoolId = request.SchoolId;
+        var campusId = request.CampusId;
+        if (IsSchoolAdmin())
+        {
+            schoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            if (request.SchoolId != schoolId)
+            {
+                throw new ForbiddenAppException("You can only create campus admins in your school.");
+            }
+        }
+
+        await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var cnic = request.Cnic.AsTrimmedOrNull();
+        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic, cancellationToken);
+        if (existing is not null)
+        {
+            try
+            {
+                existing.AddRole(UserRole.CampusAdmin, DateTimeOffset.UtcNow);
+            }
+            catch (BusinessRuleException exception)
+            {
+                throw new ValidationAppException([exception.Message]);
+            }
+
+            existing.UpdateProfile(request.FullName.AsTrimmedString());
+            existing.AssignSchoolCampus(schoolId, campusId);
+            existing.UpdateContactInfo(mobileNumber, cnic, request.EmailAddress);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return await ToCampusAdminResponseAsync(existing, cancellationToken);
+        }
+
+        var username = request.Username.AsTrimmedString();
+        if (await _users.UsernameExistsAsync(username, cancellationToken))
+        {
+            throw new ValidationAppException(["Username is already taken."]);
+        }
+
+        var user = User.CreateProvisionedAccount(
+            username,
+            request.FullName.AsTrimmedString(),
+            UserRole.CampusAdmin,
+            schoolId,
+            campusId,
+            mobileNumber,
+            cnic,
+            request.EmailAddress);
+        await _users.AddAsync(user, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await ToCampusAdminResponseAsync(user, cancellationToken);
+    }
+
+    public async Task<DirectoryCampusAdminResponse> UpdateCampusAdminAsync(
+        long userId,
+        UpdateDirectoryCampusAdminRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCanManageCampusAdmins();
+        ValidateUpdateCampusAdminRequest(request);
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("Campus admin was not found.");
+        if (!user.HasRole(UserRole.CampusAdmin))
+        {
+            throw new NotFoundAppException("Campus admin was not found.");
+        }
+
+        EnsureSchoolAccess(user.SchoolId);
+
+        var schoolId = request.SchoolId;
+        var campusId = request.CampusId;
+        if (IsSchoolAdmin())
+        {
+            schoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            if (request.SchoolId != schoolId)
+            {
+                throw new ForbiddenAppException("You can only manage campus admins in your school.");
+            }
+        }
+
+        await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
+
+        user.UpdateProfile(request.FullName);
+        user.AssignSchoolCampus(schoolId, campusId);
+        user.UpdateContactInfo(request.MobileNumber, request.Cnic, request.EmailAddress ?? string.Empty);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await ToCampusAdminResponseAsync(user, cancellationToken);
+    }
+
+    public async Task ActivateCampusAdminAsync(long userId, CancellationToken cancellationToken)
+    {
+        await SetCampusAdminActiveAsync(userId, true, cancellationToken);
+    }
+
+    public async Task DeactivateCampusAdminAsync(long userId, CancellationToken cancellationToken)
+    {
+        await SetCampusAdminActiveAsync(userId, false, cancellationToken);
+    }
+
+    private async Task SetCampusAdminActiveAsync(long userId, bool isActive, CancellationToken cancellationToken)
+    {
+        EnsureCanManageCampusAdmins();
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("Campus admin was not found.");
+        if (!user.HasRole(UserRole.CampusAdmin))
+        {
+            throw new NotFoundAppException("Campus admin was not found.");
+        }
+
+        EnsureSchoolAccess(user.SchoolId);
+        await _directory.SetUserActiveAsync(userId, isActive, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<DirectoryCampusAdminResponse> ToCampusAdminResponseAsync(
+        User user,
+        CancellationToken cancellationToken)
+    {
+        var schoolId = user.SchoolId ?? 0;
+        var campusId = user.CampusId ?? 0;
+        var school = schoolId > 0 ? await _directory.GetSchoolAsync(schoolId, cancellationToken) : null;
+        var campus = campusId > 0 ? await _directory.GetCampusAsync(campusId, cancellationToken) : null;
+        return new DirectoryCampusAdminResponse(
+            user.Id,
+            user.FullName,
+            user.Username,
+            schoolId,
+            school?.Name ?? "—",
+            campusId,
+            campus?.Name ?? "—",
+            user.MobileNumber,
+            user.Cnic,
+            user.IsActive,
+            user.NeedsPasswordSetup);
+    }
+
+    private void EnsureCanManageCampusAdmins()
+    {
+        var role = ParseRole();
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin))
+        {
+            throw new ForbiddenAppException("Only Portal Admin and School Admin can manage campus admins.");
+        }
+    }
+
+    private static void ValidateCreateCampusAdminRequest(CreateDirectoryCampusAdminRequest request)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            errors.Add("Full name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            errors.Add("Username is required.");
+        }
+
+        if (request.SchoolId <= 0)
+        {
+            errors.Add("School is required.");
+        }
+
+        if (request.CampusId <= 0)
+        {
+            errors.Add("Campus is required.");
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationAppException(errors);
+        }
+    }
+
+    private static void ValidateUpdateCampusAdminRequest(UpdateDirectoryCampusAdminRequest request)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            errors.Add("Full name is required.");
+        }
+
+        if (request.SchoolId <= 0)
+        {
+            errors.Add("School is required.");
+        }
+
+        if (request.CampusId <= 0)
+        {
+            errors.Add("Campus is required.");
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationAppException(errors);
+        }
+    }
+
+    private async Task SetSchoolAdminActiveAsync(long userId, bool isActive, CancellationToken cancellationToken)
+    {
+        EnsurePortalAdmin();
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("School admin was not found.");
+        if (!user.HasRole(UserRole.SchoolAdmin))
+        {
+            throw new NotFoundAppException("School admin was not found.");
+        }
+
+        await _directory.SetUserActiveAsync(userId, isActive, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private static void ValidateCreateSchoolAdminRequest(CreateDirectorySchoolAdminRequest request)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            errors.Add("Full name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            errors.Add("Username is required.");
+        }
+
+        if (request.SchoolId <= 0)
+        {
+            errors.Add("School is required.");
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationAppException(errors);
+        }
+    }
+
+    private static void ValidateUpdateSchoolAdminRequest(UpdateDirectorySchoolAdminRequest request)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            errors.Add("Full name is required.");
+        }
+
+        if (request.SchoolId <= 0)
+        {
+            errors.Add("School is required.");
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationAppException(errors);
+        }
+    }
+
+    private void EnsurePortalAdmin()
+    {
+        if (ParseRole() != UserRole.PortalAdmin)
+        {
+            throw new ForbiddenAppException("Only Portal Admin can manage school admins.");
+        }
+    }
+
     private static IReadOnlyList<long> NormalizeIds(BulkDeactivateRequest request)
     {
         if (request.Ids is null || request.Ids.Count == 0)
@@ -703,10 +1209,19 @@ public sealed class DirectoryService : IDirectoryService
         return request.Ids.Distinct().ToArray();
     }
 
-    private void EnsureAdmin()
+    private void EnsureSchoolManager()
     {
         var role = ParseRole();
         if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin))
+        {
+            throw new ForbiddenAppException("Only Portal Admin and School Admin can manage schools and campuses.");
+        }
+    }
+
+    private void EnsureAdmin()
+    {
+        var role = ParseRole();
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin))
         {
             throw new ForbiddenAppException("Only administrators can manage the directory.");
         }
@@ -739,11 +1254,6 @@ public sealed class DirectoryService : IDirectoryService
         if (string.IsNullOrWhiteSpace(request.Username))
         {
             errors.Add("Username is required.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-        {
-            errors.Add("Password must be at least 6 characters.");
         }
 
         if (string.IsNullOrWhiteSpace(request.RollNumber))
@@ -809,11 +1319,6 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Username is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-        {
-            errors.Add("Password must be at least 6 characters.");
-        }
-
         if (string.IsNullOrWhiteSpace(request.TeacherCode))
         {
             errors.Add("Teacher code is required.");
@@ -857,11 +1362,6 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Username is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-        {
-            errors.Add("Password must be at least 6 characters.");
-        }
-
         if (errors.Count > 0)
         {
             throw new ValidationAppException(errors);
@@ -879,7 +1379,7 @@ public sealed class DirectoryService : IDirectoryService
     private void EnsureDirectoryReader()
     {
         var role = ParseRole();
-        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.Teacher))
         {
             throw new ForbiddenAppException("You do not have access to the student directory.");
         }
@@ -888,11 +1388,122 @@ public sealed class DirectoryService : IDirectoryService
     private bool IsSchoolAdmin()
         => ParseRole() == UserRole.SchoolAdmin;
 
+    private bool IsCampusAdmin()
+        => ParseRole() == UserRole.CampusAdmin;
+
+    private async Task<User?> FindExistingUserForAdditionalRoleAsync(
+        string? mobileNumber,
+        string? cnic,
+        CancellationToken cancellationToken)
+    {
+        if (mobileNumber.HasTrimmedText())
+        {
+            var byMobile = await _users.GetByMobileNumberAsync(mobileNumber!, cancellationToken);
+            if (byMobile is not null)
+            {
+                return byMobile;
+            }
+        }
+
+        if (cnic.HasTrimmedText())
+        {
+            return await _users.GetByCnicAsync(cnic!, cancellationToken);
+        }
+
+        return null;
+    }
+
+    private async Task<DirectoryTeacherResponse> AddTeacherRoleToExistingUserAsync(
+        User existing,
+        CreateDirectoryTeacherRequest request,
+        int schoolId,
+        int campusId,
+        string? mobileNumber,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            existing.AddRole(UserRole.Teacher, DateTimeOffset.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        existing.UpdateProfile(request.FullName.AsTrimmedString());
+        existing.AssignSchoolCampus(schoolId, campusId);
+        existing.UpdateContactInfo(mobileNumber, cnic: null);
+        existing.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
+
+        if (!await _users.HasTeacherProfileAsync(existing.Id, cancellationToken))
+        {
+            await _users.AddTeacherProfileAsync(new Teacher(existing.Id, mobileNumber), cancellationToken);
+        }
+
+        existing.AttachProfileContext(existing.Id, schoolId, campusId);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new DirectoryTeacherResponse(
+            existing.Id,
+            existing.FullName,
+            existing.Username,
+            request.TeacherCode.AsTrimmedString(),
+            schoolId,
+            campusId,
+            existing.IsActive);
+    }
+
+    private async Task<DirectoryParentResponse> AddParentRoleToExistingUserAsync(
+        User existing,
+        CreateDirectoryParentRequest request,
+        string? mobileNumber,
+        string? cnic,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            existing.AddRole(UserRole.Parent, DateTimeOffset.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        existing.UpdateProfile(request.FullName.AsTrimmedString());
+        existing.UpdateContactInfo(mobileNumber, cnic);
+
+        if (!await _users.HasParentProfileAsync(existing.Id, cancellationToken))
+        {
+            await _users.AddParentProfileAsync(new Parent(existing.Id, mobileNumber), cancellationToken);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        var linkedCount = await _directory.CountParentStudentLinksAsync(existing.Id, cancellationToken);
+        return new DirectoryParentResponse(
+            existing.Id,
+            existing.FullName,
+            existing.Username,
+            linkedCount,
+            existing.IsActive);
+    }
+
     private void EnsureSchoolAccess(long schoolId)
         => EnsureSchoolAccess((int?)schoolId);
 
     private void EnsureSchoolAccess(int? schoolId)
     {
+        if (IsCampusAdmin())
+        {
+            var campusSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            if (schoolId is null || schoolId.Value != campusSchoolId)
+            {
+                throw new ForbiddenAppException("You can only access resources in your school.");
+            }
+
+            return;
+        }
+
         if (!IsSchoolAdmin())
         {
             return;
@@ -907,9 +1518,33 @@ public sealed class DirectoryService : IDirectoryService
         }
     }
 
+    private void EnsureCampusAccess(int? campusId)
+    {
+        if (!IsCampusAdmin())
+        {
+            return;
+        }
+
+        var adminCampusId = _currentUser.CampusId
+            ?? throw new ForbiddenAppException("Campus context was not found.");
+        if (campusId is null || campusId.Value != adminCampusId)
+        {
+            throw new ForbiddenAppException("You can only access resources in your campus.");
+        }
+    }
+
     private (int? SchoolId, int? CampusId) ResolveSchoolCampusFilter(int? schoolId, int? campusId)
     {
         var role = ParseRole();
+        if (role == UserRole.CampusAdmin)
+        {
+            var scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            var scopedCampusId = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+            return (scopedSchoolId, scopedCampusId);
+        }
+
         if (role is UserRole.SchoolAdmin or UserRole.Teacher)
         {
             var scopedSchoolId = _currentUser.SchoolId

@@ -65,7 +65,6 @@ export interface PagedDirectoryResult<T> {
 export interface CreateDirectoryStudentInput {
   fullName: string;
   username: string;
-  password: string;
   schoolId: number;
   campusId: number;
   rollNumber: string;
@@ -86,7 +85,6 @@ export interface UpdateDirectoryStudentInput {
 export interface CreateDirectoryTeacherInput {
   fullName: string;
   username: string;
-  password: string;
   schoolId: number;
   campusId: number;
   teacherCode: string;
@@ -103,9 +101,85 @@ export interface UpdateDirectoryTeacherInput {
 export interface CreateDirectoryParentInput {
   fullName: string;
   username: string;
-  password: string;
   cnic?: string | null;
   mobileNumber?: string | null;
+}
+
+export interface DirectorySchoolAdmin {
+  userId: number;
+  fullName: string;
+  username: string;
+  schoolId: number;
+  schoolName: string;
+  mobileNumber: string | null;
+  cnic: string | null;
+  isActive: boolean;
+  needsPasswordSetup: boolean;
+}
+
+export interface CreateDirectorySchoolAdminInput {
+  fullName: string;
+  username: string;
+  schoolId: number;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
+}
+
+export interface UpdateDirectorySchoolAdminInput {
+  fullName: string;
+  schoolId: number;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
+}
+
+export interface DirectorySchoolAdminFilters {
+  schoolId?: number | null;
+  search?: string;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+export interface DirectoryCampusAdmin {
+  userId: number;
+  fullName: string;
+  username: string;
+  schoolId: number;
+  schoolName: string;
+  campusId: number;
+  campusName: string;
+  mobileNumber: string | null;
+  cnic: string | null;
+  isActive: boolean;
+  needsPasswordSetup: boolean;
+}
+
+export interface CreateDirectoryCampusAdminInput {
+  fullName: string;
+  username: string;
+  schoolId: number;
+  campusId: number;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
+}
+
+export interface UpdateDirectoryCampusAdminInput {
+  fullName: string;
+  schoolId: number;
+  campusId: number;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
+}
+
+export interface DirectoryCampusAdminFilters {
+  schoolId?: number | null;
+  campusId?: number | null;
+  search?: string;
+  pageNumber?: number;
+  pageSize?: number;
 }
 
 export interface UpdateDirectoryParentInput {

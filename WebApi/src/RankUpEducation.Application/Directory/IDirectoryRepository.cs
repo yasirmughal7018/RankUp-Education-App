@@ -89,4 +89,19 @@ public interface IDirectoryRepository
     Task<bool> StudentExistsAsync(long studentId, CancellationToken cancellationToken);
 
     Task<int> CountParentStudentLinksAsync(long parentId, CancellationToken cancellationToken);
+
+    Task<(IReadOnlyList<DirectorySchoolAdminResponse> Items, int TotalCount)> ListSchoolAdminsAsync(
+        int? schoolId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<(IReadOnlyList<DirectoryCampusAdminResponse> Items, int TotalCount)> ListCampusAdminsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
 }

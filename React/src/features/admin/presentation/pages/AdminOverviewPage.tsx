@@ -6,7 +6,7 @@ const adminLinks = [
   {
     title: "Registration approvals",
     description:
-      "Approve account access requests from in-app notifications (School Admin and Portal Admin).",
+      "Approve account access requests from in-app notifications (Portal Admin, School Admin, and Campus Admin).",
     href: "/admin/registrations",
   },
   {
@@ -21,7 +21,7 @@ const adminLinks = [
   },
   {
     title: "School directory",
-    description: "Browse schools, campuses, students, teachers, and parent links.",
+    description: "Browse schools, campuses, students, teachers, parents, and admins.",
     href: "/admin/directory",
   },
 ];

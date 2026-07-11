@@ -2,13 +2,19 @@ import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 import type {
   BulkActionResult,
   BulkDeactivateInput,
+  CreateDirectoryCampusAdminInput,
   CreateDirectoryParentInput,
+  CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
   CreateDirectoryTeacherInput,
   DirectoryCampus,
+  DirectoryCampusAdmin,
+  DirectoryCampusAdminFilters,
   DirectoryParent,
   DirectoryParentFilters,
   DirectorySchool,
+  DirectorySchoolAdmin,
+  DirectorySchoolAdminFilters,
   DirectoryStudent,
   DirectoryStudentFilters,
   DirectoryTeacher,
@@ -16,7 +22,9 @@ import type {
   LinkParentStudentInput,
   LinkParentStudentResult,
   PagedDirectoryResult,
+  UpdateDirectoryCampusAdminInput,
   UpdateDirectoryParentInput,
+  UpdateDirectorySchoolAdminInput,
   UpdateDirectoryStudentInput,
   UpdateDirectoryTeacherInput,
   UpsertCampusInput,
@@ -295,5 +303,100 @@ export async function unlinkParentStudent(
 ): Promise<void> {
   await apiRequestVoid(`/directory/parents/${parentId}/students/${studentId}`, {
     method: "DELETE",
+  });
+}
+
+export async function listSchoolAdmins(
+  filters: DirectorySchoolAdminFilters = {},
+): Promise<PagedDirectoryResult<DirectorySchoolAdmin>> {
+  return apiRequest<PagedDirectoryResult<DirectorySchoolAdmin>>(
+    `/directory/school-admins${toQuery({
+      schoolId: filters.schoolId,
+      search: filters.search,
+      pageNumber: filters.pageNumber,
+      pageSize: filters.pageSize,
+    })}`,
+  );
+}
+
+export async function createSchoolAdmin(
+  input: CreateDirectorySchoolAdminInput,
+): Promise<DirectorySchoolAdmin> {
+  return apiRequest<DirectorySchoolAdmin>("/directory/school-admins", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateSchoolAdmin(
+  userId: number,
+  input: UpdateDirectorySchoolAdminInput,
+): Promise<DirectorySchoolAdmin> {
+  return apiRequest<DirectorySchoolAdmin>(
+    `/directory/school-admins/${userId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function activateSchoolAdmin(userId: number): Promise<void> {
+  await apiRequestVoid(`/directory/school-admins/${userId}/activate`, {
+    method: "POST",
+  });
+}
+
+export async function deactivateSchoolAdmin(userId: number): Promise<void> {
+  await apiRequestVoid(`/directory/school-admins/${userId}/deactivate`, {
+    method: "POST",
+  });
+}
+
+export async function listCampusAdmins(
+  filters: DirectoryCampusAdminFilters = {},
+): Promise<PagedDirectoryResult<DirectoryCampusAdmin>> {
+  return apiRequest<PagedDirectoryResult<DirectoryCampusAdmin>>(
+    `/directory/campus-admins${toQuery({
+      schoolId: filters.schoolId,
+      campusId: filters.campusId,
+      search: filters.search,
+      pageNumber: filters.pageNumber,
+      pageSize: filters.pageSize,
+    })}`,
+  );
+}
+
+export async function createCampusAdmin(
+  input: CreateDirectoryCampusAdminInput,
+): Promise<DirectoryCampusAdmin> {
+  return apiRequest<DirectoryCampusAdmin>("/directory/campus-admins", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateCampusAdmin(
+  userId: number,
+  input: UpdateDirectoryCampusAdminInput,
+): Promise<DirectoryCampusAdmin> {
+  return apiRequest<DirectoryCampusAdmin>(
+    `/directory/campus-admins/${userId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function activateCampusAdmin(userId: number): Promise<void> {
+  await apiRequestVoid(`/directory/campus-admins/${userId}/activate`, {
+    method: "POST",
+  });
+}
+
+export async function deactivateCampusAdmin(userId: number): Promise<void> {
+  await apiRequestVoid(`/directory/campus-admins/${userId}/deactivate`, {
+    method: "POST",
   });
 }

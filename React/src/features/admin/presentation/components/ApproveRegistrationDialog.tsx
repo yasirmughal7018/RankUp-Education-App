@@ -3,6 +3,8 @@ import type { PendingRegistration } from "@/features/admin/domain/registrationTy
 
 interface ApproveRegistrationDialogProps {
   registration: PendingRegistration;
+  schoolName: string;
+  campusName: string | null;
   isSubmitting: boolean;
   onClose: () => void;
   onConfirm: (registration: PendingRegistration) => Promise<void>;
@@ -19,6 +21,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export function ApproveRegistrationDialog({
   registration,
+  schoolName,
+  campusName,
   isSubmitting,
   onClose,
   onConfirm,
@@ -41,18 +45,6 @@ export function ApproveRegistrationDialog({
       // Parent surfaces API errors.
     }
   }
-
-  const schoolCampus =
-    registration.schoolId == null
-      ? "No school (Portal Admin)"
-      : [
-          `School ${registration.schoolId}`,
-          registration.campusId != null
-            ? `Campus ${registration.campusId}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" / ");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-8">
@@ -85,14 +77,11 @@ export function ApproveRegistrationDialog({
           />
           <DetailRow label="CNIC" value={registration.cnic || "—"} />
           <DetailRow label="Email" value={registration.emailAddress || "—"} />
-          <DetailRow label="School / campus" value={schoolCampus} />
+          <DetailRow label="School" value={schoolName} />
+          <DetailRow label="Campus" value={campusName || "—"} />
           <DetailRow
             label="Roll / teacher code"
             value={registration.rollNumberTeacherCode || "—"}
-          />
-          <DetailRow
-            label="Admin target"
-            value={registration.adminTarget || "—"}
           />
           <DetailRow
             label="Reason"
@@ -122,4 +111,3 @@ export function ApproveRegistrationDialog({
     </div>
   );
 }
-

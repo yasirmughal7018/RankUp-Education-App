@@ -75,14 +75,51 @@ public sealed class AuthService : IAuthService
             throw new AuthenticationAppException("Invalid username or password.");
         }
 
-        var refreshToken = IssueRefreshToken(user);
+        var activeRole = user.Role;
+        var refreshToken = IssueRefreshToken(user, activeRole);
         user.RecordLogin(_dateTimeProvider.UtcNow);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var sessionUser = await _users.GetByIdForRoleAsync(user.Id, activeRole, cancellationToken) ?? user;
+
         return new LoginResponse(
-            _tokenService.CreateAccessToken(user),
+            _tokenService.CreateAccessToken(sessionUser, activeRole),
             refreshToken,
-            user.ToCurrentUserResponse());
+            sessionUser.ToCurrentUserResponse(activeRole));
+    }
+
+    public async Task<LoginResponse> SwitchRoleAsync(
+        SwitchRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
+        if (string.IsNullOrWhiteSpace(request.Role)
+            || !Enum.TryParse<UserRole>(request.Role.AsTrimmedString(), true, out var targetRole))
+        {
+            throw new ValidationAppException(["Role is required."]);
+        }
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        try
+        {
+            user.EnsureCanLogin();
+            user.EnsureHasRole(targetRole);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new AuthenticationAppException(exception.Message);
+        }
+
+        var sessionUser = await _users.GetByIdForRoleAsync(user.Id, targetRole, cancellationToken) ?? user;
+        var refreshToken = IssueRefreshToken(sessionUser, targetRole);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new LoginResponse(
+            _tokenService.CreateAccessToken(sessionUser, targetRole),
+            refreshToken,
+            sessionUser.ToCurrentUserResponse(targetRole));
     }
 
     public async Task<LoginStatusResponse> GetLoginStatusAsync(
@@ -237,6 +274,7 @@ public sealed class AuthService : IAuthService
         var recipientIds = await _users.ListAdminRecipientsAsync(
             user.AdminTarget,
             user.SchoolId,
+            user.CampusId,
             cancellationToken);
         await _notifications.CreateAsync(
             recipientIds,
@@ -256,13 +294,25 @@ public sealed class AuthService : IAuthService
 
         var safeTake = Math.Clamp(take, 1, 100);
         int? schoolIdFilter = null;
-        if (IsSchoolAdmin())
+        int? campusIdFilter = null;
+        if (IsCampusAdmin())
+        {
+            schoolIdFilter = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            campusIdFilter = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+        }
+        else if (IsSchoolAdmin())
         {
             schoolIdFilter = _currentUser.SchoolId
                 ?? throw new ForbiddenAppException("School context was not found.");
         }
 
-        var users = await _users.ListPendingRegistrationsAsync(safeTake, schoolIdFilter, cancellationToken);
+        var users = await _users.ListPendingRegistrationsAsync(
+            safeTake,
+            schoolIdFilter,
+            campusIdFilter,
+            cancellationToken);
         return users.Select(user => user.ToPendingResponse()).ToArray();
     }
 
@@ -345,11 +395,18 @@ public sealed class AuthService : IAuthService
             ?? throw new AuthenticationAppException("User account was not found.");
 
         user.EnsureCanLogin();
+        var activeRole = storedToken.ActiveRole ?? user.Role;
+        if (!user.HasRole(activeRole))
+        {
+            activeRole = user.Role;
+        }
+
         storedToken.Revoke(_dateTimeProvider.UtcNow);
-        var refreshToken = IssueRefreshToken(user);
+        var sessionUser = await _users.GetByIdForRoleAsync(user.Id, activeRole, cancellationToken) ?? user;
+        var refreshToken = IssueRefreshToken(sessionUser, activeRole);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AuthTokensResponse(_tokenService.CreateAccessToken(user), refreshToken);
+        return new AuthTokensResponse(_tokenService.CreateAccessToken(sessionUser, activeRole), refreshToken);
     }
 
     public async Task RequestPasswordResetAsync(PasswordResetRequest request, CancellationToken cancellationToken)
@@ -365,10 +422,11 @@ public sealed class AuthService : IAuthService
     public async Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken)
     {
         var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
-        var user = await _users.GetByIdAsync(userId, cancellationToken)
+        var activeRole = ResolveActiveRoleFromClaims();
+        var user = await _users.GetByIdForRoleAsync(userId, activeRole, cancellationToken)
             ?? throw new NotFoundAppException("User account was not found.");
 
-        return user.ToCurrentUserResponse();
+        return user.ToCurrentUserResponse(activeRole);
     }
 
     public async Task<CurrentUserResponse> ChangePasswordAsync(
@@ -403,7 +461,7 @@ public sealed class AuthService : IAuthService
             user.SetPasswordHash(_passwordHasher.Hash(request.NewPassword));
             user.ClearPasswordChangeRequirement();
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return user.ToCurrentUserResponse();
+            return user.ToCurrentUserResponse(ResolveActiveRoleFromClaims());
         }
 
         user.EnsureHasPassword();
@@ -427,7 +485,7 @@ public sealed class AuthService : IAuthService
         user.ClearPasswordChangeRequirement();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return user.ToCurrentUserResponse();
+        return user.ToCurrentUserResponse(ResolveActiveRoleFromClaims());
     }
 
     public async Task LogoutAsync(RefreshTokenRequest? request, CancellationToken cancellationToken)
@@ -506,6 +564,12 @@ public sealed class AuthService : IAuthService
 
     private void EnsureCanApproveRegistration(User user)
     {
+        if (IsCampusAdmin())
+        {
+            EnsureCampusAdminCanReview(user);
+            return;
+        }
+
         if (!IsSchoolAdmin())
         {
             return;
@@ -529,6 +593,12 @@ public sealed class AuthService : IAuthService
 
     private void EnsureCanRejectRegistration(User user)
     {
+        if (IsCampusAdmin())
+        {
+            EnsureCampusAdminCanReview(user);
+            return;
+        }
+
         if (!IsSchoolAdmin())
         {
             return;
@@ -549,6 +619,30 @@ public sealed class AuthService : IAuthService
         }
     }
 
+    private void EnsureCampusAdminCanReview(User user)
+    {
+        if (IsPortalAdminTarget(user))
+        {
+            throw new ForbiddenAppException(
+                "Portal Admin requests can only be reviewed by Portal Admin.");
+        }
+
+        var adminSchoolId = _currentUser.SchoolId
+            ?? throw new ForbiddenAppException("School context was not found.");
+        var adminCampusId = _currentUser.CampusId
+            ?? throw new ForbiddenAppException("Campus context was not found.");
+
+        if (!user.SchoolId.HasValue || user.SchoolId != adminSchoolId)
+        {
+            throw new ForbiddenAppException("You can only review registrations for your school.");
+        }
+
+        if (!user.CampusId.HasValue || user.CampusId != adminCampusId)
+        {
+            throw new ForbiddenAppException("You can only review registrations for your campus.");
+        }
+    }
+
     private static bool IsPortalAdminTarget(User user)
         => string.Equals(user.AdminTarget, "Portal Admin", StringComparison.OrdinalIgnoreCase)
             || !user.SchoolId.HasValue;
@@ -557,7 +651,8 @@ public sealed class AuthService : IAuthService
     {
         var role = _currentUser.Role;
         if (!string.Equals(role, UserRole.PortalAdmin.ToString(), StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(role, UserRole.SchoolAdmin.ToString(), StringComparison.OrdinalIgnoreCase))
+            && !string.Equals(role, UserRole.SchoolAdmin.ToString(), StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(role, UserRole.CampusAdmin.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             throw new ForbiddenAppException("Only admins can review registration requests.");
         }
@@ -565,6 +660,9 @@ public sealed class AuthService : IAuthService
 
     private bool IsSchoolAdmin()
         => string.Equals(_currentUser.Role, UserRole.SchoolAdmin.ToString(), StringComparison.OrdinalIgnoreCase);
+
+    private bool IsCampusAdmin()
+        => string.Equals(_currentUser.Role, UserRole.CampusAdmin.ToString(), StringComparison.OrdinalIgnoreCase);
 
     private static UserRole ParseRegistrationRole(string userType)
     {
@@ -577,12 +675,27 @@ public sealed class AuthService : IAuthService
         return role;
     }
 
-    private string IssueRefreshToken(User user)
+    private string IssueRefreshToken(User user, UserRole activeRole)
     {
         var refreshToken = _tokenService.CreateRefreshToken();
         var tokenHash = _tokenService.HashToken(refreshToken);
-        user.AddRefreshToken(new RefreshToken(user.Id, tokenHash, _dateTimeProvider.UtcNow.Add(RefreshTokenLifetime)));
+        user.AddRefreshToken(new RefreshToken(
+            user.Id,
+            tokenHash,
+            _dateTimeProvider.UtcNow.Add(RefreshTokenLifetime),
+            activeRole));
         return refreshToken;
+    }
+
+    private UserRole ResolveActiveRoleFromClaims()
+    {
+        if (!string.IsNullOrWhiteSpace(_currentUser.Role)
+            && Enum.TryParse<UserRole>(_currentUser.Role, true, out var role))
+        {
+            return role;
+        }
+
+        return UserRole.Student;
     }
 
     private static void ValidateLogin(LoginRequest request)

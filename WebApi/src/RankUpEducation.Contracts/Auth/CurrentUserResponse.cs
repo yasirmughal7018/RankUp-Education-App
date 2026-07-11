@@ -6,6 +6,7 @@ public sealed record CurrentUserResponse(
     string FullName,
     string Name,
     string Role,
+    IReadOnlyList<string> Roles,
     long? ProfileId,
     int? SchoolId,
     int? CampusId,

@@ -63,7 +63,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(session => session.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasMany(user => user.RoleAssignments)
+            .WithOne()
+            .HasForeignKey(assignment => assignment.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.Navigation(user => user.RefreshTokens).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(user => user.DeviceSessions).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(user => user.RoleAssignments).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

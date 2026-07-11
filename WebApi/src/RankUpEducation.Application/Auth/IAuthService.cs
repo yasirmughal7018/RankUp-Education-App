@@ -6,6 +6,8 @@ public interface IAuthService
 {
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
 
+    Task<LoginResponse> SwitchRoleAsync(SwitchRoleRequest request, CancellationToken cancellationToken);
+
     /// <summary>
     /// Checks whether the account is pending, needs first password, or can sign in.
     /// </summary>

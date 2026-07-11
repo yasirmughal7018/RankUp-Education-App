@@ -9,3 +9,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Docs tooling
+docs/node_modules/
+docs/package-lock.json

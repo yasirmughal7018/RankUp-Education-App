@@ -2,14 +2,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as directoryApi from "@/features/directory/data/directoryApi";
 import type {
+  CreateDirectoryCampusAdminInput,
   CreateDirectoryParentInput,
+  CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
   CreateDirectoryTeacherInput,
+  DirectoryCampusAdminFilters,
   DirectoryParentFilters,
+  DirectorySchoolAdminFilters,
   DirectoryStudentFilters,
   DirectoryTeacherFilters,
   LinkParentStudentInput,
+  UpdateDirectoryCampusAdminInput,
   UpdateDirectoryParentInput,
+  UpdateDirectorySchoolAdminInput,
   UpdateDirectoryStudentInput,
   UpdateDirectoryTeacherInput,
   UpsertCampusInput,
@@ -26,6 +32,18 @@ function invalidateTeachers(queryClient: ReturnType<typeof useQueryClient>) {
 
 function invalidateParents(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["directory", "parents"] });
+}
+
+function invalidateSchoolAdmins(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    queryKey: ["directory", "school-admins"],
+  });
+}
+
+function invalidateCampusAdmins(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    queryKey: ["directory", "campus-admins"],
+  });
 }
 
 export function useDirectorySchoolsQuery(enabled = true) {
@@ -381,5 +399,113 @@ export function useUnlinkParentStudentMutation() {
       studentId: number;
     }) => directoryApi.unlinkParentStudent(parentId, studentId),
     onSuccess: () => invalidateParents(queryClient),
+  });
+}
+
+export function useDirectorySchoolAdminsQuery(
+  filters: DirectorySchoolAdminFilters = {},
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.directorySchoolAdmins(filters),
+    queryFn: () => directoryApi.listSchoolAdmins(filters),
+    enabled,
+  });
+}
+
+export function useCreateSchoolAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateDirectorySchoolAdminInput) =>
+      directoryApi.createSchoolAdmin(input),
+    onSuccess: () => invalidateSchoolAdmins(queryClient),
+  });
+}
+
+export function useUpdateSchoolAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      input,
+    }: {
+      userId: number;
+      input: UpdateDirectorySchoolAdminInput;
+    }) => directoryApi.updateSchoolAdmin(userId, input),
+    onSuccess: () => invalidateSchoolAdmins(queryClient),
+  });
+}
+
+export function useActivateSchoolAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: number) => directoryApi.activateSchoolAdmin(userId),
+    onSuccess: () => invalidateSchoolAdmins(queryClient),
+  });
+}
+
+export function useDeactivateSchoolAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: number) => directoryApi.deactivateSchoolAdmin(userId),
+    onSuccess: () => invalidateSchoolAdmins(queryClient),
+  });
+}
+
+export function useDirectoryCampusAdminsQuery(
+  filters: DirectoryCampusAdminFilters = {},
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.directoryCampusAdmins(filters),
+    queryFn: () => directoryApi.listCampusAdmins(filters),
+    enabled,
+  });
+}
+
+export function useCreateCampusAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateDirectoryCampusAdminInput) =>
+      directoryApi.createCampusAdmin(input),
+    onSuccess: () => invalidateCampusAdmins(queryClient),
+  });
+}
+
+export function useUpdateCampusAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      input,
+    }: {
+      userId: number;
+      input: UpdateDirectoryCampusAdminInput;
+    }) => directoryApi.updateCampusAdmin(userId, input),
+    onSuccess: () => invalidateCampusAdmins(queryClient),
+  });
+}
+
+export function useActivateCampusAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: number) => directoryApi.activateCampusAdmin(userId),
+    onSuccess: () => invalidateCampusAdmins(queryClient),
+  });
+}
+
+export function useDeactivateCampusAdminMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: number) => directoryApi.deactivateCampusAdmin(userId),
+    onSuccess: () => invalidateCampusAdmins(queryClient),
   });
 }

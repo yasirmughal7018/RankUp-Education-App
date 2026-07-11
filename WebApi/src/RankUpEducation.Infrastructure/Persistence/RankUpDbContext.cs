@@ -29,6 +29,7 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<DeviceSession> DeviceSessions => Set<DeviceSession>();
     public DbSet<Notification> Notifications => Set<Notification>();

@@ -174,6 +174,14 @@ class AuthRemoteDataSource {
     }
   }
 
+  Future<AuthSession> switchRole(String role) {
+    return _requestSession(
+      '/auth/switch-role',
+      data: {'role': role},
+      skipAuthRefresh: false,
+    );
+  }
+
   Future<AppUser> changePassword({
     required String newPassword,
     String? currentPassword,
@@ -199,12 +207,13 @@ class AuthRemoteDataSource {
   Future<AuthSession> _requestSession(
     String path, {
     required Map<String, dynamic> data,
+    bool skipAuthRefresh = true,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         path,
         data: data,
-        options: Options(extra: {'skipAuthRefresh': true}),
+        options: Options(extra: {'skipAuthRefresh': skipAuthRefresh}),
       );
       return AuthSessionModel.fromJson(_unwrap(response.data));
     } on DioException catch (error) {

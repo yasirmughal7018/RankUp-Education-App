@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PendingRegistration } from "@/features/admin/domain/registrationTypes";
 import { isRegistrationActionRole } from "@/features/admin/domain/registrationTypes";
 import { ApproveRegistrationDialog } from "@/features/admin/presentation/components/ApproveRegistrationDialog";
@@ -12,6 +12,10 @@ import { PageHeader } from "@/core/components/PageHeader";
 import { queryKeys } from "@/core/api/queryKeys";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import * as notificationsApi from "@/features/notifications/data/notificationsApi";
+import * as directoryApi from "@/features/directory/data/directoryApi";
+import { useDirectorySchoolsQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+
+const REASON_PREVIEW_LENGTH = 48;
 
 function formatRequestedAt(value: string | null | undefined): string {
   if (!value) {
@@ -30,17 +34,73 @@ function formatRequestedAt(value: string | null | undefined): string {
   }).format(date);
 }
 
-function formatSchoolCampus(registration: PendingRegistration): string {
-  if (registration.schoolId == null) {
-    return "No school (Portal Admin)";
+function truncateReason(reason: string | null | undefined): {
+  preview: string;
+  isTruncated: boolean;
+} {
+  const text = reason?.trim() ?? "";
+  if (!text) {
+    return { preview: "—", isTruncated: false };
   }
 
-  const parts = [
-    `School ${registration.schoolId}`,
-    registration.campusId != null ? `Campus ${registration.campusId}` : null,
-  ].filter(Boolean);
+  if (text.length <= REASON_PREVIEW_LENGTH) {
+    return { preview: text, isTruncated: false };
+  }
 
-  return parts.join(" / ");
+  return {
+    preview: `${text.slice(0, REASON_PREVIEW_LENGTH).trimEnd()}…`,
+    isTruncated: true,
+  };
+}
+
+function ReasonDialog({
+  fullName,
+  reason,
+  onClose,
+}: {
+  fullName: string;
+  reason: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-8">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reason-dialog-title"
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+      >
+        <h2
+          id="reason-dialog-title"
+          className="text-lg font-semibold text-slate-900"
+        >
+          Reason
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">{fullName}</p>
+        <p className="mt-4 whitespace-pre-wrap text-sm text-slate-800">{reason}</p>
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function PendingRegistrationsPage() {
@@ -48,6 +108,7 @@ export function PendingRegistrationsPage() {
   const queryClient = useQueryClient();
   const { data: registrations = [], isLoading, error, refetch, isFetching } =
     usePendingRegistrationsQuery();
+  const { data: schools = [] } = useDirectorySchoolsQuery();
   const approveRegistration = useApproveRegistrationMutation();
   const rejectRegistration = useRejectRegistrationMutation();
 
@@ -55,12 +116,62 @@ export function PendingRegistrationsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedRegistration, setSelectedRegistration] =
     useState<PendingRegistration | null>(null);
+  const [reasonRegistration, setReasonRegistration] =
+    useState<PendingRegistration | null>(null);
 
   const isSubmitting =
     approveRegistration.isPending || rejectRegistration.isPending;
 
   const isPortalAdmin = user?.role === "PortalAdmin";
-  const roleLabel = isPortalAdmin ? "Portal Admin" : "School Admin";
+  const isSchoolAdmin = user?.role === "SchoolAdmin";
+  const roleLabel = isPortalAdmin
+    ? "Portal Admin"
+    : isSchoolAdmin
+      ? "School Admin"
+      : "Campus Admin";
+
+  const schoolNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const school of schools) {
+      map.set(school.id, school.name);
+    }
+    return map;
+  }, [schools]);
+
+  const schoolIdsNeedingCampuses = useMemo(() => {
+    const ids = new Set<number>();
+    for (const registration of registrations) {
+      if (registration.schoolId != null && registration.campusId != null) {
+        ids.add(registration.schoolId);
+      }
+    }
+    return [...ids].sort((a, b) => a - b);
+  }, [registrations]);
+
+  const campusesQuery = useQuery({
+    queryKey: ["directory", "campuses-for-registrations", schoolIdsNeedingCampuses],
+    enabled: schoolIdsNeedingCampuses.length > 0,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        schoolIdsNeedingCampuses.map(async (schoolId) => {
+          const campuses = await directoryApi.listCampuses(schoolId);
+          return [schoolId, campuses] as const;
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+  });
+
+  const campusNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    const bySchool = campusesQuery.data ?? {};
+    for (const campuses of Object.values(bySchool)) {
+      for (const campus of campuses) {
+        map.set(campus.id, campus.name);
+      }
+    }
+    return map;
+  }, [campusesQuery.data]);
 
   useEffect(() => {
     void notificationsApi
@@ -109,6 +220,26 @@ export function PendingRegistrationsPage() {
     }
   }
 
+  function schoolLabel(registration: PendingRegistration): string {
+    if (registration.schoolId == null) {
+      return "No school";
+    }
+    return (
+      schoolNameById.get(registration.schoolId) ??
+      `School #${registration.schoolId}`
+    );
+  }
+
+  function campusLabel(registration: PendingRegistration): string | null {
+    if (registration.campusId == null) {
+      return null;
+    }
+    return (
+      campusNameById.get(registration.campusId) ??
+      `Campus #${registration.campusId}`
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
@@ -116,7 +247,9 @@ export function PendingRegistrationsPage() {
         description={
           isPortalAdmin
             ? "Portal Admin view: review request details and approve. No fields or password are changed. The user sets their password on first login."
-            : "School Admin view: review request details and approve for your school. No fields or password are changed. The user sets their password on first login."
+            : isSchoolAdmin
+              ? "School Admin view: review request details and approve for your school. No fields or password are changed. The user sets their password on first login."
+              : "Campus Admin view: review request details and approve for your campus. No fields or password are changed. The user sets their password on first login."
         }
         action={
           <div className="flex items-center gap-3">
@@ -174,9 +307,6 @@ export function PendingRegistrationsPage() {
                     School / campus
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Admin target
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Created
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
@@ -192,6 +322,10 @@ export function PendingRegistrationsPage() {
                   const canApprove = isRegistrationActionRole(registration.role);
                   const createdDisplay =
                     registration.createdDate ?? registration.requestedAt;
+                  const campus = campusLabel(registration);
+                  const { preview, isTruncated } = truncateReason(
+                    registration.reasonMessage,
+                  );
 
                   return (
                     <tr key={registration.id} className="hover:bg-slate-50">
@@ -209,17 +343,30 @@ export function PendingRegistrationsPage() {
                           {registration.role}
                         </span>
                       </td>
-                      <td className="max-w-[12rem] px-4 py-3 text-slate-700">
-                        {formatSchoolCampus(registration)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {registration.adminTarget ?? "—"}
+                      <td className="max-w-[14rem] px-4 py-3 text-slate-700">
+                        <div>{schoolLabel(registration)}</div>
+                        {campus ? (
+                          <div className="text-xs font-normal text-slate-500">
+                            {campus}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">
                         {formatRequestedAt(createdDisplay)}
                       </td>
-                      <td className="max-w-[14rem] truncate px-4 py-3 text-slate-700">
-                        {registration.reasonMessage || "—"}
+                      <td className="max-w-[16rem] px-4 py-3 text-slate-700">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="break-words">{preview}</span>
+                          {isTruncated ? (
+                            <button
+                              type="button"
+                              onClick={() => setReasonRegistration(registration)}
+                              className="shrink-0 text-xs font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                            >
+                              Read more
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
@@ -255,9 +402,19 @@ export function PendingRegistrationsPage() {
       {selectedRegistration ? (
         <ApproveRegistrationDialog
           registration={selectedRegistration}
+          schoolName={schoolLabel(selectedRegistration)}
+          campusName={campusLabel(selectedRegistration)}
           isSubmitting={approveRegistration.isPending}
           onClose={() => setSelectedRegistration(null)}
           onConfirm={handleApprove}
+        />
+      ) : null}
+
+      {reasonRegistration?.reasonMessage ? (
+        <ReasonDialog
+          fullName={reasonRegistration.fullName}
+          reason={reasonRegistration.reasonMessage}
+          onClose={() => setReasonRegistration(null)}
         />
       ) : null}
     </div>

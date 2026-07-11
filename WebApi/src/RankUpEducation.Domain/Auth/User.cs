@@ -7,6 +7,7 @@ public sealed class User : SoftDeleteEntity
 {
     private readonly List<RefreshToken> _refreshTokens = [];
     private readonly List<DeviceSession> _deviceSessions = [];
+    private readonly List<UserRoleAssignment> _roleAssignments = [];
 
     private User()
     {
@@ -39,11 +40,13 @@ public sealed class User : SoftDeleteEntity
         CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
         MustChangePassword = false;
+        EnsureRoleAssignment(role, DateTimeOffset.UtcNow);
     }
 
     public string Username { get; private set; }
     public string? PasswordHash { get; private set; }
     public string FullName { get; private set; }
+    /// <summary>Primary / default role (also used as login default active role).</summary>
     public UserRole Role { get; private set; }
     public long? ProfileId { get; private set; }
     public int? SchoolId { get; private set; }
@@ -63,11 +66,59 @@ public sealed class User : SoftDeleteEntity
     public DateTimeOffset? LastLoginAt { get; private set; }
     public IReadOnlyCollection<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyCollection<DeviceSession> DeviceSessions => _deviceSessions;
+    public IReadOnlyCollection<UserRoleAssignment> RoleAssignments => _roleAssignments;
+
+    public IReadOnlyList<UserRole> Roles
+    {
+        get
+        {
+            if (_roleAssignments.Count > 0)
+            {
+                return _roleAssignments.Select(assignment => assignment.Role).Distinct().OrderBy(role => role).ToList();
+            }
+
+            // Fallback before role rows are loaded / backfilled.
+            return [Role];
+        }
+    }
+
+    public bool HasRole(UserRole role) => Roles.Contains(role);
 
     public bool IsPendingRegistration => !IsActive && !PasswordHash.HasTrimmedText();
 
     /// <summary>Approved by admin but user has not set a password yet.</summary>
     public bool NeedsPasswordSetup => IsActive && !PasswordHash.HasTrimmedText();
+
+    /// <summary>
+    /// Admin-provisioned account: active immediately, no password.
+    /// User must set password on first login via set-initial-password.
+    /// </summary>
+    public static User CreateProvisionedAccount(
+        string username,
+        string fullName,
+        UserRole role,
+        int? schoolId = null,
+        int? campusId = null,
+        string? mobileNumber = null,
+        string? cnic = null,
+        string? emailAddress = null)
+    {
+        return new User
+        {
+            Username = username.AsTrimmedString(),
+            FullName = fullName.AsTrimmedString(),
+            Role = role,
+            PasswordHash = null,
+            IsActive = true,
+            MustChangePassword = true,
+            SchoolId = schoolId,
+            CampusId = campusId,
+            MobileNumber = mobileNumber.AsTrimmedOrNull(),
+            Cnic = cnic.AsTrimmedOrNull(),
+            EmailAddress = emailAddress.AsNormalizedEmailOrNull(),
+            CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow),
+        }.WithInitialRole(role);
+    }
 
     public static User CreateRegistrationRequest(
         string username,
@@ -101,7 +152,7 @@ public sealed class User : SoftDeleteEntity
             AdminTarget = adminTarget.AsTrimmedOrNull(),
             RollNumberTeacherCode = rollNumberTeacherCode.AsTrimmedOrNull(),
             MustChangePassword = null
-        };
+        }.WithInitialRole(role);
     }
 
     public void EnsureCanLogin()
@@ -201,7 +252,7 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    public void UpdateContactInfo(string? mobileNumber, string? cnic)
+    public void UpdateContactInfo(string? mobileNumber, string? cnic, string? emailAddress = null)
     {
         if (mobileNumber.HasTrimmedText())
         {
@@ -211,6 +262,11 @@ public sealed class User : SoftDeleteEntity
         if (cnic.HasTrimmedText())
         {
             Cnic = cnic.AsTrimmedString();
+        }
+
+        if (emailAddress is not null)
+        {
+            EmailAddress = emailAddress.AsNormalizedEmailOrNull();
         }
 
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -260,6 +316,48 @@ public sealed class User : SoftDeleteEntity
     public void AddRefreshToken(RefreshToken refreshToken)
     {
         _refreshTokens.Add(refreshToken);
+    }
+
+    public void AddRole(UserRole role, DateTimeOffset createdAt)
+    {
+        UserRoleRules.EnsureCanAddRole(Roles.ToList(), role);
+        EnsureRoleAssignment(role, createdAt);
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetPrimaryRole(UserRole role)
+    {
+        if (!HasRole(role))
+        {
+            throw new BusinessRuleException($"Account does not have the {role} role.");
+        }
+
+        Role = role;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void EnsureHasRole(UserRole role)
+    {
+        if (!HasRole(role))
+        {
+            throw new BusinessRuleException($"Account does not have the {role} role.");
+        }
+    }
+
+    private User WithInitialRole(UserRole role)
+    {
+        EnsureRoleAssignment(role, DateTimeOffset.UtcNow);
+        return this;
+    }
+
+    private void EnsureRoleAssignment(UserRole role, DateTimeOffset createdAt)
+    {
+        if (_roleAssignments.Any(assignment => assignment.Role == role))
+        {
+            return;
+        }
+
+        _roleAssignments.Add(new UserRoleAssignment(Id, role, createdAt));
     }
 
     public void RegisterDevice(DeviceSession deviceSession)

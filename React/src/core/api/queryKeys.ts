@@ -46,6 +46,19 @@ export const queryKeys = {
     pageNumber?: number;
     pageSize?: number;
   }) => ["directory", "parents", filters] as const,
+  directorySchoolAdmins: (filters: {
+    schoolId?: number | null;
+    search?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }) => ["directory", "school-admins", filters] as const,
+  directoryCampusAdmins: (filters: {
+    schoolId?: number | null;
+    campusId?: number | null;
+    search?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }) => ["directory", "campus-admins", filters] as const,
   reportQuizSummary: (from?: string | null, to?: string | null) =>
     ["reports", "quiz-summary", from ?? null, to ?? null] as const,
   reportQuizPerformance: (quizId: number) =>

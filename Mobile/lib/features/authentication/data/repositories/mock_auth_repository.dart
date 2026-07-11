@@ -99,6 +99,19 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<AuthSession> switchRole(String role) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    final parsed = parseUserRole(role);
+    final session = AuthSessionModel.mock(parsed);
+    _session = session;
+    await _tokenStore.saveTokens(
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    );
+    return session;
+  }
+
+  @override
   Future<AppUser> changePassword({
     required String newPassword,
     String? currentPassword,

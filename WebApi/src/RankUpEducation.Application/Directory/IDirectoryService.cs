@@ -117,4 +117,45 @@ public interface IDirectoryService
         CancellationToken cancellationToken);
 
     Task UnlinkParentStudentAsync(long parentId, long studentId, CancellationToken cancellationToken);
+
+    Task<DirectorySchoolAdminListResponse> ListSchoolAdminsAsync(
+        int? schoolId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectorySchoolAdminResponse> CreateSchoolAdminAsync(
+        CreateDirectorySchoolAdminRequest request,
+        CancellationToken cancellationToken);
+
+    Task<DirectorySchoolAdminResponse> UpdateSchoolAdminAsync(
+        long userId,
+        UpdateDirectorySchoolAdminRequest request,
+        CancellationToken cancellationToken);
+
+    Task ActivateSchoolAdminAsync(long userId, CancellationToken cancellationToken);
+
+    Task DeactivateSchoolAdminAsync(long userId, CancellationToken cancellationToken);
+
+    Task<DirectoryCampusAdminListResponse> ListCampusAdminsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryCampusAdminResponse> CreateCampusAdminAsync(
+        CreateDirectoryCampusAdminRequest request,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryCampusAdminResponse> UpdateCampusAdminAsync(
+        long userId,
+        UpdateDirectoryCampusAdminRequest request,
+        CancellationToken cancellationToken);
+
+    Task ActivateCampusAdminAsync(long userId, CancellationToken cancellationToken);
+
+    Task DeactivateCampusAdminAsync(long userId, CancellationToken cancellationToken);
 }
