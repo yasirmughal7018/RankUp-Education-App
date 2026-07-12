@@ -129,6 +129,7 @@ public sealed class UserRepository : IUserRepository
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Users.AsNoTracking()
+            .Include(user => user.RoleAssignments)
             .Where(user => !user.IsActive && (user.PasswordHash == null || user.PasswordHash == ""));
 
         if (campusIdFilter.HasValue)
@@ -265,6 +266,21 @@ public sealed class UserRepository : IUserRepository
                 admin.Username,
                 approval.ApprovedByRole)
         ).ToListAsync(cancellationToken);
+
+        // CampusAdmin approval covers SchoolAdmin — SchoolAdmin is no longer required.
+        var campusAdminAlreadyApproved = await _dbContext.UserApprovals.AsNoTracking()
+            .AnyAsync(
+                approval =>
+                    approval.UserId == userId
+                    && approval.ApprovedByRole == UserRole.CampusAdmin
+                    && approval.ApprovedAt != null,
+                cancellationToken);
+        if (campusAdminAlreadyApproved)
+        {
+            pending = pending
+                .Where(candidate => candidate.Role != UserRole.SchoolAdmin)
+                .ToList();
+        }
 
         return pending;
     }

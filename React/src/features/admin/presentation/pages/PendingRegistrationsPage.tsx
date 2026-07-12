@@ -187,10 +187,13 @@ export function PendingRegistrationsPage() {
     setSuccessMessage(null);
 
     try {
-      await approveRegistration.mutateAsync(registration.id);
+      const result = await approveRegistration.mutateAsync(registration.id);
       setSelectedRegistration(null);
       setSuccessMessage(
-        `${registration.fullName} was approved. They must set a password on first login.`,
+        result.message ||
+          (result.isActivated
+            ? `${registration.fullName} was approved. They must set a password on first login.`
+            : `${registration.fullName}: approval recorded. Waiting for Portal Admin.`),
       );
     } catch (caught) {
       const apiError = caught as { message?: string };
@@ -270,10 +273,10 @@ export function PendingRegistrationsPage() {
         title="Registration approvals"
         description={
           isPortalAdmin
-            ? "Portal Admin view: see who the request is pending with, then approve. Any eligible admin approval activates the account; the user sets their password on first login."
+            ? "Portal Admin view: only Portal Admin approval activates the account. School/Campus Admin can record approval first; the user sets their password after Portal Admin activates."
             : isSchoolAdmin
-              ? "School Admin view: see who the request is pending with for your school, then approve. Any eligible admin approval activates the account; the user sets their password on first login."
-              : "Campus Admin view: see who the request is pending with for your campus, then approve. Any eligible admin approval activates the account; the user sets their password on first login."
+              ? "School Admin view: your approval is recorded, but Portal Admin must still approve before the account is activated."
+              : "Campus Admin view: your approval is recorded (School Admin is then not required), but Portal Admin must still approve before the account is activated."
         }
         action={
           <div className="flex items-center gap-3">

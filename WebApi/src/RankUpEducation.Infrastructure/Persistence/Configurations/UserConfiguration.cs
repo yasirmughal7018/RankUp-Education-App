@@ -15,15 +15,8 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(user => user.Username).IsUnique();
         builder.Property(user => user.PasswordHash).HasColumnName("password_hash");
         builder.Property(user => user.FullName).HasColumnName("display_name").HasMaxLength(50);
-        // Stored as lookups.id for type = UserRole (enum numeric values match lookup ids).
-        builder.Property(user => user.Role)
-            .HasColumnName("role")
-            .HasColumnType("smallint")
-            .HasConversion(
-                role => (short)role,
-                value => (UserRole)value)
-            .IsRequired();
-        builder.HasIndex(user => new { user.Id, user.Role }).IsUnique();
+        // Roles live only in app_user_roles (User.Role is computed from assignments).
+        builder.Ignore(user => user.Role);
         builder.Property(user => user.IsActive).HasColumnName("is_active").HasDefaultValue(false);
         builder.Property(user => user.CreatedDate).HasColumnName("created_date");
         builder.Property(user => user.ModifiedDate).HasColumnName("modified_date");
@@ -38,7 +31,6 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.EmailAddress).HasColumnName("email").HasMaxLength(120);
         builder.Property(user => user.MustChangePassword).HasColumnName("must_change_password");
         builder.Property(user => user.ReasonMessage).HasColumnName("reason_message").HasMaxLength(1000);
-        builder.Property(user => user.AdminTarget).HasColumnName("admin_target").HasMaxLength(80);
         builder.Property(user => user.RollNumberTeacherCode)
             .HasColumnName("roll_number_teacher_code")
             .HasMaxLength(80);

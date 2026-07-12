@@ -30,7 +30,6 @@ public sealed class User : SoftDeleteEntity
         Username = username.AsTrimmedString();
         PasswordHash = passwordHash;
         FullName = fullName.AsTrimmedString();
-        Role = role;
         ProfileId = profileId;
         SchoolId = schoolId;
         CampusId = campusId;
@@ -46,8 +45,6 @@ public sealed class User : SoftDeleteEntity
     public string Username { get; private set; }
     public string? PasswordHash { get; private set; }
     public string FullName { get; private set; }
-    /// <summary>Primary / default role (also used as login default active role).</summary>
-    public UserRole Role { get; private set; }
     public long? ProfileId { get; private set; }
     public int? SchoolId { get; private set; }
     public int? CampusId { get; private set; }
@@ -56,11 +53,6 @@ public sealed class User : SoftDeleteEntity
     public string? EmailAddress { get; private set; }
     public bool? MustChangePassword { get; private set; }
     public string? ReasonMessage { get; private set; }
-    /// <summary>
-    /// Legacy column only. Approval routing uses <c>app_user_approval</c>
-    /// (derived from SchoolId / CampusId), not this field.
-    /// </summary>
-    public string? AdminTarget { get; private set; }
     /// <summary>Student roll number or teacher code (shared identity field).</summary>
     public string? RollNumberTeacherCode { get; private set; }
     public DateOnly? CreatedDate { get; private set; }
@@ -73,16 +65,30 @@ public sealed class User : SoftDeleteEntity
     public IReadOnlyCollection<UserRoleAssignment> RoleAssignments => _roleAssignments;
 
     public IReadOnlyList<UserRole> Roles
+        => _roleAssignments
+            .Select(assignment => assignment.Role)
+            .Distinct()
+            .OrderBy(role => role)
+            .ToList();
+
+    /// <summary>
+    /// Default active role for login when none is chosen.
+    /// Taken from <c>app_user_roles</c> (earliest assignment), not a column on <c>app_users</c>.
+    /// </summary>
+    public UserRole Role
     {
         get
         {
-            if (_roleAssignments.Count > 0)
+            if (_roleAssignments.Count == 0)
             {
-                return _roleAssignments.Select(assignment => assignment.Role).Distinct().OrderBy(role => role).ToList();
+                throw new BusinessRuleException("This account has no roles assigned.");
             }
 
-            // Fallback before role rows are loaded / backfilled.
-            return [Role];
+            return _roleAssignments
+                .OrderBy(assignment => assignment.CreatedAt)
+                .ThenBy(assignment => assignment.Role)
+                .First()
+                .Role;
         }
     }
 
@@ -111,7 +117,6 @@ public sealed class User : SoftDeleteEntity
         {
             Username = username.AsTrimmedString(),
             FullName = fullName.AsTrimmedString(),
-            Role = role,
             PasswordHash = null,
             IsActive = true,
             MustChangePassword = true,
@@ -141,7 +146,6 @@ public sealed class User : SoftDeleteEntity
         {
             Username = username.AsTrimmedString(),
             FullName = fullName.AsTrimmedString(),
-            Role = role,
             PasswordHash = null,
             IsActive = false,
             RequestedAt = requestedAt,
@@ -152,7 +156,6 @@ public sealed class User : SoftDeleteEntity
             CampusId = campusId,
             CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow),
             ReasonMessage = reasonMessage.AsTrimmedOrNull(),
-            AdminTarget = null,
             RollNumberTeacherCode = rollNumberTeacherCode.AsTrimmedOrNull(),
             MustChangePassword = null
         }.WithInitialRole(role);
@@ -325,17 +328,6 @@ public sealed class User : SoftDeleteEntity
     {
         UserRoleRules.EnsureCanAddRole(Roles.ToList(), role);
         EnsureRoleAssignment(role, createdAt);
-        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
-    }
-
-    public void SetPrimaryRole(UserRole role)
-    {
-        if (!HasRole(role))
-        {
-            throw new BusinessRuleException($"Account does not have the {role} role.");
-        }
-
-        Role = role;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

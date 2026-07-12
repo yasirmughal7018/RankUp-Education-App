@@ -37,6 +37,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserApprovalSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
@@ -200,12 +201,6 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             END IF;
         END
         $migrate$;
-
-        -- Ensure CampusAdmin (2015) is allowed on already-migrated databases.
-        ALTER TABLE public.app_users DROP CONSTRAINT IF EXISTS chk_app_users_role;
-        ALTER TABLE public.app_users
-            ADD CONSTRAINT chk_app_users_role
-            CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015]::int2[]));
         """;
 
     private const string AppUserRolesSupportSql = """
@@ -225,16 +220,28 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         CREATE INDEX IF NOT EXISTS ix_app_user_roles_role
             ON public.app_user_roles (role);
 
-        -- Backfill from primary role on app_users.
-        INSERT INTO public.app_user_roles (user_id, role, created_at)
-        SELECT u.id, u.role, now()
-        FROM public.app_users u
-        WHERE u.role IS NOT NULL
-          AND NOT EXISTS (
-              SELECT 1
-              FROM public.app_user_roles r
-              WHERE r.user_id = u.id AND r.role = u.role
-          );
+        -- Backfill from legacy app_users.role when that column still exists.
+        DO $backfill$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_users'
+                  AND column_name = 'role'
+            ) THEN
+                INSERT INTO public.app_user_roles (user_id, role, created_at)
+                SELECT u.id, u.role, now()
+                FROM public.app_users u
+                WHERE u.role IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM public.app_user_roles r
+                      WHERE r.user_id = u.id AND r.role = u.role
+                  );
+            END IF;
+        END
+        $backfill$;
 
         -- Ensure roles referenced by student_groups exist before retargeting the FK.
         INSERT INTO public.app_user_roles (user_id, role, created_at)
@@ -264,6 +271,56 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         ALTER TABLE public.refresh_tokens
             ADD COLUMN IF NOT EXISTS active_role int2 NULL;
+        """;
+
+    private const string DropAppUsersRoleAndAdminTargetSql = """
+        -- Roles live in app_user_roles; approval routing lives in app_user_approval.
+        -- Drop legacy columns from app_users after backfill / FK retarget.
+        DO $drop$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_users'
+                  AND column_name = 'role'
+            ) THEN
+                ALTER TABLE public.student_groups
+                    DROP CONSTRAINT IF EXISTS student_groups_refral_id_and_role_fkey;
+
+                -- Re-attach student_groups to app_user_roles if needed (idempotent with above).
+                BEGIN
+                    ALTER TABLE public.student_groups
+                        ADD CONSTRAINT student_groups_refral_id_and_role_fkey
+                        FOREIGN KEY (referral_id, creator_role)
+                        REFERENCES public.app_user_roles(user_id, role);
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END;
+
+                ALTER TABLE public.app_users
+                    DROP CONSTRAINT IF EXISTS chk_app_users_role;
+                ALTER TABLE public.app_users
+                    DROP CONSTRAINT IF EXISTS app_users_role_fkey;
+                ALTER TABLE public.app_users
+                    DROP CONSTRAINT IF EXISTS app_users_id_role_key;
+
+                ALTER TABLE public.app_users
+                    DROP COLUMN role;
+            END IF;
+
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_users'
+                  AND column_name = 'admin_target'
+            ) THEN
+                ALTER TABLE public.app_users
+                    DROP COLUMN admin_target;
+            END IF;
+        END
+        $drop$;
         """;
 
     private const string AppUserApprovalSupportSql = """
@@ -363,9 +420,6 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         ALTER TABLE public.app_users
             ADD COLUMN IF NOT EXISTS reason_message VARCHAR(1000) NULL;
-
-        ALTER TABLE public.app_users
-            ADD COLUMN IF NOT EXISTS admin_target VARCHAR(80) NULL;
 
         ALTER TABLE public.app_users
             ADD COLUMN IF NOT EXISTS roll_number_teacher_code VARCHAR(80) NULL;

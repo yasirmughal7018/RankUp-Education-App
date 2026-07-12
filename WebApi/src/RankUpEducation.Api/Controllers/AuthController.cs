@@ -118,12 +118,12 @@ public sealed class AuthController : ControllerBase
 
     [HttpPost("registrations/{userId:long}/approve")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
-    public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> ApproveRegistrationAsync(
+    public async Task<ActionResult<ApiResponse<ApproveRegistrationResponse>>> ApproveRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)
     {
         var result = await _authService.ApproveRegistrationAsync(userId, cancellationToken);
-        return Ok(ApiResponse<CurrentUserResponse>.Ok(result, "Registration approved. User must set a password on first login."));
+        return Ok(ApiResponse<ApproveRegistrationResponse>.Ok(result, result.Message));
     }
 
     [HttpPost("registrations/{userId:long}/reject")]

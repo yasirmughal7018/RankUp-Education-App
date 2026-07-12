@@ -673,13 +673,14 @@ class _AccountAccessRequestSheetState
     }
     if (_isTeacher) {
       return 'Optionally select school and campus. No school → Portal Admin. '
-          'School only → School Admin or Portal Admin. Campus → Campus Admin, '
-          'School Admin, or Portal Admin. Any one approval activates the account.';
+          'School only → School Admin then Portal Admin. Campus → Campus Admin / '
+          'School Admin then Portal Admin. Only Portal Admin approval activates '
+          'the account.';
     }
     return 'Enter a roll number. Optionally select school and campus. '
-        'No school → Portal Admin. School only → School Admin or Portal Admin. '
-        'Campus → Campus Admin, School Admin, or Portal Admin. Any one approval '
-        'activates the account.';
+        'No school → Portal Admin. School only → School Admin then Portal Admin. '
+        'Campus → Campus Admin / School Admin then Portal Admin. Only Portal Admin '
+        'approval activates the account.';
   }
 
   void _onUserTypeChanged(String? value) {

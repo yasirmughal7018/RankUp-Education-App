@@ -264,11 +264,11 @@ public sealed class AuthService : IAuthService
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Approval queue lives only in app_user_approval (not admin_target):
+        // Approval queue lives only in app_user_approval:
         // no school → PortalAdmin;
         // school only → SchoolAdmin + PortalAdmin;
         // campus → CampusAdmin + SchoolAdmin + PortalAdmin.
-        // Any one approval (including PortalAdmin) activates the account.
+        // Only PortalAdmin approval activates the account.
         var approverCandidates = await _users.ListPendingApproverCandidatesAsync(
             user.SchoolId,
             user.CampusId,
@@ -355,7 +355,7 @@ public sealed class AuthService : IAuthService
         return responses;
     }
 
-    public async Task<CurrentUserResponse> ApproveRegistrationAsync(
+    public async Task<ApproveRegistrationResponse> ApproveRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)
     {
@@ -370,6 +370,47 @@ public sealed class AuthService : IAuthService
         }
 
         EnsureCanApproveRegistration(user);
+
+        var approverId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var approverRole))
+        {
+            throw new ForbiddenAppException("Approver role was not found.");
+        }
+
+        // Record this admin's approval in app_user_approval.
+        var pendingApproval = await _users.GetPendingApprovalAsync(
+            user.Id,
+            approverId,
+            approverRole,
+            cancellationToken);
+        if (pendingApproval is not null)
+        {
+            pendingApproval.MarkApproved(_dateTimeProvider.UtcNow);
+        }
+        else
+        {
+            // Legacy request without a queue row for this approver.
+            var approval = UserApproval.CreatePending(user.Id, approverId, approverRole);
+            approval.MarkApproved(_dateTimeProvider.UtcNow);
+            await _users.AddApprovalAsync(approval, cancellationToken);
+        }
+
+        // Activation rules:
+        // - PortalAdmin approve → activate immediately (School/Campus not required).
+        // - SchoolAdmin / CampusAdmin approve → record only; wait for PortalAdmin.
+        // - CampusAdmin approve does not require SchoolAdmin (PortalAdmin still required).
+        if (approverRole != UserRole.PortalAdmin)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return new ApproveRegistrationResponse(
+                user.Id,
+                user.Username,
+                user.FullName,
+                IsActivated: false,
+                Message:
+                    "Your approval was recorded. The account stays pending until Portal Admin approves.");
+        }
 
         // Username priority: when CNIC is already on the request, username becomes CNIC.
         var resolvedCnic = user.Cnic.AsTrimmedOrNull();
@@ -389,41 +430,16 @@ public sealed class AuthService : IAuthService
             : user.Username;
 
         await CreateProfileForRoleAsync(user, mobileNumber, cancellationToken);
-
         user.ApprovePendingRegistration();
-
-        var approverId = _currentUser.UserId
-            ?? throw new AuthenticationAppException("Authentication is required.");
-        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var approverRole))
-        {
-            throw new ForbiddenAppException("Approver role was not found.");
-        }
-
-        // Mark this admin's queue row as approved. Other pending rows stay pending —
-        // PortalAdmin (or School/Campus Admin) activation does not wait for them.
-        var pendingApproval = await _users.GetPendingApprovalAsync(
-            user.Id,
-            approverId,
-            approverRole,
-            cancellationToken);
-        if (pendingApproval is not null)
-        {
-            pendingApproval.MarkApproved(_dateTimeProvider.UtcNow);
-        }
-        else
-        {
-            // Legacy request without a queue row for this approver.
-            var approval = UserApproval.CreatePending(user.Id, approverId, approverRole);
-            approval.MarkApproved(_dateTimeProvider.UtcNow);
-            await _users.AddApprovalAsync(approval, cancellationToken);
-        }
-
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var activated = await _users.GetByIdAsync(userId, cancellationToken)
-            ?? throw new NotFoundAppException("User account was not found.");
-
-        return activated.ToCurrentUserResponse();
+        return new ApproveRegistrationResponse(
+            user.Id,
+            user.Username,
+            user.FullName,
+            IsActivated: true,
+            Message:
+                "Registration approved by Portal Admin. The user can set their initial password and sign in.");
     }
 
     public async Task RejectRegistrationAsync(long userId, CancellationToken cancellationToken)

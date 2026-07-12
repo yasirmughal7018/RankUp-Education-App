@@ -155,13 +155,13 @@ export function RequestAccessPage() {
 
       const routing =
         schoolId && campusId
-          ? "Campus Admin, School Admin, or Portal Admin (any one approval activates the account)"
+          ? "Campus Admin / School Admin (recorded) and Portal Admin (required to activate)"
           : schoolId
-            ? "School Admin or Portal Admin (any one approval activates the account)"
+            ? "School Admin (recorded) and Portal Admin (required to activate)"
             : "Portal Admin";
 
       setSuccessMessage(
-        `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. After approval, set your initial password on the login screen, then sign in. Username will be ${response.username}.`,
+        `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. After Portal Admin approval, set your initial password on the login screen, then sign in. Username will be ${response.username}.`,
       );
       setForm({
         fullName: "",
@@ -186,8 +186,8 @@ export function RequestAccessPage() {
   const description = isParent
     ? "Parent requests go to Portal Admin. School, campus, and roll number are not required."
     : isTeacher
-      ? "Optionally select school and campus. No school → Portal Admin. School only → School Admin or Portal Admin. Campus → Campus Admin, School Admin, or Portal Admin. Any one approval activates the account."
-      : "Enter a roll number. Optionally select school and campus. No school → Portal Admin. School only → School Admin or Portal Admin. Campus → Campus Admin, School Admin, or Portal Admin. Any one approval activates the account.";
+      ? "Optionally select school and campus. No school → Portal Admin. School only → School Admin then Portal Admin. Campus → Campus Admin / School Admin then Portal Admin. Only Portal Admin approval activates the account."
+      : "Enter a roll number. Optionally select school and campus. No school → Portal Admin. School only → School Admin then Portal Admin. Campus → Campus Admin / School Admin then Portal Admin. Only Portal Admin approval activates the account.";
 
   return (
     <div className="mx-auto flex max-w-6xl justify-center px-4 py-10 sm:px-6">

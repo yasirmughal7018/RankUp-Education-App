@@ -2,7 +2,6 @@ import {
   apiRequest,
   apiRequestVoid,
 } from "@/core/api/apiClient";
-import type { CurrentUser } from "@/core/api/types";
 import type { PendingRegistration } from "@/features/admin/domain/registrationTypes";
 
 export async function listPendingRegistrations(
@@ -15,10 +14,21 @@ export async function listPendingRegistrations(
 
 export async function approveRegistration(
   userId: number,
-): Promise<CurrentUser> {
-  return apiRequest<CurrentUser>(`/auth/registrations/${userId}/approve`, {
-    method: "POST",
-  });
+): Promise<ApproveRegistrationResult> {
+  return apiRequest<ApproveRegistrationResult>(
+    `/auth/registrations/${userId}/approve`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export interface ApproveRegistrationResult {
+  userId: number;
+  username: string;
+  fullName: string;
+  isActivated: boolean;
+  message: string;
 }
 
 export async function rejectRegistration(userId: number): Promise<void> {

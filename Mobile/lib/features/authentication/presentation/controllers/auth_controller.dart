@@ -176,17 +176,16 @@ class AuthController extends StateNotifier<AuthState> {
         campusId: campusId,
       );
       final routing = schoolId != null && campusId != null
-          ? 'Campus Admin, School Admin, or Portal Admin '
-              '(any one approval activates the account)'
+          ? 'Campus Admin / School Admin (recorded) and Portal Admin '
+              '(required to activate)'
           : schoolId != null
-              ? 'School Admin or Portal Admin '
-                  '(any one approval activates the account)'
+              ? 'School Admin (recorded) and Portal Admin (required to activate)'
               : 'Portal Admin';
       state = state.copyWith(
         isLoading: false,
         successMessage:
-            'Account request sent to $routing. After approval, set your '
-            'initial password on the login screen, then sign in.',
+            'Account request sent to $routing. After Portal Admin approval, '
+            'set your initial password on the login screen, then sign in.',
       );
     } on Exception catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.toString());

@@ -59,15 +59,18 @@ class _PendingRegistrationsPageState
     });
 
     try {
-      await ref
+      final result = await ref
           .read(registrationRemoteDataSourceProvider)
           .approve(registration.id);
       if (!mounted) {
         return;
       }
       setState(() {
-        _successMessage =
-            '${registration.fullName} was approved. They must set a password on first login.';
+        _successMessage = result.message.isNotEmpty
+            ? result.message
+            : result.isActivated
+                ? '${registration.fullName} was approved. They must set a password on first login.'
+                : '${registration.fullName}: approval recorded. Waiting for Portal Admin.';
       });
       ref.invalidate(pendingRegistrationsProvider);
     } on AppException catch (error) {
@@ -195,8 +198,8 @@ class _PendingRegistrationsPageState
                   const SizedBox(height: 8),
                   Text(
                     isPortalAdmin
-                        ? 'Approve School Admin and Portal Admin account requests. Notifications open this screen.'
-                        : 'Approve account requests for your school. Portal Admin can also approve these.',
+                        ? 'Only your approval activates the account. School/Campus Admin can record approval first.'
+                        : 'Your approval is recorded, but Portal Admin must still approve before the account is activated.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

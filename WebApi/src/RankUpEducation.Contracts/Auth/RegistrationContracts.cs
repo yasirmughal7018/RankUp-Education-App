@@ -41,3 +41,11 @@ public sealed record PendingRegistrationResponse(
 
 /// <summary>Approve uses registration details as submitted. No password or field edits.</summary>
 public sealed record ApproveRegistrationRequest();
+
+public sealed record ApproveRegistrationResponse(
+    long UserId,
+    string Username,
+    string FullName,
+    /// <summary>True when Portal Admin approved and the account is ready for set-initial-password.</summary>
+    bool IsActivated,
+    string Message);

@@ -26,7 +26,7 @@ public interface IAuthService
 
     Task<IReadOnlyList<PendingRegistrationResponse>> ListPendingRegistrationsAsync(int take, CancellationToken cancellationToken);
 
-    Task<CurrentUserResponse> ApproveRegistrationAsync(long userId, CancellationToken cancellationToken);
+    Task<ApproveRegistrationResponse> ApproveRegistrationAsync(long userId, CancellationToken cancellationToken);
 
     Task RejectRegistrationAsync(long userId, CancellationToken cancellationToken);
 
