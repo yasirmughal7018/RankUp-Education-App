@@ -39,6 +39,30 @@ public interface IUserRepository
         int? campusId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Active Portal / School / Campus admins who can review registrations,
+    /// with the role they would use for this target scope.
+    /// </summary>
+    Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproverCandidatesAsync(
+        string? adminTarget,
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproversForUserAsync(
+        long userId,
+        CancellationToken cancellationToken);
+
+    Task AddApprovalAsync(UserApproval approval, CancellationToken cancellationToken);
+
+    Task AddApprovalsAsync(IEnumerable<UserApproval> approvals, CancellationToken cancellationToken);
+
+    Task<UserApproval?> GetPendingApprovalAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken);
+
     Task<bool> HasStudentProfileAsync(long userId, CancellationToken cancellationToken);
 
     Task<bool> HasTeacherProfileAsync(long userId, CancellationToken cancellationToken);

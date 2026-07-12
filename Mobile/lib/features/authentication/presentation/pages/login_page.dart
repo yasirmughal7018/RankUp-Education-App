@@ -672,12 +672,13 @@ class _AccountAccessRequestSheetState
           'number are not required.';
     }
     if (_isTeacher) {
-      return 'School, campus, and teacher code are optional for teachers. '
-          'Empty school → Portal Admin; selected school → School Admin + '
-          'Portal Admin.';
+      return 'Teachers must select school and campus. Teacher code is optional. '
+          'Campus Admin, School Admin, or Portal Admin can approve — any one '
+          'approval activates the account so you can set your initial password.';
     }
     return 'Students must select school and campus and enter a roll number. '
-        'The request goes to School Admin and Portal Admin.';
+        'Campus Admin, School Admin, or Portal Admin can approve — any one '
+        'approval activates the account so you can set your initial password.';
   }
 
   void _onUserTypeChanged(String? value) {
@@ -789,25 +790,14 @@ class _AccountAccessRequestSheetState
                   initialValue: _schoolId,
                   decoration: InputDecoration(
                     label: buildFieldLabel(
-                      _loadingSchools
-                          ? 'School (loading...)'
-                          : _isTeacher
-                              ? 'School (optional)'
-                              : 'School',
-                      required: _isStudent,
+                      _loadingSchools ? 'School (loading...)' : 'School',
+                      required: true,
                     ),
                     prefixIcon: const Icon(Icons.school_outlined),
-                    helperText: _isTeacher
-                        ? 'Empty → Portal Admin only. Selected → School Admin + Portal Admin.'
-                        : null,
                   ),
                   items: [
-                    DropdownMenuItem<int?>(
-                      child: Text(
-                        _isTeacher
-                            ? 'No school (Portal Admin)'
-                            : 'Select school',
-                      ),
+                    const DropdownMenuItem<int?>(
+                      child: Text('Select school'),
                     ),
                     ..._schools.map(
                       (school) => DropdownMenuItem<int?>(
@@ -817,7 +807,7 @@ class _AccountAccessRequestSheetState
                     ),
                   ],
                   validator: (value) {
-                    if (_isStudent && value == null) {
+                    if ((_isStudent || _isTeacher) && value == null) {
                       return 'School is required';
                     }
                     return null;
@@ -843,12 +833,8 @@ class _AccountAccessRequestSheetState
                   initialValue: _campusId,
                   decoration: InputDecoration(
                     label: buildFieldLabel(
-                      _loadingCampuses
-                          ? 'Campus (loading...)'
-                          : _isTeacher
-                              ? 'Campus (optional)'
-                              : 'Campus',
-                      required: _isStudent,
+                      _loadingCampuses ? 'Campus (loading...)' : 'Campus',
+                      required: true,
                     ),
                     prefixIcon: const Icon(Icons.location_city_outlined),
                   ),
@@ -857,9 +843,7 @@ class _AccountAccessRequestSheetState
                       child: Text(
                         _schoolId == null
                             ? 'Select a school first'
-                            : _isTeacher
-                                ? 'No campus'
-                                : 'Select campus',
+                            : 'Select campus',
                       ),
                     ),
                     ..._campuses.map(
@@ -870,7 +854,7 @@ class _AccountAccessRequestSheetState
                     ),
                   ],
                   validator: (value) {
-                    if (_isStudent && value == null) {
+                    if ((_isStudent || _isTeacher) && value == null) {
                       return 'Campus is required';
                     }
                     return null;

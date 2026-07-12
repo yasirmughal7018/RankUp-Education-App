@@ -1,5 +1,12 @@
 import type { UserRole } from "@/core/api/types";
 
+export interface PendingApprover {
+  userId: number;
+  fullName: string;
+  username: string;
+  role: string;
+}
+
 export interface PendingRegistration {
   id: number;
   username: string;
@@ -15,6 +22,7 @@ export interface PendingRegistration {
   reasonMessage: string | null;
   adminTarget: string | null;
   rollNumberTeacherCode: string | null;
+  pendingApprovers: PendingApprover[];
 }
 
 export type RegistrationActionRole = Extract<

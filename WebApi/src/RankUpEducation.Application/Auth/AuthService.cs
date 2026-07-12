@@ -238,8 +238,8 @@ public sealed class AuthService : IAuthService
 
         var role = ParseRegistrationRole(request.UserType);
 
-        // Parent requests never carry school/campus/roll. Teacher fields are optional.
-        // Student requires school, campus, and roll number (enforced in ValidateRegistration).
+        // Parent requests never carry school/campus/roll.
+        // Student and Teacher require school + campus (enforced in ValidateRegistration).
         var schoolId = role == UserRole.Parent ? null : request.SchoolId;
         var campusId = role == UserRole.Parent
             ? null
@@ -248,10 +248,15 @@ public sealed class AuthService : IAuthService
             ? null
             : request.RollNumberTeacherCode;
 
-        // AdminTarget:
-        // - School selected → School Admin + Portal Admin can approve
-        // - No school → Portal Admin only
-        var adminTarget = schoolId.HasValue ? "School Admin" : "Portal Admin";
+        // AdminTarget (who can review; any one approval activates the account):
+        // - School + campus → CampusAdmin (that campus) + SchoolAdmin (that school) + PortalAdmin
+        // - School only (legacy) → SchoolAdmin + PortalAdmin
+        // - No school → PortalAdmin only (e.g. Parent)
+        var adminTarget = schoolId.HasValue && campusId.HasValue
+            ? "Campus Admin"
+            : schoolId.HasValue
+                ? "School Admin"
+                : "Portal Admin";
 
         var user = User.CreateRegistrationRequest(
             username,
@@ -270,12 +275,30 @@ public sealed class AuthService : IAuthService
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // In-app notifications for eligible admins already logged into RankUp Education.
-        var recipientIds = await _users.ListAdminRecipientsAsync(
+        // Materialize approval queue: one pending row per eligible reviewer.
+        // Any one approval (including PortalAdmin) activates the account;
+        // other pending rows may remain until those admins act (or forever).
+        var approverCandidates = await _users.ListPendingApproverCandidatesAsync(
             user.AdminTarget,
             user.SchoolId,
             user.CampusId,
             cancellationToken);
+        if (approverCandidates.Count > 0)
+        {
+            var approvalRows = approverCandidates
+                .Select(candidate => UserApproval.CreatePending(
+                    user.Id,
+                    candidate.UserId,
+                    candidate.Role))
+                .ToArray();
+            await _users.AddApprovalsAsync(approvalRows, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        var recipientIds = approverCandidates
+            .Select(candidate => candidate.UserId)
+            .Distinct()
+            .ToArray();
         await _notifications.CreateAsync(
             recipientIds,
             "New registration request",
@@ -313,7 +336,34 @@ public sealed class AuthService : IAuthService
             schoolIdFilter,
             campusIdFilter,
             cancellationToken);
-        return users.Select(user => user.ToPendingResponse()).ToArray();
+
+        var responses = new List<PendingRegistrationResponse>(users.Count);
+        foreach (var pendingUser in users)
+        {
+            var pendingApprovers = await _users.ListPendingApproversForUserAsync(
+                pendingUser.Id,
+                cancellationToken);
+            // Fallback for legacy requests created before the approval queue existed.
+            if (pendingApprovers.Count == 0)
+            {
+                pendingApprovers = await _users.ListPendingApproverCandidatesAsync(
+                    pendingUser.AdminTarget,
+                    pendingUser.SchoolId,
+                    pendingUser.CampusId,
+                    cancellationToken);
+            }
+
+            var approvers = pendingApprovers
+                .Select(candidate => new PendingApproverResponse(
+                    candidate.UserId,
+                    candidate.FullName,
+                    candidate.Username,
+                    candidate.Role.ToString()))
+                .ToArray();
+            responses.Add(pendingUser.ToPendingResponse(approvers));
+        }
+
+        return responses;
     }
 
     public async Task<CurrentUserResponse> ApproveRegistrationAsync(
@@ -352,6 +402,33 @@ public sealed class AuthService : IAuthService
         await CreateProfileForRoleAsync(user, mobileNumber, cancellationToken);
 
         user.ApprovePendingRegistration();
+
+        var approverId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var approverRole))
+        {
+            throw new ForbiddenAppException("Approver role was not found.");
+        }
+
+        // Mark this admin's queue row as approved. Other pending rows stay pending —
+        // PortalAdmin (or School/Campus Admin) activation does not wait for them.
+        var pendingApproval = await _users.GetPendingApprovalAsync(
+            user.Id,
+            approverId,
+            approverRole,
+            cancellationToken);
+        if (pendingApproval is not null)
+        {
+            pendingApproval.MarkApproved(_dateTimeProvider.UtcNow);
+        }
+        else
+        {
+            // Legacy request without a queue row for this approver.
+            var approval = UserApproval.CreatePending(user.Id, approverId, approverRole);
+            approval.MarkApproved(_dateTimeProvider.UtcNow);
+            await _users.AddApprovalAsync(approval, cancellationToken);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var activated = await _users.GetByIdAsync(userId, cancellationToken)
@@ -766,9 +843,14 @@ public sealed class AuthService : IAuthService
         }
         else if (role == UserRole.Teacher)
         {
-            if (request.CampusId.HasValue && !request.SchoolId.HasValue)
+            if (!request.SchoolId.HasValue || request.SchoolId.Value <= 0)
             {
-                errors.Add("Campus requires a school to be selected.");
+                errors.Add("School is required for Teacher account requests.");
+            }
+
+            if (!request.CampusId.HasValue || request.CampusId.Value <= 0)
+            {
+                errors.Add("Campus is required for Teacher account requests.");
             }
         }
 

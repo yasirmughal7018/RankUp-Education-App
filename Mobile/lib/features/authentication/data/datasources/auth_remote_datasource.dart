@@ -85,7 +85,11 @@ class AuthRemoteDataSource {
     int? schoolId,
     int? campusId,
   }) {
-    final adminTarget = schoolId != null ? 'School Admin' : 'Portal Admin';
+    final adminTarget = schoolId != null && campusId != null
+        ? 'Campus Admin'
+        : schoolId != null
+            ? 'School Admin'
+            : 'Portal Admin';
     return _requestVoid(
       '/auth/register',
       data: {

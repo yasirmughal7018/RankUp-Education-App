@@ -240,16 +240,42 @@ export function PendingRegistrationsPage() {
     );
   }
 
+  function formatPendingApprovers(registration: PendingRegistration): string {
+    const approvers = registration.pendingApprovers ?? [];
+    if (approvers.length === 0) {
+      return registration.adminTarget
+        ? `Awaiting ${registration.adminTarget}`
+        : "—";
+    }
+
+    return approvers
+      .map((approver) => `${approver.fullName} (${formatApproverRole(approver.role)})`)
+      .join(", ");
+  }
+
+  function formatApproverRole(role: string): string {
+    switch (role) {
+      case "PortalAdmin":
+        return "Portal Admin";
+      case "SchoolAdmin":
+        return "School Admin";
+      case "CampusAdmin":
+        return "Campus Admin";
+      default:
+        return role;
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Registration approvals"
         description={
           isPortalAdmin
-            ? "Portal Admin view: review request details and approve. No fields or password are changed. The user sets their password on first login."
+            ? "Portal Admin view: see who the request is pending with, then approve. Any eligible admin approval activates the account; the user sets their password on first login."
             : isSchoolAdmin
-              ? "School Admin view: review request details and approve for your school. No fields or password are changed. The user sets their password on first login."
-              : "Campus Admin view: review request details and approve for your campus. No fields or password are changed. The user sets their password on first login."
+              ? "School Admin view: see who the request is pending with for your school, then approve. Any eligible admin approval activates the account; the user sets their password on first login."
+              : "Campus Admin view: see who the request is pending with for your campus, then approve. Any eligible admin approval activates the account; the user sets their password on first login."
         }
         action={
           <div className="flex items-center gap-3">
@@ -307,6 +333,9 @@ export function PendingRegistrationsPage() {
                     School / campus
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Pending with
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Created
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
@@ -350,6 +379,11 @@ export function PendingRegistrationsPage() {
                             {campus}
                           </div>
                         ) : null}
+                      </td>
+                      <td className="max-w-[18rem] px-4 py-3 text-slate-700">
+                        <div className="text-xs leading-5 text-slate-700">
+                          {formatPendingApprovers(registration)}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-700">
                         {formatRequestedAt(createdDisplay)}

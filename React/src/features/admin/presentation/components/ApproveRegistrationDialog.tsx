@@ -80,6 +80,27 @@ export function ApproveRegistrationDialog({
           <DetailRow label="School" value={schoolName} />
           <DetailRow label="Campus" value={campusName || "—"} />
           <DetailRow
+            label="Pending with"
+            value={
+              (registration.pendingApprovers ?? [])
+                .map(
+                  (approver) =>
+                    `${approver.fullName} (${
+                      approver.role === "PortalAdmin"
+                        ? "Portal Admin"
+                        : approver.role === "SchoolAdmin"
+                          ? "School Admin"
+                          : approver.role === "CampusAdmin"
+                            ? "Campus Admin"
+                            : approver.role
+                    })`,
+                )
+                .join(", ") ||
+              registration.adminTarget ||
+              "—"
+            }
+          />
+          <DetailRow
             label="Roll / teacher code"
             value={registration.rollNumberTeacherCode || "—"}
           />

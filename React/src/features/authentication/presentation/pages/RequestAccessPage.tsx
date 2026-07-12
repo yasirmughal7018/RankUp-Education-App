@@ -136,6 +136,17 @@ export function RequestAccessPage() {
       }
     }
 
+    if (isTeacher) {
+      if (!form.schoolId) {
+        setError("School is required for Teacher account requests.");
+        return;
+      }
+      if (!form.campusId) {
+        setError("Campus is required for Teacher account requests.");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     const schoolId =
@@ -152,19 +163,25 @@ export function RequestAccessPage() {
         rollNumberTeacherCode: isParent
           ? null
           : form.rollNumberTeacherCode.trim() || null,
-        adminTarget: schoolId ? "School Admin" : "Portal Admin",
+        adminTarget:
+          schoolId && campusId
+            ? "Campus Admin"
+            : schoolId
+              ? "School Admin"
+              : "Portal Admin",
         reasonMessage: form.reasonMessage.trim() || null,
         schoolId,
         campusId,
         cnic: form.cnic.trim() || null,
       });
 
-      const routing = schoolId
-        ? "School Admin and Portal Admin"
-        : "Portal Admin";
+      const routing =
+        schoolId && campusId
+          ? "Campus Admin, School Admin, or Portal Admin (any one approval activates the account)"
+          : "Portal Admin";
 
       setSuccessMessage(
-        `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. Username will be ${response.username} after approval.`,
+        `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. After approval, set your initial password on the login screen, then sign in. Username will be ${response.username}.`,
       );
       setForm({
         fullName: "",
@@ -189,8 +206,8 @@ export function RequestAccessPage() {
   const description = isParent
     ? "Parent requests go to Portal Admin. School, campus, and roll number are not required."
     : isTeacher
-      ? "School, campus, and teacher code are optional for teachers. Empty school → Portal Admin; selected school → School Admin + Portal Admin."
-      : "Students must select school and campus and enter a roll number. The request goes to School Admin and Portal Admin.";
+      ? "Teachers must select school and campus. Teacher code is optional. Campus Admin, School Admin, or Portal Admin can approve — any one approval activates the account so you can set your initial password."
+      : "Students must select school and campus and enter a roll number. Campus Admin, School Admin, or Portal Admin can approve — any one approval activates the account so you can set your initial password.";
 
   return (
     <div className="mx-auto flex max-w-6xl justify-center px-4 py-10 sm:px-6">
@@ -298,32 +315,20 @@ export function RequestAccessPage() {
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <FieldLabel
-                    htmlFor="schoolId"
-                    required={isStudent}
-                    optional={isTeacher}
-                  >
+                  <FieldLabel htmlFor="schoolId" required>
                     School
                   </FieldLabel>
                   <SearchableSelect
                     id="schoolId"
-                    required={isStudent}
+                    required
                     disabled={isSubmitting || isLoadingSchools}
                     value={form.schoolId}
                     allowEmpty
                     emptyLabel={
-                      isLoadingSchools
-                        ? "Loading schools..."
-                        : isTeacher
-                          ? "No school (Portal Admin)"
-                          : "Select school"
+                      isLoadingSchools ? "Loading schools..." : "Select school"
                     }
                     placeholder={
-                      isLoadingSchools
-                        ? "Loading schools..."
-                        : isTeacher
-                          ? "No school (Portal Admin)"
-                          : "Select school"
+                      isLoadingSchools ? "Loading schools..." : "Select school"
                     }
                     options={schools.map((school) => ({
                       value: String(school.id),
@@ -334,25 +339,15 @@ export function RequestAccessPage() {
                       updateField("campusId", "");
                     }}
                   />
-                  {isTeacher ? (
-                    <p className="mt-1 text-xs text-slate-500">
-                      Empty → Portal Admin only. Selected → School Admin + Portal
-                      Admin.
-                    </p>
-                  ) : null}
                 </div>
 
                 <div>
-                  <FieldLabel
-                    htmlFor="campusId"
-                    required={isStudent}
-                    optional={isTeacher}
-                  >
+                  <FieldLabel htmlFor="campusId" required>
                     Campus
                   </FieldLabel>
                   <SearchableSelect
                     id="campusId"
-                    required={isStudent}
+                    required
                     disabled={
                       isSubmitting || !form.schoolId || isLoadingCampuses
                     }
@@ -363,18 +358,14 @@ export function RequestAccessPage() {
                         ? "Select a school first"
                         : isLoadingCampuses
                           ? "Loading campuses..."
-                          : isTeacher
-                            ? "No campus"
-                            : "Select campus"
+                          : "Select campus"
                     }
                     placeholder={
                       !form.schoolId
                         ? "Select a school first"
                         : isLoadingCampuses
                           ? "Loading campuses..."
-                          : isTeacher
-                            ? "No campus"
-                            : "Select campus"
+                          : "Select campus"
                     }
                     options={campuses.map((campus) => ({
                       value: String(campus.id),

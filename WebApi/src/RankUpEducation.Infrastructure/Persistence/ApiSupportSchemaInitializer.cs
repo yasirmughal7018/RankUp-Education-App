@@ -37,6 +37,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(AppUserApprovalSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
 
@@ -263,6 +264,45 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         ALTER TABLE public.refresh_tokens
             ADD COLUMN IF NOT EXISTS active_role int2 NULL;
+        """;
+
+    private const string AppUserApprovalSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_user_approval (
+            id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            user_id bigint NOT NULL,
+            approved_by_user_id bigint NOT NULL,
+            approved_by_role int2 NOT NULL,
+            approved_at timestamptz NULL,
+            CONSTRAINT app_user_approval_user_id_fkey
+                FOREIGN KEY (user_id) REFERENCES public.app_users(id) ON DELETE CASCADE,
+            CONSTRAINT app_user_approval_approved_by_user_id_fkey
+                FOREIGN KEY (approved_by_user_id) REFERENCES public.app_users(id) ON DELETE RESTRICT,
+            CONSTRAINT chk_app_user_approval_role
+                CHECK (approved_by_role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015]::int2[]))
+        );
+
+        -- Existing DBs may have NOT NULL approved_at; pending queue needs NULL.
+        ALTER TABLE public.app_user_approval
+            ALTER COLUMN approved_at DROP NOT NULL;
+
+        ALTER TABLE public.app_user_approval
+            ALTER COLUMN approved_at DROP DEFAULT;
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_approval_user_id
+            ON public.app_user_approval (user_id);
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_approval_approved_by
+            ON public.app_user_approval (approved_by_user_id);
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_approval_approved_at
+            ON public.app_user_approval (approved_at DESC);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_user_approval_user_approver_role
+            ON public.app_user_approval (user_id, approved_by_user_id, approved_by_role);
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_approval_pending
+            ON public.app_user_approval (user_id)
+            WHERE approved_at IS NULL;
         """;
 
     private const string RegistrationSupportSql = """

@@ -51,11 +51,11 @@ class ApproveRegistrationSheet extends StatelessWidget {
                   _Detail('CNIC', registration.cnic ?? '—'),
                   _Detail('Email', registration.emailAddress ?? '—'),
                   _Detail('School / campus', schoolCampus),
+                  _Detail('Pending with', registration.pendingWithLabel),
                   _Detail(
                     'Roll / teacher code',
                     registration.rollNumberTeacherCode ?? '—',
                   ),
-                  _Detail('Admin target', registration.adminTarget ?? '—'),
                   _Detail('Reason', registration.reasonMessage ?? '—'),
                 ],
               ),

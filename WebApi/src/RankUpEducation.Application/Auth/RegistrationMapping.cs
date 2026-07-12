@@ -5,7 +5,9 @@ namespace RankUpEducation.Application.Auth;
 
 internal static class RegistrationMapping
 {
-    public static PendingRegistrationResponse ToPendingResponse(this User user)
+    public static PendingRegistrationResponse ToPendingResponse(
+        this User user,
+        IReadOnlyList<PendingApproverResponse> pendingApprovers)
     {
         return new PendingRegistrationResponse(
             user.Id,
@@ -21,6 +23,7 @@ internal static class RegistrationMapping
             user.CreatedDate,
             user.ReasonMessage,
             user.AdminTarget,
-            user.RollNumberTeacherCode);
+            user.RollNumberTeacherCode,
+            pendingApprovers);
     }
 }

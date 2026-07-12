@@ -133,10 +133,11 @@ public sealed class UserRepository : IUserRepository
 
         if (campusIdFilter.HasValue)
         {
-            // Campus Admin: school-target requests for their campus only.
+            // Campus Admin: campus-scoped Student/Teacher requests for their campus.
+            // AdminTarget is "Campus Admin" (current) or legacy "School Admin".
             query = query.Where(user =>
                 user.CampusId == campusIdFilter.Value
-                && user.AdminTarget == "School Admin");
+                && (user.AdminTarget == "Campus Admin" || user.AdminTarget == "School Admin"));
 
             if (schoolIdFilter.HasValue)
             {
@@ -145,10 +146,10 @@ public sealed class UserRepository : IUserRepository
         }
         else if (schoolIdFilter.HasValue)
         {
-            // School Admin: only "School Admin" target requests for their school.
+            // School Admin: school-scoped Student/Teacher requests (any campus in school).
             query = query.Where(user =>
                 user.SchoolId == schoolIdFilter.Value
-                && user.AdminTarget == "School Admin");
+                && (user.AdminTarget == "Campus Admin" || user.AdminTarget == "School Admin"));
         }
 
         return await query
@@ -166,11 +167,16 @@ public sealed class UserRepository : IUserRepository
         var query = _dbContext.Users.AsNoTracking()
             .Where(user => user.IsActive && user.PasswordHash != null);
 
+        var isCampusAdminTarget = string.Equals(adminTarget, "Campus Admin", StringComparison.OrdinalIgnoreCase)
+            && schoolId.HasValue
+            && campusId.HasValue;
         var isSchoolAdminTarget = string.Equals(adminTarget, "School Admin", StringComparison.OrdinalIgnoreCase)
             && schoolId.HasValue;
 
-        if (isSchoolAdminTarget)
+        if (isCampusAdminTarget || isSchoolAdminTarget)
         {
+            // Any of CampusAdmin (matching campus), SchoolAdmin (matching school),
+            // or PortalAdmin may approve — notify all eligible reviewers.
             query = query.Where(user =>
                 user.RoleAssignments.Any(assignment => assignment.Role == UserRole.PortalAdmin)
                 || (user.RoleAssignments.Any(assignment => assignment.Role == UserRole.SchoolAdmin)
@@ -189,6 +195,131 @@ public sealed class UserRepository : IUserRepository
             .Select(user => user.Id)
             .Distinct()
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproverCandidatesAsync(
+        string? adminTarget,
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        var users = await _dbContext.Users.AsNoTracking()
+            .Include(user => user.RoleAssignments)
+            .Where(user => user.IsActive && user.PasswordHash != null)
+            .Where(user =>
+                user.RoleAssignments.Any(assignment =>
+                    assignment.Role == UserRole.PortalAdmin
+                    || assignment.Role == UserRole.SchoolAdmin
+                    || assignment.Role == UserRole.CampusAdmin))
+            .ToListAsync(cancellationToken);
+
+        var isCampusTarget = string.Equals(adminTarget, "Campus Admin", StringComparison.OrdinalIgnoreCase)
+            && schoolId.HasValue
+            && campusId.HasValue;
+        var isSchoolTarget = string.Equals(adminTarget, "School Admin", StringComparison.OrdinalIgnoreCase)
+            && schoolId.HasValue;
+        var isPortalTarget = !isCampusTarget && !isSchoolTarget;
+
+        var results = new List<PendingApproverCandidate>();
+
+        foreach (var user in users)
+        {
+            var roles = user.Roles;
+            if (isPortalTarget)
+            {
+                if (roles.Contains(UserRole.PortalAdmin))
+                {
+                    results.Add(new PendingApproverCandidate(
+                        user.Id,
+                        user.FullName,
+                        user.Username,
+                        UserRole.PortalAdmin));
+                }
+
+                continue;
+            }
+
+            if (roles.Contains(UserRole.PortalAdmin))
+            {
+                results.Add(new PendingApproverCandidate(
+                    user.Id,
+                    user.FullName,
+                    user.Username,
+                    UserRole.PortalAdmin));
+            }
+
+            if (roles.Contains(UserRole.SchoolAdmin)
+                && user.SchoolId == schoolId)
+            {
+                results.Add(new PendingApproverCandidate(
+                    user.Id,
+                    user.FullName,
+                    user.Username,
+                    UserRole.SchoolAdmin));
+            }
+
+            if (roles.Contains(UserRole.CampusAdmin)
+                && user.SchoolId == schoolId
+                && (!campusId.HasValue || user.CampusId == campusId))
+            {
+                results.Add(new PendingApproverCandidate(
+                    user.Id,
+                    user.FullName,
+                    user.Username,
+                    UserRole.CampusAdmin));
+            }
+        }
+
+        return results
+            .OrderBy(candidate => candidate.Role)
+            .ThenBy(candidate => candidate.FullName)
+            .ToList();
+    }
+
+    public async Task AddApprovalAsync(UserApproval approval, CancellationToken cancellationToken)
+    {
+        await _dbContext.UserApprovals.AddAsync(approval, cancellationToken);
+    }
+
+    public async Task AddApprovalsAsync(
+        IEnumerable<UserApproval> approvals,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.UserApprovals.AddRangeAsync(approvals, cancellationToken);
+    }
+
+    public Task<UserApproval?> GetPendingApprovalAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+            approval =>
+                approval.UserId == userId
+                && approval.ApprovedByUserId == approverUserId
+                && approval.ApprovedByRole == approverRole
+                && approval.ApprovedAt == null,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproversForUserAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var pending = await (
+            from approval in _dbContext.UserApprovals.AsNoTracking()
+            join admin in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals admin.Id
+            where approval.UserId == userId && approval.ApprovedAt == null
+            orderby approval.ApprovedByRole, admin.FullName
+            select new PendingApproverCandidate(
+                admin.Id,
+                admin.FullName,
+                admin.Username,
+                approval.ApprovedByRole)
+        ).ToListAsync(cancellationToken);
+
+        return pending;
     }
 
     public Task<bool> HasStudentProfileAsync(long userId, CancellationToken cancellationToken)

@@ -295,9 +295,13 @@ class _PendingRegistrationsPageState
                               ),
                               const SizedBox(height: 4),
                               Text('${item.role} · ${item.username}'),
-                              if (item.adminTarget != null &&
-                                  item.adminTarget!.isNotEmpty)
-                                Text('Admin target: ${item.adminTarget}'),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Pending with: ${item.pendingWithLabel}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                               Text(_schoolCampusLabel(item)),
                               if (item.reasonMessage != null &&
                                   item.reasonMessage!.isNotEmpty)

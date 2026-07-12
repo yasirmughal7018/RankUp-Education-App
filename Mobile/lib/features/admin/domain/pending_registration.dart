@@ -1,3 +1,35 @@
+class PendingApprover {
+  const PendingApprover({
+    required this.userId,
+    required this.fullName,
+    required this.username,
+    required this.role,
+  });
+
+  factory PendingApprover.fromJson(Map<String, dynamic> json) {
+    return PendingApprover(
+      userId: (json['userId'] as num?)?.toInt() ?? 0,
+      fullName: json['fullName'] as String? ?? '',
+      username: json['username'] as String? ?? '',
+      role: json['role'] as String? ?? '',
+    );
+  }
+
+  final int userId;
+  final String fullName;
+  final String username;
+  final String role;
+
+  String get roleLabel {
+    return switch (role) {
+      'PortalAdmin' => 'Portal Admin',
+      'SchoolAdmin' => 'School Admin',
+      'CampusAdmin' => 'Campus Admin',
+      _ => role,
+    };
+  }
+}
+
 class PendingRegistration {
   const PendingRegistration({
     required this.id,
@@ -14,9 +46,18 @@ class PendingRegistration {
     this.reasonMessage,
     this.adminTarget,
     this.rollNumberTeacherCode,
+    this.pendingApprovers = const [],
   });
 
   factory PendingRegistration.fromJson(Map<String, dynamic> json) {
+    final approversJson = json['pendingApprovers'];
+    final approvers = approversJson is List
+        ? approversJson
+            .whereType<Map<String, dynamic>>()
+            .map(PendingApprover.fromJson)
+            .toList()
+        : const <PendingApprover>[];
+
     return PendingRegistration(
       id: (json['id'] as num).toInt(),
       username: json['username'] as String? ?? '',
@@ -32,6 +73,7 @@ class PendingRegistration {
       reasonMessage: json['reasonMessage'] as String?,
       adminTarget: json['adminTarget'] as String?,
       rollNumberTeacherCode: json['rollNumberTeacherCode'] as String?,
+      pendingApprovers: approvers,
     );
   }
 
@@ -49,4 +91,18 @@ class PendingRegistration {
   final String? reasonMessage;
   final String? adminTarget;
   final String? rollNumberTeacherCode;
+  final List<PendingApprover> pendingApprovers;
+
+  String get pendingWithLabel {
+    if (pendingApprovers.isEmpty) {
+      if (adminTarget != null && adminTarget!.isNotEmpty) {
+        return 'Awaiting $adminTarget';
+      }
+      return '—';
+    }
+
+    return pendingApprovers
+        .map((approver) => '${approver.fullName} (${approver.roleLabel})')
+        .join(', ');
+  }
 }
