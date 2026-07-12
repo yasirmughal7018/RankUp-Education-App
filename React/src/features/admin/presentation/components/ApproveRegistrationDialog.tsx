@@ -95,9 +95,7 @@ export function ApproveRegistrationDialog({
                             : approver.role
                     })`,
                 )
-                .join(", ") ||
-              registration.adminTarget ||
-              "—"
+                .join(", ") || "—"
             }
           />
           <DetailRow

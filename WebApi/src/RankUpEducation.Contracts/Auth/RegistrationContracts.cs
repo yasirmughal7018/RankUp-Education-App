@@ -6,7 +6,6 @@ public sealed record RegisterAccountRequest(
     string? EmailAddress,
     string UserType,
     string? RollNumberTeacherCode,
-    string? AdminTarget,
     string? ReasonMessage,
     int? SchoolId = null,
     int? CampusId = null,
@@ -37,7 +36,6 @@ public sealed record PendingRegistrationResponse(
     int? CampusId,
     DateOnly? CreatedDate,
     string? ReasonMessage,
-    string? AdminTarget,
     string? RollNumberTeacherCode,
     IReadOnlyList<PendingApproverResponse> PendingApprovers);
 

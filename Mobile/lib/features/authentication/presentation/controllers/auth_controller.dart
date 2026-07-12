@@ -178,7 +178,10 @@ class AuthController extends StateNotifier<AuthState> {
       final routing = schoolId != null && campusId != null
           ? 'Campus Admin, School Admin, or Portal Admin '
               '(any one approval activates the account)'
-          : 'Portal Admin';
+          : schoolId != null
+              ? 'School Admin or Portal Admin '
+                  '(any one approval activates the account)'
+              : 'Portal Admin';
       state = state.copyWith(
         isLoading: false,
         successMessage:

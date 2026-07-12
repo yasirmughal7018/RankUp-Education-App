@@ -133,11 +133,10 @@ public sealed class UserRepository : IUserRepository
 
         if (campusIdFilter.HasValue)
         {
-            // Campus Admin: campus-scoped Student/Teacher requests for their campus.
-            // AdminTarget is "Campus Admin" (current) or legacy "School Admin".
+            // Campus Admin: only requests scoped to their campus.
             query = query.Where(user =>
                 user.CampusId == campusIdFilter.Value
-                && (user.AdminTarget == "Campus Admin" || user.AdminTarget == "School Admin"));
+                && user.SchoolId != null);
 
             if (schoolIdFilter.HasValue)
             {
@@ -146,10 +145,9 @@ public sealed class UserRepository : IUserRepository
         }
         else if (schoolIdFilter.HasValue)
         {
-            // School Admin: school-scoped Student/Teacher requests (any campus in school).
-            query = query.Where(user =>
-                user.SchoolId == schoolIdFilter.Value
-                && (user.AdminTarget == "Campus Admin" || user.AdminTarget == "School Admin"));
+            // School Admin: school-scoped requests (school-only or with campus).
+            // Portal-only requests (no school) are excluded.
+            query = query.Where(user => user.SchoolId == schoolIdFilter.Value);
         }
 
         return await query
@@ -158,47 +156,7 @@ public sealed class UserRepository : IUserRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<long>> ListAdminRecipientsAsync(
-        string? adminTarget,
-        int? schoolId,
-        int? campusId,
-        CancellationToken cancellationToken)
-    {
-        var query = _dbContext.Users.AsNoTracking()
-            .Where(user => user.IsActive && user.PasswordHash != null);
-
-        var isCampusAdminTarget = string.Equals(adminTarget, "Campus Admin", StringComparison.OrdinalIgnoreCase)
-            && schoolId.HasValue
-            && campusId.HasValue;
-        var isSchoolAdminTarget = string.Equals(adminTarget, "School Admin", StringComparison.OrdinalIgnoreCase)
-            && schoolId.HasValue;
-
-        if (isCampusAdminTarget || isSchoolAdminTarget)
-        {
-            // Any of CampusAdmin (matching campus), SchoolAdmin (matching school),
-            // or PortalAdmin may approve — notify all eligible reviewers.
-            query = query.Where(user =>
-                user.RoleAssignments.Any(assignment => assignment.Role == UserRole.PortalAdmin)
-                || (user.RoleAssignments.Any(assignment => assignment.Role == UserRole.SchoolAdmin)
-                    && user.SchoolId == schoolId!.Value)
-                || (user.RoleAssignments.Any(assignment => assignment.Role == UserRole.CampusAdmin)
-                    && user.SchoolId == schoolId!.Value
-                    && (!campusId.HasValue || user.CampusId == campusId.Value)));
-        }
-        else
-        {
-            query = query.Where(user =>
-                user.RoleAssignments.Any(assignment => assignment.Role == UserRole.PortalAdmin));
-        }
-
-        return await query
-            .Select(user => user.Id)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproverCandidatesAsync(
-        string? adminTarget,
         int? schoolId,
         int? campusId,
         CancellationToken cancellationToken)
@@ -213,31 +171,18 @@ public sealed class UserRepository : IUserRepository
                     || assignment.Role == UserRole.CampusAdmin))
             .ToListAsync(cancellationToken);
 
-        var isCampusTarget = string.Equals(adminTarget, "Campus Admin", StringComparison.OrdinalIgnoreCase)
-            && schoolId.HasValue
-            && campusId.HasValue;
-        var isSchoolTarget = string.Equals(adminTarget, "School Admin", StringComparison.OrdinalIgnoreCase)
-            && schoolId.HasValue;
-        var isPortalTarget = !isCampusTarget && !isSchoolTarget;
+        // Approval queue rules (school / campus on the request):
+        // - no school → PortalAdmin
+        // - school only → SchoolAdmin + PortalAdmin
+        // - campus → CampusAdmin + SchoolAdmin + PortalAdmin
+        var includeSchoolAdmins = schoolId.HasValue;
+        var includeCampusAdmins = schoolId.HasValue && campusId.HasValue;
 
         var results = new List<PendingApproverCandidate>();
 
         foreach (var user in users)
         {
             var roles = user.Roles;
-            if (isPortalTarget)
-            {
-                if (roles.Contains(UserRole.PortalAdmin))
-                {
-                    results.Add(new PendingApproverCandidate(
-                        user.Id,
-                        user.FullName,
-                        user.Username,
-                        UserRole.PortalAdmin));
-                }
-
-                continue;
-            }
 
             if (roles.Contains(UserRole.PortalAdmin))
             {
@@ -248,7 +193,8 @@ public sealed class UserRepository : IUserRepository
                     UserRole.PortalAdmin));
             }
 
-            if (roles.Contains(UserRole.SchoolAdmin)
+            if (includeSchoolAdmins
+                && roles.Contains(UserRole.SchoolAdmin)
                 && user.SchoolId == schoolId)
             {
                 results.Add(new PendingApproverCandidate(
@@ -258,9 +204,10 @@ public sealed class UserRepository : IUserRepository
                     UserRole.SchoolAdmin));
             }
 
-            if (roles.Contains(UserRole.CampusAdmin)
+            if (includeCampusAdmins
+                && roles.Contains(UserRole.CampusAdmin)
                 && user.SchoolId == schoolId
-                && (!campusId.HasValue || user.CampusId == campusId))
+                && user.CampusId == campusId)
             {
                 results.Add(new PendingApproverCandidate(
                     user.Id,

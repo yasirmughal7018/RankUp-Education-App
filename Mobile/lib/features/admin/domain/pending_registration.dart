@@ -44,7 +44,6 @@ class PendingRegistration {
     this.campusId,
     this.createdDate,
     this.reasonMessage,
-    this.adminTarget,
     this.rollNumberTeacherCode,
     this.pendingApprovers = const [],
   });
@@ -71,7 +70,6 @@ class PendingRegistration {
       campusId: (json['campusId'] as num?)?.toInt(),
       createdDate: json['createdDate'] as String?,
       reasonMessage: json['reasonMessage'] as String?,
-      adminTarget: json['adminTarget'] as String?,
       rollNumberTeacherCode: json['rollNumberTeacherCode'] as String?,
       pendingApprovers: approvers,
     );
@@ -89,15 +87,11 @@ class PendingRegistration {
   final int? campusId;
   final String? createdDate;
   final String? reasonMessage;
-  final String? adminTarget;
   final String? rollNumberTeacherCode;
   final List<PendingApprover> pendingApprovers;
 
   String get pendingWithLabel {
     if (pendingApprovers.isEmpty) {
-      if (adminTarget != null && adminTarget!.isNotEmpty) {
-        return 'Awaiting $adminTarget';
-      }
       return '—';
     }
 

@@ -110,7 +110,6 @@ export interface RegisterAccountRequest {
   emailAddress?: string | null;
   userType: "Student" | "Parent" | "Teacher";
   rollNumberTeacherCode?: string | null;
-  adminTarget?: string | null;
   reasonMessage?: string | null;
   schoolId?: number | null;
   campusId?: number | null;

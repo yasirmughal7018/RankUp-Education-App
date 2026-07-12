@@ -20,7 +20,6 @@ export interface PendingRegistration {
   campusId: number | null;
   createdDate: string | null;
   reasonMessage: string | null;
-  adminTarget: string | null;
   rollNumberTeacherCode: string | null;
   pendingApprovers: PendingApprover[];
 }

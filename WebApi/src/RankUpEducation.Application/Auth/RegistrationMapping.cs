@@ -22,7 +22,6 @@ internal static class RegistrationMapping
             user.CampusId,
             user.CreatedDate,
             user.ReasonMessage,
-            user.AdminTarget,
             user.RollNumberTeacherCode,
             pendingApprovers);
     }

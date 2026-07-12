@@ -33,18 +33,13 @@ public interface IUserRepository
         int? campusIdFilter,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<long>> ListAdminRecipientsAsync(
-        string? adminTarget,
-        int? schoolId,
-        int? campusId,
-        CancellationToken cancellationToken);
-
     /// <summary>
-    /// Active Portal / School / Campus admins who can review registrations,
-    /// with the role they would use for this target scope.
+    /// Eligible reviewers from school/campus scope (written into app_user_approval):
+    /// no school → PortalAdmin;
+    /// school only → SchoolAdmin + PortalAdmin;
+    /// campus → CampusAdmin + SchoolAdmin + PortalAdmin.
     /// </summary>
     Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproverCandidatesAsync(
-        string? adminTarget,
         int? schoolId,
         int? campusId,
         CancellationToken cancellationToken);

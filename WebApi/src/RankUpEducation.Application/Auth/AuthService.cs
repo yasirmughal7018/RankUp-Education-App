@@ -238,25 +238,15 @@ public sealed class AuthService : IAuthService
 
         var role = ParseRegistrationRole(request.UserType);
 
-        // Parent requests never carry school/campus/roll.
-        // Student and Teacher require school + campus (enforced in ValidateRegistration).
+        // Parent: never school/campus.
+        // Student/Teacher: school and campus are optional; they drive the approval queue.
         var schoolId = role == UserRole.Parent ? null : request.SchoolId;
-        var campusId = role == UserRole.Parent
+        var campusId = role == UserRole.Parent || !schoolId.HasValue
             ? null
-            : schoolId.HasValue ? request.CampusId : null;
+            : request.CampusId;
         var rollNumberTeacherCode = role == UserRole.Parent
             ? null
             : request.RollNumberTeacherCode;
-
-        // AdminTarget (who can review; any one approval activates the account):
-        // - School + campus → CampusAdmin (that campus) + SchoolAdmin (that school) + PortalAdmin
-        // - School only (legacy) → SchoolAdmin + PortalAdmin
-        // - No school → PortalAdmin only (e.g. Parent)
-        var adminTarget = schoolId.HasValue && campusId.HasValue
-            ? "Campus Admin"
-            : schoolId.HasValue
-                ? "School Admin"
-                : "Portal Admin";
 
         var user = User.CreateRegistrationRequest(
             username,
@@ -269,17 +259,17 @@ public sealed class AuthService : IAuthService
             schoolId,
             campusId,
             request.ReasonMessage,
-            adminTarget,
             rollNumberTeacherCode);
 
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Materialize approval queue: one pending row per eligible reviewer.
-        // Any one approval (including PortalAdmin) activates the account;
-        // other pending rows may remain until those admins act (or forever).
+        // Approval queue lives only in app_user_approval (not admin_target):
+        // no school → PortalAdmin;
+        // school only → SchoolAdmin + PortalAdmin;
+        // campus → CampusAdmin + SchoolAdmin + PortalAdmin.
+        // Any one approval (including PortalAdmin) activates the account.
         var approverCandidates = await _users.ListPendingApproverCandidatesAsync(
-            user.AdminTarget,
             user.SchoolId,
             user.CampusId,
             cancellationToken);
@@ -347,7 +337,6 @@ public sealed class AuthService : IAuthService
             if (pendingApprovers.Count == 0)
             {
                 pendingApprovers = await _users.ListPendingApproverCandidatesAsync(
-                    pendingUser.AdminTarget,
                     pendingUser.SchoolId,
                     pendingUser.CampusId,
                     cancellationToken);
@@ -591,12 +580,6 @@ public sealed class AuthService : IAuthService
                     throw new BusinessRuleException("Student profile already exists.");
                 }
 
-                if (user.SchoolId is null || user.CampusId is null)
-                {
-                    throw new ValidationAppException(
-                        ["School and campus are required on the registration request before approval."]);
-                }
-
                 // Grade/section are not collected at request time; use defaults until profile is updated later.
                 await _users.AddStudentProfileAsync(
                     new Student(user.Id, grade: 1, section: "A", mobileNumber),
@@ -608,12 +591,6 @@ public sealed class AuthService : IAuthService
                 if (await _users.HasTeacherProfileAsync(user.Id, cancellationToken))
                 {
                     throw new BusinessRuleException("Teacher profile already exists.");
-                }
-
-                if (user.SchoolId is null || user.CampusId is null)
-                {
-                    throw new ValidationAppException(
-                        ["School and campus are required on the registration request before approval."]);
                 }
 
                 await _users.AddTeacherProfileAsync(
@@ -652,11 +629,11 @@ public sealed class AuthService : IAuthService
             return;
         }
 
-        // Portal Admin target → PortalAdmin (Portal Admin) only.
-        if (IsPortalAdminTarget(user))
+        // No school on the request → PortalAdmin only.
+        if (IsPortalOnlyRegistration(user))
         {
             throw new ForbiddenAppException(
-                "Portal Admin requests can only be approved by Portal Admin.");
+                "Requests without a school can only be approved by Portal Admin.");
         }
 
         var adminSchoolId = _currentUser.SchoolId
@@ -681,10 +658,10 @@ public sealed class AuthService : IAuthService
             return;
         }
 
-        if (IsPortalAdminTarget(user))
+        if (IsPortalOnlyRegistration(user))
         {
             throw new ForbiddenAppException(
-                "Portal Admin requests can only be rejected by Portal Admin.");
+                "Requests without a school can only be rejected by Portal Admin.");
         }
 
         var adminSchoolId = _currentUser.SchoolId
@@ -698,10 +675,16 @@ public sealed class AuthService : IAuthService
 
     private void EnsureCampusAdminCanReview(User user)
     {
-        if (IsPortalAdminTarget(user))
+        if (IsPortalOnlyRegistration(user))
         {
             throw new ForbiddenAppException(
-                "Portal Admin requests can only be reviewed by Portal Admin.");
+                "Requests without a school can only be reviewed by Portal Admin.");
+        }
+
+        if (!user.CampusId.HasValue)
+        {
+            throw new ForbiddenAppException(
+                "School-only requests can only be reviewed by School Admin or Portal Admin.");
         }
 
         var adminSchoolId = _currentUser.SchoolId
@@ -714,15 +697,15 @@ public sealed class AuthService : IAuthService
             throw new ForbiddenAppException("You can only review registrations for your school.");
         }
 
-        if (!user.CampusId.HasValue || user.CampusId != adminCampusId)
+        if (user.CampusId != adminCampusId)
         {
             throw new ForbiddenAppException("You can only review registrations for your campus.");
         }
     }
 
-    private static bool IsPortalAdminTarget(User user)
-        => string.Equals(user.AdminTarget, "Portal Admin", StringComparison.OrdinalIgnoreCase)
-            || !user.SchoolId.HasValue;
+    /// <summary>No school selected → approval queue is PortalAdmin only.</summary>
+    private static bool IsPortalOnlyRegistration(User user)
+        => !user.SchoolId.HasValue;
 
     private void EnsureRegistrationReviewer()
     {
@@ -824,33 +807,26 @@ public sealed class AuthService : IAuthService
                 errors.Add("Roll number / teacher code is not used for Parent account requests.");
             }
         }
-        else if (role == UserRole.Student)
+        else if (role == UserRole.Student || role == UserRole.Teacher)
         {
-            if (!request.SchoolId.HasValue || request.SchoolId.Value <= 0)
+            if (request.CampusId.HasValue && !request.SchoolId.HasValue)
             {
-                errors.Add("School is required for Student account requests.");
+                errors.Add("School is required when a campus is selected.");
             }
 
-            if (!request.CampusId.HasValue || request.CampusId.Value <= 0)
+            if (request.SchoolId.HasValue && request.SchoolId.Value <= 0)
             {
-                errors.Add("Campus is required for Student account requests.");
+                errors.Add("School is invalid.");
             }
 
-            if (!request.RollNumberTeacherCode.HasTrimmedText())
+            if (request.CampusId.HasValue && request.CampusId.Value <= 0)
+            {
+                errors.Add("Campus is invalid.");
+            }
+
+            if (role == UserRole.Student && !request.RollNumberTeacherCode.HasTrimmedText())
             {
                 errors.Add("Roll number is required for Student account requests.");
-            }
-        }
-        else if (role == UserRole.Teacher)
-        {
-            if (!request.SchoolId.HasValue || request.SchoolId.Value <= 0)
-            {
-                errors.Add("School is required for Teacher account requests.");
-            }
-
-            if (!request.CampusId.HasValue || request.CampusId.Value <= 0)
-            {
-                errors.Add("Campus is required for Teacher account requests.");
             }
         }
 

@@ -56,6 +56,10 @@ public sealed class User : SoftDeleteEntity
     public string? EmailAddress { get; private set; }
     public bool? MustChangePassword { get; private set; }
     public string? ReasonMessage { get; private set; }
+    /// <summary>
+    /// Legacy column only. Approval routing uses <c>app_user_approval</c>
+    /// (derived from SchoolId / CampusId), not this field.
+    /// </summary>
     public string? AdminTarget { get; private set; }
     /// <summary>Student roll number or teacher code (shared identity field).</summary>
     public string? RollNumberTeacherCode { get; private set; }
@@ -131,7 +135,6 @@ public sealed class User : SoftDeleteEntity
         int? schoolId = null,
         int? campusId = null,
         string? reasonMessage = null,
-        string? adminTarget = null,
         string? rollNumberTeacherCode = null)
     {
         return new User
@@ -149,7 +152,7 @@ public sealed class User : SoftDeleteEntity
             CampusId = campusId,
             CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow),
             ReasonMessage = reasonMessage.AsTrimmedOrNull(),
-            AdminTarget = adminTarget.AsTrimmedOrNull(),
+            AdminTarget = null,
             RollNumberTeacherCode = rollNumberTeacherCode.AsTrimmedOrNull(),
             MustChangePassword = null
         }.WithInitialRole(role);

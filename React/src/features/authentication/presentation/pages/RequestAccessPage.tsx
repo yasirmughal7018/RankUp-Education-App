@@ -121,30 +121,14 @@ export function RequestAccessPage() {
     setError(null);
     setSuccessMessage(null);
 
-    if (isStudent) {
-      if (!form.schoolId) {
-        setError("School is required for Student account requests.");
-        return;
-      }
-      if (!form.campusId) {
-        setError("Campus is required for Student account requests.");
-        return;
-      }
-      if (!form.rollNumberTeacherCode.trim()) {
-        setError("Roll number is required for Student account requests.");
-        return;
-      }
+    if (isStudent && !form.rollNumberTeacherCode.trim()) {
+      setError("Roll number is required for Student account requests.");
+      return;
     }
 
-    if (isTeacher) {
-      if (!form.schoolId) {
-        setError("School is required for Teacher account requests.");
-        return;
-      }
-      if (!form.campusId) {
-        setError("Campus is required for Teacher account requests.");
-        return;
-      }
+    if (form.campusId && !form.schoolId) {
+      setError("School is required when a campus is selected.");
+      return;
     }
 
     setIsSubmitting(true);
@@ -163,12 +147,6 @@ export function RequestAccessPage() {
         rollNumberTeacherCode: isParent
           ? null
           : form.rollNumberTeacherCode.trim() || null,
-        adminTarget:
-          schoolId && campusId
-            ? "Campus Admin"
-            : schoolId
-              ? "School Admin"
-              : "Portal Admin",
         reasonMessage: form.reasonMessage.trim() || null,
         schoolId,
         campusId,
@@ -178,7 +156,9 @@ export function RequestAccessPage() {
       const routing =
         schoolId && campusId
           ? "Campus Admin, School Admin, or Portal Admin (any one approval activates the account)"
-          : "Portal Admin";
+          : schoolId
+            ? "School Admin or Portal Admin (any one approval activates the account)"
+            : "Portal Admin";
 
       setSuccessMessage(
         `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. After approval, set your initial password on the login screen, then sign in. Username will be ${response.username}.`,
@@ -206,8 +186,8 @@ export function RequestAccessPage() {
   const description = isParent
     ? "Parent requests go to Portal Admin. School, campus, and roll number are not required."
     : isTeacher
-      ? "Teachers must select school and campus. Teacher code is optional. Campus Admin, School Admin, or Portal Admin can approve — any one approval activates the account so you can set your initial password."
-      : "Students must select school and campus and enter a roll number. Campus Admin, School Admin, or Portal Admin can approve — any one approval activates the account so you can set your initial password.";
+      ? "Optionally select school and campus. No school → Portal Admin. School only → School Admin or Portal Admin. Campus → Campus Admin, School Admin, or Portal Admin. Any one approval activates the account."
+      : "Enter a roll number. Optionally select school and campus. No school → Portal Admin. School only → School Admin or Portal Admin. Campus → Campus Admin, School Admin, or Portal Admin. Any one approval activates the account.";
 
   return (
     <div className="mx-auto flex max-w-6xl justify-center px-4 py-10 sm:px-6">
@@ -315,12 +295,11 @@ export function RequestAccessPage() {
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <FieldLabel htmlFor="schoolId" required>
+                  <FieldLabel htmlFor="schoolId" optional>
                     School
                   </FieldLabel>
                   <SearchableSelect
                     id="schoolId"
-                    required
                     disabled={isSubmitting || isLoadingSchools}
                     value={form.schoolId}
                     allowEmpty
@@ -342,12 +321,11 @@ export function RequestAccessPage() {
                 </div>
 
                 <div>
-                  <FieldLabel htmlFor="campusId" required>
+                  <FieldLabel htmlFor="campusId" optional>
                     Campus
                   </FieldLabel>
                   <SearchableSelect
                     id="campusId"
-                    required
                     disabled={
                       isSubmitting || !form.schoolId || isLoadingCampuses
                     }

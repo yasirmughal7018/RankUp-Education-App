@@ -243,9 +243,7 @@ export function PendingRegistrationsPage() {
   function formatPendingApprovers(registration: PendingRegistration): string {
     const approvers = registration.pendingApprovers ?? [];
     if (approvers.length === 0) {
-      return registration.adminTarget
-        ? `Awaiting ${registration.adminTarget}`
-        : "—";
+      return "—";
     }
 
     return approvers

@@ -672,13 +672,14 @@ class _AccountAccessRequestSheetState
           'number are not required.';
     }
     if (_isTeacher) {
-      return 'Teachers must select school and campus. Teacher code is optional. '
-          'Campus Admin, School Admin, or Portal Admin can approve — any one '
-          'approval activates the account so you can set your initial password.';
+      return 'Optionally select school and campus. No school → Portal Admin. '
+          'School only → School Admin or Portal Admin. Campus → Campus Admin, '
+          'School Admin, or Portal Admin. Any one approval activates the account.';
     }
-    return 'Students must select school and campus and enter a roll number. '
-        'Campus Admin, School Admin, or Portal Admin can approve — any one '
-        'approval activates the account so you can set your initial password.';
+    return 'Enter a roll number. Optionally select school and campus. '
+        'No school → Portal Admin. School only → School Admin or Portal Admin. '
+        'Campus → Campus Admin, School Admin, or Portal Admin. Any one approval '
+        'activates the account.';
   }
 
   void _onUserTypeChanged(String? value) {
@@ -791,7 +792,7 @@ class _AccountAccessRequestSheetState
                   decoration: InputDecoration(
                     label: buildFieldLabel(
                       _loadingSchools ? 'School (loading...)' : 'School',
-                      required: true,
+                      required: false,
                     ),
                     prefixIcon: const Icon(Icons.school_outlined),
                   ),
@@ -806,12 +807,6 @@ class _AccountAccessRequestSheetState
                       ),
                     ),
                   ],
-                  validator: (value) {
-                    if ((_isStudent || _isTeacher) && value == null) {
-                      return 'School is required';
-                    }
-                    return null;
-                  },
                   onChanged: _loadingSchools
                       ? null
                       : (value) {
@@ -834,7 +829,7 @@ class _AccountAccessRequestSheetState
                   decoration: InputDecoration(
                     label: buildFieldLabel(
                       _loadingCampuses ? 'Campus (loading...)' : 'Campus',
-                      required: true,
+                      required: false,
                     ),
                     prefixIcon: const Icon(Icons.location_city_outlined),
                   ),
@@ -853,12 +848,6 @@ class _AccountAccessRequestSheetState
                       ),
                     ),
                   ],
-                  validator: (value) {
-                    if ((_isStudent || _isTeacher) && value == null) {
-                      return 'Campus is required';
-                    }
-                    return null;
-                  },
                   onChanged: _schoolId == null || _loadingCampuses
                       ? null
                       : (value) => setState(() => _campusId = value),
