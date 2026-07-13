@@ -7,7 +7,8 @@ internal static class RegistrationMapping
 {
     public static PendingRegistrationResponse ToPendingResponse(
         this User user,
-        IReadOnlyList<PendingApproverResponse> pendingApprovers)
+        IReadOnlyList<PendingApproverResponse> pendingApprovers,
+        bool currentUserHasApproved)
     {
         return new PendingRegistrationResponse(
             user.Id,
@@ -23,6 +24,7 @@ internal static class RegistrationMapping
             user.CreatedDate,
             user.ReasonMessage,
             user.RollNumberTeacherCode,
-            pendingApprovers);
+            pendingApprovers,
+            currentUserHasApproved);
     }
 }

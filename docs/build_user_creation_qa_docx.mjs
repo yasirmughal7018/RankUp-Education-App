@@ -175,7 +175,7 @@ const doc = new Document({
   creator: "RankUp Education",
   title: "User Creation, Approval & Login — QA Guide",
   description:
-    "QA guide for web and mobile user creation, approval, login, CampusAdmin, and multi-role.",
+    "QA guide for web and mobile user creation, approval queue (app_user_approval), PortalAdmin activation, login, CampusAdmin, and multi-role.",
   sections: [
     {
       properties: {
@@ -202,14 +202,14 @@ const doc = new Document({
             color: MUTED,
             size: 18,
           },
-          { text: "Multi-role + active role  ·  Date: 11 Jul 2026", color: MUTED, size: 18 },
+          { text: "app_user_roles + app_user_approval  ·  Date: 13 Jul 2026", color: MUTED, size: 18 },
         ]),
 
         h2("1. Overview & account states"),
         p("RankUp supports these user-creation paths:"),
         numbered(
           1,
-          "Self-service request — Student / Parent / Teacher submit → Admin reviews → Approve or Reject → On approve, user sets password → Login.",
+          "Self-service request — Student / Parent / Teacher submit → approval queue in app_user_approval → admins record approvals → ONLY Portal Admin activates → user sets password → Login.",
         ),
         numbered(
           2,
@@ -242,10 +242,10 @@ const doc = new Document({
           ],
           [1800, 3200, 2200, 2160],
         ),
-        p(
-          "Roles live in app_user_roles. app_users.role is the primary/default role at login. JWT role claim is the active role for the session.",
-          { after: 160 },
-        ),
+        bullet("Roles live only in app_user_roles. Columns app_users.role and app_users.admin_target are removed."),
+        bullet("Default login role = earliest role assignment in app_user_roles (by created_at)."),
+        bullet("JWT role claim = active session role; roles = all assigned roles."),
+        bullet("Self-service approval routing lives in app_user_approval (not on app_users)."),
 
         h2("2. Roles & permissions matrix"),
         table(
@@ -253,10 +253,28 @@ const doc = new Document({
           [
             ["Request account access", "—", "—", "—", "Yes", "Yes", "Yes"],
             [
-              "Approve / reject registrations",
-              "All",
-              "Own school, School Admin target",
-              "Own school+campus, School Admin target",
+              "Record registration approval",
+              "Yes (activates)",
+              "Own school (does not activate)",
+              "Own campus (does not activate)",
+              "—",
+              "—",
+              "—",
+            ],
+            [
+              "Activate registration",
+              "Yes — required",
+              "No",
+              "No",
+              "—",
+              "—",
+              "—",
+            ],
+            [
+              "Reject registrations",
+              "All pending",
+              "Own school (if not yet acted)",
+              "Own campus (if not yet acted)",
               "—",
               "—",
               "—",
@@ -297,13 +315,14 @@ const doc = new Document({
         ),
 
         h2("3. Ways to create users"),
-        h3("Path A — Self-service → Approve → Set password → Login"),
+        h3("Path A — Self-service → Approval queue → Portal Admin activates → Set password → Login"),
         numbered(1, "Guest opens Request account access (Web or Mobile)."),
         numbered(2, "Chooses Student / Parent / Teacher and submits."),
-        numbered(3, "Request appears on Registration approvals for eligible admins."),
-        numbered(4, "Admin Approves (or Rejects)."),
-        numbered(5, "On Approve: user becomes active but has no password; role profile created."),
-        numbered(6, "User enters CNIC/mobile → NeedsPasswordSetup → sets password → signs in."),
+        numbered(3, "API creates pending app_users + app_user_roles + one pending app_user_approval row per eligible reviewer."),
+        numbered(4, "Eligible admins see the request on Registration approvals (Pending with lists remaining reviewers)."),
+        numbered(5, "SchoolAdmin / CampusAdmin may Approve → their queue row is marked; account stays pending."),
+        numbered(6, "PortalAdmin Approves → account activates (NeedsPasswordSetup); role profile created."),
+        numbered(7, "User enters CNIC/mobile → sets password → signs in."),
         h3("Path B — Directory create (Web only)"),
         numbered(1, "Admin opens Directory (Students / Teachers / Parents / School Admins / Campus Admins)."),
         numbered(2, "Creates user with username and required fields — NO password."),
@@ -325,44 +344,70 @@ const doc = new Document({
             ["Mobile number", "Required *", "Required *", "Required *"],
             ["Account type", "Required *", "Required *", "Required *"],
             ["Email / CNIC / Reason", "Optional", "Optional", "Optional"],
-            ["School", "Required *", "Hidden / not allowed", "Optional"],
-            ["Campus", "Required *", "Hidden / not allowed", "Optional (needs school if set)"],
+            ["School", "Optional", "Hidden / not allowed", "Optional"],
+            ["Campus", "Optional (needs school if set)", "Hidden / not allowed", "Optional (needs school if set)"],
             ["Roll / teacher code", "Roll required *", "Hidden / not allowed", "Teacher code optional"],
           ],
           [2400, 2320, 2320, 2320],
         ),
         bullet("Username on request: CNIC if provided, otherwise mobile. Must be unique."),
-        bullet(
-          "School selected → admin_target = School Admin → SchoolAdmin (same school), CampusAdmin (same school+campus), and PortalAdmin.",
-        ),
-        bullet("No school → admin_target = Portal Admin → PortalAdmin only."),
-
-        h2("5. Approval & rejection rules"),
+        bullet("admin_target is NOT used. Approval recipients are derived from school/campus into app_user_approval."),
+        h3("Who is queued in app_user_approval (at submit time)"),
         table(
-          ["Reviewer", "Sees in pending list", "Can approve / reject"],
+          ["Selection on request", "Pending approver rows"],
           [
-            ["PortalAdmin", "All pending requests", "All pending requests"],
+            ["Parent / Student or Teacher with no school", "PortalAdmin only"],
+            ["School selected, no campus", "SchoolAdmin (that school) + PortalAdmin"],
+            ["School + campus selected", "CampusAdmin (that campus) + SchoolAdmin (that school) + PortalAdmin"],
+          ],
+          [4200, 5160],
+        ),
+
+        h2("5. Approval queue & activation rules"),
+        table(
+          ["Reviewer", "Sees in pending list", "Can act"],
+          [
+            ["PortalAdmin", "All pending requests", "Approve (activates) or Reject"],
             [
               "SchoolAdmin",
-              "Own school AND admin_target = School Admin",
-              "Same scope only (Portal-target forbidden)",
+              "Own school (school-only or with campus). Portal-only hidden.",
+              "Approve (record only) or Reject — until already approved",
             ],
             [
               "CampusAdmin",
-              "Own school + campus AND admin_target = School Admin",
-              "Same campus scope only",
+              "Own school + campus only. School-only and Portal-only hidden.",
+              "Approve (record only) or Reject — until already approved",
             ],
           ],
           [1800, 3780, 3780],
         ),
-        bullet("On Approve: is_active=true, password still null, must_change_password=true; role profile created."),
-        bullet("Student profile defaults: grade 1, section A."),
-        bullet("Teacher approve requires school + campus on the request."),
+        h3("Activation hierarchy (critical)"),
+        table(
+          ["Who approves", "Effect", "Account activated?"],
+          [
+            [
+              "PortalAdmin",
+              "Marks app_user_approval; creates profile; is_active=true; must_change_password=true",
+              "Yes — other pending rows not required",
+            ],
+            ["SchoolAdmin", "Marks their queue row only", "No — still needs PortalAdmin"],
+            [
+              "CampusAdmin",
+              "Marks their queue row only; SchoolAdmin then not required",
+              "No — still needs PortalAdmin",
+            ],
+          ],
+          [1800, 4200, 3360],
+        ),
+        bullet("After SchoolAdmin / CampusAdmin approve, the request stays on their Approvals list."),
+        bullet("Approve / Reject buttons are hidden for that admin; UI shows: Approved — awaiting Portal Admin."),
+        bullet("Pending with lists remaining pending reviewers (approved_at IS NULL). After CampusAdmin approval, pending SchoolAdmin rows are omitted from Pending with."),
+        bullet("Student profile defaults on PortalAdmin activation: grade 1, section A."),
         bullet("On Reject: user row hard-deleted; login-status returns No account found; can request again."),
         bullet("Approvals UI (Web): school line 1, campus line 2; no Admin Target column; long reason truncated with Read more."),
 
         h2("6. Directory (admin) create rules — Web only"),
-        p("No password on create. Directory users are auto-approved and must set password on first login (NeedsPasswordSetup)."),
+        p("No password on create. Directory users are auto-approved and must set password on first login (NeedsPasswordSetup). Directory create does not use app_user_approval."),
         table(
           ["Entity", "Who", "Required fields", "Optional"],
           [
@@ -394,7 +439,7 @@ const doc = new Document({
         bullet("If mobile/CNIC matches an existing user and role rules allow, the role is added to that account (Path C)."),
 
         h2("7. Multi-role & active role"),
-        p("One person can hold multiple roles on one login. Roles are stored in app_user_roles."),
+        p("One person can hold multiple roles on one login. Roles are stored in app_user_roles only."),
         h3("Allowed combinations"),
         bullet("Teacher + Parent"),
         bullet("CampusAdmin + Teacher and/or Parent"),
@@ -404,7 +449,7 @@ const doc = new Document({
         bullet("Student cannot combine with any other role"),
         bullet("PortalAdmin cannot combine with any other role"),
         h3("Session behaviour"),
-        numbered(1, "Login uses primary role (app_users.role) as the default active role."),
+        numbered(1, "Login default active role = earliest assignment in app_user_roles."),
         numbered(2, "API returns role (active) and roles (all)."),
         numbered(3, "POST /api/auth/switch-role issues new tokens for the selected role."),
         numbered(4, "Refresh token stores active_role so refresh keeps the same acting role."),
@@ -418,14 +463,15 @@ const doc = new Document({
         numbered(2, "Branch: PendingApproval | NeedsPasswordSetup | Ready."),
         numbered(3, "Sign in → POST /api/auth/login."),
         p("Login identifier resolution: username → CNIC → mobile."),
+        p("While SchoolAdmin / CampusAdmin have approved but PortalAdmin has not, login-status remains PendingApproval."),
         h3("How to check if a user is active"),
         table(
           ["Method", "How", "Platform"],
           [
             ["Login status UI", "Enter identifier; see Pending / Needs password / Ready / not active", "Web + Mobile"],
-            ["Pending list", "Appears on Approvals only while pending", "Web + Mobile"],
+            ["Pending list", "Appears while is_active=false and no password (includes post–Campus/School approval)", "Web + Mobile"],
             ["Directory list", "Active / Inactive column and filters", "Web only"],
-            ["Database", "app_users.is_active, password_hash, app_user_roles", "QA / DB"],
+            ["Database", "app_users.is_active, password_hash, app_user_roles, app_user_approval", "QA / DB"],
             ["GET /api/auth/me", "After login; includes role, roles, mustChangePassword", "API"],
           ],
           [2200, 4800, 2360],
@@ -449,11 +495,11 @@ const doc = new Document({
 
         h2("10. QA scenarios (step-by-step)"),
 
-        ...scenario("QA-01", "Student self-request — happy path", "Web + Mobile", [
+        ...scenario("QA-01", "Student self-request — Portal Admin activates", "Web + Mobile", [
           "Open Request account access.",
-          "Account type = Student. Fill full name, mobile, school, campus, roll number.",
-          "Submit request.",
-          "As PortalAdmin, SchoolAdmin (same school), or CampusAdmin (same campus), open Approvals and Approve.",
+          "Account type = Student. Fill full name, mobile, roll; optionally school + campus.",
+          "Submit request. Confirm app_user_approval rows match selection.",
+          "As PortalAdmin, open Approvals → Approve.",
           "On login: enter mobile/CNIC → Needs password setup.",
           "Set password (≥6) → then Sign in.",
         ], "Student reaches app home. Pending list cleared. Directory (Web) shows Active."),
@@ -462,76 +508,97 @@ const doc = new Document({
           "Request as Parent; confirm school/campus/roll are hidden.",
           "Submit with name + mobile.",
           "SchoolAdmin / CampusAdmin Approvals → Parent request must NOT appear.",
-          "PortalAdmin Approvals → Approve.",
+          "PortalAdmin Approvals → Approve (activates).",
           "Parent sets password and logs in on Web and Mobile.",
-        ], "Only PortalAdmin can approve. Parent becomes Ready after set-password + login."),
+        ], "Only PortalAdmin sees and activates. Parent becomes Ready after set-password + login."),
 
         ...scenario(
           "QA-03",
-          "Teacher self-request with school (School / Campus Admin path)",
+          "Campus path — CampusAdmin records, PortalAdmin activates",
           "Web + Mobile",
           [
-            "Request as Teacher; select school + campus; optional teacher code.",
-            "SchoolAdmin of that school, CampusAdmin of that campus, and PortalAdmin can Approve.",
-            "Set password → login as Teacher on Web and Mobile.",
+            "Request as Student or Teacher with school + campus.",
+            "As CampusAdmin of that campus, Approve.",
+            "Confirm account still PendingApproval (cannot set password yet).",
+            "CampusAdmin list still shows the row; buttons hidden; message: Approved — awaiting Portal Admin.",
+            "Pending with shows Portal Admin (School Admin omitted after CampusAdmin approval).",
+            "As PortalAdmin, Approve → NeedsPasswordSetup → set password → login.",
           ],
-          "Teacher profile created; login succeeds.",
+          "CampusAdmin does not activate. PortalAdmin activates. SchoolAdmin not required after CampusAdmin.",
         ),
 
         ...scenario(
           "QA-04",
-          "Teacher self-request without school (Portal Admin path)",
-          "Web + Mobile + API",
+          "School-only path — SchoolAdmin records, PortalAdmin activates",
+          "Web + Mobile",
           [
-            "Request as Teacher with school empty.",
-            "Confirm SchoolAdmin / CampusAdmin do not see it.",
-            "PortalAdmin attempts Approve.",
+            "Request as Teacher/Student with school selected and campus empty.",
+            "CampusAdmin must NOT see it.",
+            "SchoolAdmin Approves → still pending; message Approved — awaiting Portal Admin.",
+            "PortalAdmin Approves → activates.",
           ],
-          "Document actual API result.",
-          "Teacher profile creation requires school + campus at approve time — approve may fail if missing. Prefer school+campus or directory create.",
+          "SchoolAdmin alone does not activate; PortalAdmin does.",
         ),
 
-        ...scenario("QA-05", "Student request validation (required fields)", "Web + Mobile", [
-          "As Student, submit without school → blocked.",
-          "Without campus → blocked.",
-          "Without roll number → blocked.",
-          "Without full name or mobile → blocked.",
-        ], "Client and/or API validation errors; no pending row created."),
+        ...scenario(
+          "QA-05",
+          "PortalAdmin first — no need for School/Campus",
+          "Web + Mobile",
+          [
+            "Submit Student/Teacher with school + campus (full queue).",
+            "As PortalAdmin, Approve immediately (without Campus/School acting).",
+            "Confirm NeedsPasswordSetup; user can set password.",
+          ],
+          "PortalAdmin alone activates even if other approval rows remain pending.",
+        ),
 
-        ...scenario("QA-06", "Parent must not send school/campus/roll", "Web + Mobile + API", [
+        ...scenario("QA-06", "Teacher / Student without school (Portal only)", "Web + Mobile", [
+          "Request as Teacher or Student with school empty (Student still needs roll).",
+          "Confirm SchoolAdmin / CampusAdmin do not see it.",
+          "PortalAdmin Approves → activates → set password.",
+        ], "Portal-only queue; activation works without school/campus on the request."),
+
+        ...scenario("QA-07", "Student request validation", "Web + Mobile", [
+          "As Student, submit without roll number → blocked.",
+          "Without full name or mobile → blocked.",
+          "Campus without school → blocked.",
+          "School/campus empty is allowed (Portal-only queue).",
+        ], "Roll + identity required; school/campus optional for Student."),
+
+        ...scenario("QA-08", "Parent must not send school/campus/roll", "Web + Mobile + API", [
           "UI: switching to Parent clears/hides school fields.",
           "API optional: POST register as Parent with schoolId → validation error.",
         ], "Parent requests never carry school/campus/roll."),
 
-        ...scenario("QA-07", "Duplicate mobile / CNIC / username", "Web + Mobile", [
+        ...scenario("QA-09", "Duplicate mobile / CNIC / username", "Web + Mobile", [
           "Submit a valid Student request.",
           "Submit again with same mobile or CNIC → error.",
           "Reject first request, then same mobile can register again.",
         ], "Uniqueness while pending/active; after reject, re-request allowed."),
 
-        ...scenario("QA-08", "Reject registration", "Web + Mobile", [
+        ...scenario("QA-10", "Reject registration", "Web + Mobile", [
           "Create a pending request.",
-          "Admin Rejects.",
+          "Admin Rejects (before or without prior Campus/School record).",
           "Confirm removed from Approvals.",
           "Login with same identifier → No account found.",
         ], "Hard delete; cannot login; can request again."),
 
-        ...scenario("QA-09", "SchoolAdmin & CampusAdmin scope isolation", "Web + Mobile", [
+        ...scenario("QA-11", "SchoolAdmin & CampusAdmin scope isolation", "Web + Mobile", [
           "Create Student request for School A / Campus 1.",
-          "Create Parent request (Portal target).",
+          "Create Parent request (no school).",
           "SchoolAdmin of School B → must not see School A request.",
           "CampusAdmin of School A / Campus 2 → must not see Campus 1 request.",
-          "CampusAdmin of Campus 1 → sees Student request; not Parent portal request.",
+          "CampusAdmin of Campus 1 → sees Student request; not Parent.",
           "SchoolAdmin of School A → sees Student request; not Parent.",
-        ], "Each admin only sees own-scope School-Admin-target requests."),
+        ], "Scope by school/campus on the request (not admin_target)."),
 
-        ...scenario("QA-10", "PendingApproval login messaging", "Web + Mobile", [
-          "While request is pending, enter identifier on login.",
+        ...scenario("QA-12", "PendingApproval login messaging (including partial approval)", "Web + Mobile", [
+          "While request is pending (including after CampusAdmin/SchoolAdmin approval), enter identifier on login.",
           "Do not proceed to password login.",
-        ], "Status PendingApproval with wait-for-admin message on both clients."),
+        ], "Status PendingApproval until PortalAdmin activates."),
 
-        ...scenario("QA-11", "NeedsPasswordSetup then Ready", "Web + Mobile", [
-          "Approve a pending user.",
+        ...scenario("QA-13", "NeedsPasswordSetup then Ready (after PortalAdmin)", "Web + Mobile", [
+          "PortalAdmin Approves a pending user.",
           "Login identifier → NeedsPasswordSetup.",
           "Try login before set-initial-password → blocked.",
           "Set password → login succeeds → Ready.",
@@ -539,7 +606,7 @@ const doc = new Document({
         ], "Set-password does not auto-login; user must sign in afterward."),
 
         ...scenario(
-          "QA-12",
+          "QA-14",
           "Directory create Student (auto-approve + set password)",
           "Web create; Web + Mobile login",
           [
@@ -548,11 +615,11 @@ const doc = new Document({
             "Save; confirm first-login password message.",
             "Login: NeedsPasswordSetup → set password → Sign in.",
           ],
-          "No pending approval. NeedsPasswordSetup then Ready.",
+          "No pending approval queue. NeedsPasswordSetup then Ready.",
         ),
 
         ...scenario(
-          "QA-13",
+          "QA-15",
           "Directory create Teacher / Parent",
           "Web create; Web + Mobile login",
           [
@@ -562,7 +629,7 @@ const doc = new Document({
           "Both Active after create; Ready after set-password + login.",
         ),
 
-        ...scenario("QA-14", "PortalAdmin creates SchoolAdmin", "Web create; Web + Mobile login", [
+        ...scenario("QA-16", "PortalAdmin creates SchoolAdmin", "Web create; Web + Mobile login", [
           "PortalAdmin opens /admin/directory/school-admins.",
           "Create School Admin: name, username, school (optional contacts). No password.",
           "SchoolAdmin / CampusAdmin cannot open this page.",
@@ -570,7 +637,7 @@ const doc = new Document({
         ], "Auto-approved SchoolAdmin; first login requires set-initial-password."),
 
         ...scenario(
-          "QA-15",
+          "QA-17",
           "PortalAdmin / SchoolAdmin creates CampusAdmin",
           "Web create; Web + Mobile login",
           [
@@ -582,7 +649,7 @@ const doc = new Document({
           "Auto-approved CampusAdmin; campus-scoped approvals and directory create.",
         ),
 
-        ...scenario("QA-16", "CampusAdmin creates Student / Teacher / Parent", "Web", [
+        ...scenario("QA-18", "CampusAdmin creates Student / Teacher / Parent", "Web", [
           "Login as CampusAdmin (active role CampusAdmin).",
           "Create Student/Teacher — school/campus forced to own campus.",
           "Create Parent.",
@@ -590,20 +657,20 @@ const doc = new Document({
         ], "Creates succeed only in own school+campus; auto-approved; users need set-password."),
 
         ...scenario(
-          "QA-17",
+          "QA-19",
           "Multi-role: add Teacher to existing Parent",
           "Web + Mobile + API",
           [
             "Create/approve a Parent who can login (Ready).",
             "As admin, directory-create Teacher using the same mobile (and school/campus/teacher code).",
-            "Confirm no duplicate user; Parent account now has roles Parent + Teacher.",
-            "Login → default active role is primary; switch to Teacher on Web header / Mobile Profile.",
+            "Confirm no duplicate user; Parent account now has roles Parent + Teacher in app_user_roles.",
+            "Login → default active role from earliest assignment; switch to Teacher on Web header / Mobile Profile.",
             "Confirm nav/permissions change with active role; refresh keeps active role.",
           ],
           "One account, two roles; switch-role works; one password.",
         ),
 
-        ...scenario("QA-18", "Multi-role: CampusAdmin + Teacher", "Web + Mobile", [
+        ...scenario("QA-20", "Multi-role: CampusAdmin + Teacher", "Web + Mobile", [
           "Create CampusAdmin, then add Teacher role via directory (same mobile) OR create Teacher then add CampusAdmin.",
           "Login and switch between CampusAdmin and Teacher.",
           "As CampusAdmin: Approvals + directory available.",
@@ -611,7 +678,7 @@ const doc = new Document({
         ], "Active-role gates features correctly; both roles listed in /auth/me."),
 
         ...scenario(
-          "QA-19",
+          "QA-21",
           "Multi-role blocked: Student + anything / PortalAdmin + anything",
           "Web + API",
           [
@@ -622,52 +689,53 @@ const doc = new Document({
           "Validation / business-rule errors; no second role added.",
         ),
 
-        ...scenario("QA-20", "Deactivate / activate user (active check)", "Web directory; Web + Mobile login", [
-          "Create or approve a user who can login.",
+        ...scenario("QA-22", "Deactivate / activate user (active check)", "Web directory; Web + Mobile login", [
+          "Create or PortalAdmin-approve a user who can login.",
           "On Web directory, Deactivate.",
           "Attempt login on Web and Mobile → not active.",
           "Activate again → login succeeds.",
         ], "Deactivated is not PendingApproval. Activated returns to Ready."),
 
-        ...scenario("QA-21", "SchoolAdmin / CampusAdmin cannot create outside scope", "Web + API", [
+        ...scenario("QA-23", "SchoolAdmin / CampusAdmin cannot create outside scope", "Web + API", [
           "Login as SchoolAdmin; try create student for another school.",
           "Login as CampusAdmin; try create for another campus.",
         ], "Blocked by UI and/or API (403 / validation)."),
 
-        ...scenario("QA-22", "Approvals UI polish (Web)", "Web", [
+        ...scenario("QA-24", "Approvals UI polish (Web)", "Web", [
           "Submit request with a long reason.",
-          "Approvals table shows school line 1, campus line 2; truncated reason.",
+          "Approvals table shows school line 1, campus line 2; truncated reason; Pending with list.",
           "Click Read more → popup shows full reason.",
           "Confirm Admin Target column is not shown.",
-        ], "Truncation + popup; no Admin Target column."),
+          "After CampusAdmin approve, confirm status text instead of buttons.",
+        ], "Truncation + popup; no Admin Target; awaiting message after local approve."),
 
-        ...scenario("QA-23", "Searchable school/campus on Request Access (Web)", "Web", [
+        ...scenario("QA-25", "Searchable school/campus on Request Access (Web)", "Web", [
           "Open /request-access as Student/Teacher.",
-          "Open School dropdown → type to filter.",
+          "Open School dropdown → type to filter (optional field).",
           "Select school → Campus searchable list loads.",
         ], "Filter-as-you-type works; Mobile may remain native dropdowns."),
 
-        ...scenario("QA-24", "Password minimum length", "Web + Mobile", [
-          "After approval, try set password shorter than 6 characters.",
+        ...scenario("QA-26", "Password minimum length", "Web + Mobile", [
+          "After PortalAdmin approval, try set password shorter than 6 characters.",
         ], "Validation error; password not saved."),
 
-        ...scenario("QA-25", "Login with CNIC vs mobile", "Web + Mobile", [
+        ...scenario("QA-27", "Login with CNIC vs mobile", "Web + Mobile", [
           "Register/create user with both CNIC and mobile when possible.",
           "After Ready, login using CNIC, then using mobile.",
         ], "Both identifiers resolve to the same account when stored."),
 
-        ...scenario("QA-26", "Notifications for new registration (admin)", "Web + Mobile", [
+        ...scenario("QA-28", "Notifications for new registration (admin)", "Web + Mobile", [
           "As eligible admin logged in, submit a new request from another device.",
-          "Check in-app notifications / Approvals (Portal / School / Campus as applicable).",
-        ], "Eligible admins receive RegistrationRequest notification."),
+          "Check in-app notifications / Approvals (Portal / School / Campus as queued).",
+        ], "Eligible admins in the approval queue receive RegistrationRequest notification."),
 
-        ...scenario("QA-27", "Non-admin cannot open Approvals", "Web + Mobile", [
+        ...scenario("QA-29", "Non-admin cannot open Approvals", "Web + Mobile", [
           "Login as Student / Teacher / Parent (active role).",
           "Navigate to Approvals / admin registrations.",
         ], "Redirect / forbidden; no pending list."),
 
-        ...scenario("QA-28", "Switch role then refresh token", "Web + Mobile + API", [
-          "Login as multi-role user; switch to non-primary role.",
+        ...scenario("QA-30", "Switch role then refresh token", "Web + Mobile + API", [
+          "Login as multi-role user; switch to non-default role.",
           "Wait for / force access-token refresh (or call refresh API).",
           "Call GET /api/auth/me.",
         ], "Active role remains the switched role after refresh; permissions match active role."),
@@ -676,24 +744,29 @@ const doc = new Document({
         table(
           ["#", "Check", "Web", "Mobile", "Pass?"],
           [
-            ["1", "Student request requires school, campus, roll", "☐", "☐", ""],
+            ["1", "Student requires roll; school/campus optional", "☐", "☐", ""],
             ["2", "Parent hides school/campus/roll", "☐", "☐", ""],
             ["3", "Teacher school/campus/code optional", "☐", "☐", ""],
-            ["4", "Pending shows for Portal / School / Campus correctly", "☐", "☐", ""],
-            ["5", "SchoolAdmin / CampusAdmin cannot see Portal-target", "☐", "☐", ""],
-            ["6", "Approve → NeedsPasswordSetup", "☐", "☐", ""],
-            ["7", "Set password → Ready login", "☐", "☐", ""],
-            ["8", "Reject → account not found", "☐", "☐", ""],
-            ["9", "Directory create → NeedsPasswordSetup (no admin password)", "☐", "login", ""],
-            ["10", "PortalAdmin creates SchoolAdmin; first login set password", "☐", "☐", ""],
-            ["11", "Portal/School Admin creates CampusAdmin; first login set password", "☐", "☐", ""],
-            ["12", "CampusAdmin campus-scoped approve + directory create", "☐", "☐", ""],
-            ["13", "Multi-role add Teacher to Parent; switch role", "☐", "☐", ""],
-            ["14", "Student / PortalAdmin cannot combine roles", "☐", "—", ""],
-            ["15", "Deactivate → not active", "☐", "☐", ""],
-            ["16", "Required * dark red bold", "☐", "☐", ""],
-            ["17", "Approvals UI: 2-line school/campus, no Admin Target, Read more", "☐", "—", ""],
-            ["18", "Switch role survives token refresh", "☐", "☐", ""],
+            ["4", "Submit writes correct app_user_approval queue", "☐", "☐", ""],
+            ["5", "Pending scope by school/campus (no admin_target)", "☐", "☐", ""],
+            ["6", "SchoolAdmin / CampusAdmin approve does NOT activate", "☐", "☐", ""],
+            ["7", "After local approve: Approved — awaiting Portal Admin.", "☐", "☐", ""],
+            ["8", "PortalAdmin approve → NeedsPasswordSetup", "☐", "☐", ""],
+            ["9", "PortalAdmin alone can activate (others not required)", "☐", "☐", ""],
+            ["10", "CampusAdmin approve removes SchoolAdmin from Pending with", "☐", "☐", ""],
+            ["11", "Set password → Ready login", "☐", "☐", ""],
+            ["12", "Reject → account not found", "☐", "☐", ""],
+            ["13", "Directory create → NeedsPasswordSetup (no approval queue)", "☐", "login", ""],
+            ["14", "PortalAdmin creates SchoolAdmin; first login set password", "☐", "☐", ""],
+            ["15", "Portal/School Admin creates CampusAdmin; first login set password", "☐", "☐", ""],
+            ["16", "CampusAdmin campus-scoped list + directory create", "☐", "☐", ""],
+            ["17", "Multi-role add Teacher to Parent; switch role", "☐", "☐", ""],
+            ["18", "Student / PortalAdmin cannot combine roles", "☐", "—", ""],
+            ["19", "Deactivate → not active", "☐", "☐", ""],
+            ["20", "Required * dark red bold", "☐", "☐", ""],
+            ["21", "Approvals UI: Pending with, no Admin Target, Read more", "☐", "—", ""],
+            ["22", "Switch role survives token refresh", "☐", "☐", ""],
+            ["23", "No role / admin_target columns on app_users", "DB", "—", ""],
           ],
           [600, 5200, 1000, 1200, 1360],
         ),
@@ -702,14 +775,14 @@ const doc = new Document({
         table(
           ["Method", "Path", "Auth", "Purpose"],
           [
-            ["POST", "/api/auth/register", "Anonymous", "Self-service request"],
+            ["POST", "/api/auth/register", "Anonymous", "Self-service; creates app_user_approval queue"],
             ["GET", "/api/auth/registration-options/schools", "Anonymous", "Schools"],
             ["GET", "/api/auth/registration-options/schools/{id}/campuses", "Anonymous", "Campuses"],
-            ["GET", "/api/auth/registrations/pending", "Portal/School/Campus Admin", "Pending list"],
-            ["POST", "/api/auth/registrations/{id}/approve", "Portal/School/Campus Admin", "Approve"],
-            ["POST", "/api/auth/registrations/{id}/reject", "Portal/School/Campus Admin", "Reject"],
+            ["GET", "/api/auth/registrations/pending", "Portal/School/Campus Admin", "Pending + pendingApprovers + currentUserHasApproved"],
+            ["POST", "/api/auth/registrations/{id}/approve", "Portal/School/Campus Admin", "isActivated + message (PortalAdmin activates)"],
+            ["POST", "/api/auth/registrations/{id}/reject", "Portal/School/Campus Admin", "Reject / delete"],
             ["POST", "/api/auth/login-status", "Anonymous", "Pre-login status"],
-            ["POST", "/api/auth/set-initial-password", "Anonymous", "First password"],
+            ["POST", "/api/auth/set-initial-password", "Anonymous", "First password (after PortalAdmin)"],
             ["POST", "/api/auth/login", "Anonymous", "Sign in (role + roles)"],
             ["POST", "/api/auth/switch-role", "Bearer", "Change active role; new tokens"],
             ["POST", "/api/auth/token/refresh", "Anonymous", "Refresh (keeps active_role)"],
@@ -723,7 +796,7 @@ const doc = new Document({
         ),
 
         p(
-          "Companion HTML: docs/02_RankUp_User_Creation_Approval_QA.html — Rebuild DOCX: node docs/build_user_creation_qa_docx.mjs — Source of truth: WebApi Auth/Directory, React auth/admin/directory, Flutter login & pending registrations, table app_user_roles.",
+          "Companion HTML: docs/02_RankUp_User_Creation_Approval_QA.html — Rebuild DOCX: node docs/build_user_creation_qa_docx.mjs — Source of truth: WebApi Auth/Directory, React auth/admin, Flutter login & pending registrations, tables app_user_roles and app_user_approval (no app_users.role / admin_target).",
           { color: MUTED, size: 18, before: 200 },
         ),
       ],

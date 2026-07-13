@@ -133,9 +133,9 @@
     <p class="subtitle">RankUp Education — Web (React), Mobile (Flutter), and API</p>
     <div class="meta">
       <span class="chip">Version: current codebase</span>
-      <span class="chip">Date: 11 Jul 2026</span>
+      <span class="chip">Date: 13 Jul 2026</span>
       <span class="chip">Roles: PortalAdmin · SchoolAdmin · CampusAdmin · Teacher · Parent · Student</span>
-      <span class="chip">Multi-role + active role</span>
+      <span class="chip">app_user_roles + app_user_approval</span>
     </div>
   </header>
 
@@ -145,7 +145,7 @@
     <li><a href="#roles">2. Roles &amp; permissions matrix</a></li>
     <li><a href="#paths">3. Ways to create users</a></li>
     <li><a href="#request">4. Self-service request field rules</a></li>
-    <li><a href="#approval">5. Approval &amp; rejection rules</a></li>
+    <li><a href="#approval">5. Approval queue &amp; activation rules</a></li>
     <li><a href="#directory">6. Directory (admin) create rules</a></li>
     <li><a href="#multirole">7. Multi-role &amp; active role</a></li>
     <li><a href="#login">8. Login / password / active checks</a></li>
@@ -158,7 +158,7 @@
   <h2 id="overview">1. Overview &amp; account states</h2>
   <p>RankUp supports these user-creation paths:</p>
   <ol>
-    <li><strong>Self-service request</strong> — Student / Parent / Teacher submit → Admin reviews → Approve or Reject → On approve, user sets password → Login.</li>
+    <li><strong>Self-service request</strong> — Student / Parent / Teacher submit → approval queue written to <code>app_user_approval</code> → admins record approvals → <strong>only Portal Admin activates</strong> → user sets password → Login.</li>
     <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / SchoolAdmin / CampusAdmin with <strong>no password</strong> → auto-approved → user sets password on first login.</li>
     <li><strong>Add role to existing account</strong> — Directory create matching an existing mobile/CNIC adds a second role (multi-role) instead of creating a duplicate user (when combination rules allow).</li>
   </ol>
@@ -177,7 +177,12 @@
       <tr><td>Rejected</td><td>Row deleted from <code>app_users</code></td><td>No account found</td><td>No</td></tr>
     </tbody>
   </table>
-  <p>Roles for an account live in <code>app_user_roles</code>. <code>app_users.role</code> is the <strong>primary / default</strong> role used at login. The JWT <code>role</code> claim is the <strong>active</strong> role for the current session.</p>
+  <ul>
+    <li>Roles live only in <code>app_user_roles</code>. Columns <code>app_users.role</code> and <code>app_users.admin_target</code> are <strong>removed</strong>.</li>
+    <li>Default login role = earliest role assignment in <code>app_user_roles</code> (by <code>created_at</code>).</li>
+    <li>JWT <code>role</code> claim = <strong>active</strong> session role; <code>roles</code> = all assigned roles.</li>
+    <li>Self-service approval routing lives in <code>app_user_approval</code> (not on <code>app_users</code>).</li>
+  </ul>
 
   <h2 id="roles">2. Roles &amp; permissions matrix</h2>
   <table>
@@ -194,7 +199,9 @@
     </thead>
     <tbody>
       <tr><td>Request account access</td><td>—</td><td>—</td><td>—</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-      <tr><td>Approve / reject registrations</td><td>All</td><td>Own school, School Admin target</td><td>Own school + campus, School Admin target</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Record registration approval</td><td>Yes (activates)</td><td>Own school (does not activate)</td><td>Own campus (does not activate)</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Activate registration (set NeedsPasswordSetup)</td><td>Yes — required</td><td>No</td><td>No</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Reject registrations</td><td>All pending</td><td>Own school (if not yet acted)</td><td>Own campus (if not yet acted)</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create Student / Teacher / Parent</td><td>Any school</td><td>Own school</td><td>Own school + campus</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create SchoolAdmin</td><td>Yes</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create CampusAdmin</td><td>Yes</td><td>Own school</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
@@ -206,14 +213,15 @@
   </table>
 
   <h2 id="paths">3. Ways to create users</h2>
-  <h3>Path A — Self-service → Approve → Set password → Login</h3>
+  <h3>Path A — Self-service → Approval queue → Portal Admin activates → Set password → Login</h3>
   <ol>
     <li>Guest opens Request account access (Web or Mobile).</li>
     <li>Chooses Student / Parent / Teacher and submits.</li>
-    <li>Request appears on Registration approvals for eligible admins.</li>
-    <li>Admin Approves (or Rejects).</li>
-    <li>On Approve: user becomes active but has no password; role profile created.</li>
-    <li>User enters CNIC/mobile → <code>NeedsPasswordSetup</code> → sets password → signs in.</li>
+    <li>API creates pending <code>app_users</code> row + role in <code>app_user_roles</code> + one pending row per eligible reviewer in <code>app_user_approval</code>.</li>
+    <li>Eligible admins see the request on Registration approvals (“Pending with” lists remaining reviewers).</li>
+    <li>SchoolAdmin / CampusAdmin may Approve → their queue row is marked; account stays pending.</li>
+    <li>PortalAdmin Approves → account activates (<code>NeedsPasswordSetup</code>); role profile created.</li>
+    <li>User enters CNIC/mobile → sets password → signs in.</li>
   </ol>
 
   <h3>Path B — Directory create (Web only)</h3>
@@ -241,50 +249,86 @@
       <tr><td>Mobile number</td><td>Required *</td><td>Required *</td><td>Required *</td></tr>
       <tr><td>Account type</td><td>Required *</td><td>Required *</td><td>Required *</td></tr>
       <tr><td>Email / CNIC / Reason</td><td>Optional</td><td>Optional</td><td>Optional</td></tr>
-      <tr><td>School</td><td>Required *</td><td>Hidden / not allowed</td><td>Optional</td></tr>
-      <tr><td>Campus</td><td>Required *</td><td>Hidden / not allowed</td><td>Optional (needs school if set)</td></tr>
+      <tr><td>School</td><td>Optional</td><td>Hidden / not allowed</td><td>Optional</td></tr>
+      <tr><td>Campus</td><td>Optional (needs school if set)</td><td>Hidden / not allowed</td><td>Optional (needs school if set)</td></tr>
       <tr><td>Roll / teacher code</td><td>Roll required *</td><td>Hidden / not allowed</td><td>Teacher code optional</td></tr>
     </tbody>
   </table>
   <ul>
     <li>Username on request: CNIC if provided, otherwise mobile. Must be unique.</li>
-    <li>School selected → <code>admin_target = School Admin</code> → SchoolAdmin (same school), CampusAdmin (same school+campus), and PortalAdmin.</li>
-    <li>No school → <code>admin_target = Portal Admin</code> → PortalAdmin only.</li>
+    <li><code>admin_target</code> is <strong>not used</strong>. Approval recipients are derived from school/campus and stored in <code>app_user_approval</code>.</li>
   </ul>
-
-  <h2 id="approval">5. Approval &amp; rejection rules</h2>
+  <h3>Who is queued in <code>app_user_approval</code> (at submit time)</h3>
   <table>
     <thead>
-      <tr><th>Reviewer</th><th>Sees in pending list</th><th>Can approve / reject</th></tr>
+      <tr><th>Selection on request</th><th>Pending approver rows</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Parent (no school) / Student or Teacher with no school</td><td>PortalAdmin only</td></tr>
+      <tr><td>School selected, no campus</td><td>SchoolAdmin (that school) + PortalAdmin</td></tr>
+      <tr><td>School + campus selected</td><td>CampusAdmin (that campus) + SchoolAdmin (that school) + PortalAdmin</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="approval">5. Approval queue &amp; activation rules</h2>
+  <h3>Who sees what</h3>
+  <table>
+    <thead>
+      <tr><th>Reviewer</th><th>Sees in pending list</th><th>Can act</th></tr>
     </thead>
     <tbody>
       <tr>
         <td>PortalAdmin</td>
         <td>All pending requests</td>
-        <td>All pending requests</td>
+        <td>Approve (activates) or Reject</td>
       </tr>
       <tr>
         <td>SchoolAdmin</td>
-        <td>Own school AND <code>admin_target = School Admin</code></td>
-        <td>Same scope only (Portal-target forbidden)</td>
+        <td>Own school (school-only or with campus). Portal-only (no school) hidden.</td>
+        <td>Approve (record only) or Reject — until they have already approved</td>
       </tr>
       <tr>
         <td>CampusAdmin</td>
-        <td>Own school + campus AND <code>admin_target = School Admin</code></td>
-        <td>Same campus scope only</td>
+        <td>Own school + campus only. School-only and Portal-only hidden.</td>
+        <td>Approve (record only) or Reject — until they have already approved</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Activation hierarchy (critical)</h3>
+  <table>
+    <thead>
+      <tr><th>Who approves</th><th>Effect</th><th>Account activated?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>PortalAdmin</strong></td>
+        <td>Marks their <code>app_user_approval</code> row; creates role profile; sets <code>is_active=true</code>, <code>must_change_password=true</code></td>
+        <td><strong>Yes</strong> — other pending rows are not required</td>
+      </tr>
+      <tr>
+        <td><strong>SchoolAdmin</strong></td>
+        <td>Marks their queue row only</td>
+        <td><strong>No</strong> — still needs PortalAdmin</td>
+      </tr>
+      <tr>
+        <td><strong>CampusAdmin</strong></td>
+        <td>Marks their queue row only; SchoolAdmin is then not required</td>
+        <td><strong>No</strong> — still needs PortalAdmin</td>
       </tr>
     </tbody>
   </table>
   <ul>
-    <li>On Approve: <code>is_active=true</code>, password still null, <code>must_change_password=true</code>; role profile created.</li>
-    <li>Student profile defaults: grade 1, section A.</li>
-    <li>Teacher approve requires school + campus on the request.</li>
+    <li>After SchoolAdmin / CampusAdmin approve, the request <strong>stays on their Approvals list</strong>.</li>
+    <li>Approve / Reject buttons are hidden for that admin; UI shows: <strong>Approved — awaiting Portal Admin.</strong></li>
+    <li>“Pending with” lists remaining pending reviewers from <code>app_user_approval</code> (<code>approved_at IS NULL</code>). If a CampusAdmin has already approved, pending SchoolAdmin rows are omitted from “Pending with”.</li>
+    <li>Student profile defaults on PortalAdmin activation: grade 1, section A.</li>
     <li>On Reject: user row hard-deleted; login-status returns No account found; can request again.</li>
     <li>Approvals UI (Web): school on line 1, campus on line 2; no Admin Target column; long reason truncated with Read more.</li>
   </ul>
 
   <h2 id="directory">6. Directory (admin) create rules</h2>
-  <p>No password on create. Directory users are auto-approved and must set password on first login (<code>NeedsPasswordSetup</code>).</p>
+  <p>No password on create. Directory users are auto-approved and must set password on first login (<code>NeedsPasswordSetup</code>). Directory create does <em>not</em> use <code>app_user_approval</code>.</p>
   <table>
     <thead>
       <tr><th>Entity</th><th>Who</th><th>Required fields</th><th>Optional</th></tr>
@@ -329,7 +373,7 @@
   </ul>
 
   <h2 id="multirole">7. Multi-role &amp; active role</h2>
-  <p>One person can hold multiple roles on one login. Roles are stored in <code>app_user_roles</code>.</p>
+  <p>One person can hold multiple roles on one login. Roles are stored in <code>app_user_roles</code> only.</p>
   <h3>Allowed combinations</h3>
   <ul>
     <li>Teacher + Parent</li>
@@ -344,7 +388,7 @@
   </ul>
   <h3>Session behaviour</h3>
   <ol>
-    <li>Login uses primary role (<code>app_users.role</code>) as the default active role.</li>
+    <li>Login default active role = earliest assignment in <code>app_user_roles</code>.</li>
     <li>API returns <code>role</code> (active) and <code>roles</code> (all).</li>
     <li><code>POST /api/auth/switch-role</code> issues new tokens for the selected role.</li>
     <li>Refresh token stores <code>active_role</code> so refresh keeps the same acting role.</li>
@@ -364,6 +408,7 @@
     <li>Sign in → <code>POST /api/auth/login</code>.</li>
   </ol>
   <p>Login identifier resolution: username → CNIC → mobile.</p>
+  <p>While SchoolAdmin / CampusAdmin have approved but PortalAdmin has not, login-status remains <code>PendingApproval</code> (account not active).</p>
   <h3>How to check if a user is active</h3>
   <table>
     <thead>
@@ -371,9 +416,9 @@
     </thead>
     <tbody>
       <tr><td>Login status UI</td><td>Enter identifier; see Pending / Needs password / Ready / not active</td><td>Web + Mobile</td></tr>
-      <tr><td>Pending list</td><td>Appears on Approvals only while pending</td><td>Web + Mobile</td></tr>
+      <tr><td>Pending list</td><td>Appears while <code>is_active=false</code> and no password (includes post–Campus/School approval)</td><td>Web + Mobile</td></tr>
       <tr><td>Directory list</td><td>Active / Inactive column and filters</td><td>Web only</td></tr>
-      <tr><td>Database</td><td><code>app_users.is_active</code>, <code>password_hash</code>, <code>app_user_roles</code></td><td>QA / DB</td></tr>
+      <tr><td>Database</td><td><code>app_users.is_active</code>, <code>password_hash</code>, <code>app_user_roles</code>, <code>app_user_approval</code></td><td>QA / DB</td></tr>
       <tr><td><code>GET /api/auth/me</code></td><td>After login; includes <code>role</code>, <code>roles</code>, <code>mustChangePassword</code></td><td>API</td></tr>
     </tbody>
   </table>
@@ -398,17 +443,17 @@
   <h2 id="scenarios">10. QA scenarios (step-by-step)</h2>
 
   <div class="scenario" id="qa-01">
-    <h3><span class="id">QA-01</span> Student self-request — happy path</h3>
+    <h3><span class="id">QA-01</span> Student self-request — Portal Admin activates</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Open Request account access.</li>
-      <li>Account type = Student. Fill full name, mobile, school, campus, roll number.</li>
-      <li>Submit request.</li>
-      <li>As PortalAdmin, SchoolAdmin (same school), or CampusAdmin (same campus), open Approvals and Approve.</li>
+      <li>Account type = Student. Fill full name, mobile, roll; optionally school + campus.</li>
+      <li>Submit request. Confirm <code>app_user_approval</code> rows match selection (Portal only / School+Portal / Campus+School+Portal).</li>
+      <li>As PortalAdmin, open Approvals → Approve.</li>
       <li>On login: enter mobile/CNIC → Needs password setup.</li>
       <li>Set password (≥6) → then Sign in.</li>
     </ol>
-    <div class="expect">Expected: Student reaches app home. Pending list cleared. Directory (Web) shows Active.</div>
+    <div class="expect">Expected: Student reaches app home. Pending list cleared for all admins. Directory (Web) shows Active.</div>
   </div>
 
   <div class="scenario" id="qa-02">
@@ -418,49 +463,74 @@
       <li>Request as Parent; confirm school/campus/roll are hidden.</li>
       <li>Submit with name + mobile.</li>
       <li>SchoolAdmin / CampusAdmin Approvals → Parent request must NOT appear.</li>
-      <li>PortalAdmin Approvals → Approve.</li>
+      <li>PortalAdmin Approvals → Approve (activates).</li>
       <li>Parent sets password and logs in on Web and Mobile.</li>
     </ol>
-    <div class="expect">Expected: Only PortalAdmin can approve. Parent becomes Ready after set-password + login.</div>
+    <div class="expect">Expected: Only PortalAdmin sees and activates. Parent becomes Ready after set-password + login.</div>
   </div>
 
   <div class="scenario" id="qa-03">
-    <h3><span class="id">QA-03</span> Teacher self-request with school (School / Campus Admin path)</h3>
+    <h3><span class="id">QA-03</span> Campus path — CampusAdmin records, PortalAdmin activates</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Request as Teacher; select school + campus; optional teacher code.</li>
-      <li>SchoolAdmin of that school, CampusAdmin of that campus, and PortalAdmin can Approve.</li>
-      <li>Set password → login as Teacher on Web and Mobile.</li>
+      <li>Request as Student or Teacher with school + campus.</li>
+      <li>As CampusAdmin of that campus, Approve.</li>
+      <li>Confirm account still PendingApproval (cannot set password yet).</li>
+      <li>CampusAdmin list still shows the row; buttons hidden; message: <strong>Approved — awaiting Portal Admin.</strong></li>
+      <li>“Pending with” shows Portal Admin (School Admin omitted after CampusAdmin approval).</li>
+      <li>As PortalAdmin, Approve → NeedsPasswordSetup → set password → login.</li>
     </ol>
-    <div class="expect">Expected: Teacher profile created; login succeeds.</div>
+    <div class="expect">Expected: CampusAdmin does not activate. PortalAdmin activates. SchoolAdmin not required after CampusAdmin.</div>
   </div>
 
   <div class="scenario" id="qa-04">
-    <h3><span class="id">QA-04</span> Teacher self-request without school (Portal Admin path)</h3>
-    <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span><span class="api">API</span></div>
+    <h3><span class="id">QA-04</span> School-only path — SchoolAdmin records, PortalAdmin activates</h3>
+    <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Request as Teacher with school empty.</li>
-      <li>Confirm SchoolAdmin / CampusAdmin do not see it.</li>
-      <li>PortalAdmin attempts Approve.</li>
+      <li>Request as Teacher/Student with school selected and campus empty.</li>
+      <li>CampusAdmin must NOT see it.</li>
+      <li>SchoolAdmin Approves → still pending; message Approved — awaiting Portal Admin.</li>
+      <li>PortalAdmin Approves → activates.</li>
     </ol>
-    <div class="expect">Expected: Document actual API result.</div>
-    <div class="note">Note: Teacher profile creation requires school + campus at approve time — approve may fail if missing. Prefer school+campus or directory create.</div>
+    <div class="expect">Expected: SchoolAdmin alone does not activate; PortalAdmin does.</div>
   </div>
 
   <div class="scenario" id="qa-05">
-    <h3><span class="id">QA-05</span> Student request validation (required fields)</h3>
+    <h3><span class="id">QA-05</span> PortalAdmin first — no need for School/Campus</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>As Student, submit without school → blocked.</li>
-      <li>Without campus → blocked.</li>
-      <li>Without roll number → blocked.</li>
-      <li>Without full name or mobile → blocked.</li>
+      <li>Submit Student/Teacher with school + campus (full queue).</li>
+      <li>As PortalAdmin, Approve immediately (without Campus/School acting).</li>
+      <li>Confirm NeedsPasswordSetup; user can set password.</li>
     </ol>
-    <div class="expect">Expected: Client and/or API validation errors; no pending row created.</div>
+    <div class="expect">Expected: PortalAdmin alone activates even if other approval rows remain pending.</div>
   </div>
 
   <div class="scenario" id="qa-06">
-    <h3><span class="id">QA-06</span> Parent must not send school/campus/roll</h3>
+    <h3><span class="id">QA-06</span> Teacher / Student without school (Portal only)</h3>
+    <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
+    <ol class="steps">
+      <li>Request as Teacher or Student with school empty (Student still needs roll).</li>
+      <li>Confirm SchoolAdmin / CampusAdmin do not see it.</li>
+      <li>PortalAdmin Approves → activates → set password.</li>
+    </ol>
+    <div class="expect">Expected: Portal-only queue; activation works without school/campus on the request.</div>
+  </div>
+
+  <div class="scenario" id="qa-07">
+    <h3><span class="id">QA-07</span> Student request validation</h3>
+    <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
+    <ol class="steps">
+      <li>As Student, submit without roll number → blocked.</li>
+      <li>Without full name or mobile → blocked.</li>
+      <li>Campus without school → blocked.</li>
+      <li>School/campus empty is allowed (Portal-only queue).</li>
+    </ol>
+    <div class="expect">Expected: Roll + identity required; school/campus optional for Student.</div>
+  </div>
+
+  <div class="scenario" id="qa-08">
+    <h3><span class="id">QA-08</span> Parent must not send school/campus/roll</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span><span class="api">API</span></div>
     <ol class="steps">
       <li>UI: switching to Parent clears/hides school fields.</li>
@@ -469,8 +539,8 @@
     <div class="expect">Expected: Parent requests never carry school/campus/roll.</div>
   </div>
 
-  <div class="scenario" id="qa-07">
-    <h3><span class="id">QA-07</span> Duplicate mobile / CNIC / username</h3>
+  <div class="scenario" id="qa-09">
+    <h3><span class="id">QA-09</span> Duplicate mobile / CNIC / username</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Submit a valid Student request.</li>
@@ -480,47 +550,47 @@
     <div class="expect">Expected: Uniqueness while pending/active; after reject, re-request allowed.</div>
   </div>
 
-  <div class="scenario" id="qa-08">
-    <h3><span class="id">QA-08</span> Reject registration</h3>
+  <div class="scenario" id="qa-10">
+    <h3><span class="id">QA-10</span> Reject registration</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Create a pending request.</li>
-      <li>Admin Rejects.</li>
+      <li>Admin Rejects (before or without prior Campus/School record).</li>
       <li>Confirm removed from Approvals.</li>
       <li>Login with same identifier → No account found.</li>
     </ol>
     <div class="expect">Expected: Hard delete; cannot login; can request again.</div>
   </div>
 
-  <div class="scenario" id="qa-09">
-    <h3><span class="id">QA-09</span> SchoolAdmin &amp; CampusAdmin scope isolation</h3>
+  <div class="scenario" id="qa-11">
+    <h3><span class="id">QA-11</span> SchoolAdmin &amp; CampusAdmin scope isolation</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Create Student request for School A / Campus 1.</li>
-      <li>Create Parent request (Portal target).</li>
+      <li>Create Parent request (no school).</li>
       <li>SchoolAdmin of School B → must not see School A request.</li>
       <li>CampusAdmin of School A / Campus 2 → must not see Campus 1 request.</li>
-      <li>CampusAdmin of Campus 1 → sees Student request; not Parent portal request.</li>
+      <li>CampusAdmin of Campus 1 → sees Student request; not Parent.</li>
       <li>SchoolAdmin of School A → sees Student request; not Parent.</li>
     </ol>
-    <div class="expect">Expected: Each admin only sees own-scope School-Admin-target requests.</div>
+    <div class="expect">Expected: Scope by school/campus on the request (not admin_target).</div>
   </div>
 
-  <div class="scenario" id="qa-10">
-    <h3><span class="id">QA-10</span> PendingApproval login messaging</h3>
+  <div class="scenario" id="qa-12">
+    <h3><span class="id">QA-12</span> PendingApproval login messaging (including partial approval)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>While request is pending, enter identifier on login.</li>
+      <li>While request is pending (including after CampusAdmin/SchoolAdmin approval), enter identifier on login.</li>
       <li>Do not proceed to password login.</li>
     </ol>
-    <div class="expect">Expected: Status PendingApproval with wait-for-admin message on both clients.</div>
+    <div class="expect">Expected: Status PendingApproval until PortalAdmin activates.</div>
   </div>
 
-  <div class="scenario" id="qa-11">
-    <h3><span class="id">QA-11</span> NeedsPasswordSetup then Ready</h3>
+  <div class="scenario" id="qa-13">
+    <h3><span class="id">QA-13</span> NeedsPasswordSetup then Ready (after PortalAdmin)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Approve a pending user.</li>
+      <li>PortalAdmin Approves a pending user.</li>
       <li>Login identifier → NeedsPasswordSetup.</li>
       <li>Try login before set-initial-password → blocked.</li>
       <li>Set password → login succeeds → Ready.</li>
@@ -529,8 +599,8 @@
     <div class="expect">Expected: Set-password does not auto-login; user must sign in afterward.</div>
   </div>
 
-  <div class="scenario" id="qa-12">
-    <h3><span class="id">QA-12</span> Directory create Student (auto-approve + set password)</h3>
+  <div class="scenario" id="qa-14">
+    <h3><span class="id">QA-14</span> Directory create Student (auto-approve + set password)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Admin opens <code>/admin/directory/students</code> → Create.</li>
@@ -538,11 +608,11 @@
       <li>Save; confirm first-login password message.</li>
       <li>Login: NeedsPasswordSetup → set password → Sign in.</li>
     </ol>
-    <div class="expect">Expected: No pending approval. NeedsPasswordSetup then Ready.</div>
+    <div class="expect">Expected: No pending approval queue. NeedsPasswordSetup then Ready.</div>
   </div>
 
-  <div class="scenario" id="qa-13">
-    <h3><span class="id">QA-13</span> Directory create Teacher / Parent</h3>
+  <div class="scenario" id="qa-15">
+    <h3><span class="id">QA-15</span> Directory create Teacher / Parent</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Create Teacher via directory (no password); first login set password.</li>
@@ -551,8 +621,8 @@
     <div class="expect">Expected: Both Active after create; Ready after set-password + login.</div>
   </div>
 
-  <div class="scenario" id="qa-14">
-    <h3><span class="id">QA-14</span> PortalAdmin creates SchoolAdmin</h3>
+  <div class="scenario" id="qa-16">
+    <h3><span class="id">QA-16</span> PortalAdmin creates SchoolAdmin</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>PortalAdmin opens <code>/admin/directory/school-admins</code>.</li>
@@ -563,8 +633,8 @@
     <div class="expect">Expected: Auto-approved SchoolAdmin; first login requires set-initial-password.</div>
   </div>
 
-  <div class="scenario" id="qa-15">
-    <h3><span class="id">QA-15</span> PortalAdmin / SchoolAdmin creates CampusAdmin</h3>
+  <div class="scenario" id="qa-17">
+    <h3><span class="id">QA-17</span> PortalAdmin / SchoolAdmin creates CampusAdmin</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>PortalAdmin or SchoolAdmin opens <code>/admin/directory/campus-admins</code>.</li>
@@ -575,8 +645,8 @@
     <div class="expect">Expected: Auto-approved CampusAdmin; campus-scoped approvals and directory create.</div>
   </div>
 
-  <div class="scenario" id="qa-16">
-    <h3><span class="id">QA-16</span> CampusAdmin creates Student / Teacher / Parent</h3>
+  <div class="scenario" id="qa-18">
+    <h3><span class="id">QA-18</span> CampusAdmin creates Student / Teacher / Parent</h3>
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
       <li>Login as CampusAdmin (active role CampusAdmin).</li>
@@ -587,21 +657,21 @@
     <div class="expect">Expected: Creates succeed only in own school+campus; auto-approved; users need set-password.</div>
   </div>
 
-  <div class="scenario" id="qa-17">
-    <h3><span class="id">QA-17</span> Multi-role: add Teacher to existing Parent</h3>
+  <div class="scenario" id="qa-19">
+    <h3><span class="id">QA-19</span> Multi-role: add Teacher to existing Parent</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span><span class="api">API</span></div>
     <ol class="steps">
       <li>Create/approve a Parent who can login (Ready).</li>
       <li>As admin, directory-create Teacher using the <strong>same mobile</strong> (and school/campus/teacher code).</li>
-      <li>Confirm no duplicate user; Parent account now has roles Parent + Teacher.</li>
-      <li>Login → default active role is primary; switch to Teacher on Web header / Mobile Profile.</li>
+      <li>Confirm no duplicate user; Parent account now has roles Parent + Teacher in <code>app_user_roles</code>.</li>
+      <li>Login → default active role from earliest assignment; switch to Teacher on Web header / Mobile Profile.</li>
       <li>Confirm nav/permissions change with active role; refresh keeps active role.</li>
     </ol>
     <div class="expect">Expected: One account, two roles; switch-role works; one password.</div>
   </div>
 
-  <div class="scenario" id="qa-18">
-    <h3><span class="id">QA-18</span> Multi-role: CampusAdmin + Teacher</h3>
+  <div class="scenario" id="qa-20">
+    <h3><span class="id">QA-20</span> Multi-role: CampusAdmin + Teacher</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Create CampusAdmin, then add Teacher role via directory (same mobile) OR create Teacher then add CampusAdmin.</li>
@@ -612,8 +682,8 @@
     <div class="expect">Expected: Active-role gates features correctly; both roles listed in <code>/auth/me</code>.</div>
   </div>
 
-  <div class="scenario" id="qa-19">
-    <h3><span class="id">QA-19</span> Multi-role blocked: Student + anything / PortalAdmin + anything</h3>
+  <div class="scenario" id="qa-21">
+    <h3><span class="id">QA-21</span> Multi-role blocked: Student + anything / PortalAdmin + anything</h3>
     <div class="platforms"><span class="web">Web</span><span class="api">API</span></div>
     <ol class="steps">
       <li>Try directory-create Teacher with mobile of an existing Student → error.</li>
@@ -623,11 +693,11 @@
     <div class="expect">Expected: Validation / business-rule errors; no second role added.</div>
   </div>
 
-  <div class="scenario" id="qa-20">
-    <h3><span class="id">QA-20</span> Deactivate / activate user (active check)</h3>
+  <div class="scenario" id="qa-22">
+    <h3><span class="id">QA-22</span> Deactivate / activate user (active check)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Create or approve a user who can login.</li>
+      <li>Create or PortalAdmin-approve a user who can login.</li>
       <li>On Web directory, Deactivate.</li>
       <li>Attempt login on Web and Mobile → not active.</li>
       <li>Activate again → login succeeds.</li>
@@ -635,8 +705,8 @@
     <div class="expect">Expected: Deactivated is not PendingApproval. Activated returns to Ready.</div>
   </div>
 
-  <div class="scenario" id="qa-21">
-    <h3><span class="id">QA-21</span> SchoolAdmin / CampusAdmin cannot create outside scope</h3>
+  <div class="scenario" id="qa-23">
+    <h3><span class="id">QA-23</span> SchoolAdmin / CampusAdmin cannot create outside scope</h3>
     <div class="platforms"><span class="web">Web</span><span class="api">API</span></div>
     <ol class="steps">
       <li>Login as SchoolAdmin; try create student for another school.</li>
@@ -645,40 +715,41 @@
     <div class="expect">Expected: Blocked by UI and/or API (403 / validation).</div>
   </div>
 
-  <div class="scenario" id="qa-22">
-    <h3><span class="id">QA-22</span> Approvals UI polish (Web)</h3>
+  <div class="scenario" id="qa-24">
+    <h3><span class="id">QA-24</span> Approvals UI polish (Web)</h3>
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
       <li>Submit request with a long reason.</li>
-      <li>Approvals table shows school line 1, campus line 2; truncated reason.</li>
+      <li>Approvals table shows school line 1, campus line 2; truncated reason; Pending with list.</li>
       <li>Click Read more → popup shows full reason.</li>
       <li>Confirm Admin Target column is not shown.</li>
+      <li>After CampusAdmin approve, confirm status text instead of buttons.</li>
     </ol>
-    <div class="expect">Expected: Truncation + popup; no Admin Target column.</div>
+    <div class="expect">Expected: Truncation + popup; no Admin Target; awaiting message after local approve.</div>
   </div>
 
-  <div class="scenario" id="qa-23">
-    <h3><span class="id">QA-23</span> Searchable school/campus on Request Access (Web)</h3>
+  <div class="scenario" id="qa-25">
+    <h3><span class="id">QA-25</span> Searchable school/campus on Request Access (Web)</h3>
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
       <li>Open <code>/request-access</code> as Student/Teacher.</li>
-      <li>Open School dropdown → type to filter.</li>
+      <li>Open School dropdown → type to filter (optional field).</li>
       <li>Select school → Campus searchable list loads.</li>
     </ol>
     <div class="expect">Expected: Filter-as-you-type works; Mobile may remain native dropdowns.</div>
   </div>
 
-  <div class="scenario" id="qa-24">
-    <h3><span class="id">QA-24</span> Password minimum length</h3>
+  <div class="scenario" id="qa-26">
+    <h3><span class="id">QA-26</span> Password minimum length</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>After approval, try set password shorter than 6 characters.</li>
+      <li>After PortalAdmin approval, try set password shorter than 6 characters.</li>
     </ol>
     <div class="expect">Expected: Validation error; password not saved.</div>
   </div>
 
-  <div class="scenario" id="qa-25">
-    <h3><span class="id">QA-25</span> Login with CNIC vs mobile</h3>
+  <div class="scenario" id="qa-27">
+    <h3><span class="id">QA-27</span> Login with CNIC vs mobile</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Register/create user with both CNIC and mobile when possible.</li>
@@ -687,18 +758,18 @@
     <div class="expect">Expected: Both identifiers resolve to the same account when stored.</div>
   </div>
 
-  <div class="scenario" id="qa-26">
-    <h3><span class="id">QA-26</span> Notifications for new registration (admin)</h3>
+  <div class="scenario" id="qa-28">
+    <h3><span class="id">QA-28</span> Notifications for new registration (admin)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>As eligible admin logged in, submit a new request from another device.</li>
-      <li>Check in-app notifications / Approvals (Portal / School / Campus as applicable).</li>
+      <li>Check in-app notifications / Approvals (Portal / School / Campus as queued).</li>
     </ol>
-    <div class="expect">Expected: Eligible admins receive RegistrationRequest notification.</div>
+    <div class="expect">Expected: Eligible admins in the approval queue receive RegistrationRequest notification.</div>
   </div>
 
-  <div class="scenario" id="qa-27">
-    <h3><span class="id">QA-27</span> Non-admin cannot open Approvals</h3>
+  <div class="scenario" id="qa-29">
+    <h3><span class="id">QA-29</span> Non-admin cannot open Approvals</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Login as Student / Teacher / Parent (active role).</li>
@@ -707,11 +778,11 @@
     <div class="expect">Expected: Redirect / forbidden; no pending list.</div>
   </div>
 
-  <div class="scenario" id="qa-28">
-    <h3><span class="id">QA-28</span> Switch role then refresh token</h3>
+  <div class="scenario" id="qa-30">
+    <h3><span class="id">QA-30</span> Switch role then refresh token</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span><span class="api">API</span></div>
     <ol class="steps">
-      <li>Login as multi-role user; switch to non-primary role.</li>
+      <li>Login as multi-role user; switch to non-default role.</li>
       <li>Wait for / force access-token refresh (or call refresh API).</li>
       <li>Call <code>GET /api/auth/me</code>.</li>
     </ol>
@@ -724,24 +795,29 @@
       <tr><th>#</th><th>Check</th><th>Web</th><th>Mobile</th><th>Pass?</th></tr>
     </thead>
     <tbody>
-      <tr><td>1</td><td>Student request requires school, campus, roll</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>1</td><td>Student requires roll; school/campus optional</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>2</td><td>Parent hides school/campus/roll</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>3</td><td>Teacher school/campus/code optional</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>4</td><td>Pending shows for Portal / School / Campus correctly</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>5</td><td>SchoolAdmin / CampusAdmin cannot see Portal-target</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>6</td><td>Approve → NeedsPasswordSetup</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>7</td><td>Set password → Ready login</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>8</td><td>Reject → account not found</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>9</td><td>Directory create → NeedsPasswordSetup (no admin password)</td><td>☐</td><td>login</td><td></td></tr>
-      <tr><td>10</td><td>PortalAdmin creates SchoolAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>11</td><td>Portal/School Admin creates CampusAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>12</td><td>CampusAdmin campus-scoped approve + directory create</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>13</td><td>Multi-role add Teacher to Parent; switch role</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>14</td><td>Student / PortalAdmin cannot combine roles</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>15</td><td>Deactivate → not active</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>16</td><td>Required * dark red bold</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>17</td><td>Approvals UI: 2-line school/campus, no Admin Target, Read more</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>18</td><td>Switch role survives token refresh</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>4</td><td>Submit writes correct <code>app_user_approval</code> queue</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>5</td><td>Pending scope by school/campus (no admin_target)</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>6</td><td>SchoolAdmin / CampusAdmin approve does NOT activate</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>7</td><td>After local approve: “Approved — awaiting Portal Admin.”</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>8</td><td>PortalAdmin approve → NeedsPasswordSetup</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>9</td><td>PortalAdmin alone can activate (others not required)</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>10</td><td>CampusAdmin approve removes SchoolAdmin from Pending with</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>11</td><td>Set password → Ready login</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>12</td><td>Reject → account not found</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>13</td><td>Directory create → NeedsPasswordSetup (no approval queue)</td><td>☐</td><td>login</td><td></td></tr>
+      <tr><td>14</td><td>PortalAdmin creates SchoolAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>15</td><td>Portal/School Admin creates CampusAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>16</td><td>CampusAdmin campus-scoped list + directory create</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>17</td><td>Multi-role add Teacher to Parent; switch role</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>18</td><td>Student / PortalAdmin cannot combine roles</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>19</td><td>Deactivate → not active</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>20</td><td>Required * dark red bold</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>21</td><td>Approvals UI: Pending with, no Admin Target, Read more</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>22</td><td>Switch role survives token refresh</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>23</td><td>No <code>role</code> / <code>admin_target</code> columns on <code>app_users</code></td><td>DB</td><td>—</td><td></td></tr>
     </tbody>
   </table>
 
@@ -751,14 +827,14 @@
       <tr><th>Method</th><th>Path</th><th>Auth</th><th>Purpose</th></tr>
     </thead>
     <tbody>
-      <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Anonymous</td><td>Self-service request</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Anonymous</td><td>Self-service request; creates <code>app_user_approval</code> queue</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools</code></td><td>Anonymous</td><td>Schools</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools/{id}/campuses</code></td><td>Anonymous</td><td>Campuses</td></tr>
-      <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending list</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Approve</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Reject</td></tr>
+      <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending list + <code>pendingApprovers</code> + <code>currentUserHasApproved</code></td></tr>
+      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Returns <code>isActivated</code> + message (PortalAdmin activates)</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Reject / delete</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login-status</code></td><td>Anonymous</td><td>Pre-login status</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/set-initial-password</code></td><td>Anonymous</td><td>First password</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/set-initial-password</code></td><td>Anonymous</td><td>First password (after PortalAdmin activation)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>Sign in (returns role + roles)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/switch-role</code></td><td>Bearer</td><td>Change active role; new tokens</td></tr>
       <tr><td>POST</td><td><code>/api/auth/token/refresh</code></td><td>Anonymous</td><td>Refresh (keeps active_role)</td></tr>
@@ -773,7 +849,10 @@
   <footer>
     Companion DOCX: <code>docs/02_RankUp_User_Creation_Approval_QA.docx</code> —
     Rebuild with <code>node docs/build_user_creation_qa_docx.mjs</code>.
-    Source of truth: WebApi AuthService / DirectoryService, React auth/admin/directory, Flutter login &amp; pending registrations, table <code>app_user_roles</code>.
+    Source of truth: WebApi AuthService / DirectoryService / UserRepository,
+    React auth/admin, Flutter login &amp; pending registrations,
+    tables <code>app_user_roles</code> and <code>app_user_approval</code>
+    (no <code>app_users.role</code> / <code>admin_target</code>).
   </footer>
 </main>
 </body>

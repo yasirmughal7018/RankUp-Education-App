@@ -251,6 +251,21 @@ public sealed class UserRepository : IUserRepository
             cancellationToken);
     }
 
+    public Task<bool> HasApprovedAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserApprovals.AnyAsync(
+            approval =>
+                approval.UserId == userId
+                && approval.ApprovedByUserId == approverUserId
+                && approval.ApprovedByRole == approverRole
+                && approval.ApprovedAt != null,
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproversForUserAsync(
         long userId,
         CancellationToken cancellationToken)

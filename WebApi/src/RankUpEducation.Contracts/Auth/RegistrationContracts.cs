@@ -37,7 +37,9 @@ public sealed record PendingRegistrationResponse(
     DateOnly? CreatedDate,
     string? ReasonMessage,
     string? RollNumberTeacherCode,
-    IReadOnlyList<PendingApproverResponse> PendingApprovers);
+    IReadOnlyList<PendingApproverResponse> PendingApprovers,
+    /// <summary>True when the current admin already recorded approval and is waiting on Portal Admin.</summary>
+    bool CurrentUserHasApproved);
 
 /// <summary>Approve uses registration details as submitted. No password or field edits.</summary>
 public sealed record ApproveRegistrationRequest();

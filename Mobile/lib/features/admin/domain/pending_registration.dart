@@ -46,6 +46,7 @@ class PendingRegistration {
     this.reasonMessage,
     this.rollNumberTeacherCode,
     this.pendingApprovers = const [],
+    this.currentUserHasApproved = false,
   });
 
   factory PendingRegistration.fromJson(Map<String, dynamic> json) {
@@ -72,6 +73,7 @@ class PendingRegistration {
       reasonMessage: json['reasonMessage'] as String?,
       rollNumberTeacherCode: json['rollNumberTeacherCode'] as String?,
       pendingApprovers: approvers,
+      currentUserHasApproved: json['currentUserHasApproved'] as bool? ?? false,
     );
   }
 
@@ -89,6 +91,7 @@ class PendingRegistration {
   final String? reasonMessage;
   final String? rollNumberTeacherCode;
   final List<PendingApprover> pendingApprovers;
+  final bool currentUserHasApproved;
 
   String get pendingWithLabel {
     if (pendingApprovers.isEmpty) {

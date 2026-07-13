@@ -404,26 +404,34 @@ export function PendingRegistrationsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          {canApprove ? (
+                        {registration.currentUserHasApproved ? (
+                          <p className="max-w-[14rem] text-right text-xs leading-5 text-amber-800">
+                            Approved — awaiting Portal Admin.
+                          </p>
+                        ) : (
+                          <div className="flex justify-end gap-2">
+                            {canApprove ? (
+                              <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() =>
+                                  setSelectedRegistration(registration)
+                                }
+                                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+                              >
+                                Approve
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               disabled={isSubmitting}
-                              onClick={() => setSelectedRegistration(registration)}
-                              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+                              onClick={() => void handleReject(registration)}
+                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
                             >
-                              Approve
+                              Reject
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => void handleReject(registration)}
-                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                          >
-                            Reject
-                          </button>
-                        </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

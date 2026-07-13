@@ -22,6 +22,8 @@ export interface PendingRegistration {
   reasonMessage: string | null;
   rollNumberTeacherCode: string | null;
   pendingApprovers: PendingApprover[];
+  /** True when this admin already approved and the request still awaits Portal Admin. */
+  currentUserHasApproved: boolean;
 }
 
 export type RegistrationActionRole = Extract<

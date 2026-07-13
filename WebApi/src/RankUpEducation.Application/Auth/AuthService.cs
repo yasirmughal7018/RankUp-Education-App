@@ -327,6 +327,13 @@ public sealed class AuthService : IAuthService
             campusIdFilter,
             cancellationToken);
 
+        var viewerId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var viewerRole))
+        {
+            throw new ForbiddenAppException("Approver role was not found.");
+        }
+
         var responses = new List<PendingRegistrationResponse>(users.Count);
         foreach (var pendingUser in users)
         {
@@ -349,7 +356,14 @@ public sealed class AuthService : IAuthService
                     candidate.Username,
                     candidate.Role.ToString()))
                 .ToArray();
-            responses.Add(pendingUser.ToPendingResponse(approvers));
+
+            var currentUserHasApproved = await _users.HasApprovedAsync(
+                pendingUser.Id,
+                viewerId,
+                viewerRole,
+                cancellationToken);
+
+            responses.Add(pendingUser.ToPendingResponse(approvers, currentUserHasApproved));
         }
 
         return responses;
@@ -387,6 +401,11 @@ public sealed class AuthService : IAuthService
         if (pendingApproval is not null)
         {
             pendingApproval.MarkApproved(_dateTimeProvider.UtcNow);
+        }
+        else if (await _users.HasApprovedAsync(user.Id, approverId, approverRole, cancellationToken))
+        {
+            throw new BusinessRuleException(
+                "Approved — awaiting Portal Admin.");
         }
         else
         {

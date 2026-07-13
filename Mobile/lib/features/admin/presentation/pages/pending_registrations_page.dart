@@ -313,27 +313,49 @@ class _PendingRegistrationsPageState
                                   child: Text(item.reasonMessage!),
                                 ),
                               const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      onPressed: _isActing
-                                          ? null
-                                          : () => _reject(item),
-                                      child: const Text('Reject'),
+                              if (item.currentUserHasApproved)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.secondaryContainer
+                                        .withValues(alpha: 0.45),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Approved — awaiting Portal Admin.',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme
+                                          .colorScheme
+                                          .onSecondaryContainer,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: FilledButton(
-                                      onPressed: _isActing
-                                          ? null
-                                          : () => _approve(item),
-                                      child: const Text('Approve'),
+                                )
+                              else
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: _isActing
+                                            ? null
+                                            : () => _reject(item),
+                                        child: const Text('Reject'),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: FilledButton(
+                                        onPressed: _isActing
+                                            ? null
+                                            : () => _approve(item),
+                                        child: const Text('Approve'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                         ),
