@@ -22,10 +22,13 @@ public sealed class UserApprovalConfiguration : IEntityTypeConfiguration<UserApp
             .IsRequired();
         // Null = still pending with this approver.
         builder.Property(approval => approval.ApprovedAt).HasColumnName("approved_at");
+        // Null = pending; true = approved; false = rejected.
+        builder.Property(approval => approval.IsApproved).HasColumnName("is_approved");
 
         builder.HasIndex(approval => approval.UserId);
         builder.HasIndex(approval => approval.ApprovedByUserId);
         builder.HasIndex(approval => approval.ApprovedAt);
+        builder.HasIndex(approval => approval.IsApproved);
         builder.HasIndex(approval => new { approval.UserId, approval.ApprovedByUserId, approval.ApprovedByRole })
             .IsUnique();
 

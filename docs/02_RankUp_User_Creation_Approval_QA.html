@@ -174,7 +174,7 @@
       <tr><td>Approved, needs password</td><td><code>is_active=true</code> AND <code>password_hash</code> NULL</td><td><code>NeedsPasswordSetup</code></td><td>No — set password first</td></tr>
       <tr><td>Active &amp; ready</td><td><code>is_active=true</code> AND password set</td><td><code>Ready</code></td><td>Yes</td></tr>
       <tr><td>Deactivated</td><td><code>is_active=false</code> with password set</td><td>not active</td><td>No</td></tr>
-      <tr><td>Rejected</td><td>Row deleted from <code>app_users</code></td><td>No account found</td><td>No</td></tr>
+      <tr><td>Rejected</td><td>Row kept; <code>rejected_at</code> set; approval trail with <code>is_approved = false</code></td><td>Rejected</td><td>Yes (new row)</td></tr>
     </tbody>
   </table>
   <ul>
@@ -323,7 +323,7 @@
     <li>Approve / Reject buttons are hidden for that admin; UI shows: <strong>Approved — awaiting Portal Admin.</strong></li>
     <li>“Pending with” lists remaining pending reviewers from <code>app_user_approval</code> (<code>approved_at IS NULL</code>). If a CampusAdmin has already approved, pending SchoolAdmin rows are omitted from “Pending with”.</li>
     <li>Student profile defaults on PortalAdmin activation: grade 1, section A.</li>
-    <li>On Reject: user row hard-deleted; login-status returns No account found; can request again.</li>
+    <li>On Reject: soft-reject — <code>app_users.rejected_at</code> set; rejector's <code>app_user_approval</code> row gets <code>is_approved = false</code>; other pending queue rows left as-is. Login-status returns <strong>Rejected</strong>; same identity may request access again (new user row).</li>
     <li>Approvals UI (Web): school on line 1, campus on line 2; no Admin Target column; long reason truncated with Read more.</li>
   </ul>
 
@@ -557,9 +557,10 @@
       <li>Create a pending request.</li>
       <li>Admin Rejects (before or without prior Campus/School record).</li>
       <li>Confirm removed from Approvals.</li>
-      <li>Login with same identifier → No account found.</li>
+      <li>Login with same identifier → status <strong>Rejected</strong> (message invites re-request).</li>
+      <li>Submit Request Access again with same CNIC/mobile → succeeds (new pending row).</li>
     </ol>
-    <div class="expect">Expected: Hard delete; cannot login; can request again.</div>
+    <div class="expect">Expected: Soft-reject (user + approval trail kept); login-status Rejected; re-request allowed.</div>
   </div>
 
   <div class="scenario" id="qa-11">
@@ -806,7 +807,7 @@
       <tr><td>9</td><td>PortalAdmin alone can activate (others not required)</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>10</td><td>CampusAdmin approve removes SchoolAdmin from Pending with</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>11</td><td>Set password → Ready login</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>12</td><td>Reject → account not found</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>12</td><td>Reject → soft-reject + login-status Rejected; re-request allowed</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>13</td><td>Directory create → NeedsPasswordSetup (no approval queue)</td><td>☐</td><td>login</td><td></td></tr>
       <tr><td>14</td><td>PortalAdmin creates SchoolAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>15</td><td>Portal/School Admin creates CampusAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
@@ -832,7 +833,7 @@
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools/{id}/campuses</code></td><td>Anonymous</td><td>Campuses</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending list + <code>pendingApprovers</code> + <code>currentUserHasApproved</code></td></tr>
       <tr><td>POST</td><td><code>/api/auth/registrations/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Returns <code>isActivated</code> + message (PortalAdmin activates)</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Reject / delete</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Soft-reject (keep trail)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login-status</code></td><td>Anonymous</td><td>Pre-login status</td></tr>
       <tr><td>POST</td><td><code>/api/auth/set-initial-password</code></td><td>Anonymous</td><td>First password (after PortalAdmin activation)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>Sign in (returns role + roles)</td></tr>

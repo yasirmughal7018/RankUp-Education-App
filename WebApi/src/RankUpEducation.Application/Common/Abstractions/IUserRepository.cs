@@ -58,6 +58,12 @@ public interface IUserRepository
         UserRole approverRole,
         CancellationToken cancellationToken);
 
+    Task<UserApproval?> GetApprovalAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken);
+
     Task<bool> HasApprovedAsync(
         long userId,
         long approverUserId,

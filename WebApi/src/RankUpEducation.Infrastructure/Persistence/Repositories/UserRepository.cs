@@ -28,7 +28,9 @@ public sealed class UserRepository : IUserRepository
     public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken)
     {
         return WithProfileContextAsync(
-            UsersWithRoles().FirstOrDefaultAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken),
+            PreferActiveRegistrationAsync(
+                UsersWithRoles().Where(user => user.Username.ToLower() == username.ToLower()),
+                cancellationToken),
             activeRole: null,
             cancellationToken);
     }
@@ -38,26 +40,28 @@ public sealed class UserRepository : IUserRepository
         var normalized = identifier.AsLowercase();
 
         // Priority: username → CNIC → mobile number.
-        var byUsername = await UsersWithRoles()
-            .FirstOrDefaultAsync(user => user.Username.ToLower() == normalized, cancellationToken);
+        // Prefer non-rejected rows so a re-request after soft-reject is found first.
+        var byUsername = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(user => user.Username.ToLower() == normalized),
+            cancellationToken);
         if (byUsername is not null)
         {
             return await WithProfileContextAsync(Task.FromResult<User?>(byUsername), null, cancellationToken);
         }
 
-        var byCnic = await UsersWithRoles()
-            .FirstOrDefaultAsync(
-                user => user.Cnic != null && user.Cnic.ToLower() == normalized,
-                cancellationToken);
+        var byCnic = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(
+                user => user.Cnic != null && user.Cnic.ToLower() == normalized),
+            cancellationToken);
         if (byCnic is not null)
         {
             return await WithProfileContextAsync(Task.FromResult<User?>(byCnic), null, cancellationToken);
         }
 
-        var byMobile = await UsersWithRoles()
-            .FirstOrDefaultAsync(
-                user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized,
-                cancellationToken);
+        var byMobile = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(
+                user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized),
+            cancellationToken);
         return await WithProfileContextAsync(Task.FromResult(byMobile), null, cancellationToken);
     }
 
@@ -65,8 +69,9 @@ public sealed class UserRepository : IUserRepository
     {
         var normalized = mobileNumber.AsTrimmedString().ToLowerInvariant();
         return WithProfileContextAsync(
-            UsersWithRoles().FirstOrDefaultAsync(
-                user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized,
+            PreferActiveRegistrationAsync(
+                UsersWithRoles().Where(
+                    user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized),
                 cancellationToken),
             activeRole: null,
             cancellationToken);
@@ -76,11 +81,25 @@ public sealed class UserRepository : IUserRepository
     {
         var normalized = cnic.AsTrimmedString().ToLowerInvariant();
         return WithProfileContextAsync(
-            UsersWithRoles().FirstOrDefaultAsync(
-                user => user.Cnic != null && user.Cnic.ToLower() == normalized,
+            PreferActiveRegistrationAsync(
+                UsersWithRoles().Where(
+                    user => user.Cnic != null && user.Cnic.ToLower() == normalized),
                 cancellationToken),
             activeRole: null,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Soft-rejected rows remain for audit; prefer the live (non-rejected) match when present.
+    /// </summary>
+    private static Task<User?> PreferActiveRegistrationAsync(
+        IQueryable<User> query,
+        CancellationToken cancellationToken)
+    {
+        return query
+            .OrderBy(user => user.RejectedAt == null ? 0 : 1)
+            .ThenByDescending(user => user.Id)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public Task<User?> GetByIdForRoleAsync(long id, UserRole activeRole, CancellationToken cancellationToken)
@@ -98,14 +117,19 @@ public sealed class UserRepository : IUserRepository
 
     public Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken)
     {
-        return _dbContext.Users.AnyAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken);
+        return _dbContext.Users.AnyAsync(
+            user => user.RejectedAt == null && user.Username.ToLower() == username.ToLower(),
+            cancellationToken);
     }
 
     public Task<bool> CnicExistsAsync(string cnic, CancellationToken cancellationToken)
     {
         var normalized = cnic.AsTrimmedString();
         return _dbContext.Users.AnyAsync(
-            user => user.Cnic != null && user.Cnic.ToLower() == normalized.ToLower(),
+            user =>
+                user.RejectedAt == null
+                && user.Cnic != null
+                && user.Cnic.ToLower() == normalized.ToLower(),
             cancellationToken);
     }
 
@@ -113,7 +137,10 @@ public sealed class UserRepository : IUserRepository
     {
         var normalized = mobileNumber.AsTrimmedString();
         return _dbContext.Users.AnyAsync(
-            user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized.ToLower(),
+            user =>
+                user.RejectedAt == null
+                && user.MobileNumber != null
+                && user.MobileNumber.ToLower() == normalized.ToLower(),
             cancellationToken);
     }
 
@@ -130,7 +157,10 @@ public sealed class UserRepository : IUserRepository
     {
         var query = _dbContext.Users.AsNoTracking()
             .Include(user => user.RoleAssignments)
-            .Where(user => !user.IsActive && (user.PasswordHash == null || user.PasswordHash == ""));
+            .Where(user =>
+                !user.IsActive
+                && (user.PasswordHash == null || user.PasswordHash == "")
+                && user.RejectedAt == null);
 
         if (campusIdFilter.HasValue)
         {
@@ -247,7 +277,22 @@ public sealed class UserRepository : IUserRepository
                 approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
+                && approval.IsApproved == null
                 && approval.ApprovedAt == null,
+            cancellationToken);
+    }
+
+    public Task<UserApproval?> GetApprovalAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+            approval =>
+                approval.UserId == userId
+                && approval.ApprovedByUserId == approverUserId
+                && approval.ApprovedByRole == approverRole,
             cancellationToken);
     }
 
@@ -262,7 +307,7 @@ public sealed class UserRepository : IUserRepository
                 approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
-                && approval.ApprovedAt != null,
+                && approval.IsApproved == true,
             cancellationToken);
     }
 
@@ -273,7 +318,9 @@ public sealed class UserRepository : IUserRepository
         var pending = await (
             from approval in _dbContext.UserApprovals.AsNoTracking()
             join admin in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals admin.Id
-            where approval.UserId == userId && approval.ApprovedAt == null
+            where approval.UserId == userId
+                && approval.IsApproved == null
+                && approval.ApprovedAt == null
             orderby approval.ApprovedByRole, admin.FullName
             select new PendingApproverCandidate(
                 admin.Id,
@@ -288,7 +335,7 @@ public sealed class UserRepository : IUserRepository
                 approval =>
                     approval.UserId == userId
                     && approval.ApprovedByRole == UserRole.CampusAdmin
-                    && approval.ApprovedAt != null,
+                    && approval.IsApproved == true,
                 cancellationToken);
         if (campusAdminAlreadyApproved)
         {

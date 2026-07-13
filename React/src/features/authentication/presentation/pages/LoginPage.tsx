@@ -73,7 +73,7 @@ export function LoginPage() {
     setPassword("");
     setConfirmPassword("");
 
-    if (status === "PendingApproval") {
+    if (status === "PendingApproval" || status === "Rejected") {
       setInfoMessage(message);
       setStep("identifier");
       return;

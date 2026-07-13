@@ -59,6 +59,8 @@ public sealed class User : SoftDeleteEntity
     public DateOnly? ModifiedDate { get; private set; }
     public bool IsActive { get; private set; }
     public DateTimeOffset? RequestedAt { get; private set; }
+    /// <summary>Set when a registration request is rejected (soft close; row kept for audit).</summary>
+    public DateTimeOffset? RejectedAt { get; private set; }
     public DateTimeOffset? LastLoginAt { get; private set; }
     public IReadOnlyCollection<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyCollection<DeviceSession> DeviceSessions => _deviceSessions;
@@ -94,7 +96,10 @@ public sealed class User : SoftDeleteEntity
 
     public bool HasRole(UserRole role) => Roles.Contains(role);
 
-    public bool IsPendingRegistration => !IsActive && !PasswordHash.HasTrimmedText();
+    public bool IsRejectedRegistration => RejectedAt is not null;
+
+    public bool IsPendingRegistration
+        => !IsActive && !PasswordHash.HasTrimmedText() && !IsRejectedRegistration;
 
     /// <summary>Approved by admin but user has not set a password yet.</summary>
     public bool NeedsPasswordSetup => IsActive && !PasswordHash.HasTrimmedText();
@@ -169,6 +174,12 @@ public sealed class User : SoftDeleteEntity
         }
 
         // Pending registration: inactive and no password until an admin approves.
+        if (IsRejectedRegistration)
+        {
+            throw new BusinessRuleException(
+                "Your registration request was rejected. You may submit a new request.");
+        }
+
         if (IsPendingRegistration)
         {
             throw new BusinessRuleException(
@@ -204,6 +215,22 @@ public sealed class User : SoftDeleteEntity
         IsActive = true;
         PasswordHash = null;
         MustChangePassword = true;
+        RejectedAt = null;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>Soft-reject registration. Keeps the user row and approval trail for audit.</summary>
+    public void RejectPendingRegistration(DateTimeOffset rejectedAt)
+    {
+        if (!IsPendingRegistration)
+        {
+            throw new BusinessRuleException("This user is not a pending registration request.");
+        }
+
+        IsActive = false;
+        PasswordHash = null;
+        RejectedAt = rejectedAt;
+        MustChangePassword = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

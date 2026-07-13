@@ -349,6 +349,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             approved_by_user_id bigint NOT NULL,
             approved_by_role int2 NOT NULL,
             approved_at timestamptz NULL,
+            is_approved boolean NULL,
             CONSTRAINT app_user_approval_user_id_fkey
                 FOREIGN KEY (user_id) REFERENCES public.app_users(id) ON DELETE CASCADE,
             CONSTRAINT app_user_approval_approved_by_user_id_fkey
@@ -364,6 +365,15 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_user_approval
             ALTER COLUMN approved_at DROP DEFAULT;
 
+        ALTER TABLE public.app_user_approval
+            ADD COLUMN IF NOT EXISTS is_approved boolean NULL;
+
+        -- Backfill: rows that already have approved_at were approvals (not rejections).
+        UPDATE public.app_user_approval
+        SET is_approved = TRUE
+        WHERE approved_at IS NOT NULL
+          AND is_approved IS NULL;
+
         CREATE INDEX IF NOT EXISTS ix_app_user_approval_user_id
             ON public.app_user_approval (user_id);
 
@@ -373,17 +383,24 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         CREATE INDEX IF NOT EXISTS ix_app_user_approval_approved_at
             ON public.app_user_approval (approved_at DESC);
 
+        CREATE INDEX IF NOT EXISTS ix_app_user_approval_is_approved
+            ON public.app_user_approval (is_approved);
+
         CREATE UNIQUE INDEX IF NOT EXISTS ix_app_user_approval_user_approver_role
             ON public.app_user_approval (user_id, approved_by_user_id, approved_by_role);
 
+        DROP INDEX IF EXISTS ix_app_user_approval_pending;
         CREATE INDEX IF NOT EXISTS ix_app_user_approval_pending
             ON public.app_user_approval (user_id)
-            WHERE approved_at IS NULL;
+            WHERE approved_at IS NULL AND is_approved IS NULL;
         """;
 
     private const string RegistrationSupportSql = """
         ALTER TABLE public.app_users
             ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ NULL;
+
+        ALTER TABLE public.app_users
+            ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ NULL;
 
         ALTER TABLE public.app_users
             ALTER COLUMN password_hash DROP NOT NULL;
@@ -401,9 +418,32 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 OR must_change_password IS TRUE
             );
 
+        -- Rejected registrations keep the row for audit; allow same identity to re-request.
+        ALTER TABLE public.app_users DROP CONSTRAINT IF EXISTS app_users_username_key;
+        DROP INDEX IF EXISTS app_users_username_key;
+        DROP INDEX IF EXISTS ix_app_users_username;
+        DROP INDEX IF EXISTS "IX_app_users_username";
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_username_active
+            ON public.app_users (username)
+            WHERE rejected_at IS NULL;
+
+        ALTER TABLE public.app_users DROP CONSTRAINT IF EXISTS app_users_cnic_key;
+        DROP INDEX IF EXISTS ix_app_users_cnic;
+        DROP INDEX IF EXISTS "IX_app_users_cnic";
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_cnic_active
+            ON public.app_users (cnic)
+            WHERE cnic IS NOT NULL AND rejected_at IS NULL;
+
+        DROP INDEX IF EXISTS ix_app_users_pending_registration;
         CREATE INDEX IF NOT EXISTS ix_app_users_pending_registration
             ON public.app_users (requested_at DESC NULLS LAST)
-            WHERE is_active = false AND password_hash IS NULL;
+            WHERE is_active = false
+              AND password_hash IS NULL
+              AND rejected_at IS NULL;
+
+        CREATE INDEX IF NOT EXISTS ix_app_users_rejected_at
+            ON public.app_users (rejected_at DESC)
+            WHERE rejected_at IS NOT NULL;
 
         ALTER TABLE public.app_user_students
             ADD COLUMN IF NOT EXISTS mobile_number VARCHAR(40) NULL;

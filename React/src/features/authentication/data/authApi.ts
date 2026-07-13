@@ -22,7 +22,8 @@ export interface SetInitialPasswordRequest {
 export type LoginStatus =
   | "PendingApproval"
   | "NeedsPasswordSetup"
-  | "Ready";
+  | "Ready"
+  | "Rejected";
 
 export interface LoginStatusResponse {
   status: LoginStatus;

@@ -12,7 +12,9 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(user => user.Id);
         builder.Property(user => user.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(user => user.Username).HasColumnName("username").HasMaxLength(50).IsRequired();
-        builder.HasIndex(user => user.Username).IsUnique();
+        builder.HasIndex(user => user.Username)
+            .IsUnique()
+            .HasFilter("rejected_at IS NULL");
         builder.Property(user => user.PasswordHash).HasColumnName("password_hash");
         builder.Property(user => user.FullName).HasColumnName("display_name").HasMaxLength(50);
         // Roles live only in app_user_roles (User.Role is computed from assignments).
@@ -21,11 +23,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.CreatedDate).HasColumnName("created_date");
         builder.Property(user => user.ModifiedDate).HasColumnName("modified_date");
         builder.Property(user => user.RequestedAt).HasColumnName("requested_at");
+        builder.Property(user => user.RejectedAt).HasColumnName("rejected_at");
         builder.Property(user => user.MobileNumber).HasColumnName("mobile_number").HasMaxLength(40);
         builder.Property(user => user.Cnic).HasColumnName("cnic").HasMaxLength(20);
         builder.HasIndex(user => user.Cnic)
             .IsUnique()
-            .HasFilter("cnic IS NOT NULL");
+            .HasFilter("cnic IS NOT NULL AND rejected_at IS NULL");
         builder.Property(user => user.SchoolId).HasColumnName("school_id");
         builder.Property(user => user.CampusId).HasColumnName("campus_id");
         builder.Property(user => user.EmailAddress).HasColumnName("email").HasMaxLength(120);

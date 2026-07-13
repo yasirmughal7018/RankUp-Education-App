@@ -368,7 +368,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       setState(() {
         _passwordController.clear();
         _confirmPasswordController.clear();
-        if (result.status == 'PendingApproval') {
+        if (result.status == 'PendingApproval' ||
+            result.status == 'Rejected') {
           _infoMessage = result.message;
           _step = _LoginStep.identifier;
         } else if (result.status == 'NeedsPasswordSetup') {

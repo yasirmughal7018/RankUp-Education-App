@@ -140,6 +140,13 @@ public sealed class AuthService : IAuthService
             throw new AuthenticationAppException("This account is not active.");
         }
 
+        if (user.IsRejectedRegistration)
+        {
+            return new LoginStatusResponse(
+                "Rejected",
+                "Your registration request was rejected. You may submit a new request.");
+        }
+
         if (user.IsPendingRegistration)
         {
             return new LoginStatusResponse(
@@ -475,7 +482,33 @@ public sealed class AuthService : IAuthService
 
         EnsureCanRejectRegistration(user);
 
-        await _users.DeleteAsync(user, cancellationToken);
+        var rejectorId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var rejectorRole))
+        {
+            throw new ForbiddenAppException("Approver role was not found.");
+        }
+
+        var rejectedAt = _dateTimeProvider.UtcNow;
+
+        // Record rejection on this admin's queue row (keep trail; do not delete user).
+        var approval = await _users.GetApprovalAsync(
+            user.Id,
+            rejectorId,
+            rejectorRole,
+            cancellationToken);
+        if (approval is not null)
+        {
+            approval.RecordRejected(rejectedAt);
+        }
+        else
+        {
+            var rejection = UserApproval.CreatePending(user.Id, rejectorId, rejectorRole);
+            rejection.MarkRejected(rejectedAt);
+            await _users.AddApprovalAsync(rejection, cancellationToken);
+        }
+
+        user.RejectPendingRegistration(rejectedAt);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
