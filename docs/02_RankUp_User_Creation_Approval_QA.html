@@ -133,9 +133,9 @@
     <p class="subtitle">RankUp Education — Web (React), Mobile (Flutter), and API</p>
     <div class="meta">
       <span class="chip">Version: current codebase</span>
-      <span class="chip">Date: 13 Jul 2026</span>
+      <span class="chip">Date: 14 Jul 2026</span>
       <span class="chip">Roles: PortalAdmin · SchoolAdmin · CampusAdmin · Teacher · Parent · Student</span>
-      <span class="chip">app_user_roles + app_user_approval</span>
+      <span class="chip">app_user_roles + app_user_approval · soft-reject</span>
     </div>
   </header>
 
@@ -170,11 +170,11 @@
       <tr><th>State</th><th>DB condition</th><th>login-status</th><th>Can login?</th></tr>
     </thead>
     <tbody>
-      <tr><td>Pending approval</td><td><code>is_active=false</code> AND <code>password_hash</code> NULL</td><td><code>PendingApproval</code></td><td>No</td></tr>
-      <tr><td>Approved, needs password</td><td><code>is_active=true</code> AND <code>password_hash</code> NULL</td><td><code>NeedsPasswordSetup</code></td><td>No — set password first</td></tr>
+      <tr><td>Pending approval</td><td><code>is_active=false</code> AND <code>password_hash</code> NULL AND <code>rejected_at</code> NULL</td><td><code>PendingApproval</code></td><td>No</td></tr>
+      <tr><td>Approved, needs password</td><td><code>is_active=true</code> AND <code>password_hash</code> NULL (<code>must_change_password=true</code>)</td><td><code>NeedsPasswordSetup</code></td><td>No — set password first</td></tr>
       <tr><td>Active &amp; ready</td><td><code>is_active=true</code> AND password set</td><td><code>Ready</code></td><td>Yes</td></tr>
-      <tr><td>Deactivated</td><td><code>is_active=false</code> with password set</td><td>not active</td><td>No</td></tr>
-      <tr><td>Rejected</td><td>Row kept; <code>rejected_at</code> set; approval trail with <code>is_approved = false</code></td><td>Rejected</td><td>Yes (new row)</td></tr>
+      <tr><td>Deactivated</td><td><code>is_active=false</code> with password set (directory deactivate)</td><td>throws “not active” (not a status enum)</td><td>No</td></tr>
+      <tr><td>Rejected (soft)</td><td>Row <strong>kept</strong>; <code>rejected_at</code> set; rejector’s <code>app_user_approval.is_approved = false</code></td><td><code>Rejected</code></td><td>No — may submit a <strong>new</strong> request</td></tr>
     </tbody>
   </table>
   <ul>
@@ -182,7 +182,23 @@
     <li>Default login role = earliest role assignment in <code>app_user_roles</code> (by <code>created_at</code>).</li>
     <li>JWT <code>role</code> claim = <strong>active</strong> session role; <code>roles</code> = all assigned roles.</li>
     <li>Self-service approval routing lives in <code>app_user_approval</code> (not on <code>app_users</code>).</li>
+    <li>Reject is a <strong>soft-reject</strong> (no hard delete of <code>app_users</code>). Unique indexes on username/CNIC ignore rows where <code>rejected_at IS NOT NULL</code>.</li>
   </ul>
+
+  <h3>Role lookup IDs</h3>
+  <table>
+    <thead>
+      <tr><th>Role</th><th>Lookup ID</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>PortalAdmin</td><td>2010</td></tr>
+      <tr><td>SchoolAdmin</td><td>2011</td></tr>
+      <tr><td>CampusAdmin</td><td>2012</td></tr>
+      <tr><td>Parent</td><td>2013</td></tr>
+      <tr><td>Teacher</td><td>2014</td></tr>
+      <tr><td>Student</td><td>2015</td></tr>
+    </tbody>
+  </table>
 
   <h2 id="roles">2. Roles &amp; permissions matrix</h2>
   <table>
@@ -201,7 +217,7 @@
       <tr><td>Request account access</td><td>—</td><td>—</td><td>—</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
       <tr><td>Record registration approval</td><td>Yes (activates)</td><td>Own school (does not activate)</td><td>Own campus (does not activate)</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Activate registration (set NeedsPasswordSetup)</td><td>Yes — required</td><td>No</td><td>No</td><td>—</td><td>—</td><td>—</td></tr>
-      <tr><td>Reject registrations</td><td>All pending</td><td>Own school (if not yet acted)</td><td>Own campus (if not yet acted)</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Reject registrations (soft)</td><td>All pending</td><td>Own school (UI hides after they approve)</td><td>Own campus (UI hides after they approve)</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create Student / Teacher / Parent</td><td>Any school</td><td>Own school</td><td>Own school + campus</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create SchoolAdmin</td><td>Yes</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create CampusAdmin</td><td>Yes</td><td>Own school</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
@@ -255,7 +271,7 @@
     </tbody>
   </table>
   <ul>
-    <li>Username on request: CNIC if provided, otherwise mobile. Must be unique.</li>
+    <li>Username on request: CNIC if provided, otherwise mobile. Must be unique among <strong>non-rejected</strong> rows (<code>rejected_at IS NULL</code>).</li>
     <li><code>admin_target</code> is <strong>not used</strong>. Approval recipients are derived from school/campus and stored in <code>app_user_approval</code>.</li>
   </ul>
   <h3>Who is queued in <code>app_user_approval</code> (at submit time)</h3>
@@ -320,12 +336,27 @@
   </table>
   <ul>
     <li>After SchoolAdmin / CampusAdmin approve, the request <strong>stays on their Approvals list</strong>.</li>
-    <li>Approve / Reject buttons are hidden for that admin; UI shows: <strong>Approved — awaiting Portal Admin.</strong></li>
-    <li>“Pending with” lists remaining pending reviewers from <code>app_user_approval</code> (<code>approved_at IS NULL</code>). If a CampusAdmin has already approved, pending SchoolAdmin rows are omitted from “Pending with”.</li>
+    <li>Approve / Reject buttons are hidden for that admin; UI shows: <strong>Approved — awaiting Portal Admin.</strong> (API flag: <code>currentUserHasApproved</code>).</li>
+    <li>“Pending with” lists remaining reviewers where <code>is_approved IS NULL</code> and <code>approved_at IS NULL</code>. If a CampusAdmin has already approved (<code>is_approved = true</code>), pending SchoolAdmin rows are omitted from “Pending with” (SchoolAdmin DB row may still exist as pending).</li>
     <li>Student profile defaults on PortalAdmin activation: grade 1, section A.</li>
-    <li>On Reject: soft-reject — <code>app_users.rejected_at</code> set; rejector's <code>app_user_approval</code> row gets <code>is_approved = false</code>; other pending queue rows left as-is. Login-status returns <strong>Rejected</strong>; same identity may request access again (new user row).</li>
     <li>Approvals UI (Web): school on line 1, campus on line 2; no Admin Target column; long reason truncated with Read more.</li>
   </ul>
+
+  <h3>Soft reject (critical — not a hard delete)</h3>
+  <table>
+    <thead>
+      <tr><th>What</th><th>Behaviour</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>app_users</code></td><td>Row <strong>kept</strong>. Sets <code>rejected_at</code>; keeps <code>is_active=false</code>, <code>password_hash</code> NULL. Does <strong>not</strong> delete the user.</td></tr>
+      <tr><td>Rejector’s <code>app_user_approval</code></td><td><code>is_approved = false</code>, <code>approved_at</code> set (via <code>RecordRejected</code>). If no queue row existed, one is created then marked rejected.</td></tr>
+      <tr><td>Other admins’ pending rows</td><td><strong>Left as-is</strong> (<code>is_approved</code> still NULL). They simply fall off the pending list because the user is rejected.</td></tr>
+      <tr><td>Pending list</td><td>Rejected users excluded (<code>rejected_at IS NULL</code> filter).</td></tr>
+      <tr><td>login-status</td><td><code>Rejected</code> — “Your registration request was rejected. You may submit a new request.”</td></tr>
+      <tr><td>Re-request</td><td>Allowed. Uniqueness ignores rejected rows. Same CNIC/mobile creates a <strong>new</strong> <code>app_users</code> + new approval queue. Login lookup prefers the non-rejected row.</td></tr>
+      <tr><td><code>app_user_approval.is_approved</code></td><td><code>NULL</code> = pending · <code>true</code> = approved · <code>false</code> = rejected</td></tr>
+    </tbody>
+  </table>
 
   <h2 id="directory">6. Directory (admin) create rules</h2>
   <p>No password on create. Directory users are auto-approved and must set password on first login (<code>NeedsPasswordSetup</code>). Directory create does <em>not</em> use <code>app_user_approval</code>.</p>
@@ -404,21 +435,22 @@
   <h3>Shared 3-step flow (Web + Mobile)</h3>
   <ol>
     <li>Enter CNIC or mobile → <code>POST /api/auth/login-status</code>.</li>
-    <li>Branch: <code>PendingApproval</code> | <code>NeedsPasswordSetup</code> | <code>Ready</code>.</li>
-    <li>Sign in → <code>POST /api/auth/login</code>.</li>
+    <li>Branch: <code>PendingApproval</code> | <code>Rejected</code> | <code>NeedsPasswordSetup</code> | <code>Ready</code>.</li>
+    <li>For Ready only: Sign in → <code>POST /api/auth/login</code>.</li>
   </ol>
-  <p>Login identifier resolution: username → CNIC → mobile.</p>
+  <p>Login identifier resolution: username → CNIC → mobile (prefers non-rejected row when a soft-rejected duplicate exists).</p>
   <p>While SchoolAdmin / CampusAdmin have approved but PortalAdmin has not, login-status remains <code>PendingApproval</code> (account not active).</p>
+  <p><code>PendingApproval</code> and <code>Rejected</code> keep the user on the identifier step (info message; no password step).</p>
   <h3>How to check if a user is active</h3>
   <table>
     <thead>
       <tr><th>Method</th><th>How</th><th>Platform</th></tr>
     </thead>
     <tbody>
-      <tr><td>Login status UI</td><td>Enter identifier; see Pending / Needs password / Ready / not active</td><td>Web + Mobile</td></tr>
-      <tr><td>Pending list</td><td>Appears while <code>is_active=false</code> and no password (includes post–Campus/School approval)</td><td>Web + Mobile</td></tr>
+      <tr><td>Login status UI</td><td>Enter identifier; see Pending / Rejected / Needs password / Ready / not active</td><td>Web + Mobile</td></tr>
+      <tr><td>Pending list</td><td>Appears while <code>is_active=false</code>, no password, and <code>rejected_at</code> NULL (includes post–Campus/School approval)</td><td>Web + Mobile</td></tr>
       <tr><td>Directory list</td><td>Active / Inactive column and filters</td><td>Web only</td></tr>
-      <tr><td>Database</td><td><code>app_users.is_active</code>, <code>password_hash</code>, <code>app_user_roles</code>, <code>app_user_approval</code></td><td>QA / DB</td></tr>
+      <tr><td>Database</td><td><code>app_users.is_active</code>, <code>password_hash</code>, <code>rejected_at</code>, <code>app_user_roles</code>, <code>app_user_approval.is_approved</code></td><td>QA / DB</td></tr>
       <tr><td><code>GET /api/auth/me</code></td><td>After login; includes <code>role</code>, <code>roles</code>, <code>mustChangePassword</code></td><td>API</td></tr>
     </tbody>
   </table>
@@ -551,16 +583,20 @@
   </div>
 
   <div class="scenario" id="qa-10">
-    <h3><span class="id">QA-10</span> Reject registration</h3>
-    <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
+    <h3><span class="id">QA-10</span> Reject registration (soft-reject)</h3>
+    <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span><span class="api">API / DB</span></div>
     <ol class="steps">
-      <li>Create a pending request.</li>
-      <li>Admin Rejects (before or without prior Campus/School record).</li>
-      <li>Confirm removed from Approvals.</li>
-      <li>Login with same identifier → status <strong>Rejected</strong> (message invites re-request).</li>
-      <li>Submit Request Access again with same CNIC/mobile → succeeds (new pending row).</li>
+      <li>Create a pending request (optionally with school+campus so multiple <code>app_user_approval</code> rows exist).</li>
+      <li>Admin Rejects from Approvals (confirm dialog → success: “{name} was rejected.”).</li>
+      <li>Confirm removed from Approvals for all admins.</li>
+      <li>DB: <code>app_users.rejected_at</code> is set; user row still exists (not deleted).</li>
+      <li>DB: rejector’s <code>app_user_approval</code> has <code>is_approved = false</code>; other admins’ pending rows may still be <code>is_approved NULL</code>.</li>
+      <li>Login with same identifier → status <strong>Rejected</strong> (“…You may submit a new request.”).</li>
+      <li>Submit Request Access again with same CNIC/mobile → succeeds (new <code>app_users</code> + new approval queue).</li>
+      <li>Login with same identifier after re-request → <code>PendingApproval</code> (new row preferred over soft-rejected one).</li>
     </ol>
-    <div class="expect">Expected: Soft-reject (user + approval trail kept); login-status Rejected; re-request allowed.</div>
+    <div class="expect">Expected: Soft-reject only; trail kept; login-status Rejected then re-request → PendingApproval on new row.</div>
+    <div class="note">Do not expect “No account found” after reject — that was the old hard-delete behaviour.</div>
   </div>
 
   <div class="scenario" id="qa-11">
@@ -807,18 +843,20 @@
       <tr><td>9</td><td>PortalAdmin alone can activate (others not required)</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>10</td><td>CampusAdmin approve removes SchoolAdmin from Pending with</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>11</td><td>Set password → Ready login</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>12</td><td>Reject → soft-reject + login-status Rejected; re-request allowed</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>13</td><td>Directory create → NeedsPasswordSetup (no approval queue)</td><td>☐</td><td>login</td><td></td></tr>
-      <tr><td>14</td><td>PortalAdmin creates SchoolAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>15</td><td>Portal/School Admin creates CampusAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>16</td><td>CampusAdmin campus-scoped list + directory create</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>17</td><td>Multi-role add Teacher to Parent; switch role</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>18</td><td>Student / PortalAdmin cannot combine roles</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>19</td><td>Deactivate → not active</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>20</td><td>Required * dark red bold</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>21</td><td>Approvals UI: Pending with, no Admin Target, Read more</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>22</td><td>Switch role survives token refresh</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>23</td><td>No <code>role</code> / <code>admin_target</code> columns on <code>app_users</code></td><td>DB</td><td>—</td><td></td></tr>
+      <tr><td>12</td><td>Reject → soft-reject (row kept) + login-status Rejected</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>13</td><td>After reject: <code>rejected_at</code> set; rejector <code>is_approved=false</code></td><td>DB</td><td>—</td><td></td></tr>
+      <tr><td>14</td><td>After reject: same CNIC/mobile can re-request (new row)</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>15</td><td>Directory create → NeedsPasswordSetup (no approval queue)</td><td>☐</td><td>login</td><td></td></tr>
+      <tr><td>16</td><td>PortalAdmin creates SchoolAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>17</td><td>Portal/School Admin creates CampusAdmin; first login set password</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>18</td><td>CampusAdmin campus-scoped list + directory create</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>19</td><td>Multi-role add Teacher to Parent; switch role</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>20</td><td>Student / PortalAdmin cannot combine roles</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>21</td><td>Deactivate → not active</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>22</td><td>Required * dark red bold</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>23</td><td>Approvals UI: Pending with, no Admin Target, Read more</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>24</td><td>Switch role survives token refresh</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>25</td><td>No <code>role</code> / <code>admin_target</code> on <code>app_users</code>; soft-reject columns present</td><td>DB</td><td>—</td><td></td></tr>
     </tbody>
   </table>
 
@@ -833,8 +871,8 @@
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools/{id}/campuses</code></td><td>Anonymous</td><td>Campuses</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending list + <code>pendingApprovers</code> + <code>currentUserHasApproved</code></td></tr>
       <tr><td>POST</td><td><code>/api/auth/registrations/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Returns <code>isActivated</code> + message (PortalAdmin activates)</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Soft-reject (keep trail)</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/login-status</code></td><td>Anonymous</td><td>Pre-login status</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Soft-reject: set <code>rejected_at</code> + <code>is_approved=false</code> (no delete)</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/login-status</code></td><td>Anonymous</td><td>Pre-login: PendingApproval | Rejected | NeedsPasswordSetup | Ready</td></tr>
       <tr><td>POST</td><td><code>/api/auth/set-initial-password</code></td><td>Anonymous</td><td>First password (after PortalAdmin activation)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>Sign in (returns role + roles)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/switch-role</code></td><td>Bearer</td><td>Change active role; new tokens</td></tr>
@@ -853,7 +891,8 @@
     Source of truth: WebApi AuthService / DirectoryService / UserRepository,
     React auth/admin, Flutter login &amp; pending registrations,
     tables <code>app_user_roles</code> and <code>app_user_approval</code>
-    (no <code>app_users.role</code> / <code>admin_target</code>).
+    (no <code>app_users.role</code> / <code>admin_target</code>;
+    soft-reject via <code>app_users.rejected_at</code> + <code>app_user_approval.is_approved</code>).
   </footer>
 </main>
 </body>
