@@ -89,23 +89,42 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
     private const string UserRoleSupportSql = """
         -- Ensure UserRole lookup rows exist (IDs match Domain.UserRole).
+        -- Layout: 2010 PortalAdmin, 2011 SchoolAdmin, 2012 CampusAdmin,
+        --         2013 Parent, 2014 Teacher, 2015 Student.
         INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
         SELECT seed.id, seed.name, 'UserRole', seed.order_by, TRUE, NULL
         FROM (
             VALUES
                 (2010, 'PortalAdmin'::varchar, 0::smallint),
                 (2011, 'SchoolAdmin', 0),
-                (2012, 'Student', 0),
-                (2013, 'Teacher', 0),
-                (2014, 'Parent', 0),
-                (2015, 'CampusAdmin', 0)
+                (2012, 'CampusAdmin', 0),
+                (2013, 'Parent', 0),
+                (2014, 'Teacher', 0),
+                (2015, 'Student', 0)
         ) AS seed(id, name, order_by)
         WHERE NOT EXISTS (
             SELECT 1
             FROM public.lookups existing
             WHERE existing.id = seed.id
-               OR (existing.type = 'UserRole' AND lower(existing.name) = lower(seed.name))
         );
+
+        -- Keep names aligned when IDs already exist (lookup value renames).
+        UPDATE public.lookups AS existing
+        SET name = seed.name,
+            type = 'UserRole',
+            is_active = TRUE
+        FROM (
+            VALUES
+                (2010, 'PortalAdmin'::varchar),
+                (2011, 'SchoolAdmin'),
+                (2012, 'CampusAdmin'),
+                (2013, 'Parent'),
+                (2014, 'Teacher'),
+                (2015, 'Student')
+        ) AS seed(id, name)
+        WHERE existing.id = seed.id
+          AND existing.type = 'UserRole'
+          AND existing.name IS DISTINCT FROM seed.name;
 
         -- Convert app_users.role from text names to lookup ids (smallint).
         DO $migrate$
@@ -135,10 +154,10 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                     WHEN 'portaladmin' THEN 2010
                     WHEN 'superadmin' THEN 2010
                     WHEN 'schooladmin' THEN 2011
-                    WHEN 'student' THEN 2012
-                    WHEN 'teacher' THEN 2013
-                    WHEN 'parent' THEN 2014
-                    WHEN 'campusadmin' THEN 2015
+                    WHEN 'campusadmin' THEN 2012
+                    WHEN 'parent' THEN 2013
+                    WHEN 'teacher' THEN 2014
+                    WHEN 'student' THEN 2015
                     ELSE NULL
                 END
                 WHERE role_id IS NULL;
@@ -163,7 +182,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                     ADD CONSTRAINT chk_app_users_role
                     CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015]::int2[]));
 
-                -- student_groups.creator_role: text -> lookup id
+                -- student_groups.creator_role: text -> lookup id (Parent=2013, Teacher=2014)
                 IF EXISTS (
                     SELECT 1
                     FROM information_schema.columns
@@ -177,8 +196,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
                     UPDATE public.student_groups
                     SET creator_role_id = CASE lower(creator_role)
-                        WHEN 'teacher' THEN 2013
-                        WHEN 'parent' THEN 2014
+                        WHEN 'parent' THEN 2013
+                        WHEN 'teacher' THEN 2014
                         ELSE NULL
                     END
                     WHERE creator_role_id IS NULL;

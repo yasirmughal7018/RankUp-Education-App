@@ -7,8 +7,8 @@ public enum UserRole
 {
     PortalAdmin = 2010,
     SchoolAdmin = 2011,
-    Student = 2012,
-    Teacher = 2013,
-    Parent = 2014,
-    CampusAdmin = 2015
+    CampusAdmin = 2012,
+    Parent = 2013,
+    Teacher = 2014,
+    Student = 2015
 }

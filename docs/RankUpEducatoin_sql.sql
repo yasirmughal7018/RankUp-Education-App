@@ -29,7 +29,7 @@ CREATE TABLE public.app_users (
 	CONSTRAINT app_users_username_key UNIQUE (username),
 	CONSTRAINT app_users_role_fkey FOREIGN KEY (role) REFERENCES public.lookups(id),
 	CONSTRAINT chk_app_users_password_when_active CHECK (((is_active = false) OR (password_hash IS NOT NULL) OR (must_change_password IS TRUE))),
-	CONSTRAINT chk_app_users_role CHECK ((role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014]::int2[])))
+	CONSTRAINT chk_app_users_role CHECK ((role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015]::int2[])))
 );
 CREATE UNIQUE INDEX ix_app_users_email ON public.app_users USING btree (email) WHERE (email IS NOT NULL);
 CREATE UNIQUE INDEX ix_app_users_cnic_unique ON public.app_users USING btree (cnic) WHERE (cnic IS NOT NULL);
