@@ -90,11 +90,14 @@ export function QuestionCreatePage() {
     formValues.topicId,
   ]);
 
-  async function saveQuestion(values: QuestionFormValues) {
+  async function saveQuestion(
+    values: QuestionFormValues,
+    submitForReview: boolean,
+  ) {
     setIsSubmitting(true);
     setSuccessMessage(null);
     try {
-      const created = await questionApi.createQuestion(values);
+      const created = await questionApi.createQuestion(values, submitForReview);
       setSavedQuestions((current) => {
         const next = [...current, created];
         setReviewIndex(next.length - 1);
@@ -103,7 +106,9 @@ export function QuestionCreatePage() {
 
       setFormValues(resetQuestionContent(values));
       setSuccessMessage(
-        `Saved question #${created.questionId}. Class / Subject / Topic kept — add the next one.`,
+        submitForReview
+          ? `Submitted question #${created.questionId} for review. Class / Subject / Topic kept — add the next one.`
+          : `Saved draft question #${created.questionId}. Class / Subject / Topic kept — add the next one.`,
       );
     } finally {
       setIsSubmitting(false);
@@ -175,10 +180,12 @@ export function QuestionCreatePage() {
             key={`batch-${savedQuestions.length}`}
             initialValues={formValues}
             lockScope
-            submitLabel="Save & Add"
+            submitLabel="Submit for review & Add"
+            secondarySubmitLabel="Save as Draft"
             isSubmitting={isSubmitting}
             onValuesChange={setFormValues}
-            onSubmit={saveQuestion}
+            onSubmit={(values) => saveQuestion(values, true)}
+            onSecondarySubmit={(values) => saveQuestion(values, false)}
             onCancel={() => navigate("/questions")}
           />
         </div>
@@ -239,9 +246,20 @@ export function QuestionCreatePage() {
                         </li>
                       ))}
                     </ul>
+                  ) : (reviewing.acceptedAnswers?.length ?? 0) > 0 ? (
+                    <ul className="mt-3 space-y-1.5">
+                      {reviewing.acceptedAnswers.map((answer) => (
+                        <li
+                          key={answer.acceptedAnswerId}
+                          className="rounded-xl bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-900"
+                        >
+                          {answer.answerText}
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
                     <p className="mt-3 text-xs text-slate-500">
-                      Descriptive — no options.
+                      No options on this question.
                     </p>
                   )}
                 </div>
@@ -304,8 +322,10 @@ export function QuestionCreatePage() {
               <li>1. Set Class, Subject, Topic, and Difficulty once.</li>
               <li>2. Choose the question type — answer UI changes with it.</li>
               <li>
-                3. Use <strong className="text-white">Save &amp; Add</strong> to
-                keep the same scope and clear only the question fields.
+                3. Use <strong className="text-white">Save as Draft</strong> to
+                keep working privately, or{" "}
+                <strong className="text-white">Submit for review &amp; Add</strong>{" "}
+                to queue PortalAdmin approval — scope stays sticky either way.
               </li>
               <li>
                 4. Open full detail to browse every question saved in this

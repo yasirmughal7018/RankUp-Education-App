@@ -96,7 +96,18 @@ public sealed record QuizQuestionItem(
     short Marks,
     short DisplayOrder,
     string? Hint,
-    IReadOnlyList<QuizQuestionOptionItem> Options);
+    IReadOnlyList<QuizQuestionOptionItem> Options,
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
+
+/// <summary>Server-side Fill scoring model — never returned on student attempt start.</summary>
+public sealed record QuestionAcceptedAnswerScoreItem(
+    long AcceptedAnswerId,
+    string AnswerText,
+    bool IsCaseSensitive,
+    bool AllowPartialMatch,
+    string NormalizedAnswer,
+    short MinimumLength,
+    short MaximumLength);
 
 public sealed record QuizQuestionOptionItem(
     long OptionId,
@@ -221,7 +232,8 @@ public sealed record QuizQuestionCopyItem(
     string? Hint,
     string? Explanation,
     short DisplayOrder,
-    IReadOnlyList<QuizQuestionOptionItem> Options);
+    IReadOnlyList<QuizQuestionOptionItem> Options,
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
 
 public sealed record QuizAssignmentReviewState(
     long AssignmentId,

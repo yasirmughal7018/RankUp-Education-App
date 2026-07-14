@@ -115,7 +115,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
 
         await _questions.AddQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await ReplaceOptionsAsync(question.Id, request.Options, cancellationToken);
+        await ReplaceAnswersAsync(question.Id, request.QuestionType, request.Options, cancellationToken);
 
         var existingQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
         var displayOrder = (short)(existingQuestions.Count + 1);
@@ -150,8 +150,9 @@ public sealed class QuizQuestionService : IQuizQuestionService
         }
 
         var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
-        var isApprovedStatus = QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
-            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+        var isApprovedStatus =
+            QuizLookupNames.IsApprovedQuestionStatusId(question.StatusId)
+            || QuizLookupNames.IsApprovedQuestionStatusName(statusName);
         if (!isApprovedStatus)
         {
             throw new BusinessRuleException("Only approved question-bank items can be attached to a quiz.");
@@ -160,7 +161,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         if (!question.IsEligibleForQuiz)
         {
             throw new BusinessRuleException(
-                "Question must be both human-approved (ApprovedBy) and AI-approved before it can be added to a quiz.");
+                "Question must be PortalAdmin-approved (ApprovedBy set) and active before it can be added to a quiz.");
         }
 
         if (question.ClassId != quiz.ClassId || question.SubjectId != quiz.SubjectId)
@@ -232,7 +233,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             request.Hint,
             request.Explanation);
 
-        await ReplaceOptionsAsync(questionId, request.Options, cancellationToken);
+        await ReplaceAnswersAsync(questionId, request.QuestionType, request.Options, cancellationToken);
         link.SetMarks(request.Marks);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -266,12 +267,31 @@ public sealed class QuizQuestionService : IQuizQuestionService
         return await BuildManageResponseAsync(quizId, scope, cancellationToken);
     }
 
-    private async Task ReplaceOptionsAsync(
+    private async Task ReplaceAnswersAsync(
         long questionId,
+        string questionType,
         IReadOnlyList<QuizQuestionOptionRequest> options,
         CancellationToken cancellationToken)
     {
         await _questions.RemoveQuestionOptionsAsync(questionId, cancellationToken);
+        await _questions.RemoveQuestionAcceptedAnswersAsync(questionId, cancellationToken);
+
+        if (QuizQuestionHelper.IsFillBlankType(questionType))
+        {
+            var answers = options
+                .Where(option => !string.IsNullOrWhiteSpace(option.OptionText))
+                .Select(option => new QuestionAcceptedAnswer(questionId, option.OptionText.Trim()))
+                .ToArray();
+
+            if (answers.Length > 0)
+            {
+                await _questions.AddQuestionAcceptedAnswersAsync(answers, cancellationToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         if (options.Count == 0)
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);

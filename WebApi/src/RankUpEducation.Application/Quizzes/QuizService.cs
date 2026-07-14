@@ -424,19 +424,15 @@ public sealed class QuizService : IQuizService
             else if (isFillBlank && submitted.SubmittedText.HasTrimmedText())
             {
                 var submittedText = submitted.SubmittedText.AsTrimmedString();
-                var matched = question.Options.FirstOrDefault(option =>
-                    option.IsCorrect
-                    && string.Equals(
-                        option.OptionText.AsTrimmedString(),
-                        submittedText,
-                        StringComparison.OrdinalIgnoreCase));
-                isCorrect = matched is not null;
+                isCorrect = question.AcceptedAnswers.Any(answer => MatchesAcceptedAnswer(answer, submittedText))
+                    || question.Options.Any(option =>
+                        option.IsCorrect
+                        && string.Equals(
+                            option.OptionText.AsTrimmedString(),
+                            submittedText,
+                            StringComparison.OrdinalIgnoreCase));
                 awardedMarks = isCorrect ? question.Marks : (short)0;
                 obtainedMarks += awardedMarks;
-                if (matched is not null)
-                {
-                    selectedOptionIds = [matched.OptionId];
-                }
             }
             else if (selectedOptionIds.Count > 0)
             {
@@ -544,14 +540,17 @@ public sealed class QuizService : IQuizService
                         Array.Empty<QuizOptionResponse>());
                 }
 
-                var options = bankQuestion.Options
-                    .Select(option => new QuizOptionResponse(
-                        option.OptionId,
-                        option.OptionText,
-                        option.OptionImageUrl))
-                    .ToList();
+                var isFillBlank = QuizQuestionHelper.IsFillBlankType(bankQuestion.QuestionTypeName);
+                var options = isFillBlank
+                    ? new List<QuizOptionResponse>()
+                    : bankQuestion.Options
+                        .Select(option => new QuizOptionResponse(
+                            option.OptionId,
+                            option.OptionText,
+                            option.OptionImageUrl))
+                        .ToList();
 
-                if (quiz.ShuffleOptions && options.Count > 1)
+                if (!isFillBlank && quiz.ShuffleOptions && options.Count > 1)
                 {
                     options = options.OrderBy(_ => Random.Shared.Next()).ToList();
                 }
@@ -765,6 +764,32 @@ public sealed class QuizService : IQuizService
     {
         return _currentUser.ProfileId ?? _currentUser.UserId
             ?? throw new ForbiddenAppException("Student profile was not found.");
+    }
+
+    private static bool MatchesAcceptedAnswer(QuestionAcceptedAnswerScoreItem answer, string submittedText)
+    {
+        if (answer.MinimumLength > 0 && submittedText.Length < answer.MinimumLength)
+        {
+            return false;
+        }
+
+        if (answer.MaximumLength > 0 && submittedText.Length > answer.MaximumLength)
+        {
+            return false;
+        }
+
+        if (answer.AllowPartialMatch)
+        {
+            return answer.IsCaseSensitive
+                ? submittedText.Contains(answer.AnswerText, StringComparison.Ordinal)
+                    || answer.AnswerText.Contains(submittedText, StringComparison.Ordinal)
+                : submittedText.Contains(answer.AnswerText, StringComparison.OrdinalIgnoreCase)
+                    || answer.AnswerText.Contains(submittedText, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return answer.IsCaseSensitive
+            ? string.Equals(answer.AnswerText, submittedText, StringComparison.Ordinal)
+            : string.Equals(answer.NormalizedAnswer, submittedText.AsLowercase(), StringComparison.Ordinal);
     }
 
     private static UserRole ParseRole(string? role)

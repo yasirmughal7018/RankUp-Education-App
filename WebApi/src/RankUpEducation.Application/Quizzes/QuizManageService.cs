@@ -393,6 +393,20 @@ public sealed class QuizManageService : IQuizManageService
                 await _questions.AddQuestionOptionsAsync(options, cancellationToken);
             }
 
+            if (sourceQuestion.AcceptedAnswers.Count > 0)
+            {
+                var answers = sourceQuestion.AcceptedAnswers
+                    .Select(answer => new QuestionAcceptedAnswer(
+                        question.Id,
+                        answer.AnswerText,
+                        answer.IsCaseSensitive,
+                        answer.AllowPartialMatch,
+                        answer.MinimumLength,
+                        answer.MaximumLength))
+                    .ToArray();
+                await _questions.AddQuestionAcceptedAnswersAsync(answers, cancellationToken);
+            }
+
             await _quizQuestions.AddQuizQuestionAsync(
                 new QuizQuestion(copy.Id, question.Id, sourceQuestion.DisplayOrder, sourceQuestion.Marks),
                 cancellationToken);

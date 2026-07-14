@@ -75,8 +75,9 @@ public sealed class QuestionRepository : IQuestionRepository
                 .Where(lookup => lookup.Type == QuizLookupNames.QuestionStatus)
                 .ToListAsync(cancellationToken);
             var approvedStatusIdList = approvedLookups
-                .Where(lookup => QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
-                    name.Equals(lookup.Name, StringComparison.OrdinalIgnoreCase)))
+                .Where(lookup =>
+                    QuizLookupNames.IsApprovedQuestionStatusId(lookup.Id)
+                    || QuizLookupNames.IsApprovedQuestionStatusName(lookup.Name))
                 .Select(lookup => lookup.Id)
                 .ToList();
 
@@ -126,16 +127,18 @@ public sealed class QuestionRepository : IQuestionRepository
 
         var pendingStatusIds = pendingApprovalOnly
             ? lookupNames
-                .Where(pair => QuizLookupNames.PendingQuestionStatusNames.Any(name =>
-                    name.Equals(pair.Value, StringComparison.OrdinalIgnoreCase)))
+                .Where(pair =>
+                    QuizLookupNames.IsPendingQuestionStatusId(pair.Key)
+                    || QuizLookupNames.IsPendingQuestionStatusName(pair.Value))
                 .Select(pair => pair.Key)
                 .ToHashSet()
             : null;
 
         var approvedStatusIds = eligibleForQuizOnly
             ? lookupNames
-                .Where(pair => QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
-                    name.Equals(pair.Value, StringComparison.OrdinalIgnoreCase)))
+                .Where(pair =>
+                    QuizLookupNames.IsApprovedQuestionStatusId(pair.Key)
+                    || QuizLookupNames.IsApprovedQuestionStatusName(pair.Value))
                 .Select(pair => pair.Key)
                 .ToHashSet()
             : null;
@@ -177,6 +180,20 @@ public sealed class QuestionRepository : IQuestionRepository
                 option.IsCorrect))
             .ToListAsync(cancellationToken);
 
+        var acceptedAnswers = await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+            .Where(answer => answer.QuestionId == questionId)
+            .Select(answer => new QuestionAcceptedAnswerItem(
+                answer.Id,
+                answer.AnswerText,
+                answer.IsCaseSensitive,
+                answer.AllowPartialMatch,
+                answer.NormalizedAnswer,
+                answer.MinimumLength,
+                answer.MaximumLength,
+                answer.AllowAiReview,
+                answer.AllowTeacherReview))
+            .ToListAsync(cancellationToken);
+
         var lookupIds = new[] { question.QuestionTypeId, question.StatusId };
         var lookupNames = await _dbContext.Lookups.AsNoTracking()
             .Where(lookup => lookupIds.Contains(lookup.Id))
@@ -204,7 +221,8 @@ public sealed class QuestionRepository : IQuestionRepository
             question.RejectionReason,
             question.CreatedDate,
             question.ModifiedDate,
-            options);
+            options,
+            acceptedAnswers);
     }
 
     public Task<int> CountQuizLinksAsync(long questionId, CancellationToken cancellationToken)
@@ -238,5 +256,20 @@ public sealed class QuestionRepository : IQuestionRepository
     public async Task AddQuestionOptionsAsync(IReadOnlyList<QuestionOption> options, CancellationToken cancellationToken)
     {
         await _dbContext.QuestionOptions.AddRangeAsync(options, cancellationToken);
+    }
+
+    public async Task RemoveQuestionAcceptedAnswersAsync(long questionId, CancellationToken cancellationToken)
+    {
+        var answers = await _dbContext.QuestionAcceptedAnswers
+            .Where(answer => answer.QuestionId == questionId)
+            .ToListAsync(cancellationToken);
+        _dbContext.QuestionAcceptedAnswers.RemoveRange(answers);
+    }
+
+    public async Task AddQuestionAcceptedAnswersAsync(
+        IReadOnlyList<QuestionAcceptedAnswer> answers,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.QuestionAcceptedAnswers.AddRangeAsync(answers, cancellationToken);
     }
 }

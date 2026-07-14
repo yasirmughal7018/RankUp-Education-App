@@ -1,4 +1,3 @@
-using RankUpEducation.Application.Questions;
 using RankUpEducation.Contracts.Questions;
 using ClosedXML.Excel;
 
@@ -64,6 +63,31 @@ public static class QuestionExcelImportParser
                 options.Add(new QuestionOptionRequest(optionText, isCorrect));
             }
 
+            var acceptedAnswers = new List<QuestionAcceptedAnswerRequest>();
+            for (var answerIndex = 1; answerIndex <= 8; answerIndex++)
+            {
+                var answerKey = $"AcceptedAnswer{answerIndex}";
+                if (!headers.ContainsKey(answerKey))
+                {
+                    continue;
+                }
+
+                var answerText = GetString(row, headers, answerKey);
+                if (string.IsNullOrWhiteSpace(answerText))
+                {
+                    continue;
+                }
+
+                acceptedAnswers.Add(new QuestionAcceptedAnswerRequest(
+                    AnswerText: answerText,
+                    IsCaseSensitive: GetBool(row, headers, $"IsCaseSensitive{answerIndex}", defaultValue: false),
+                    AllowPartialMatch: GetBool(row, headers, $"AllowPartialMatch{answerIndex}", defaultValue: false),
+                    MinimumLength: GetShort(row, headers, $"MinLength{answerIndex}", defaultValue: 0),
+                    MaximumLength: GetShort(row, headers, $"MaxLength{answerIndex}", defaultValue: 1000),
+                    AllowAiReview: GetBool(row, headers, $"AllowAIReview{answerIndex}", defaultValue: false),
+                    AllowTeacherReview: GetBool(row, headers, $"AllowTeacherReview{answerIndex}", defaultValue: false)));
+            }
+
             rows.Add(new CreateQuestionRequest(
                 QuestionText: questionText,
                 QuestionType: GetString(row, headers, "QuestionType"),
@@ -76,6 +100,7 @@ public static class QuestionExcelImportParser
                 Hint: GetNullableString(row, headers, "Hint"),
                 Explanation: GetNullableString(row, headers, "Explanation"),
                 Options: options,
+                AcceptedAnswers: acceptedAnswers,
                 SubmitForReview: false));
         }
 
@@ -91,7 +116,9 @@ public static class QuestionExcelImportParser
             "QuestionText", "QuestionType", "ClassId", "SubjectId", "TopicId",
             "DifficultyLevel", "Marks", "EstimatedTimeSeconds", "Hint", "Explanation",
             "Option1", "IsCorrect1", "Option2", "IsCorrect2", "Option3", "IsCorrect3",
-            "Option4", "IsCorrect4"
+            "Option4", "IsCorrect4",
+            "AcceptedAnswer1", "IsCaseSensitive1", "AllowPartialMatch1",
+            "AcceptedAnswer2", "IsCaseSensitive2", "AllowPartialMatch2"
         };
 
         for (var i = 0; i < headers.Length; i++)
@@ -111,6 +138,18 @@ public static class QuestionExcelImportParser
         sheet.Cell(2, 12).Value = true;
         sheet.Cell(2, 13).Value = "Karachi";
         sheet.Cell(2, 14).Value = false;
+
+        sheet.Cell(3, 1).Value = "The chemical symbol for water is ____.";
+        sheet.Cell(3, 2).Value = "Fill in the Blanks";
+        sheet.Cell(3, 3).Value = 1;
+        sheet.Cell(3, 4).Value = 1;
+        sheet.Cell(3, 6).Value = 2001;
+        sheet.Cell(3, 7).Value = 1;
+        sheet.Cell(3, 8).Value = 45;
+        sheet.Cell(3, 19).Value = "H2O";
+        sheet.Cell(3, 20).Value = false;
+        sheet.Cell(3, 21).Value = false;
+        sheet.Cell(3, 22).Value = "H₂O";
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);

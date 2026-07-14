@@ -19,6 +19,15 @@ bool isAdminRole(UserRole role) {
       role == UserRole.portalAdmin;
 }
 
+/// Question-bank manage roles (Students use quizzes only).
+bool canManageQuestions(UserRole role) {
+  return role == UserRole.portalAdmin ||
+      role == UserRole.schoolAdmin ||
+      role == UserRole.campusAdmin ||
+      role == UserRole.teacher ||
+      role == UserRole.parent;
+}
+
 extension UserRoleLabel on UserRole {
   String get label {
     return switch (this) {

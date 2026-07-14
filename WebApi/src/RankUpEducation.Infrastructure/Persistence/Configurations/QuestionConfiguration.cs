@@ -65,8 +65,10 @@ public sealed class QuestionAcceptedAnswerConfiguration : IEntityTypeConfigurati
         builder.Property(answer => answer.AllowPartialMatch).HasColumnName("allow_partial_match").HasDefaultValue(false);
         builder.Property(answer => answer.NormalizedAnswer).HasColumnName("normalized_answer").HasMaxLength(1000).IsRequired();
         builder.Property(answer => answer.MinimumLength).HasColumnName("minimum_length").HasDefaultValue((short)0);
-        builder.Property(answer => answer.MaximumLength).HasColumnName("maximum_length").HasDefaultValue(1000L);
+        builder.Property(answer => answer.MaximumLength).HasColumnName("maximum_length").HasDefaultValue((short)1000);
         builder.Property(answer => answer.AiReview).HasColumnName("ai_review").HasMaxLength(1000);
         builder.Property(answer => answer.TeacherReview).HasColumnName("teacher_review").HasMaxLength(1000);
+        builder.Property(answer => answer.AllowAiReview).HasColumnName("allow_ai_review").HasDefaultValue(false);
+        builder.Property(answer => answer.AllowTeacherReview).HasColumnName("allow_teacher_review").HasDefaultValue(false);
     }
 }

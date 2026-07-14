@@ -34,6 +34,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(SchoolSoftDeleteSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(NotificationSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuestionStatusLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
@@ -56,6 +57,129 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         ALTER TABLE public.questions
             ADD COLUMN IF NOT EXISTS is_ai_approved BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE public.question_accepted_answers
+            ADD COLUMN IF NOT EXISTS allow_ai_review BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE public.question_accepted_answers
+            ADD COLUMN IF NOT EXISTS allow_teacher_review BOOLEAN NOT NULL DEFAULT FALSE;
+
+        -- One-time: move legacy Fill answers from question_options → question_accepted_answers.
+        INSERT INTO public.question_accepted_answers (
+            question_id, answer_text, is_case_sensitive, allow_partial_match,
+            normalized_answer, minimum_length, maximum_length,
+            allow_ai_review, allow_teacher_review)
+        SELECT
+            o.question_id,
+            o.option_text,
+            FALSE,
+            FALSE,
+            lower(trim(o.option_text)),
+            0,
+            1000,
+            FALSE,
+            FALSE
+        FROM public.question_options o
+        INNER JOIN public.questions q ON q.id = o.question_id
+        INNER JOIN public.lookups l ON l.id = q.question_type_id
+        WHERE l.type = 'QuestionType'
+          AND (
+              lower(l.name) LIKE '%fill%blank%'
+              OR lower(l.name) IN ('fillblank', 'fill blanks')
+          )
+          AND o.is_correct = TRUE
+          AND length(trim(o.option_text)) > 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.question_accepted_answers a
+              WHERE a.question_id = o.question_id
+                AND lower(trim(a.answer_text)) = lower(trim(o.option_text))
+          );
+
+        DELETE FROM public.question_options o
+        USING public.questions q, public.lookups l
+        WHERE o.question_id = q.id
+          AND q.question_type_id = l.id
+          AND l.type = 'QuestionType'
+          AND (
+              lower(l.name) LIKE '%fill%blank%'
+              OR lower(l.name) IN ('fillblank', 'fill blanks')
+          );
+        """;
+
+    private const string QuestionStatusLookupSql = """
+        -- Canonical QuestionStatus IDs 110–114.
+        INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
+        SELECT v.id, v.name, 'QuestionStatus', v.ord, TRUE, NULL
+        FROM (
+            VALUES
+                (110::smallint, 'Draft'::varchar, 1::smallint),
+                (111, 'PendingReview', 2),
+                (112, 'Approved', 3),
+                (113, 'Rejected', 4),
+                (114, 'Archived', 5)
+        ) AS v(id, name, ord)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public.lookups existing WHERE existing.id = v.id
+        );
+
+        -- If canonical IDs already exist under QuestionStatus, normalize names.
+        UPDATE public.lookups SET name = 'Draft', order_by = 1, is_active = TRUE
+        WHERE id = 110 AND type = 'QuestionStatus' AND name IS DISTINCT FROM 'Draft';
+        UPDATE public.lookups SET name = 'PendingReview', order_by = 2, is_active = TRUE
+        WHERE id = 111 AND type = 'QuestionStatus' AND name IS DISTINCT FROM 'PendingReview';
+        UPDATE public.lookups SET name = 'Approved', order_by = 3, is_active = TRUE
+        WHERE id = 112 AND type = 'QuestionStatus' AND name IS DISTINCT FROM 'Approved';
+        UPDATE public.lookups SET name = 'Rejected', order_by = 4, is_active = TRUE
+        WHERE id = 113 AND type = 'QuestionStatus' AND name IS DISTINCT FROM 'Rejected';
+        UPDATE public.lookups SET name = 'Archived', order_by = 5, is_active = TRUE
+        WHERE id = 114 AND type = 'QuestionStatus' AND name IS DISTINCT FROM 'Archived';
+
+        -- Remap questions from legacy status names onto canonical IDs when those IDs exist.
+        UPDATE public.questions q
+        SET status_id = 110
+        FROM public.lookups l
+        WHERE q.status_id = l.id
+          AND l.type = 'QuestionStatus'
+          AND lower(l.name) = 'draft'
+          AND q.status_id <> 110
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 110 AND c.type = 'QuestionStatus');
+
+        UPDATE public.questions q
+        SET status_id = 111
+        FROM public.lookups l
+        WHERE q.status_id = l.id
+          AND l.type = 'QuestionStatus'
+          AND lower(l.name) IN ('pending', 'under review', 'pendingreview')
+          AND q.status_id <> 111
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 111 AND c.type = 'QuestionStatus');
+
+        UPDATE public.questions q
+        SET status_id = 112
+        FROM public.lookups l
+        WHERE q.status_id = l.id
+          AND l.type = 'QuestionStatus'
+          AND lower(l.name) IN ('approved', 'active', 'published')
+          AND q.status_id <> 112
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 112 AND c.type = 'QuestionStatus');
+
+        UPDATE public.questions q
+        SET status_id = 113
+        FROM public.lookups l
+        WHERE q.status_id = l.id
+          AND l.type = 'QuestionStatus'
+          AND lower(l.name) IN ('rejected', 'declined')
+          AND q.status_id <> 113
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 113 AND c.type = 'QuestionStatus');
+
+        UPDATE public.questions q
+        SET status_id = 114
+        FROM public.lookups l
+        WHERE q.status_id = l.id
+          AND l.type = 'QuestionStatus'
+          AND lower(l.name) = 'archived'
+          AND q.status_id <> 114
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 114 AND c.type = 'QuestionStatus');
         """;
 
     private const string QuestionTypeLookupSql = """

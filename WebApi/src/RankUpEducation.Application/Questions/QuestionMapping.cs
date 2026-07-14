@@ -43,5 +43,14 @@ internal static class QuestionMapping
             item.Options.Select(option => new QuestionOptionResponse(
                 option.OptionId,
                 option.OptionText,
-                option.IsCorrect)).ToArray());
+                option.IsCorrect)).ToArray(),
+            item.AcceptedAnswers.Select(answer => new QuestionAcceptedAnswerResponse(
+                answer.AcceptedAnswerId,
+                answer.AnswerText,
+                answer.IsCaseSensitive,
+                answer.AllowPartialMatch,
+                answer.MinimumLength,
+                answer.MaximumLength,
+                answer.AllowAiReview,
+                answer.AllowTeacherReview)).ToArray());
 }

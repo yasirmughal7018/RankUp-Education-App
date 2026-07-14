@@ -26,7 +26,8 @@ public static class QuestionAiApprovalValidator
 
         if (QuizQuestionHelper.IsFillBlankType(questionTypeName))
         {
-            if (options.Length < 1 || options.All(option => string.IsNullOrWhiteSpace(option.OptionText)))
+            if (question.AcceptedAnswers.Count < 1
+                && (options.Length < 1 || options.All(option => string.IsNullOrWhiteSpace(option.OptionText))))
             {
                 throw new BusinessRuleException(
                     "AI approval requires fill-in-the-blank questions to have at least one accepted answer.");

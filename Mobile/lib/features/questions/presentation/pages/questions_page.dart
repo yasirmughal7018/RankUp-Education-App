@@ -1,6 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
+import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
+import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 import 'package:rankup_education/features/questions/data/models/question_summary_model.dart';
 import 'package:rankup_education/features/questions/presentation/providers/question_providers.dart';
 
@@ -9,6 +12,49 @@ class QuestionsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authControllerProvider).user;
+    final role = user?.role;
+
+    if (role == null || !canManageQuestions(role)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Question Bank')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Access restricted',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The question bank is for teachers and admins. '
+                  'Students answer questions inside quizzes only.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    if (role != null) {
+                      context.go(_dashboardPath(role));
+                    } else {
+                      context.go('/login');
+                    }
+                  },
+                  child: const Text('Back to dashboard'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final async = ref.watch(questionsListProvider);
 
     return Scaffold(
@@ -74,6 +120,10 @@ class _QuestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final approved =
+        question.approvedBy != null && question.approvedBy!.isNotEmpty;
+    final quizReady = question.isActive && approved;
+
     return Card(
       child: ListTile(
         leading: Icon(
@@ -85,10 +135,12 @@ class _QuestionCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '${question.questionType} · ${question.marks} marks'
-          '${question.approvedBy != null && question.approvedBy!.isNotEmpty ? ' · Human approved' : ''}'
-          '${question.isAiApproved ? ' · AI approved' : ''}'
-          '${question.approvedBy != null && question.approvedBy!.isNotEmpty && question.isAiApproved ? ' · Quiz ready' : ''}',
+          [
+            question.questionType,
+            '${question.marks} marks',
+            if (approved) 'Approved',
+            if (quizReady) 'Quiz ready',
+          ].join(' · '),
         ),
         trailing: Chip(
           label: Text(question.status),
@@ -100,4 +152,16 @@ class _QuestionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _dashboardPath(UserRole role) {
+  return switch (role) {
+    UserRole.student => '/student',
+    UserRole.parent => '/parent',
+    UserRole.teacher => '/teacher',
+    UserRole.schoolAdmin ||
+    UserRole.campusAdmin ||
+    UserRole.portalAdmin =>
+      '/admin',
+  };
 }

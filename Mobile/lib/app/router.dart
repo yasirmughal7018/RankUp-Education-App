@@ -57,6 +57,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _dashboardPath(user.role);
       }
 
+      if (isAuthenticated &&
+          location == '/questions' &&
+          !canManageQuestions(user.role)) {
+        return _dashboardPath(user.role);
+      }
+
       return null;
     },
     routes: [

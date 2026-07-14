@@ -18,6 +18,12 @@ public interface ILookupRepository
         short fallback,
         CancellationToken cancellationToken);
 
+    /// <summary>Returns the lookup when id exists and matches type; otherwise null.</summary>
+    Task<LookupListItem?> GetByIdAndTypeAsync(
+        short id,
+        string type,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<LookupListItem>> ListActiveAsync(
         string? type,
         short? parentId,

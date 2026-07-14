@@ -176,7 +176,12 @@ public sealed class QuestionService : IQuestionService
 
         await _questions.AddQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await ReplaceOptionsAsync(question.Id, request.Options, cancellationToken);
+        await ReplaceAnswersAsync(
+            question.Id,
+            request.QuestionType,
+            request.Options,
+            request.AcceptedAnswers,
+            cancellationToken);
 
         var detail = await RequireQuestionDetailAsync(question.Id, cancellationToken);
         return QuestionMapping.ToDetailResponse(detail);
@@ -207,7 +212,12 @@ public sealed class QuestionService : IQuestionService
             request.Explanation);
 
         // Explicit SubmitForReview is required to move Rejected → PendingReview.
-        await ReplaceOptionsAsync(questionId, request.Options, cancellationToken);
+        await ReplaceAnswersAsync(
+            questionId,
+            request.QuestionType,
+            request.Options,
+            request.AcceptedAnswers,
+            cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
@@ -332,6 +342,7 @@ public sealed class QuestionService : IQuestionService
         }
 
         await _questions.RemoveQuestionOptionsAsync(questionId, cancellationToken);
+        await _questions.RemoveQuestionAcceptedAnswersAsync(questionId, cancellationToken);
         await _questions.DeleteQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -433,6 +444,63 @@ public sealed class QuestionService : IQuestionService
         }
     }
 
+    private async Task ReplaceAnswersAsync(
+        long questionId,
+        string questionType,
+        IReadOnlyList<QuestionOptionRequest> options,
+        IReadOnlyList<QuestionAcceptedAnswerRequest>? acceptedAnswers,
+        CancellationToken cancellationToken)
+    {
+        if (QuizQuestionHelper.IsFillBlankType(questionType))
+        {
+            await _questions.RemoveQuestionOptionsAsync(questionId, cancellationToken);
+            await _questions.RemoveQuestionAcceptedAnswersAsync(questionId, cancellationToken);
+
+            var answers = ResolveFillAcceptedAnswers(options, acceptedAnswers)
+                .Select(answer => new QuestionAcceptedAnswer(
+                    questionId,
+                    answer.AnswerText,
+                    answer.IsCaseSensitive,
+                    answer.AllowPartialMatch,
+                    answer.MinimumLength,
+                    answer.MaximumLength,
+                    answer.AllowAiReview,
+                    answer.AllowTeacherReview))
+                .ToArray();
+
+            if (answers.Length > 0)
+            {
+                await _questions.AddQuestionAcceptedAnswersAsync(answers, cancellationToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        await _questions.RemoveQuestionAcceptedAnswersAsync(questionId, cancellationToken);
+        await ReplaceOptionsAsync(questionId, options, cancellationToken);
+    }
+
+    private static IReadOnlyList<QuestionAcceptedAnswerRequest> ResolveFillAcceptedAnswers(
+        IReadOnlyList<QuestionOptionRequest> options,
+        IReadOnlyList<QuestionAcceptedAnswerRequest>? acceptedAnswers)
+    {
+        var fromAccepted = (acceptedAnswers ?? Array.Empty<QuestionAcceptedAnswerRequest>())
+            .Where(answer => !string.IsNullOrWhiteSpace(answer.AnswerText))
+            .ToArray();
+
+        if (fromAccepted.Length > 0)
+        {
+            return fromAccepted;
+        }
+
+        // Legacy Excel / clients that still send Fill answers as options.
+        return options
+            .Where(option => !string.IsNullOrWhiteSpace(option.OptionText))
+            .Select(option => new QuestionAcceptedAnswerRequest(option.OptionText.Trim()))
+            .ToArray();
+    }
+
     private async Task ReplaceOptionsAsync(
         long questionId,
         IReadOnlyList<QuestionOptionRequest> options,
@@ -513,48 +581,65 @@ public sealed class QuestionService : IQuestionService
     }
 
     private static bool IsPendingReviewStatus(string statusName)
-        => QuizLookupNames.PendingQuestionStatusNames.Any(name =>
-            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+        => QuizLookupNames.IsPendingQuestionStatusName(statusName);
 
     private static bool IsApprovedStatus(string statusName)
-        => QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
-            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+        => QuizLookupNames.IsApprovedQuestionStatusName(statusName);
 
     private static bool IsArchivedStatus(string statusName)
-        => QuizLookupNames.ArchivedQuestionStatusNames.Any(name =>
-            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+        => QuizLookupNames.IsArchivedQuestionStatusName(statusName);
 
     private static bool IsOwnerEditableStatus(string statusName)
-        => QuizLookupNames.OwnerEditableQuestionStatusNames.Any(name =>
-            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+        => QuizLookupNames.IsOwnerEditableQuestionStatusName(statusName);
 
     private Task<short> RequirePendingReviewStatusIdAsync(CancellationToken cancellationToken)
-        => _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
+        => RequireQuestionStatusIdAsync(
+            QuizLookupNames.QuestionStatusIds.PendingReview,
             QuizLookupNames.PendingQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireDraftStatusIdAsync(CancellationToken cancellationToken)
-        => _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
+        => RequireQuestionStatusIdAsync(
+            QuizLookupNames.QuestionStatusIds.Draft,
             QuizLookupNames.DraftQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireApprovedStatusIdAsync(CancellationToken cancellationToken)
-        => _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
+        => RequireQuestionStatusIdAsync(
+            QuizLookupNames.QuestionStatusIds.Approved,
             QuizLookupNames.ApprovedQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireRejectedStatusIdAsync(CancellationToken cancellationToken)
-        => _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
+        => RequireQuestionStatusIdAsync(
+            QuizLookupNames.QuestionStatusIds.Rejected,
             QuizLookupNames.RejectedQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireArchivedStatusIdAsync(CancellationToken cancellationToken)
-        => _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
+        => RequireQuestionStatusIdAsync(
+            QuizLookupNames.QuestionStatusIds.Archived,
             QuizLookupNames.ArchivedQuestionStatusNames,
             cancellationToken);
+
+    private async Task<short> RequireQuestionStatusIdAsync(
+        short preferredId,
+        IReadOnlyList<string> canonicalNames,
+        CancellationToken cancellationToken)
+    {
+        var preferred = await _lookups.GetByIdAndTypeAsync(
+            preferredId,
+            QuizLookupNames.QuestionStatus,
+            cancellationToken);
+
+        if (preferred is not null)
+        {
+            return preferred.Id;
+        }
+
+        return await _guard.RequireLookupAsync(
+            QuizLookupNames.QuestionStatus,
+            canonicalNames,
+            cancellationToken);
+    }
 }

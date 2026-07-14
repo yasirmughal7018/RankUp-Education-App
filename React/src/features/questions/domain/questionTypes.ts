@@ -9,6 +9,20 @@ export interface QuestionOption extends QuestionOptionInput {
   optionId: number;
 }
 
+export interface QuestionAcceptedAnswerInput {
+  answerText: string;
+  isCaseSensitive: boolean;
+  allowPartialMatch: boolean;
+  minimumLength: number;
+  maximumLength: number;
+  allowAiReview: boolean;
+  allowTeacherReview: boolean;
+}
+
+export interface QuestionAcceptedAnswer extends QuestionAcceptedAnswerInput {
+  acceptedAnswerId: number;
+}
+
 export interface QuestionSummary {
   questionId: number;
   questionText: string;
@@ -43,6 +57,7 @@ export interface QuestionDetail {
   createdDate: string;
   modifiedDate: string;
   options: QuestionOption[];
+  acceptedAnswers: QuestionAcceptedAnswer[];
   rejectionReason?: string | null;
 }
 
@@ -58,6 +73,7 @@ export interface QuestionFormValues {
   hint: string;
   explanation: string;
   options: QuestionOptionInput[];
+  acceptedAnswers: QuestionAcceptedAnswerInput[];
 }
 
 export interface QuestionListFilters {
@@ -76,15 +92,26 @@ export interface QuestionScopeValues {
   difficultyLevel: number;
 }
 
-export const QUESTION_TYPES = [
+export const QUESTION_TYPES_NOW = [
   "Single Choice",
   "Multiple Choice",
   "True/False",
   "Fill in the Blanks",
+] as const;
+
+/** Includes NOT NOW types for display/normalization of legacy rows only. */
+export const QUESTION_TYPES = [
+  ...QUESTION_TYPES_NOW,
   "Descriptive",
 ] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];
+export type QuestionTypeNow = (typeof QUESTION_TYPES_NOW)[number];
+
+export function isCreatableQuestionType(type: string): boolean {
+  const normalized = normalizeQuestionType(type);
+  return (QUESTION_TYPES_NOW as readonly string[]).includes(normalized);
+}
 
 export const QUESTION_TYPE_META: Record<
   QuestionType,
@@ -141,6 +168,7 @@ export function canLifecycleQuestions(role: UserRole): boolean {
 
 export function isPendingQuestionStatus(status: string): boolean {
   const normalized = status.toLowerCase().replace(/\s+/g, "");
+  // Canonical: PendingReview. Legacy aliases still recognized for old rows.
   return ["pendingreview", "pending", "underreview"].includes(normalized);
 }
 
@@ -155,8 +183,22 @@ export function isRejectedQuestionStatus(status: string): boolean {
 
 export function isApprovedQuestionStatus(status: string): boolean {
   const normalized = status.toLowerCase();
+  // Canonical: Approved. Legacy Active/Published still recognized for old rows.
   return ["approved", "active", "published"].includes(normalized);
 }
+
+export function isArchivedQuestionStatus(status: string): boolean {
+  return status.trim().toLowerCase() === "archived";
+}
+
+/** Canonical QuestionStatus lookup IDs (110–114). */
+export const QUESTION_STATUS_IDS = {
+  Draft: 110,
+  PendingReview: 111,
+  Approved: 112,
+  Rejected: 113,
+  Archived: 114,
+} as const;
 
 export function isOwnerEditableQuestionStatus(status: string): boolean {
   return (
@@ -164,6 +206,21 @@ export function isOwnerEditableQuestionStatus(status: string): boolean {
     isPendingQuestionStatus(status) ||
     isRejectedQuestionStatus(status)
   );
+}
+
+/** PortalAdmin any; otherwise owner + Draft / PendingReview / Rejected. */
+export function canMutateQuestion(args: {
+  role: UserRole;
+  userId: number | string;
+  createdBy: string;
+  status: string;
+}): boolean {
+  if (canLifecycleQuestions(args.role)) {
+    return true;
+  }
+
+  const isOwner = String(args.userId) === String(args.createdBy);
+  return isOwner && isOwnerEditableQuestionStatus(args.status);
 }
 
 /** Eligible for quiz bank attach after PortalAdmin approve. */
@@ -241,7 +298,33 @@ export function isDescriptiveType(type: string): boolean {
 
 export function usesAnswerOptions(type: string): boolean {
   const normalized = normalizeQuestionType(type);
-  return normalized !== "Descriptive";
+  return (
+    normalized === "Single Choice" ||
+    normalized === "Multiple Choice" ||
+    normalized === "True/False"
+  );
+}
+
+export function usesAcceptedAnswers(type: string): boolean {
+  return isFillBlankType(type);
+}
+
+export function createEmptyAcceptedAnswer(): QuestionAcceptedAnswerInput {
+  return {
+    answerText: "",
+    isCaseSensitive: false,
+    allowPartialMatch: false,
+    minimumLength: 0,
+    maximumLength: 1000,
+    allowAiReview: false,
+    allowTeacherReview: false,
+  };
+}
+
+export function defaultAcceptedAnswersForType(
+  type: string,
+): QuestionAcceptedAnswerInput[] {
+  return isFillBlankType(type) ? [createEmptyAcceptedAnswer()] : [];
 }
 
 export function defaultOptionsForType(type: string): QuestionOptionInput[] {
@@ -254,7 +337,6 @@ export function defaultOptionsForType(type: string): QuestionOptionInput[] {
         { optionText: "False", isCorrect: false },
       ];
     case "Fill in the Blanks":
-      return [{ optionText: "", isCorrect: true }];
     case "Descriptive":
       return [];
     case "Multiple Choice":
@@ -290,6 +372,7 @@ export function createEmptyQuestionForm(
     hint: "",
     explanation: "",
     options: defaultOptionsForType("Single Choice"),
+    acceptedAnswers: [],
   };
 }
 
@@ -308,11 +391,17 @@ export function resetQuestionContent(
     marks: current.marks,
     estimatedTimeSeconds: current.estimatedTimeSeconds,
     options: defaultOptionsForType(current.questionType),
+    acceptedAnswers: defaultAcceptedAnswersForType(current.questionType),
   };
 }
 
 export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
   const questionType = normalizeQuestionType(detail.questionType);
+  const acceptedFromApi = detail.acceptedAnswers ?? [];
+  const legacyFillFromOptions =
+    isFillBlankType(questionType) &&
+    acceptedFromApi.length === 0 &&
+    detail.options.length > 0;
 
   return {
     questionText: detail.questionText,
@@ -325,19 +414,39 @@ export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
     estimatedTimeSeconds: detail.estimatedTimeSeconds,
     hint: detail.hint ?? "",
     explanation: detail.explanation ?? "",
-    options:
-      detail.options.length > 0
+    options: isFillBlankType(questionType)
+      ? []
+      : detail.options.length > 0
         ? detail.options.map((option) => ({
             optionText: option.optionText,
             isCorrect: option.isCorrect,
           }))
         : defaultOptionsForType(questionType),
+    acceptedAnswers: isFillBlankType(questionType)
+      ? acceptedFromApi.length > 0
+        ? acceptedFromApi.map((answer) => ({
+            answerText: answer.answerText,
+            isCaseSensitive: answer.isCaseSensitive,
+            allowPartialMatch: answer.allowPartialMatch,
+            minimumLength: answer.minimumLength,
+            maximumLength: answer.maximumLength,
+            allowAiReview: answer.allowAiReview,
+            allowTeacherReview: answer.allowTeacherReview,
+          }))
+        : legacyFillFromOptions
+          ? detail.options.map((option) => ({
+              ...createEmptyAcceptedAnswer(),
+              answerText: option.optionText,
+            }))
+          : defaultAcceptedAnswersForType(questionType)
+      : [],
   };
 }
 
 export function buildQuestionPayload(values: QuestionFormValues) {
   const questionType = normalizeQuestionType(values.questionType);
   const withOptions = usesAnswerOptions(questionType);
+  const withAccepted = usesAcceptedAnswers(questionType);
 
   return {
     questionText: values.questionText.trim(),
@@ -356,6 +465,19 @@ export function buildQuestionPayload(values: QuestionFormValues) {
           .map((option) => ({
             optionText: option.optionText.trim(),
             isCorrect: option.isCorrect,
+          }))
+      : [],
+    acceptedAnswers: withAccepted
+      ? values.acceptedAnswers
+          .filter((answer) => answer.answerText.trim())
+          .map((answer) => ({
+            answerText: answer.answerText.trim(),
+            isCaseSensitive: answer.isCaseSensitive,
+            allowPartialMatch: answer.allowPartialMatch,
+            minimumLength: answer.minimumLength,
+            maximumLength: answer.maximumLength,
+            allowAiReview: answer.allowAiReview,
+            allowTeacherReview: answer.allowTeacherReview,
           }))
       : [],
   };
@@ -379,7 +501,15 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
   }
 
   const questionType = normalizeQuestionType(values.questionType);
+
+  if (!isCreatableQuestionType(questionType)) {
+    return "Descriptive and other future question types are not available yet. Choose Single Choice, Multiple Choice, True/False, or Fill in the Blanks.";
+  }
+
   const options = values.options.filter((option) => option.optionText.trim());
+  const acceptedAnswers = values.acceptedAnswers.filter((answer) =>
+    answer.answerText.trim(),
+  );
 
   if (questionType === "Single Choice") {
     if (options.length < 2) {
@@ -409,11 +539,8 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
   }
 
   if (questionType === "Fill in the Blanks") {
-    if (options.length < 1) {
+    if (acceptedAnswers.length < 1) {
       return "Add at least one accepted answer.";
-    }
-    if (!options.every((option) => option.isCorrect)) {
-      return "All fill-in answers should be marked as accepted.";
     }
   }
 

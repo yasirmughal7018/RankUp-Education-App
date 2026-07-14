@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Questions;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Domain.Common;
@@ -81,8 +82,8 @@ internal sealed class QuizManageGuard
             QuizLookupNames.SingleChoiceQuestionTypeNames,
             QuizLookupNames.MultiSelectQuestionTypeNames,
             QuizLookupNames.TrueFalseQuestionTypeNames,
-            QuizLookupNames.FillBlankQuestionTypeNames,
-            QuizLookupNames.DescriptiveQuestionTypeNames
+            QuizLookupNames.FillBlankQuestionTypeNames
+            // Descriptive and future types are rejected by QuestionBankGuard / ValidateQuestionRequest.
         ];
 
         foreach (var group in candidateGroups)
@@ -102,6 +103,19 @@ internal sealed class QuizManageGuard
             throw new ValidationAppException([$"Question type '{questionType}' is not supported."]);
         }
 
+        // Reject Descriptive / future types even if present in lookup table.
+        var resolvedName = await _lookups.GetLookupNameAsync(directId, cancellationToken);
+        if (QuizQuestionHelper.IsDescriptiveType(resolvedName)
+            || (!QuizQuestionHelper.IsSingleChoiceType(resolvedName)
+                && !QuizQuestionHelper.IsMultiSelectType(resolvedName)
+                && !QuizQuestionHelper.IsTrueFalseType(resolvedName)
+                && !QuizQuestionHelper.IsFillBlankType(resolvedName)))
+        {
+            throw new ValidationAppException([
+                $"Question type '{resolvedName}' is not available yet. Use Single Choice, Multiple Choice, True/False, or Fill in the Blanks."
+            ]);
+        }
+
         return directId;
     }
 
@@ -118,9 +132,17 @@ internal sealed class QuizManageGuard
             errors.Add("Marks must be greater than zero.");
         }
 
-        if (request.Options.Count > 0 && !request.Options.Any(option => option.IsCorrect))
+        if (string.IsNullOrWhiteSpace(request.QuestionType))
         {
-            errors.Add("At least one option must be marked correct.");
+            errors.Add("Question type is required.");
+        }
+        else
+        {
+            errors.AddRange(QuestionBankGuard.ValidateTypeAndOptions(
+                request.QuestionType,
+                request.Options
+                    .Select(option => (option.OptionText, option.IsCorrect))
+                    .ToArray()));
         }
 
         if (errors.Count > 0)

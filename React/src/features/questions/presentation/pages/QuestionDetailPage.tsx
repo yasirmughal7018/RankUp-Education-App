@@ -5,9 +5,10 @@ import { useAuth } from "@/features/authentication/presentation/context/AuthProv
 import {
   canApproveQuestions,
   canLifecycleQuestions,
+  canMutateQuestion,
   isApprovedQuestionStatus,
   isDraftQuestionStatus,
-  isOwnerEditableQuestionStatus,
+  isEligibleForQuizQuestion,
   isPendingQuestionStatus,
   isRejectedQuestionStatus,
 } from "@/features/questions/domain/questionTypes";
@@ -104,14 +105,18 @@ export function QuestionDetailPage() {
   const isApproved = isApprovedQuestionStatus(question.status);
   const isRejected = isRejectedQuestionStatus(question.status);
   const isDraft = isDraftQuestionStatus(question.status);
-  const canOwnerEdit = isOwnerEditableQuestionStatus(question.status);
   const canEdit =
-    canLifecycle || (isOwner && canOwnerEdit);
-  const canDelete =
-    canLifecycle || (isOwner && canOwnerEdit);
+    user != null &&
+    canMutateQuestion({
+      role: user.role,
+      userId: user.id,
+      createdBy: question.createdBy,
+      status: question.status,
+    });
+  const canDelete = canEdit;
   const canSubmit =
     (canLifecycle || isOwner) && (isDraft || isRejected);
-  const isQuizReady = isEligibleQuiz(question);
+  const isQuizReady = isEligibleForQuizQuestion(question);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -205,6 +210,34 @@ export function QuestionDetailPage() {
                       Correct
                     </span>
                   ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {(question.acceptedAnswers?.length ?? 0) > 0 ? (
+          <div>
+            <h3 className="mb-3 text-sm font-medium text-slate-900">
+              Accepted answers
+            </h3>
+            <ul className="space-y-2">
+              {question.acceptedAnswers.map((answer) => (
+                <li
+                  key={answer.acceptedAnswerId}
+                  className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-slate-700"
+                >
+                  <span className="font-medium">{answer.answerText}</span>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {[
+                      answer.isCaseSensitive ? "case-sensitive" : null,
+                      answer.allowPartialMatch ? "partial match" : null,
+                      answer.allowAiReview ? "AI review" : null,
+                      answer.allowTeacherReview ? "teacher review" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "exact match"}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -383,17 +416,5 @@ export function QuestionDetailPage() {
         ) : null}
       </section>
     </div>
-  );
-}
-
-function isEligibleQuiz(question: {
-  isActive: boolean;
-  approvedBy: string | null;
-  status: string;
-}): boolean {
-  return (
-    question.isActive &&
-    Boolean(question.approvedBy?.trim()) &&
-    isApprovedQuestionStatus(question.status)
   );
 }

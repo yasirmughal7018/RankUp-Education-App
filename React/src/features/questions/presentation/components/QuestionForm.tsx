@@ -4,14 +4,17 @@ import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import {
   QUESTION_TYPE_META,
-  QUESTION_TYPES,
+  QUESTION_TYPES_NOW,
+  defaultAcceptedAnswersForType,
   defaultOptionsForType,
   normalizeQuestionType,
+  usesAcceptedAnswers,
   usesAnswerOptions,
   validateQuestionForm,
   type QuestionFormValues,
   type QuestionType,
 } from "@/features/questions/domain/questionTypes";
+import { QuestionAcceptedAnswersEditor } from "@/features/questions/presentation/components/QuestionAcceptedAnswersEditor";
 import { QuestionOptionsEditor } from "@/features/questions/presentation/components/QuestionOptionsEditor";
 
 interface QuestionFormProps {
@@ -104,6 +107,7 @@ export function QuestionForm({
         ...current,
         questionType: nextType,
         options: defaultOptionsForType(nextType),
+        acceptedAnswers: defaultAcceptedAnswersForType(nextType),
       };
       onValuesChange?.(next);
       return next;
@@ -133,6 +137,7 @@ export function QuestionForm({
   }
 
   const showOptions = usesAnswerOptions(values.questionType);
+  const showAcceptedAnswers = usesAcceptedAnswers(values.questionType);
 
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
@@ -227,8 +232,8 @@ export function QuestionForm({
 
       <section className="space-y-3">
         <RequiredLabel>Question type</RequiredLabel>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {QUESTION_TYPES.map((type) => {
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {QUESTION_TYPES_NOW.map((type) => {
             const meta = QUESTION_TYPE_META[type];
             const selected = normalizeQuestionType(values.questionType) === type;
             return (
@@ -256,6 +261,12 @@ export function QuestionForm({
             );
           })}
         </div>
+        {normalizeQuestionType(values.questionType) === "Descriptive" ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            This question is Descriptive (not available for new creates). Choose
+            a NOW type above to continue editing, or cancel.
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -346,15 +357,15 @@ export function QuestionForm({
           disabled={isSubmitting}
           onChange={(options) => patchValues({ options })}
         />
-      ) : (
-        <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-          <p className="font-semibold">Descriptive answer</p>
-          <p className="mt-1 text-amber-800/90">
-            No predefined options. Teachers mark the written response during
-            review.
-          </p>
-        </div>
-      )}
+      ) : null}
+
+      {showAcceptedAnswers ? (
+        <QuestionAcceptedAnswersEditor
+          answers={values.acceptedAnswers}
+          disabled={isSubmitting}
+          onChange={(acceptedAnswers) => patchValues({ acceptedAnswers })}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-5">
         <button

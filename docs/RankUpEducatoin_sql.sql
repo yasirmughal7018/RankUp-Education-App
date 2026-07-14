@@ -275,6 +275,8 @@ CREATE TABLE public.question_accepted_answers (
 	maximum_length int2 DEFAULT 1000 NOT NULL,
 	ai_review varchar(1000) NULL,
 	teacher_review varchar(1000) NULL,
+	allow_ai_review bool DEFAULT false NOT NULL,
+	allow_teacher_review bool DEFAULT false NOT NULL,
 	CONSTRAINT question_accepted_answers_pkey PRIMARY KEY (id),
 	CONSTRAINT question_accepted_answers_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.questions(id)
 );

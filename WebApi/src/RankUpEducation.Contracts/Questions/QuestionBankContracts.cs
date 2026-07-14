@@ -9,6 +9,25 @@ public sealed record QuestionOptionResponse(
     string OptionText,
     bool IsCorrect);
 
+public sealed record QuestionAcceptedAnswerRequest(
+    string AnswerText,
+    bool IsCaseSensitive = false,
+    bool AllowPartialMatch = false,
+    short MinimumLength = 0,
+    short MaximumLength = 1000,
+    bool AllowAiReview = false,
+    bool AllowTeacherReview = false);
+
+public sealed record QuestionAcceptedAnswerResponse(
+    long AcceptedAnswerId,
+    string AnswerText,
+    bool IsCaseSensitive,
+    bool AllowPartialMatch,
+    short MinimumLength,
+    short MaximumLength,
+    bool AllowAiReview,
+    bool AllowTeacherReview);
+
 public sealed record CreateQuestionRequest(
     string QuestionText,
     string QuestionType,
@@ -21,6 +40,7 @@ public sealed record CreateQuestionRequest(
     string? Hint,
     string? Explanation,
     IReadOnlyList<QuestionOptionRequest> Options,
+    IReadOnlyList<QuestionAcceptedAnswerRequest>? AcceptedAnswers = null,
     /// <summary>When true (default), status = PendingReview. When false, Draft.</summary>
     bool SubmitForReview = true);
 
@@ -35,7 +55,8 @@ public sealed record UpdateQuestionRequest(
     short EstimatedTimeSeconds,
     string? Hint,
     string? Explanation,
-    IReadOnlyList<QuestionOptionRequest> Options);
+    IReadOnlyList<QuestionOptionRequest> Options,
+    IReadOnlyList<QuestionAcceptedAnswerRequest>? AcceptedAnswers = null);
 
 public sealed record QuestionSummaryResponse(
     long QuestionId,
@@ -46,6 +67,7 @@ public sealed record QuestionSummaryResponse(
     bool IsActive,
     string CreatedBy,
     string? ApprovedBy,
+    /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
     bool IsAiApproved,
     DateOnly CreatedDate,
     DateOnly ModifiedDate);
@@ -68,17 +90,20 @@ public sealed record QuestionDetailResponse(
     bool IsActive,
     string CreatedBy,
     string? ApprovedBy,
+    /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
     bool IsAiApproved,
     string? RejectionReason,
     DateOnly CreatedDate,
     DateOnly ModifiedDate,
-    IReadOnlyList<QuestionOptionResponse> Options);
+    IReadOnlyList<QuestionOptionResponse> Options,
+    IReadOnlyList<QuestionAcceptedAnswerResponse> AcceptedAnswers);
 
 public sealed record QuestionApprovalResponse(
     long QuestionId,
     string Status,
     bool IsActive,
     string? ApprovedBy,
+    /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
     bool IsAiApproved,
     string? RejectionReason = null);
 

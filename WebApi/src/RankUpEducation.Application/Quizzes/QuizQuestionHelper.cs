@@ -88,8 +88,7 @@ public static class QuizQuestionHelper
     public static bool UsesOptions(string questionTypeName)
         => IsSingleChoiceType(questionTypeName)
             || IsMultiSelectType(questionTypeName)
-            || IsTrueFalseType(questionTypeName)
-            || IsFillBlankType(questionTypeName);
+            || IsTrueFalseType(questionTypeName);
 
     private static bool MatchesAny(string value, IReadOnlyList<string> names)
         => names.Any(name => name.Equals(value, StringComparison.OrdinalIgnoreCase));

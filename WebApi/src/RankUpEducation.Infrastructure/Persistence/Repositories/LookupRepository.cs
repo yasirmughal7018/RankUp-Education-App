@@ -54,6 +54,21 @@ public sealed class LookupRepository : ILookupRepository
         return fallback;
     }
 
+    public async Task<LookupListItem?> GetByIdAndTypeAsync(
+        short id,
+        string type,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Lookups.AsNoTracking()
+            .Where(lookup => lookup.Id == id && lookup.Type == type)
+            .Select(lookup => new LookupListItem(
+                lookup.Id,
+                lookup.Name,
+                lookup.Type,
+                lookup.LookupRefId))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<LookupListItem>> ListActiveAsync(
         string? type,
         short? parentId,
