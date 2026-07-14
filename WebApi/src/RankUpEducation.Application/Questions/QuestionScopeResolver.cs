@@ -11,7 +11,13 @@ public sealed record QuestionManageScope(
     int? SchoolId,
     int? CampusId)
 {
-    public bool CanApprove => Role is UserRole.SchoolAdmin or UserRole.PortalAdmin;
+    public bool IsPortalAdmin => Role == UserRole.PortalAdmin;
+
+    /// <summary>Only PortalAdmin may approve / reject.</summary>
+    public bool CanApprove => IsPortalAdmin;
+
+    /// <summary>Only PortalAdmin may activate / deactivate / archive.</summary>
+    public bool CanLifecycle => IsPortalAdmin;
 }
 
 public static class QuestionScopeResolver
@@ -19,7 +25,12 @@ public static class QuestionScopeResolver
     public static QuestionManageScope RequireManageScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (
+            UserRole.Parent
+            or UserRole.Teacher
+            or UserRole.CampusAdmin
+            or UserRole.SchoolAdmin
+            or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("You do not have permission to manage questions.");
         }
@@ -33,9 +44,9 @@ public static class QuestionScopeResolver
     public static QuestionManageScope RequireApprovalScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not UserRole.PortalAdmin)
         {
-            throw new ForbiddenAppException("Only school administrators can approve questions.");
+            throw new ForbiddenAppException("Only Portal Admin can approve or reject questions.");
         }
 
         var userId = currentUser.UserId
@@ -44,12 +55,13 @@ public static class QuestionScopeResolver
         return new QuestionManageScope(role, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
-    public static QuestionManageScope RequireAiApprovalScope(ICurrentUserService currentUser)
+    public static QuestionManageScope RequireLifecycleScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
         if (role is not UserRole.PortalAdmin)
         {
-            throw new ForbiddenAppException("Only super administrators can AI-approve questions.");
+            throw new ForbiddenAppException(
+                "Only Portal Admin can activate, deactivate, or archive questions.");
         }
 
         var userId = currentUser.UserId
@@ -58,16 +70,14 @@ public static class QuestionScopeResolver
         return new QuestionManageScope(role, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
-    public static void EnsureCanModify(Question question, QuestionManageScope scope)
-    {
-        if (scope.CanApprove)
-        {
-            return;
-        }
+    public static bool IsOwner(Question question, QuestionManageScope scope)
+        => string.Equals(question.CreatedBy, scope.UserId.ToString(), StringComparison.Ordinal);
 
-        if (!string.Equals(question.CreatedBy, scope.UserId.ToString(), StringComparison.Ordinal))
+    public static void EnsureIsOwner(Question question, QuestionManageScope scope)
+    {
+        if (!IsOwner(question, scope))
         {
-            throw new ForbiddenAppException("You can only modify questions you created.");
+            throw new ForbiddenAppException("You can only change questions you created.");
         }
     }
 

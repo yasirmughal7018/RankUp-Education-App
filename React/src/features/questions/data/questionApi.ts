@@ -1,4 +1,6 @@
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
+import { environment } from "@/app/environment";
+import { readStoredSession } from "@/core/auth/tokenStorage";
 import type {
   QuestionDetail,
   QuestionFormValues,
@@ -58,10 +60,14 @@ export async function getQuestion(questionId: number): Promise<QuestionDetail> {
 
 export async function createQuestion(
   values: QuestionFormValues,
+  submitForReview = true,
 ): Promise<QuestionDetail> {
   return apiRequest<QuestionDetail>("/questions", {
     method: "POST",
-    body: buildQuestionPayload(values),
+    body: {
+      ...buildQuestionPayload(values),
+      submitForReview,
+    },
   });
 }
 
@@ -75,21 +81,25 @@ export async function updateQuestion(
   });
 }
 
+export async function submitQuestionForReview(
+  questionId: number,
+): Promise<QuestionDetail> {
+  return apiRequest<QuestionDetail>(`/questions/${questionId}/submit`, {
+    method: "POST",
+  });
+}
+
 export async function approveQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/approve`, { method: "POST" });
 }
 
-export async function approveQuestionAi(questionId: number): Promise<void> {
-  await apiRequest(`/questions/${questionId}/approve-ai`, { method: "POST" });
-}
-
 export async function rejectQuestion(
   questionId: number,
-  reason?: string,
+  reason: string,
 ): Promise<void> {
   await apiRequest(`/questions/${questionId}/reject`, {
     method: "POST",
-    body: { reason: reason ?? null },
+    body: { reason },
   });
 }
 
@@ -101,6 +111,56 @@ export async function deactivateQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/deactivate`, { method: "POST" });
 }
 
+export async function archiveQuestion(questionId: number): Promise<void> {
+  await apiRequest(`/questions/${questionId}/archive`, { method: "POST" });
+}
+
 export async function deleteQuestion(questionId: number): Promise<void> {
   await apiRequestVoid(`/questions/${questionId}`, { method: "DELETE" });
+}
+
+export interface ImportQuestionsResult {
+  dryRun: boolean;
+  createdCount: number;
+  errorCount: number;
+  errors: Array<{ rowNumber: number; message: string }>;
+}
+
+export async function importQuestionsFromExcel(
+  file: File,
+  dryRun = false,
+): Promise<ImportQuestionsResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const token = readStoredSession()?.accessToken;
+  const response = await fetch(
+    `${environment.apiBaseUrl}/questions/import?dryRun=${dryRun}`,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    },
+  );
+
+  const payload = (await response.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: ImportQuestionsResult;
+    errors?: string[];
+  };
+
+  if (!response.ok || payload.success === false) {
+    throw new Error(
+      payload.message ||
+        payload.errors?.[0] ||
+        "Unable to import questions from Excel.",
+    );
+  }
+
+  return payload.data as ImportQuestionsResult;
+}
+
+export function getQuestionImportTemplateUrl(): string {
+  return `${environment.apiBaseUrl}/questions/import-template`;
 }

@@ -20,7 +20,9 @@ public sealed record CreateQuestionRequest(
     short EstimatedTimeSeconds,
     string? Hint,
     string? Explanation,
-    IReadOnlyList<QuestionOptionRequest> Options);
+    IReadOnlyList<QuestionOptionRequest> Options,
+    /// <summary>When true (default), status = PendingReview. When false, Draft.</summary>
+    bool SubmitForReview = true);
 
 public sealed record UpdateQuestionRequest(
     string QuestionText,
@@ -72,10 +74,6 @@ public sealed record QuestionDetailResponse(
     DateOnly ModifiedDate,
     IReadOnlyList<QuestionOptionResponse> Options);
 
-/// <summary>
-/// Approval outcome. <see cref="IsAiApproved"/> is an AI-approval marker (role-gated heuristic validation),
-/// not an external LLM scoring result.
-/// </summary>
 public sealed record QuestionApprovalResponse(
     long QuestionId,
     string Status,
@@ -94,4 +92,14 @@ public sealed record DeleteQuestionResponse(
     bool Deleted,
     bool Deactivated);
 
-public sealed record RejectQuestionRequest(string? Reason);
+/// <summary>Rejection reason is required (min length enforced in service).</summary>
+public sealed record RejectQuestionRequest(string Reason);
+
+public sealed record ImportQuestionRowError(int RowNumber, string Message);
+
+public sealed record ImportQuestionsResponse(
+    bool DryRun,
+    int CreatedCount,
+    int ErrorCount,
+    IReadOnlyList<QuestionDetailResponse> Created,
+    IReadOnlyList<ImportQuestionRowError> Errors);

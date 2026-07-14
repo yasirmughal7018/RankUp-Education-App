@@ -54,6 +54,10 @@ public sealed class Question : BaseEntity
     public string? ApprovedBy { get; private set; }
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    /// <summary>
+    /// Legacy quiz-eligibility marker. PortalAdmin Approve sets this true so existing
+    /// quiz-attach SQL remains compatible. Prefer <see cref="IsEligibleForQuiz"/>.
+    /// </summary>
     public bool IsAiApproved { get; private set; }
     public string? RejectionReason { get; private set; }
     public IReadOnlyCollection<QuestionOption> Options => _options;
@@ -96,81 +100,66 @@ public sealed class Question : BaseEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    public void SubmitForApproval(short pendingStatusId)
+    /// <summary>
+    /// Submit (or resubmit) for PortalAdmin review. Clears prior approval / rejection.
+    /// </summary>
+    public void SubmitForApproval(short pendingReviewStatusId)
     {
-        StatusId = pendingStatusId;
+        StatusId = pendingReviewStatusId;
         ApprovedBy = null;
         IsAiApproved = false;
         RejectionReason = null;
+        IsActive = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void MarkDraft(short draftStatusId)
+    {
+        StatusId = draftStatusId;
+        ApprovedBy = null;
+        IsAiApproved = false;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     /// <summary>
-    /// Human approval (School Admin / Portal Admin). AI approval is a separate second step.
+    /// PortalAdmin approval. Marks quiz-eligible in one step (legacy IsAiApproved also set).
     /// </summary>
     public void Approve(string approvedBy, short approvedStatusId)
     {
         StatusId = approvedStatusId;
         ApprovedBy = approvedBy.AsTrimmedString();
-        IsAiApproved = false;
-        RejectionReason = null;
-        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
-        IsActive = true;
-    }
-
-    /// <summary>
-    /// Second approval step: AI approval. Requires human <see cref="ApprovedBy"/> first.
-    /// </summary>
-    public void MarkAiApproved()
-    {
-        if (!ApprovedBy.HasTrimmedText())
-        {
-            throw new BusinessRuleException(
-                "Question must be human-approved (ApprovedBy) before AI approval.");
-        }
-
-        if (IsAiApproved)
-        {
-            throw new BusinessRuleException("Question is already AI-approved.");
-        }
-
         IsAiApproved = true;
         RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
     }
 
-    /// <summary>
-    /// Marks both human and AI approval in one step (e.g. questions created directly on a quiz).
-    /// </summary>
+    /// <summary>Kept for inline quiz-created questions and legacy callers.</summary>
     public void MarkFullyApproved(string approvedBy, short approvedStatusId)
+        => Approve(approvedBy, approvedStatusId);
+
+    /// <summary>Quiz bank eligibility: active + PortalAdmin approved.</summary>
+    public bool IsEligibleForQuiz
+        => IsActive && ApprovedBy.HasTrimmedText();
+
+    public void Archive(short archivedStatusId)
     {
-        StatusId = approvedStatusId;
-        ApprovedBy = approvedBy.AsTrimmedString();
-        IsAiApproved = true;
-        RejectionReason = null;
+        StatusId = archivedStatusId;
+        IsActive = false;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
-        IsActive = true;
     }
 
-    /// <summary>
-    /// Quiz bank eligibility: active + human approved + AI approved.
-    /// </summary>
-    public bool IsEligibleForQuiz
-        => IsActive && ApprovedBy.HasTrimmedText() && IsAiApproved;
-
-    public void Reject(short rejectedStatusId, string? reason)
+    /// <summary>PortalAdmin reject — reason is required (validated by application layer).</summary>
+    public void Reject(short rejectedStatusId, string reason)
     {
+        var trimmedReason = reason.AsTrimmedString();
         StatusId = rejectedStatusId;
         ApprovedBy = null;
         IsAiApproved = false;
         IsActive = false;
-        var trimmedReason = reason.AsTrimmedOrNull();
-        RejectionReason = trimmedReason is null
-            ? null
-            : trimmedReason.Length > 1000
-                ? trimmedReason[..1000]
-                : trimmedReason;
+        RejectionReason = trimmedReason.Length > 1000
+            ? trimmedReason[..1000]
+            : trimmedReason;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

@@ -29,9 +29,9 @@ public interface IQuestionService
         UpdateQuestionRequest request,
         CancellationToken cancellationToken);
 
-    Task<QuestionApprovalResponse> ApproveAsync(long questionId, CancellationToken cancellationToken);
+    Task<QuestionDetailResponse> SubmitForReviewAsync(long questionId, CancellationToken cancellationToken);
 
-    Task<QuestionApprovalResponse> ApproveAiAsync(long questionId, CancellationToken cancellationToken);
+    Task<QuestionApprovalResponse> ApproveAsync(long questionId, CancellationToken cancellationToken);
 
     Task<QuestionApprovalResponse> RejectAsync(
         long questionId,
@@ -42,11 +42,20 @@ public interface IQuestionService
 
     Task<QuestionActiveStateResponse> DeactivateAsync(long questionId, CancellationToken cancellationToken);
 
+    Task<QuestionActiveStateResponse> ArchiveAsync(long questionId, CancellationToken cancellationToken);
+
     Task<DeleteQuestionResponse> DeleteAsync(long questionId, CancellationToken cancellationToken);
+
+    Task<ImportQuestionsResponse> ImportAsync(
+        IReadOnlyList<CreateQuestionRequest> rows,
+        bool dryRun,
+        CancellationToken cancellationToken);
 }
 
 public sealed class QuestionService : IQuestionService
 {
+    public const int MinRejectionReasonLength = 10;
+
     private readonly IQuestionRepository _questions;
     private readonly ILookupRepository _lookups;
     private readonly IUnitOfWork _unitOfWork;
@@ -76,7 +85,22 @@ public sealed class QuestionService : IQuestionService
         CancellationToken cancellationToken)
     {
         var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
-        var createdByUserId = scope.CanApprove ? (long?)null : scope.UserId;
+
+        // PortalAdmin: all. Others: own rows OR Approved (bank visibility).
+        long? createdByUserId = null;
+        var includeAllApproved = !scope.IsPortalAdmin;
+        if (!scope.IsPortalAdmin && !eligibleForQuizOnly)
+        {
+            createdByUserId = scope.UserId;
+        }
+
+        if (eligibleForQuizOnly)
+        {
+            // Quiz picker: shared Approved bank for all manage roles.
+            createdByUserId = null;
+            includeAllApproved = false;
+        }
+
         var items = await _questions.ListQuestionsAsync(
             createdByUserId,
             isActive,
@@ -84,6 +108,7 @@ public sealed class QuestionService : IQuestionService
             classId,
             pendingApprovalOnly,
             eligibleForQuizOnly,
+            includeAllApproved,
             cancellationToken);
 
         return new QuestionListResponse(items.Select(QuestionMapping.ToSummaryResponse).ToArray());
@@ -99,6 +124,7 @@ public sealed class QuestionService : IQuestionService
             classId: null,
             pendingApprovalOnly: true,
             eligibleForQuizOnly: false,
+            includeAllApprovedForOwnerScope: false,
             cancellationToken);
 
         return new QuestionListResponse(items.Select(QuestionMapping.ToSummaryResponse).ToArray());
@@ -120,7 +146,10 @@ public sealed class QuestionService : IQuestionService
         QuestionBankGuard.ValidateCreateRequest(request);
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
-        var pendingStatusId = await RequirePendingStatusIdAsync(cancellationToken);
+        var statusId = request.SubmitForReview
+            ? await RequirePendingReviewStatusIdAsync(cancellationToken)
+            : await RequireDraftStatusIdAsync(cancellationToken);
+
         var question = new Question(
             request.QuestionText,
             questionTypeId,
@@ -128,7 +157,7 @@ public sealed class QuestionService : IQuestionService
             request.SubjectId,
             request.TopicId,
             request.DifficultyLevel,
-            pendingStatusId,
+            statusId,
             scope.UserId.ToString(),
             request.EstimatedTimeSeconds,
             request.Marks);
@@ -162,7 +191,7 @@ public sealed class QuestionService : IQuestionService
         QuestionBankGuard.ValidateUpdateRequest(request);
 
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        QuestionScopeResolver.EnsureCanModify(question, scope);
+        await EnsureCanUpdateAsync(question, scope, cancellationToken);
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
         question.UpdateDetails(
@@ -177,13 +206,34 @@ public sealed class QuestionService : IQuestionService
             request.Hint,
             request.Explanation);
 
-        if (!scope.CanApprove)
+        // Explicit SubmitForReview is required to move Rejected → PendingReview.
+        await ReplaceOptionsAsync(questionId, request.Options, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
+        return QuestionMapping.ToDetailResponse(detail);
+    }
+
+    public async Task<QuestionDetailResponse> SubmitForReviewAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
+        var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
+
+        if (!scope.IsPortalAdmin)
         {
-            var pendingStatusId = await RequirePendingStatusIdAsync(cancellationToken);
-            question.SubmitForApproval(pendingStatusId);
+            QuestionScopeResolver.EnsureIsOwner(question, scope);
         }
 
-        await ReplaceOptionsAsync(questionId, request.Options, cancellationToken);
+        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
+        if (IsApprovedStatus(statusName) || IsArchivedStatus(statusName))
+        {
+            throw new BusinessRuleException("Approved or archived questions cannot be submitted for review.");
+        }
+
+        var pendingStatusId = await RequirePendingReviewStatusIdAsync(cancellationToken);
+        question.SubmitForApproval(pendingStatusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
@@ -194,32 +244,13 @@ public sealed class QuestionService : IQuestionService
     {
         var scope = QuestionScopeResolver.RequireApprovalScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        await EnsurePendingAsync(question, cancellationToken);
+        await EnsurePendingReviewAsync(question, cancellationToken);
 
         var approvedStatusId = await RequireApprovedStatusIdAsync(cancellationToken);
         question.Approve(scope.UserId.ToString(), approvedStatusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var statusName = await _lookups.GetLookupNameAsync(approvedStatusId, cancellationToken);
-        return ToApprovalResponse(questionId, statusName, question);
-    }
-
-    /// <summary>
-    /// Second approval step after human approve. Sets <c>IsAiApproved</c> only.
-    /// </summary>
-    public async Task<QuestionApprovalResponse> ApproveAiAsync(long questionId, CancellationToken cancellationToken)
-    {
-        QuestionScopeResolver.RequireAiApprovalScope(_currentUser);
-        var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        await EnsureHumanApprovedAsync(question, cancellationToken);
-
-        var questionTypeName = await _lookups.GetLookupNameAsync(question.QuestionTypeId, cancellationToken);
-        QuestionAiApprovalValidator.EnsureReadyForAiApproval(question, questionTypeName);
-
-        question.MarkAiApproved();
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
         return ToApprovalResponse(questionId, statusName, question);
     }
 
@@ -230,10 +261,19 @@ public sealed class QuestionService : IQuestionService
     {
         QuestionScopeResolver.RequireApprovalScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        await EnsurePendingAsync(question, cancellationToken);
+        await EnsurePendingReviewAsync(question, cancellationToken);
+
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (reason.Length < MinRejectionReasonLength)
+        {
+            throw new ValidationAppException(
+            [
+                $"Rejection reason is required (at least {MinRejectionReasonLength} characters)."
+            ]);
+        }
 
         var rejectedStatusId = await RequireRejectedStatusIdAsync(cancellationToken);
-        question.Reject(rejectedStatusId, request.Reason);
+        question.Reject(rejectedStatusId, reason);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var statusName = await _lookups.GetLookupNameAsync(rejectedStatusId, cancellationToken);
@@ -242,9 +282,8 @@ public sealed class QuestionService : IQuestionService
 
     public async Task<QuestionActiveStateResponse> ActivateAsync(long questionId, CancellationToken cancellationToken)
     {
-        var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
+        QuestionScopeResolver.RequireLifecycleScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        QuestionScopeResolver.EnsureCanModify(question, scope);
         await EnsureApprovedAsync(question, cancellationToken);
 
         question.Activate();
@@ -256,9 +295,8 @@ public sealed class QuestionService : IQuestionService
 
     public async Task<QuestionActiveStateResponse> DeactivateAsync(long questionId, CancellationToken cancellationToken)
     {
-        var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
+        QuestionScopeResolver.RequireLifecycleScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        QuestionScopeResolver.EnsureCanModify(question, scope);
 
         question.Deactivate();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -267,11 +305,24 @@ public sealed class QuestionService : IQuestionService
         return new QuestionActiveStateResponse(questionId, question.IsActive, statusName);
     }
 
+    public async Task<QuestionActiveStateResponse> ArchiveAsync(long questionId, CancellationToken cancellationToken)
+    {
+        QuestionScopeResolver.RequireLifecycleScope(_currentUser);
+        var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
+
+        var archivedStatusId = await RequireArchivedStatusIdAsync(cancellationToken);
+        question.Archive(archivedStatusId);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var statusName = await _lookups.GetLookupNameAsync(archivedStatusId, cancellationToken);
+        return new QuestionActiveStateResponse(questionId, question.IsActive, statusName);
+    }
+
     public async Task<DeleteQuestionResponse> DeleteAsync(long questionId, CancellationToken cancellationToken)
     {
         var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        QuestionScopeResolver.EnsureCanModify(question, scope);
+        await EnsureCanDeleteAsync(question, scope, cancellationToken);
 
         var linkCount = await _questions.CountQuizLinksAsync(questionId, cancellationToken);
         if (linkCount > 0)
@@ -280,21 +331,106 @@ public sealed class QuestionService : IQuestionService
                 "Question is linked to one or more quizzes. Remove it from quizzes before deleting.");
         }
 
-        if (question.IsActive && !scope.CanApprove)
-        {
-            var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
-            if (!IsPendingStatus(statusName))
-            {
-                throw new BusinessRuleException(
-                    "Active or approved questions must be deactivated before they can be deleted.");
-            }
-        }
-
         await _questions.RemoveQuestionOptionsAsync(questionId, cancellationToken);
         await _questions.DeleteQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new DeleteQuestionResponse(questionId, Deleted: true, Deactivated: false);
+    }
+
+    public async Task<ImportQuestionsResponse> ImportAsync(
+        IReadOnlyList<CreateQuestionRequest> rows,
+        bool dryRun,
+        CancellationToken cancellationToken)
+    {
+        QuestionScopeResolver.RequireManageScope(_currentUser);
+
+        if (rows.Count == 0)
+        {
+            throw new ValidationAppException(["Import file has no question rows."]);
+        }
+
+        if (rows.Count > 200)
+        {
+            throw new ValidationAppException(["Import is limited to 200 rows per file."]);
+        }
+
+        var errors = new List<ImportQuestionRowError>();
+        var created = new List<QuestionDetailResponse>();
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var rowNumber = index + 2; // header = row 1
+            var row = rows[index] with { SubmitForReview = false }; // import as Draft
+            try
+            {
+                QuestionBankGuard.ValidateCreateRequest(row);
+                await _guard.ResolveQuestionTypeIdAsync(row.QuestionType, cancellationToken);
+
+                if (!dryRun)
+                {
+                    var detail = await CreateAsync(row, cancellationToken);
+                    created.Add(detail);
+                }
+            }
+            catch (ValidationAppException ex)
+            {
+                errors.Add(new ImportQuestionRowError(rowNumber, string.Join(" ", ex.Errors)));
+            }
+            catch (AppException ex)
+            {
+                errors.Add(new ImportQuestionRowError(rowNumber, ex.Message));
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new ImportQuestionRowError(rowNumber, ex.Message));
+            }
+        }
+
+        return new ImportQuestionsResponse(
+            DryRun: dryRun,
+            CreatedCount: created.Count,
+            ErrorCount: errors.Count,
+            Created: created,
+            Errors: errors);
+    }
+
+    private async Task EnsureCanUpdateAsync(
+        Question question,
+        QuestionManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        if (scope.IsPortalAdmin)
+        {
+            return;
+        }
+
+        QuestionScopeResolver.EnsureIsOwner(question, scope);
+        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
+        if (!IsOwnerEditableStatus(statusName))
+        {
+            throw new BusinessRuleException(
+                "You can only update your own questions before Portal Admin approval (or after rejection).");
+        }
+    }
+
+    private async Task EnsureCanDeleteAsync(
+        Question question,
+        QuestionManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        if (scope.IsPortalAdmin)
+        {
+            return;
+        }
+
+        QuestionScopeResolver.EnsureIsOwner(question, scope);
+        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
+        if (!IsOwnerEditableStatus(statusName))
+        {
+            throw new BusinessRuleException(
+                "You can only delete your own Draft, PendingReview, or Rejected questions. Approved questions can only be deleted by Portal Admin.");
+        }
     }
 
     private async Task ReplaceOptionsAsync(
@@ -326,27 +462,12 @@ public sealed class QuestionService : IQuestionService
         => await _questions.GetQuestionDetailAsync(questionId, cancellationToken)
             ?? throw new NotFoundAppException("Question was not found.");
 
-    private async Task EnsurePendingAsync(Question question, CancellationToken cancellationToken)
+    private async Task EnsurePendingReviewAsync(Question question, CancellationToken cancellationToken)
     {
         var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
-        if (!IsPendingStatus(statusName))
+        if (!IsPendingReviewStatus(statusName))
         {
-            throw new BusinessRuleException("Only pending questions can be approved or rejected.");
-        }
-    }
-
-    private async Task EnsureHumanApprovedAsync(Question question, CancellationToken cancellationToken)
-    {
-        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
-        if (!IsApprovedStatus(statusName) || !question.ApprovedBy.HasTrimmedText())
-        {
-            throw new BusinessRuleException(
-                "Question must be human-approved before AI approval.");
-        }
-
-        if (question.IsAiApproved)
-        {
-            throw new BusinessRuleException("Question is already AI-approved.");
+            throw new BusinessRuleException("Only PendingReview questions can be approved or rejected.");
         }
     }
 
@@ -373,18 +494,25 @@ public sealed class QuestionService : IQuestionService
 
     private static void EnsureCanView(QuestionDetailItem detail, QuestionManageScope scope)
     {
-        if (scope.CanApprove)
+        if (scope.IsPortalAdmin)
         {
             return;
         }
 
-        if (!string.Equals(detail.CreatedBy, scope.UserId.ToString(), StringComparison.Ordinal))
+        if (string.Equals(detail.CreatedBy, scope.UserId.ToString(), StringComparison.Ordinal))
         {
-            throw new ForbiddenAppException("You do not have access to this question.");
+            return;
         }
+
+        if (IsApprovedStatus(detail.StatusName))
+        {
+            return;
+        }
+
+        throw new ForbiddenAppException("You do not have access to this question.");
     }
 
-    private static bool IsPendingStatus(string statusName)
+    private static bool IsPendingReviewStatus(string statusName)
         => QuizLookupNames.PendingQuestionStatusNames.Any(name =>
             name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
 
@@ -392,10 +520,24 @@ public sealed class QuestionService : IQuestionService
         => QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
             name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
 
-    private Task<short> RequirePendingStatusIdAsync(CancellationToken cancellationToken)
+    private static bool IsArchivedStatus(string statusName)
+        => QuizLookupNames.ArchivedQuestionStatusNames.Any(name =>
+            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsOwnerEditableStatus(string statusName)
+        => QuizLookupNames.OwnerEditableQuestionStatusNames.Any(name =>
+            name.Equals(statusName, StringComparison.OrdinalIgnoreCase));
+
+    private Task<short> RequirePendingReviewStatusIdAsync(CancellationToken cancellationToken)
         => _guard.RequireLookupAsync(
             QuizLookupNames.QuestionStatus,
             QuizLookupNames.PendingQuestionStatusNames,
+            cancellationToken);
+
+    private Task<short> RequireDraftStatusIdAsync(CancellationToken cancellationToken)
+        => _guard.RequireLookupAsync(
+            QuizLookupNames.QuestionStatus,
+            QuizLookupNames.DraftQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireApprovedStatusIdAsync(CancellationToken cancellationToken)
@@ -408,5 +550,11 @@ public sealed class QuestionService : IQuestionService
         => _guard.RequireLookupAsync(
             QuizLookupNames.QuestionStatus,
             QuizLookupNames.RejectedQuestionStatusNames,
+            cancellationToken);
+
+    private Task<short> RequireArchivedStatusIdAsync(CancellationToken cancellationToken)
+        => _guard.RequireLookupAsync(
+            QuizLookupNames.QuestionStatus,
+            QuizLookupNames.ArchivedQuestionStatusNames,
             cancellationToken);
 }

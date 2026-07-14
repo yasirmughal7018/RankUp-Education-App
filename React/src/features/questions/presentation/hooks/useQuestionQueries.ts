@@ -30,15 +30,13 @@ export function useQuestionsQuery(filters: QuestionListFilters) {
   return useQuery({
     queryKey: queryKeys.questions(normalized),
     queryFn: () =>
-      filters.pendingOnly
-        ? questionApi.listPendingApprovalQuestions()
-        : questionApi.listQuestions({
-            pendingApprovalOnly: false,
-            isActive: normalized.isActive,
-            subjectId: normalized.subjectId,
-            classId: normalized.classId,
-            eligibleForQuizOnly: normalized.eligibleForQuizOnly,
-          }),
+      questionApi.listQuestions({
+        pendingApprovalOnly: filters.pendingOnly,
+        isActive: normalized.isActive,
+        subjectId: normalized.subjectId,
+        classId: normalized.classId,
+        eligibleForQuizOnly: normalized.eligibleForQuizOnly,
+      }),
   });
 }
 
@@ -83,22 +81,43 @@ export function useApproveQuestionMutation(questionId: number) {
   });
 }
 
-export function useApproveQuestionAiMutation(questionId: number) {
-  const invalidate = useInvalidateQuestions(questionId);
-
-  return useMutation({
-    mutationFn: () => questionApi.approveQuestionAi(questionId),
-    onSuccess: invalidate,
-  });
-}
-
 export function useRejectQuestionMutation(questionId: number) {
   const invalidate = useInvalidateQuestions(questionId);
 
   return useMutation({
-    mutationFn: (reason?: string) =>
+    mutationFn: (reason: string) =>
       questionApi.rejectQuestion(questionId, reason),
     onSuccess: invalidate,
+  });
+}
+
+export function useSubmitQuestionMutation(questionId: number) {
+  const invalidate = useInvalidateQuestions(questionId);
+
+  return useMutation({
+    mutationFn: () => questionApi.submitQuestionForReview(questionId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useArchiveQuestionMutation(questionId: number) {
+  const invalidate = useInvalidateQuestions(questionId);
+
+  return useMutation({
+    mutationFn: () => questionApi.archiveQuestion(questionId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportQuestionsMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ file, dryRun }: { file: File; dryRun?: boolean }) =>
+      questionApi.importQuestionsFromExcel(file, dryRun ?? false),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["questions"] });
+    },
   });
 }
 

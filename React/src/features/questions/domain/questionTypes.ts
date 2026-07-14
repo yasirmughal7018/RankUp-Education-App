@@ -1,5 +1,4 @@
 import type { UserRole } from "@/core/api/types";
-import { isAdminRole } from "@/core/api/types";
 
 export interface QuestionOptionInput {
   optionText: string;
@@ -121,6 +120,7 @@ export const QUESTION_TYPE_META: Record<
 export const QUESTION_MANAGER_ROLES: UserRole[] = [
   "PortalAdmin",
   "SchoolAdmin",
+  "CampusAdmin",
   "Teacher",
   "Parent",
 ];
@@ -129,17 +129,28 @@ export function canManageQuestions(role: UserRole): boolean {
   return QUESTION_MANAGER_ROLES.includes(role);
 }
 
+/** Only PortalAdmin approves / rejects. */
 export function canApproveQuestions(role: UserRole): boolean {
-  return isAdminRole(role);
+  return role === "PortalAdmin";
 }
 
-export function canAiApproveQuestions(role: UserRole): boolean {
+/** Only PortalAdmin activate / deactivate / archive. */
+export function canLifecycleQuestions(role: UserRole): boolean {
   return role === "PortalAdmin";
 }
 
 export function isPendingQuestionStatus(status: string): boolean {
+  const normalized = status.toLowerCase().replace(/\s+/g, "");
+  return ["pendingreview", "pending", "underreview"].includes(normalized);
+}
+
+export function isDraftQuestionStatus(status: string): boolean {
+  return status.trim().toLowerCase() === "draft";
+}
+
+export function isRejectedQuestionStatus(status: string): boolean {
   const normalized = status.toLowerCase();
-  return ["pending", "draft", "under review"].includes(normalized);
+  return normalized === "rejected" || normalized === "declined";
 }
 
 export function isApprovedQuestionStatus(status: string): boolean {
@@ -147,17 +158,23 @@ export function isApprovedQuestionStatus(status: string): boolean {
   return ["approved", "active", "published"].includes(normalized);
 }
 
-/** Eligible for quiz bank attach: human ApprovedBy + AI approved + active. */
+export function isOwnerEditableQuestionStatus(status: string): boolean {
+  return (
+    isDraftQuestionStatus(status) ||
+    isPendingQuestionStatus(status) ||
+    isRejectedQuestionStatus(status)
+  );
+}
+
+/** Eligible for quiz bank attach after PortalAdmin approve. */
 export function isEligibleForQuizQuestion(question: {
   isActive: boolean;
   approvedBy: string | null;
-  isAiApproved: boolean;
   status: string;
 }): boolean {
   return (
     question.isActive &&
     Boolean(question.approvedBy?.trim()) &&
-    question.isAiApproved &&
     isApprovedQuestionStatus(question.status)
   );
 }

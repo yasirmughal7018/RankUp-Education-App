@@ -18,6 +18,7 @@ public interface IQuestionRepository
         short? classId,
         bool pendingApprovalOnly,
         bool eligibleForQuizOnly,
+        bool includeAllApprovedForOwnerScope,
         CancellationToken cancellationToken);
 
     Task<QuestionDetailItem?> GetQuestionDetailAsync(long questionId, CancellationToken cancellationToken);

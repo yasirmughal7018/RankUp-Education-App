@@ -64,9 +64,16 @@ public static class QuizLookupNames
     /// <summary>Legacy alias — single-choice style MCQ names.</summary>
     public static readonly string[] McqQuestionTypeNames = SingleChoiceQuestionTypeNames;
 
-    public static readonly string[] PendingQuestionStatusNames = ["Pending", "Draft", "Under Review"];
+    public static readonly string[] DraftQuestionStatusNames = ["Draft"];
+    /// <summary>Pending review queue (canonical: PendingReview). Legacy aliases kept for existing rows.</summary>
+    public static readonly string[] PendingQuestionStatusNames =
+        ["PendingReview", "Pending", "Under Review"];
     public static readonly string[] ApprovedQuestionStatusNames = ["Approved", "Active", "Published"];
     public static readonly string[] RejectedQuestionStatusNames = ["Rejected", "Declined"];
+    public static readonly string[] ArchivedQuestionStatusNames = ["Archived"];
+    /// <summary>Statuses owners may still edit/delete (not Approved / Archived).</summary>
+    public static readonly string[] OwnerEditableQuestionStatusNames =
+        ["Draft", "PendingReview", "Pending", "Under Review", "Rejected", "Declined"];
     public static readonly string[] ActiveQuestionStatusNames = ["Active", "Approved", "Published"];
     public static readonly string[] SubmittedAttemptStatusNames = ["Submitted", "SUBMITTED"];
     public static readonly string[] ReviewedAttemptStatusNames = ["Reviewed", "REVIEWED"];

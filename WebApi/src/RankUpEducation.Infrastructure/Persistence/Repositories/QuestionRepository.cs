@@ -41,6 +41,7 @@ public sealed class QuestionRepository : IQuestionRepository
         short? classId,
         bool pendingApprovalOnly,
         bool eligibleForQuizOnly,
+        bool includeAllApprovedForOwnerScope,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Questions.AsNoTracking().AsQueryable();
@@ -64,9 +65,30 @@ public sealed class QuestionRepository : IQuestionRepository
         {
             query = query.Where(question =>
                 question.IsActive
-                && question.IsAiApproved
                 && question.ApprovedBy != null
                 && question.ApprovedBy != "");
+        }
+
+        if (createdByUserId.HasValue && includeAllApprovedForOwnerScope)
+        {
+            var approvedLookups = await _dbContext.Lookups.AsNoTracking()
+                .Where(lookup => lookup.Type == QuizLookupNames.QuestionStatus)
+                .ToListAsync(cancellationToken);
+            var approvedStatusIdList = approvedLookups
+                .Where(lookup => QuizLookupNames.ApprovedQuestionStatusNames.Any(name =>
+                    name.Equals(lookup.Name, StringComparison.OrdinalIgnoreCase)))
+                .Select(lookup => lookup.Id)
+                .ToList();
+
+            var ownerKey = createdByUserId.Value.ToString();
+            query = query.Where(question =>
+                question.CreatedBy == ownerKey
+                || approvedStatusIdList.Contains(question.StatusId));
+        }
+        else if (createdByUserId.HasValue)
+        {
+            var ownerKey = createdByUserId.Value.ToString();
+            query = query.Where(question => question.CreatedBy == ownerKey);
         }
 
         var rows = await query
@@ -125,7 +147,7 @@ public sealed class QuestionRepository : IQuestionRepository
                 row.Id,
                 row.QuestionText,
                 lookupNames.GetValueOrDefault(row.QuestionTypeId, "Multiple Choice"),
-                lookupNames.GetValueOrDefault(row.StatusId, "Pending"),
+                lookupNames.GetValueOrDefault(row.StatusId, "PendingReview"),
                 row.Marks,
                 row.IsActive,
                 row.CreatedBy,

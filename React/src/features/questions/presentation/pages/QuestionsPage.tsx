@@ -10,8 +10,13 @@ import {
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
   useDeleteQuestionMutation,
+  useImportQuestionsMutation,
   useQuestionsQuery,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
+import {
+  getQuestionImportTemplateUrl,
+} from "@/features/questions/data/questionApi";
+import { readStoredSession } from "@/core/auth/tokenStorage";
 
 function truncateText(value: string, maxLength = 90): string {
   if (value.length <= maxLength) {
@@ -27,11 +32,40 @@ export function QuestionsPage() {
   const [subjectId, setSubjectId] = useState<number | "">("");
   const [classId, setClassId] = useState<number | "">("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const { data: questions = [], isLoading, error, refetch, isFetching } =
     useQuestionsQuery({ pendingOnly, activeFilter, subjectId, classId });
 
   const deleteQuestion = useDeleteQuestionMutation();
+  const importQuestions = useImportQuestionsMutation();
+
+  async function handleImport(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    setActionError(null);
+    setImportMessage(null);
+
+    try {
+      const result = await importQuestions.mutateAsync({ file, dryRun: false });
+      setImportMessage(
+        `Imported ${result.createdCount} draft question(s). ${result.errorCount} row error(s).`,
+      );
+      if (result.errors.length > 0) {
+        setActionError(
+          result.errors
+            .slice(0, 5)
+            .map((item) => `Row ${item.rowNumber}: ${item.message}`)
+            .join(" "),
+        );
+      }
+    } catch (caught) {
+      const apiError = caught as { message?: string };
+      setActionError(apiError.message || "Unable to import questions.");
+    }
+  }
 
   async function handleDelete(question: QuestionSummary) {
     const confirmed = window.confirm(
@@ -58,7 +92,7 @@ export function QuestionsPage() {
         title="Question bank"
         description="Create, review, and manage questions for quizzes and assessments."
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void refetch()}
@@ -67,6 +101,44 @@ export function QuestionsPage() {
             >
               Refresh
             </button>
+            <a
+              href={getQuestionImportTemplateUrl()}
+              onClick={(event) => {
+                event.preventDefault();
+                const token = readStoredSession()?.accessToken;
+                void (async () => {
+                  const response = await fetch(getQuestionImportTemplateUrl(), {
+                    headers: token
+                      ? { Authorization: `Bearer ${token}` }
+                      : undefined,
+                  });
+                  const blob = await response.blob();
+                  const url = URL.createObjectURL(blob);
+                  const anchor = document.createElement("a");
+                  anchor.href = url;
+                  anchor.download = "rankup-questions-import-template.xlsx";
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                })();
+              }}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Import template
+            </a>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+              {importQuestions.isPending ? "Importing..." : "Import Excel"}
+              <input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                disabled={importQuestions.isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  void handleImport(file);
+                }}
+              />
+            </label>
             <Link
               to="/questions/new"
               className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
@@ -124,6 +196,12 @@ export function QuestionsPage() {
       {error || actionError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error?.message ?? actionError}
+        </div>
+      ) : null}
+
+      {importMessage ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {importMessage}
         </div>
       ) : null}
 
