@@ -92,6 +92,7 @@ app.UseSwaggerUI(options =>
     options.DocumentTitle = "RankUp Education API";
 });
 app.UseCors(CorsOptions.PolicyName);
+app.UseStaticFiles();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

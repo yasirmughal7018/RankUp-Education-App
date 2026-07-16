@@ -4,10 +4,12 @@ import { AdminRoute } from "@/features/admin/presentation/components/AdminRoute"
 import { AdminOverviewPage } from "@/features/admin/presentation/pages/AdminOverviewPage";
 import { AdminQuizApprovalsPage } from "@/features/admin/presentation/pages/AdminQuizApprovalsPage";
 import { PendingRegistrationsPage } from "@/features/admin/presentation/pages/PendingRegistrationsPage";
+import { PendingSchoolChangesPage } from "@/features/admin/presentation/pages/PendingSchoolChangesPage";
 import {
   GuestRoute,
   ProtectedRoute,
 } from "@/features/authentication/presentation/components/RouteGuards";
+import { AccountPage } from "@/features/authentication/presentation/pages/AccountPage";
 import { ForgotPasswordPage } from "@/features/authentication/presentation/pages/ForgotPasswordPage";
 import { LoginPage } from "@/features/authentication/presentation/pages/LoginPage";
 import { RequestAccessPage } from "@/features/authentication/presentation/pages/RequestAccessPage";
@@ -63,12 +65,17 @@ export function AppRouter() {
 
           <Route element={<ProtectedRoute />}>
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="account" element={<AccountPage />} />
 
             <Route element={<AdminRoute />}>
               <Route path="admin" element={<AdminOverviewPage />} />
               <Route
                 path="admin/registrations"
                 element={<PendingRegistrationsPage />}
+              />
+              <Route
+                path="admin/school-changes"
+                element={<PendingSchoolChangesPage />}
               />
               <Route
                 path="admin/quiz-approvals"

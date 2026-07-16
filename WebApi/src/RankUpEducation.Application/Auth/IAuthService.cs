@@ -36,6 +36,32 @@ public interface IAuthService
 
     Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken);
 
+    Task<CurrentUserResponse> UpdateProfileAsync(
+        UpdateProfileRequest request,
+        CancellationToken cancellationToken);
+
+    Task<CurrentUserResponse> UploadAvatarAsync(
+        Stream content,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken);
+
+    Task DeactivateAccountAsync(
+        DeactivateAccountRequest request,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PendingSchoolChangeResponse>> ListPendingSchoolChangesAsync(
+        int take,
+        CancellationToken cancellationToken);
+
+    Task<ApproveSchoolChangeResponse> ApproveSchoolChangeAsync(
+        long requestId,
+        CancellationToken cancellationToken);
+
+    Task RejectSchoolChangeAsync(
+        long requestId,
+        CancellationToken cancellationToken);
+
     Task<CurrentUserResponse> ChangePasswordAsync(
         ChangePasswordRequest request,
         CancellationToken cancellationToken);

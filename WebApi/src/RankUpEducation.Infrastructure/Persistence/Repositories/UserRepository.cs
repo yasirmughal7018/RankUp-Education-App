@@ -383,6 +383,21 @@ public sealed class UserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
+    public async Task RevokeRefreshTokensForUserAsync(
+        long userId,
+        DateTimeOffset revokedAt,
+        CancellationToken cancellationToken)
+    {
+        var tokens = await _dbContext.RefreshTokens
+            .Where(token => token.UserId == userId && token.RevokedAt == null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var token in tokens)
+        {
+            token.Revoke(revokedAt);
+        }
+    }
+
     private IQueryable<User> UsersWithRoles()
         => _dbContext.Users.Include(user => user.RoleAssignments);
 

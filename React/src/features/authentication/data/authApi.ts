@@ -1,5 +1,6 @@
 import {
   apiRequest,
+  apiRequestForm,
   apiRequestVoid,
 } from "@/core/api/apiClient";
 import type {
@@ -103,6 +104,43 @@ export async function logout(refreshToken: string | null): Promise<void> {
 
 export async function getCurrentUser(): Promise<CurrentUser> {
   return apiRequest<CurrentUser>("/auth/me");
+}
+
+export interface UpdateProfileRequest {
+  fullName: string;
+  mobileNumber: string;
+  emailAddress?: string | null;
+  cnic?: string | null;
+  schoolId?: number | null;
+  campusId?: number | null;
+}
+
+export async function updateProfile(
+  request: UpdateProfileRequest,
+): Promise<CurrentUser> {
+  return apiRequest<CurrentUser>("/auth/me", {
+    method: "PUT",
+    body: request,
+  });
+}
+
+export async function uploadAvatar(file: File): Promise<CurrentUser> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiRequestForm<CurrentUser>("/auth/me/avatar", formData);
+}
+
+export interface DeactivateAccountRequest {
+  currentPassword: string;
+}
+
+export async function deactivateAccount(
+  request: DeactivateAccountRequest,
+): Promise<void> {
+  await apiRequestVoid("/auth/me/deactivate", {
+    method: "POST",
+    body: request,
+  });
 }
 
 export interface RegisterAccountRequest {

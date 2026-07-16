@@ -40,8 +40,52 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserApprovalSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(UserAvatarAndSchoolChangeSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
+
+    private const string UserAvatarAndSchoolChangeSupportSql = """
+        ALTER TABLE public.app_users
+            ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500) NULL;
+
+        CREATE TABLE IF NOT EXISTS public.app_user_school_change_request (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL
+                REFERENCES public.app_users (id) ON DELETE CASCADE,
+            from_school_id INTEGER NULL,
+            from_campus_id INTEGER NULL,
+            to_school_id INTEGER NULL,
+            to_campus_id INTEGER NULL,
+            requester_role SMALLINT NOT NULL,
+            status SMALLINT NOT NULL DEFAULT 0,
+            requested_at TIMESTAMPTZ NOT NULL,
+            resolved_at TIMESTAMPTZ NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_school_change_request_user_id
+            ON public.app_user_school_change_request (user_id);
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_school_change_request_status
+            ON public.app_user_school_change_request (status);
+
+        CREATE TABLE IF NOT EXISTS public.app_user_school_change_approval (
+            id BIGSERIAL PRIMARY KEY,
+            request_id BIGINT NOT NULL
+                REFERENCES public.app_user_school_change_request (id) ON DELETE CASCADE,
+            approved_by_user_id BIGINT NOT NULL
+                REFERENCES public.app_users (id) ON DELETE RESTRICT,
+            approved_by_role SMALLINT NOT NULL,
+            approved_at TIMESTAMPTZ NULL,
+            is_approved BOOLEAN NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_school_change_approval_request_id
+            ON public.app_user_school_change_approval (request_id);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_app_user_school_change_approval_unique
+            ON public.app_user_school_change_approval (
+                request_id, approved_by_user_id, approved_by_role);
+        """;
 
     private const string SchoolSoftDeleteSupportSql = """
         ALTER TABLE public.schools

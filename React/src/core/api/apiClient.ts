@@ -146,3 +146,38 @@ export async function apiRequestVoid(
 ): Promise<void> {
   await apiRequest<unknown>(path, options);
 }
+
+async function executeFormRequest(
+  path: string,
+  formData: FormData,
+  accessToken?: string | null,
+): Promise<Response> {
+  const headers = new Headers();
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  return fetch(`${environment.apiBaseUrl}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+}
+
+/** Multipart upload (do not set Content-Type; browser adds boundary). */
+export async function apiRequestForm<T>(
+  path: string,
+  formData: FormData,
+): Promise<T> {
+  const accessToken = authHandlers?.getAccessToken();
+  let response = await executeFormRequest(path, formData, accessToken);
+
+  if (response.status === 401 && authHandlers) {
+    const refreshedToken = await authHandlers.refreshAccessToken();
+    if (refreshedToken) {
+      response = await executeFormRequest(path, formData, refreshedToken);
+    }
+  }
+
+  return parseResponse<T>(response);
+}

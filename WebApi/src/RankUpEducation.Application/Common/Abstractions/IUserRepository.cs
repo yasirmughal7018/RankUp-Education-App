@@ -83,4 +83,9 @@ public interface IUserRepository
     Task AddParentProfileAsync(Domain.Parents.Parent parent, CancellationToken cancellationToken);
 
     Task DeleteAsync(User user, CancellationToken cancellationToken);
+
+    Task RevokeRefreshTokensForUserAsync(
+        long userId,
+        DateTimeOffset revokedAt,
+        CancellationToken cancellationToken);
 }

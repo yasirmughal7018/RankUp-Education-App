@@ -5,7 +5,10 @@ namespace RankUpEducation.Application.Auth;
 
 internal static class AuthMapping
 {
-    public static CurrentUserResponse ToCurrentUserResponse(this User user, UserRole? activeRole = null)
+    public static CurrentUserResponse ToCurrentUserResponse(
+        this User user,
+        UserRole? activeRole = null,
+        CurrentUserPendingSchoolChange? pendingSchoolChange = null)
     {
         var role = activeRole ?? user.Role;
         if (!user.HasRole(role))
@@ -27,6 +30,11 @@ internal static class AuthMapping
             user.ProfileId,
             user.SchoolId,
             user.CampusId,
+            user.EmailAddress,
+            user.MobileNumber,
+            user.Cnic,
+            user.AvatarUrl,
+            pendingSchoolChange,
             permissions,
             mustChangePassword);
     }

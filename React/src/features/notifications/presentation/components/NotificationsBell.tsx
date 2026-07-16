@@ -16,6 +16,11 @@ function formatCreatedAt(value: string): string {
   }).format(date);
 }
 
+const ADMIN_NOTIFICATION_CATEGORIES = new Set([
+  "RegistrationRequest",
+  "SchoolChangeRequest",
+]);
+
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -28,11 +33,11 @@ export function NotificationsBell() {
   });
 
   const items = data?.items ?? [];
-  const registrationItems = items.filter(
-    (item) => item.category === "RegistrationRequest",
+  const adminItems = items.filter((item) =>
+    ADMIN_NOTIFICATION_CATEGORIES.has(item.category),
   );
-  const unreadCount = registrationItems.filter((item) => !item.isRead).length;
-  const recentItems = registrationItems.slice(0, 8);
+  const unreadCount = adminItems.filter((item) => !item.isRead).length;
+  const recentItems = adminItems.slice(0, 8);
 
   useEffect(() => {
     if (!open) {
@@ -62,21 +67,26 @@ export function NotificationsBell() {
     };
   }, [open]);
 
-  async function openApprovals() {
-    setOpen(false);
+  async function markCategoryRead(category: string) {
     try {
-      await notificationsApi.markNotificationCategoryRead("RegistrationRequest");
+      await notificationsApi.markNotificationCategoryRead(category);
       await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
     } catch {
-      // Approvals page still opens even if mark-read fails.
+      // Page still opens even if mark-read fails.
     }
+  }
+
+  function hrefForCategory(category: string) {
+    return category === "SchoolChangeRequest"
+      ? "/admin/school-changes"
+      : "/admin/registrations";
   }
 
   return (
     <div className="relative" ref={containerRef}>
       <button
         type="button"
-        aria-label="Registration approval notifications"
+        aria-label="Admin notifications"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         className="relative rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
@@ -106,10 +116,10 @@ export function NotificationsBell() {
         <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="border-b border-slate-100 px-4 py-3">
             <p className="text-sm font-semibold text-slate-900">
-              Account access requests
+              Admin requests
             </p>
             <p className="text-xs text-slate-500">
-              Open the approval screen to review and approve
+              Registrations and school/campus changes
             </p>
           </div>
 
@@ -124,15 +134,18 @@ export function NotificationsBell() {
               </p>
             ) : recentItems.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-slate-500">
-                No registration notifications.
+                No admin notifications.
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {recentItems.map((item) => (
                   <li key={item.id}>
                     <Link
-                      to="/admin/registrations"
-                      onClick={() => void openApprovals()}
+                      to={hrefForCategory(item.category)}
+                      onClick={() => {
+                        setOpen(false);
+                        void markCategoryRead(item.category);
+                      }}
                       className={[
                         "block px-4 py-3 transition hover:bg-slate-50",
                         item.isRead ? "bg-white" : "bg-brand-50/40",
@@ -154,13 +167,26 @@ export function NotificationsBell() {
             )}
           </div>
 
-          <div className="border-t border-slate-100 px-4 py-2">
+          <div className="flex flex-col gap-1 border-t border-slate-100 px-4 py-2">
             <Link
               to="/admin/registrations"
-              onClick={() => void openApprovals()}
+              onClick={() => {
+                setOpen(false);
+                void markCategoryRead("RegistrationRequest");
+              }}
               className="text-xs font-medium text-brand-700 hover:text-brand-800"
             >
-              Open registration approvals
+              Registration approvals
+            </Link>
+            <Link
+              to="/admin/school-changes"
+              onClick={() => {
+                setOpen(false);
+                void markCategoryRead("SchoolChangeRequest");
+              }}
+              className="text-xs font-medium text-brand-700 hover:text-brand-800"
+            >
+              School / campus changes
             </Link>
           </div>
         </div>

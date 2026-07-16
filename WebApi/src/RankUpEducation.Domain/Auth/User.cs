@@ -51,6 +51,7 @@ public sealed class User : SoftDeleteEntity
     public string? MobileNumber { get; private set; }
     public string? Cnic { get; private set; }
     public string? EmailAddress { get; private set; }
+    public string? AvatarUrl { get; private set; }
     public bool? MustChangePassword { get; private set; }
     public string? ReasonMessage { get; private set; }
     /// <summary>Student roll number or teacher code (shared identity field).</summary>
@@ -302,6 +303,43 @@ public sealed class User : SoftDeleteEntity
             EmailAddress = emailAddress.AsNormalizedEmailOrNull();
         }
 
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>Self-service contact update (school/campus changes go through approval).</summary>
+    public void UpdateSelfServiceContact(
+        string fullName,
+        string mobileNumber,
+        string? emailAddress,
+        string? cnic)
+    {
+        if (!fullName.HasTrimmedText())
+        {
+            throw new BusinessRuleException("Display name is required.");
+        }
+
+        if (!mobileNumber.HasTrimmedText())
+        {
+            throw new BusinessRuleException("Mobile number is required.");
+        }
+
+        FullName = fullName.AsTrimmedString();
+        MobileNumber = mobileNumber.AsTrimmedString();
+        EmailAddress = emailAddress.AsNormalizedEmailOrNull();
+        Cnic = cnic.AsTrimmedOrNull();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void SetAvatarUrl(string? avatarUrl)
+    {
+        AvatarUrl = avatarUrl.AsTrimmedOrNull();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void ApplySchoolCampus(int? schoolId, int? campusId)
+    {
+        SchoolId = schoolId;
+        CampusId = campusId;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

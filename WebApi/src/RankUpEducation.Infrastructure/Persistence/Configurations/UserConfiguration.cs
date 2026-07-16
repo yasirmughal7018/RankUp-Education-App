@@ -32,6 +32,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.SchoolId).HasColumnName("school_id");
         builder.Property(user => user.CampusId).HasColumnName("campus_id");
         builder.Property(user => user.EmailAddress).HasColumnName("email").HasMaxLength(120);
+        builder.Property(user => user.AvatarUrl).HasColumnName("avatar_url").HasMaxLength(500);
         builder.Property(user => user.MustChangePassword).HasColumnName("must_change_password");
         builder.Property(user => user.ReasonMessage).HasColumnName("reason_message").HasMaxLength(1000);
         builder.Property(user => user.RollNumberTeacherCode)

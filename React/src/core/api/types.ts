@@ -19,6 +19,14 @@ export type UserRole =
   | "Student"
   | "Parent";
 
+export interface PendingSchoolChange {
+  id: number;
+  toSchoolId: number | null;
+  toCampusId: number | null;
+  requestedAt: string;
+  status: string;
+}
+
 export interface CurrentUser {
   id: number;
   username: string;
@@ -30,6 +38,11 @@ export interface CurrentUser {
   profileId: number | null;
   schoolId: number | null;
   campusId: number | null;
+  emailAddress?: string | null;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  avatarUrl?: string | null;
+  pendingSchoolChange?: PendingSchoolChange | null;
   permissions: string[];
   mustChangePassword?: boolean | null;
 }

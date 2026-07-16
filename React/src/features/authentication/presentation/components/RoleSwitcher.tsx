@@ -35,14 +35,14 @@ export function RoleSwitcher() {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <label className="flex items-center gap-2 text-xs text-slate-600">
-        <span className="hidden sm:inline">Acting as</span>
+    <div className="flex w-full flex-col gap-1">
+      <label className="flex w-full flex-col gap-1.5 text-xs text-slate-600 sm:flex-row sm:items-center">
+        <span className="shrink-0 font-medium text-slate-500">Acting as</span>
         <select
           value={user.role}
           disabled={isSubmitting}
           onChange={(event) => void handleChange(event.target.value)}
-          className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:min-w-[9rem]"
         >
           {user.roles.map((role) => (
             <option key={role} value={role}>
@@ -51,7 +51,7 @@ export function RoleSwitcher() {
           ))}
         </select>
       </label>
-      {error ? <p className="max-w-[14rem] text-right text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   );
 }

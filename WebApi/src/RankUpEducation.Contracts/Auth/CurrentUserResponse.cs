@@ -10,5 +10,11 @@ public sealed record CurrentUserResponse(
     long? ProfileId,
     int? SchoolId,
     int? CampusId,
+    string? EmailAddress,
+    string? MobileNumber,
+    string? Cnic,
+    string? AvatarUrl,
+    CurrentUserPendingSchoolChange? PendingSchoolChange,
     IReadOnlyList<string> Permissions,
     bool? MustChangePassword);
+
