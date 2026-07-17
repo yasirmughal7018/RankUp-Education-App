@@ -14,7 +14,7 @@ class AppEnvironment {
 
   factory AppEnvironment.fromDartDefines() {
     const env = String.fromEnvironment('APP_ENV', defaultValue: 'development');
-    const apiFromDefine = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    const apiFromDefine = String.fromEnvironment('API_BASE_URL');
 
     final name = EnvironmentName.values.firstWhere(
       (value) => value.name == env,
@@ -31,7 +31,6 @@ class AppEnvironment {
       enableNetworkLogging: name != EnvironmentName.production,
       enableMockRepositories: const bool.fromEnvironment(
         'USE_MOCKS',
-        defaultValue: false,
       ),
     );
   }

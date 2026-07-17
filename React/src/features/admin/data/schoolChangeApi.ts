@@ -18,6 +18,7 @@ export interface PendingSchoolChangeItem {
     role: string;
   }>;
   currentUserHasApproved: boolean;
+  schoolAdminHasApproved: boolean;
 }
 
 export interface ApproveSchoolChangeResult {

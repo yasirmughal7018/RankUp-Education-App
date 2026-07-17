@@ -172,7 +172,7 @@ export function UserMenu({ compact = false }: UserMenuProps) {
               <span>
                 <span className="block font-medium">Profile</span>
                 <span className="block text-xs text-slate-500">
-                  Name, contact, school
+                  Name and contact details
                 </span>
               </span>
             </Link>

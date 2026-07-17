@@ -24,7 +24,8 @@ export type LoginStatus =
   | "PendingApproval"
   | "NeedsPasswordSetup"
   | "Ready"
-  | "Rejected";
+  | "Rejected"
+  | "LockedPendingSchoolChange";
 
 export interface LoginStatusResponse {
   status: LoginStatus;
@@ -111,8 +112,6 @@ export interface UpdateProfileRequest {
   mobileNumber: string;
   emailAddress?: string | null;
   cnic?: string | null;
-  schoolId?: number | null;
-  campusId?: number | null;
 }
 
 export async function updateProfile(
@@ -120,6 +119,26 @@ export async function updateProfile(
 ): Promise<CurrentUser> {
   return apiRequest<CurrentUser>("/auth/me", {
     method: "PUT",
+    body: request,
+  });
+}
+
+export interface RequestSchoolChangeRequest {
+  schoolId?: number | null;
+  campusId?: number | null;
+}
+
+export interface RequestSchoolChangeResponse {
+  requestId: number;
+  isLocked: boolean;
+  message: string;
+}
+
+export async function requestSchoolChange(
+  request: RequestSchoolChangeRequest,
+): Promise<RequestSchoolChangeResponse> {
+  return apiRequest<RequestSchoolChangeResponse>("/auth/me/school-change", {
+    method: "POST",
     body: request,
   });
 }

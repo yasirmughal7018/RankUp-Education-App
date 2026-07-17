@@ -120,6 +120,19 @@ public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestReposito
             cancellationToken);
     }
 
+    public Task<bool> HasRoleApprovedAsync(
+        long requestId,
+        UserRole approverRole,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserSchoolChangeApprovals.AnyAsync(
+            approval =>
+                approval.RequestId == requestId
+                && approval.ApprovedByRole == approverRole
+                && approval.IsApproved == true,
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproversForRequestAsync(
         long requestId,
         CancellationToken cancellationToken)

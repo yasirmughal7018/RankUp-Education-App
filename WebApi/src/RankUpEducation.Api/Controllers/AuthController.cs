@@ -188,6 +188,16 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<CurrentUserResponse>.Ok(user, "Profile updated successfully."));
     }
 
+    [HttpPost("me/school-change")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<RequestSchoolChangeResponse>>> RequestSchoolChangeAsync(
+        [FromBody] RequestSchoolChangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.RequestSchoolChangeAsync(request, cancellationToken);
+        return Ok(ApiResponse<RequestSchoolChangeResponse>.Ok(result, result.Message));
+    }
+
     [HttpPost("me/avatar")]
     [Authorize]
     [RequestSizeLimit(5 * 1024 * 1024)]

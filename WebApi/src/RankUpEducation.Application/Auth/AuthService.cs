@@ -17,6 +17,8 @@ public sealed class AuthService : IAuthService
     private static readonly string[] AllowedRegistrationRoles = ["Student", "Parent", "Teacher"];
     private const string RegistrationRequestCategory = "RegistrationRequest";
     private const string SchoolChangeRequestCategory = "SchoolChangeRequest";
+    private const string LockedPendingSchoolChangeMessage =
+        "Your account is locked because you requested a school or campus change. School Admin or Portal Admin must approve (or reject) the change before you can sign in again.";
 
     private readonly IUserRepository _users;
     private readonly ISchoolChangeRequestRepository _schoolChanges;
@@ -63,7 +65,10 @@ public sealed class AuthService : IAuthService
         }
         catch (BusinessRuleException exception)
         {
-            throw new AuthenticationAppException(exception.Message);
+            var pendingLockMessage = await TryGetPendingSchoolChangeLockMessageAsync(
+                user,
+                cancellationToken);
+            throw new AuthenticationAppException(pendingLockMessage ?? exception.Message);
         }
 
         if (user.NeedsPasswordSetup)
@@ -163,6 +168,16 @@ public sealed class AuthService : IAuthService
 
         if (!user.IsActive)
         {
+            var pendingLockMessage = await TryGetPendingSchoolChangeLockMessageAsync(
+                user,
+                cancellationToken);
+            if (pendingLockMessage is not null)
+            {
+                return new LoginStatusResponse(
+                    "LockedPendingSchoolChange",
+                    pendingLockMessage);
+            }
+
             throw new AuthenticationAppException("This account is not active.");
         }
 
@@ -630,10 +645,53 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException([exception.Message]);
         }
 
-        await MaybeQueueSchoolChangeAsync(user, activeRole, request.SchoolId, request.CampusId, cancellationToken);
-
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await ToCurrentUserResponseAsync(user, activeRole, cancellationToken);
+    }
+
+    public async Task<RequestSchoolChangeResponse> RequestSchoolChangeAsync(
+        RequestSchoolChangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
+        var activeRole = ResolveActiveRoleFromClaims();
+        var user = await _users.GetByIdForRoleAsync(userId, activeRole, cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        try
+        {
+            user.EnsureCanLogin();
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new AuthenticationAppException(exception.Message);
+        }
+
+        var changeRequest = await MaybeQueueSchoolChangeAsync(
+            user,
+            activeRole,
+            request.SchoolId,
+            request.CampusId,
+            cancellationToken);
+
+        if (changeRequest is null)
+        {
+            throw new ValidationAppException([
+                "School and campus are unchanged. Choose a different school or campus to request a change.",
+            ]);
+        }
+
+        user.SetActive(false);
+        await _users.RevokeRefreshTokensForUserAsync(
+            user.Id,
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new RequestSchoolChangeResponse(
+            changeRequest.Id,
+            IsLocked: true,
+            LockedPendingSchoolChangeMessage);
     }
 
     public async Task<CurrentUserResponse> UploadAvatarAsync(
@@ -766,6 +824,10 @@ public sealed class AuthService : IAuthService
                 viewerId,
                 viewerRole,
                 cancellationToken);
+            var schoolAdminHasApproved = await _schoolChanges.HasRoleApprovedAsync(
+                request.Id,
+                UserRole.SchoolAdmin,
+                cancellationToken);
 
             responses.Add(new PendingSchoolChangeResponse(
                 request.Id,
@@ -779,7 +841,8 @@ public sealed class AuthService : IAuthService
                 request.ToCampusId,
                 request.RequestedAt.ToString("O"),
                 approvers,
-                currentUserHasApproved));
+                currentUserHasApproved,
+                schoolAdminHasApproved));
         }
 
         return responses;
@@ -819,7 +882,12 @@ public sealed class AuthService : IAuthService
         }
         else if (await _schoolChanges.HasApprovedAsync(request.Id, approverId, approverRole, cancellationToken))
         {
-            throw new BusinessRuleException("Approved — awaiting Portal Admin.");
+            // Already soft-approved (e.g. legacy flow). Appliers may still finalize.
+            if (!CanApplySchoolChange(request, approverRole))
+            {
+                throw new BusinessRuleException(
+                    "You already approved this request. It stays pending until School Admin or Portal Admin applies it.");
+            }
         }
         else
         {
@@ -828,7 +896,9 @@ public sealed class AuthService : IAuthService
             await _schoolChanges.AddApprovalsAsync([approval], cancellationToken);
         }
 
-        if (approverRole != UserRole.PortalAdmin)
+        // Teacher/Student (and Parent/CampusAdmin) school or campus changes:
+        // SchoolAdmin OR PortalAdmin can apply. CampusAdmin records soft-approval only.
+        if (!CanApplySchoolChange(request, approverRole))
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             return new ApproveSchoolChangeResponse(
@@ -836,7 +906,7 @@ public sealed class AuthService : IAuthService
                 request.UserId,
                 IsApplied: false,
                 Message:
-                    "Your approval was recorded. The change stays pending until Portal Admin approves.");
+                    "Your approval was recorded. The change stays pending until School Admin or Portal Admin approves.");
         }
 
         var user = await _users.GetByIdAsync(request.UserId, cancellationToken)
@@ -844,13 +914,18 @@ public sealed class AuthService : IAuthService
 
         user.ApplySchoolCampus(request.ToSchoolId, request.ToCampusId);
         request.Approve(_dateTimeProvider.UtcNow);
+        if (!user.IsActive)
+        {
+            user.SetActive(true);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new ApproveSchoolChangeResponse(
             request.Id,
             request.UserId,
             IsApplied: true,
-            Message: "School/campus change approved and applied.");
+            Message: "School/campus change approved and applied. The account is unlocked.");
     }
 
     public async Task RejectSchoolChangeAsync(
@@ -893,6 +968,13 @@ public sealed class AuthService : IAuthService
         }
 
         request.Reject(_dateTimeProvider.UtcNow);
+
+        var user = await _users.GetByIdAsync(request.UserId, cancellationToken);
+        if (user is not null && !user.IsActive)
+        {
+            user.SetActive(true);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -1128,17 +1210,30 @@ public sealed class AuthService : IAuthService
         return user.ToCurrentUserResponse(activeRole, pendingDto);
     }
 
-    private async Task MaybeQueueSchoolChangeAsync(
+    private async Task<string?> TryGetPendingSchoolChangeLockMessageAsync(
+        User user,
+        CancellationToken cancellationToken)
+    {
+        if (user.IsActive || user.IsPendingRegistration || user.IsRejectedRegistration)
+        {
+            return null;
+        }
+
+        var pending = await _schoolChanges.GetPendingForUserAsync(user.Id, cancellationToken);
+        return pending is null ? null : LockedPendingSchoolChangeMessage;
+    }
+
+    private async Task<UserSchoolChangeRequest?> MaybeQueueSchoolChangeAsync(
         User user,
         UserRole activeRole,
         int? requestedSchoolId,
         int? requestedCampusId,
         CancellationToken cancellationToken)
     {
-        // PortalAdmin / SchoolAdmin cannot change school/campus via profile.
+        // PortalAdmin / SchoolAdmin cannot change school/campus via this flow.
         if (activeRole is UserRole.PortalAdmin or UserRole.SchoolAdmin)
         {
-            return;
+            throw new ForbiddenAppException("Your role cannot request a school or campus change.");
         }
 
         var canRequest = activeRole is UserRole.Student
@@ -1148,7 +1243,7 @@ public sealed class AuthService : IAuthService
 
         if (!canRequest)
         {
-            return;
+            throw new ForbiddenAppException("Your role cannot request a school or campus change.");
         }
 
         int? toSchoolId;
@@ -1168,7 +1263,7 @@ public sealed class AuthService : IAuthService
 
         if (toSchoolId == user.SchoolId && toCampusId == user.CampusId)
         {
-            return;
+            return null;
         }
 
         // No-op when request body omitted school fields (null/null) and user has none.
@@ -1177,7 +1272,7 @@ public sealed class AuthService : IAuthService
             && !user.SchoolId.HasValue
             && !user.CampusId.HasValue)
         {
-            return;
+            return null;
         }
 
         try
@@ -1239,6 +1334,8 @@ public sealed class AuthService : IAuthService
                     SchoolChangeRequestCategory,
                     cancellationToken);
             }
+
+            return changeRequest;
         }
         catch (BusinessRuleException exception)
         {
@@ -1269,15 +1366,13 @@ public sealed class AuthService : IAuthService
         {
             if (request.RequesterRole == UserRole.CampusAdmin)
             {
-                throw new ForbiddenAppException(
-                    "Campus admin change requests are reviewed by School Admin and Portal Admin.");
+                throw new ForbiddenAppException("Campus admins cannot review other campus admin change requests.");
             }
 
             var adminSchoolId = _currentUser.SchoolId
                 ?? throw new ForbiddenAppException("School context was not found.");
             var adminCampusId = _currentUser.CampusId
                 ?? throw new ForbiddenAppException("Campus context was not found.");
-
             if (request.ToSchoolId != adminSchoolId || request.ToCampusId != adminCampusId)
             {
                 throw new ForbiddenAppException("You can only review changes for your campus.");
@@ -1286,7 +1381,29 @@ public sealed class AuthService : IAuthService
             return;
         }
 
-        throw new ForbiddenAppException("Only admins can review school change requests.");
+        throw new ForbiddenAppException("You are not allowed to review school change requests.");
+    }
+
+    /// <summary>
+    /// Teacher/Student school or campus changes (also Parent/CampusAdmin requests):
+    /// SchoolAdmin or PortalAdmin may apply. CampusAdmin soft-approves only.
+    /// </summary>
+    private static bool CanApplySchoolChange(UserSchoolChangeRequest request, UserRole approverRole)
+    {
+        if (approverRole == UserRole.PortalAdmin)
+        {
+            return true;
+        }
+
+        if (approverRole != UserRole.SchoolAdmin)
+        {
+            return false;
+        }
+
+        return request.RequesterRole is UserRole.Teacher
+            or UserRole.Student
+            or UserRole.Parent
+            or UserRole.CampusAdmin;
     }
 
     private void EnsureRegistrationReviewer()

@@ -37,7 +37,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final environment = ref.watch(appEnvironmentProvider);
     final theme = Theme.of(context);
     final showDevApiHint = environment.name == EnvironmentName.development;
-    final localhostWarning = usesHostUnreachableLocalhost(environment.apiBaseUrl);
+    final localhostWarning =
+        usesHostUnreachableLocalhost(environment.apiBaseUrl);
     final authModeLabel = environment.usesApiAuth
         ? 'API login (calls POST /auth/login)'
         : 'Offline demo mode (student/parent/teacher-demo only)';
@@ -211,7 +212,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
                   ],
-                  if (_localError != null || authState.errorMessage != null) ...[
+                  if (_localError != null ||
+                      authState.errorMessage != null) ...[
                     const SizedBox(height: 12),
                     DecoratedBox(
                       decoration: BoxDecoration(
@@ -368,8 +370,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       setState(() {
         _passwordController.clear();
         _confirmPasswordController.clear();
-        if (result.status == 'PendingApproval' ||
-            result.status == 'Rejected') {
+        if (result.status == 'PendingApproval' || result.status == 'Rejected') {
           _infoMessage = result.message;
           _step = _LoginStep.identifier;
         } else if (result.status == 'NeedsPasswordSetup') {
@@ -794,7 +795,6 @@ class _AccountAccessRequestSheetState
                   decoration: InputDecoration(
                     label: buildFieldLabel(
                       _loadingSchools ? 'School (loading...)' : 'School',
-                      required: false,
                     ),
                     prefixIcon: const Icon(Icons.school_outlined),
                   ),
@@ -831,7 +831,6 @@ class _AccountAccessRequestSheetState
                   decoration: InputDecoration(
                     label: buildFieldLabel(
                       _loadingCampuses ? 'Campus (loading...)' : 'Campus',
-                      required: false,
                     ),
                     prefixIcon: const Icon(Icons.location_city_outlined),
                   ),
@@ -905,9 +904,8 @@ class _AccountAccessRequestSheetState
         mobileNumber: _mobileNumberController.text.trim(),
         emailAddress: _emailAddressController.text.trim(),
         userType: _userType,
-        rollNumberTeacherCode: isParent
-            ? ''
-            : _rollNumberTeacherCodeController.text.trim(),
+        rollNumberTeacherCode:
+            isParent ? '' : _rollNumberTeacherCodeController.text.trim(),
         reasonMessage: _reasonMessageController.text.trim(),
         cnic: _cnicController.text.trim(),
         schoolId: isParent ? null : _schoolId,

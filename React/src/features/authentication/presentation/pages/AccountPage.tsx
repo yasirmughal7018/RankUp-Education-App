@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { ApiError, CurrentUser, UserRole } from "@/core/api/types";
 import { getRoleLabel } from "@/core/api/types";
@@ -16,6 +16,13 @@ const inputClassName =
 const sectionClassName =
   "rounded-2xl border border-slate-200 bg-white p-6 shadow-sm";
 
+const SCHOOL_CHANGE_ROLES: UserRole[] = [
+  "Teacher",
+  "Student",
+  "Parent",
+  "CampusAdmin",
+];
+
 function userInitials(name?: string | null, username?: string | null) {
   const source = (name || username || "?").trim();
   const parts = source.split(/\s+/).filter(Boolean);
@@ -25,27 +32,14 @@ function userInitials(name?: string | null, username?: string | null) {
   return source.slice(0, 2).toUpperCase();
 }
 
-/** Teacher / Parent / Student may request school+campus. CampusAdmin may request campus only. */
-function schoolChangeMode(
-  role: UserRole,
-): "none" | "school-campus" | "campus-only" {
-  if (role === "PortalAdmin" || role === "SchoolAdmin") {
-    return "none";
-  }
-  if (role === "CampusAdmin") {
-    return "campus-only";
-  }
-  if (role === "Teacher" || role === "Parent" || role === "Student") {
-    return "school-campus";
-  }
-  return "none";
-}
-
 type ProfileForm = {
   fullName: string;
   mobileNumber: string;
   emailAddress: string;
   cnic: string;
+};
+
+type SchoolChangeForm = {
   schoolId: string;
   campusId: string;
 };
@@ -56,6 +50,11 @@ function toProfileForm(user: CurrentUser): ProfileForm {
     mobileNumber: user.mobileNumber || "",
     emailAddress: user.emailAddress || "",
     cnic: user.cnic || "",
+  };
+}
+
+function toSchoolChangeForm(user: CurrentUser): SchoolChangeForm {
+  return {
     schoolId: user.schoolId != null ? String(user.schoolId) : "",
     campusId: user.campusId != null ? String(user.campusId) : "",
   };
@@ -70,19 +69,24 @@ export function AccountPage() {
   const [form, setForm] = useState<ProfileForm | null>(
     user ? toProfileForm(user) : null,
   );
-  const [schools, setSchools] = useState<authApi.RegistrationSchoolOption[]>(
-    [],
-  );
-  const [campuses, setCampuses] = useState<authApi.RegistrationCampusOption[]>(
-    [],
+  const [schoolForm, setSchoolForm] = useState<SchoolChangeForm | null>(
+    user ? toSchoolChangeForm(user) : null,
   );
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [isLoadingSchools, setIsLoadingSchools] = useState(false);
-  const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [schoolError, setSchoolError] = useState<string | null>(null);
+  const [isSavingSchoolChange, setIsSavingSchoolChange] = useState(false);
+  const [confirmSchoolChangeOpen, setConfirmSchoolChangeOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+
+  const [schools, setSchools] = useState<authApi.RegistrationSchoolOption[]>([]);
+  const [campuses, setCampuses] = useState<authApi.RegistrationCampusOption[]>(
+    [],
+  );
+  const [isLoadingSchools, setIsLoadingSchools] = useState(false);
+  const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -96,10 +100,9 @@ export function AccountPage() {
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
-  const changeMode = useMemo(
-    () => (profile ? schoolChangeMode(profile.role) : "none"),
-    [profile],
-  );
+  const canRequestSchoolChange =
+    !!profile && SCHOOL_CHANGE_ROLES.includes(profile.role);
+  const isCampusAdminOnly = profile?.role === "CampusAdmin";
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +115,7 @@ export function AccountPage() {
         }
         setProfile(current);
         setForm(toProfileForm(current));
+        setSchoolForm(toSchoolChangeForm(current));
         updateUser(current);
       })
       .catch((caught: ApiError) => {
@@ -131,8 +135,7 @@ export function AccountPage() {
   }, [updateUser]);
 
   useEffect(() => {
-    if (changeMode === "none") {
-      setSchools([]);
+    if (!canRequestSchoolChange) {
       return;
     }
 
@@ -142,12 +145,12 @@ export function AccountPage() {
       .listRegistrationSchools()
       .then((items) => {
         if (!cancelled) {
-          setSchools(items);
+          setSchools(items.filter((school) => school.isActive));
         }
       })
-      .catch((caught: ApiError) => {
+      .catch(() => {
         if (!cancelled) {
-          setProfileError(caught.message || "Unable to load schools.");
+          setSchools([]);
         }
       })
       .finally(() => {
@@ -159,23 +162,11 @@ export function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [changeMode]);
+  }, [canRequestSchoolChange]);
 
   useEffect(() => {
-    const schoolIdValue =
-      changeMode === "campus-only"
-        ? profile?.schoolId != null
-          ? String(profile.schoolId)
-          : ""
-        : form?.schoolId;
-
-    if (changeMode === "none" || !schoolIdValue) {
-      setCampuses([]);
-      return;
-    }
-
-    const schoolId = Number(schoolIdValue);
-    if (!Number.isFinite(schoolId)) {
+    const schoolId = schoolForm?.schoolId ? Number(schoolForm.schoolId) : NaN;
+    if (!canRequestSchoolChange || !Number.isFinite(schoolId)) {
       setCampuses([]);
       return;
     }
@@ -186,12 +177,12 @@ export function AccountPage() {
       .listRegistrationCampuses(schoolId)
       .then((items) => {
         if (!cancelled) {
-          setCampuses(items);
+          setCampuses(items.filter((campus) => campus.isActive));
         }
       })
-      .catch((caught: ApiError) => {
+      .catch(() => {
         if (!cancelled) {
-          setProfileError(caught.message || "Unable to load campuses.");
+          setCampuses([]);
         }
       })
       .finally(() => {
@@ -203,7 +194,7 @@ export function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [changeMode, form?.schoolId, profile?.schoolId]);
+  }, [canRequestSchoolChange, schoolForm?.schoolId]);
 
   useEffect(() => {
     const hash = location.hash.replace("#", "");
@@ -222,15 +213,16 @@ export function AccountPage() {
     key: K,
     value: ProfileForm[K],
   ) {
-    setForm((current) => {
-      if (!current) {
-        return current;
-      }
-      if (key === "schoolId") {
-        return { ...current, schoolId: value, campusId: "" };
-      }
-      return { ...current, [key]: value };
-    });
+    setForm((current) => (current ? { ...current, [key]: value } : current));
+  }
+
+  function updateSchoolField<K extends keyof SchoolChangeForm>(
+    key: K,
+    value: SchoolChangeForm[K],
+  ) {
+    setSchoolForm((current) =>
+      current ? { ...current, [key]: value } : current,
+    );
   }
 
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
@@ -254,42 +246,85 @@ export function AccountPage() {
 
     setIsSavingProfile(true);
     try {
-      let schoolId: number | null = null;
-      let campusId: number | null = null;
-
-      if (changeMode === "school-campus") {
-        schoolId = form.schoolId ? Number(form.schoolId) : null;
-        campusId = form.campusId ? Number(form.campusId) : null;
-      } else if (changeMode === "campus-only") {
-        schoolId = profile.schoolId;
-        campusId = form.campusId ? Number(form.campusId) : null;
-      }
-
       const updated = await authApi.updateProfile({
         fullName: form.fullName.trim(),
         mobileNumber: form.mobileNumber.trim(),
         emailAddress: form.emailAddress.trim() || null,
         cnic: form.cnic.trim() || null,
-        schoolId: Number.isFinite(schoolId as number) ? schoolId : null,
-        campusId: Number.isFinite(campusId as number) ? campusId : null,
       });
 
       setProfile(updated);
       setForm(toProfileForm(updated));
+      setSchoolForm(toSchoolChangeForm(updated));
       updateUser(updated);
-
-      if (updated.pendingSchoolChange) {
-        setProfileSuccess(
-          "Profile saved. School/campus change was submitted for admin approval.",
-        );
-      } else {
-        setProfileSuccess("Profile updated successfully.");
-      }
+      setProfileSuccess("Profile updated successfully.");
     } catch (caught) {
       const apiError = caught as ApiError;
       setProfileError(apiError.message || "Unable to update profile.");
     } finally {
       setIsSavingProfile(false);
+    }
+  }
+
+  function openSchoolChangeConfirm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!schoolForm || !profile) {
+      return;
+    }
+
+    setSchoolError(null);
+
+    const nextSchoolId = isCampusAdminOnly
+      ? profile.schoolId
+      : schoolForm.schoolId
+        ? Number(schoolForm.schoolId)
+        : null;
+    const nextCampusId = schoolForm.campusId
+      ? Number(schoolForm.campusId)
+      : null;
+
+    if (
+      nextSchoolId === profile.schoolId &&
+      nextCampusId === profile.campusId
+    ) {
+      setSchoolError("Choose a different school or campus before requesting.");
+      return;
+    }
+
+    setConfirmSchoolChangeOpen(true);
+  }
+
+  async function confirmSchoolChangeRequest() {
+    if (!schoolForm || !profile) {
+      return;
+    }
+
+    setSchoolError(null);
+    setIsSavingSchoolChange(true);
+    try {
+      const result = await authApi.requestSchoolChange({
+        schoolId: isCampusAdminOnly
+          ? profile.schoolId
+          : schoolForm.schoolId
+            ? Number(schoolForm.schoolId)
+            : null,
+        campusId: schoolForm.campusId ? Number(schoolForm.campusId) : null,
+      });
+
+      setConfirmSchoolChangeOpen(false);
+      await logout();
+      navigate("/account-locked", {
+        replace: true,
+        state: { message: result.message },
+      });
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      setSchoolError(
+        apiError.message || "Unable to submit school/campus change request.",
+      );
+      setConfirmSchoolChangeOpen(false);
+    } finally {
+      setIsSavingSchoolChange(false);
     }
   }
 
@@ -369,20 +404,6 @@ export function AccountPage() {
 
   const initials = userInitials(form.fullName || profile.fullName, profile.username);
   const avatarUrl = resolvePublicUrl(profile.avatarUrl);
-  const schoolOptions = schools.map((school) => ({
-    value: String(school.id),
-    label: school.name,
-  }));
-  const campusOptions = campuses.map((campus) => ({
-    value: String(campus.id),
-    label: campus.name,
-  }));
-  const currentSchoolName =
-    schools.find((s) => s.id === profile.schoolId)?.name ??
-    (profile.schoolId != null ? `School #${profile.schoolId}` : "—");
-  const currentCampusName =
-    campuses.find((c) => c.id === profile.campusId)?.name ??
-    (profile.campusId != null ? `Campus #${profile.campusId}` : "—");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6">
@@ -433,16 +454,8 @@ export function AccountPage() {
           Profile details
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Contact details save immediately. School/campus changes need admin
-          approval.
+          Update your display name and contact details.
         </p>
-
-        {profile.pendingSchoolChange ? (
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Pending school/campus change (request #
-            {profile.pendingSchoolChange.id}) — waiting for admin approval.
-          </div>
-        ) : null}
 
         {profileError ? (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -511,105 +524,6 @@ export function AccountPage() {
                 placeholder="Optional"
               />
             </div>
-
-            {changeMode === "none" ? (
-              <div className="sm:col-span-2 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                <p>
-                  <span className="font-medium text-slate-800">School:</span>{" "}
-                  {currentSchoolName}
-                </p>
-                <p className="mt-1">
-                  <span className="font-medium text-slate-800">Campus:</span>{" "}
-                  {currentCampusName}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  Portal and school admins cannot change school or campus from
-                  profile.
-                </p>
-              </div>
-            ) : null}
-
-            {changeMode === "school-campus" ? (
-              <>
-                <div>
-                  <FieldLabel htmlFor="schoolId">School</FieldLabel>
-                  <SearchableSelect
-                    id="schoolId"
-                    value={form.schoolId}
-                    onChange={(value) => updateField("schoolId", value)}
-                    options={schoolOptions}
-                    allowEmpty
-                    emptyLabel={
-                      isLoadingSchools ? "Loading schools..." : "Select school"
-                    }
-                    placeholder="Select school"
-                    disabled={isSavingProfile || isLoadingSchools}
-                  />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="campusId">Campus</FieldLabel>
-                  <SearchableSelect
-                    id="campusId"
-                    value={form.campusId}
-                    onChange={(value) => updateField("campusId", value)}
-                    options={campusOptions}
-                    allowEmpty
-                    emptyLabel={
-                      !form.schoolId
-                        ? "Select a school first"
-                        : isLoadingCampuses
-                          ? "Loading campuses..."
-                          : "Select campus"
-                    }
-                    placeholder="Select campus"
-                    disabled={
-                      isSavingProfile || !form.schoolId || isLoadingCampuses
-                    }
-                  />
-                </div>
-                <p className="sm:col-span-2 text-xs text-slate-500">
-                  Changing school or campus creates an approval request for
-                  Campus Admin, School Admin, and Portal Admin (same flow as
-                  account access requests).
-                </p>
-              </>
-            ) : null}
-
-            {changeMode === "campus-only" ? (
-              <>
-                <div>
-                  <FieldLabel htmlFor="schoolReadonly">School</FieldLabel>
-                  <input
-                    id="schoolReadonly"
-                    type="text"
-                    value={currentSchoolName}
-                    disabled
-                    className={`${inputClassName} bg-slate-50 text-slate-500`}
-                  />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="campusId">Campus</FieldLabel>
-                  <SearchableSelect
-                    id="campusId"
-                    value={form.campusId}
-                    onChange={(value) => updateField("campusId", value)}
-                    options={campusOptions}
-                    allowEmpty
-                    emptyLabel={
-                      isLoadingCampuses
-                        ? "Loading campuses..."
-                        : "Select campus"
-                    }
-                    placeholder="Select campus"
-                    disabled={isSavingProfile || isLoadingCampuses}
-                  />
-                </div>
-                <p className="sm:col-span-2 text-xs text-slate-500">
-                  Campus changes are sent to School Admin and Portal Admin for
-                  approval.
-                </p>
-              </>
-            ) : null}
           </div>
 
           <button
@@ -621,6 +535,115 @@ export function AccountPage() {
           </button>
         </form>
       </section>
+
+      {canRequestSchoolChange && schoolForm ? (
+        <section className={sectionClassName} id="school-campus">
+          <h2 className="text-base font-semibold text-slate-900">
+            School / campus change
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Submit a separate request to change school or campus. After you
+            confirm, your account locks until School Admin or Portal Admin
+            reviews it.
+            {isCampusAdminOnly
+              ? " Campus admins can change campus only."
+              : null}
+          </p>
+
+          {profile.pendingSchoolChange ? (
+            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              You already have a pending change to school{" "}
+              {profile.pendingSchoolChange.toSchoolId ?? "—"} / campus{" "}
+              {profile.pendingSchoolChange.toCampusId ?? "—"} (
+              {profile.pendingSchoolChange.status}).
+            </p>
+          ) : null}
+
+          {schoolError ? (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {schoolError}
+            </div>
+          ) : null}
+
+          <form
+            className="mt-4 space-y-4"
+            onSubmit={(e) => openSchoolChangeConfirm(e)}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="schoolId">School</FieldLabel>
+                <SearchableSelect
+                  id="schoolId"
+                  disabled={
+                    isSavingSchoolChange ||
+                    isLoadingSchools ||
+                    isCampusAdminOnly
+                  }
+                  value={schoolForm.schoolId}
+                  allowEmpty
+                  emptyLabel={
+                    isLoadingSchools ? "Loading schools..." : "Select school"
+                  }
+                  placeholder={
+                    isLoadingSchools ? "Loading schools..." : "Select school"
+                  }
+                  options={schools.map((school) => ({
+                    value: String(school.id),
+                    label: school.name,
+                  }))}
+                  onChange={(next) => {
+                    updateSchoolField("schoolId", next);
+                    updateSchoolField("campusId", "");
+                  }}
+                />
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="campusId">Campus</FieldLabel>
+                <SearchableSelect
+                  id="campusId"
+                  disabled={
+                    isSavingSchoolChange ||
+                    !schoolForm.schoolId ||
+                    isLoadingCampuses
+                  }
+                  value={schoolForm.campusId}
+                  allowEmpty
+                  emptyLabel={
+                    !schoolForm.schoolId
+                      ? "Select a school first"
+                      : isLoadingCampuses
+                        ? "Loading campuses..."
+                        : "Select campus"
+                  }
+                  placeholder={
+                    !schoolForm.schoolId
+                      ? "Select a school first"
+                      : isLoadingCampuses
+                        ? "Loading campuses..."
+                        : "Select campus"
+                  }
+                  options={campuses.map((campus) => ({
+                    value: String(campus.id),
+                    label: campus.name,
+                  }))}
+                  onChange={(next) => updateSchoolField("campusId", next)}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingSchoolChange || isLoadingProfile}
+              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+            >
+              {isSavingSchoolChange
+                ? "Submitting..."
+                : "Request school / campus change"}
+            </button>
+          </form>
+        </section>
+      ) : null}
 
       <section className={sectionClassName} id="password">
         <h2 className="text-base font-semibold text-slate-900">
@@ -754,6 +777,47 @@ export function AccountPage() {
           </button>
         </form>
       </section>
+
+      {confirmSchoolChangeOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="school-change-confirm-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+          >
+            <h3
+              id="school-change-confirm-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              Confirm school / campus change
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              After you confirm, your account will be locked automatically until
+              School Admin or Portal Admin approves or rejects this request. You
+              will be signed out now.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={isSavingSchoolChange}
+                onClick={() => setConfirmSchoolChangeOpen(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingSchoolChange}
+                onClick={() => void confirmSchoolChangeRequest()}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
+              >
+                {isSavingSchoolChange ? "Submitting..." : "Confirm and lock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {avatarOpen ? (
         <AvatarUploadDialog

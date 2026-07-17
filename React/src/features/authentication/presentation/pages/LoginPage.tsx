@@ -5,6 +5,7 @@ import { FieldLabel } from "@/core/components/FieldLabel";
 import { PageHeader } from "@/core/components/PageHeader";
 import * as authApi from "@/features/authentication/data/authApi";
 import type { LoginStatus } from "@/features/authentication/data/authApi";
+import { AuthSplitLayout } from "@/features/authentication/presentation/components/AuthSplitLayout";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 
 type LoginStep = "identifier" | "setPassword" | "password";
@@ -72,6 +73,14 @@ export function LoginPage() {
   function applyLoginStatus(status: LoginStatus, message: string) {
     setPassword("");
     setConfirmPassword("");
+
+    if (status === "LockedPendingSchoolChange") {
+      navigate("/account-locked", {
+        replace: true,
+        state: { message },
+      });
+      return;
+    }
 
     if (status === "PendingApproval" || status === "Rejected") {
       setInfoMessage(message);
@@ -146,8 +155,8 @@ export function LoginPage() {
         : "Enter your CNIC or mobile number to continue.";
 
   return (
-    <div className="mx-auto flex max-w-6xl justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <AuthSplitLayout variant="login">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <PageHeader title={title} description={description} />
 
         {successMessage ? (
@@ -325,6 +334,6 @@ export function LoginPage() {
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }

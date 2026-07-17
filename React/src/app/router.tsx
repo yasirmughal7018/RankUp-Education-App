@@ -9,6 +9,7 @@ import {
   GuestRoute,
   ProtectedRoute,
 } from "@/features/authentication/presentation/components/RouteGuards";
+import { AccountLockedPage } from "@/features/authentication/presentation/pages/AccountLockedPage";
 import { AccountPage } from "@/features/authentication/presentation/pages/AccountPage";
 import { ForgotPasswordPage } from "@/features/authentication/presentation/pages/ForgotPasswordPage";
 import { LoginPage } from "@/features/authentication/presentation/pages/LoginPage";
@@ -59,6 +60,7 @@ export function AppRouter() {
 
           <Route element={<GuestRoute />}>
             <Route path="login" element={<LoginPage />} />
+            <Route path="account-locked" element={<AccountLockedPage />} />
             <Route path="forgot-password" element={<ForgotPasswordPage />} />
             <Route path="request-access" element={<RequestAccessPage />} />
           </Route>

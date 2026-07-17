@@ -32,7 +32,12 @@ const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
       : "text-slate-700 hover:bg-slate-100",
   ].join(" ");
 
-const AUTH_PAGES_WITHOUT_MENU = new Set(["/login", "/request-access"]);
+const AUTH_PAGES_WITHOUT_MENU = new Set([
+  "/login",
+  "/account-locked",
+  "/request-access",
+  "/forgot-password",
+]);
 
 export function AppLayout() {
   const { isAuthenticated, user, isBootstrapping } = useAuth();
@@ -95,9 +100,11 @@ export function AppLayout() {
               to="/"
               className="flex min-w-0 shrink-0 items-center gap-3 rounded-xl outline-none ring-brand-500 focus-visible:ring-2"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-xs font-bold tracking-wide text-white shadow-sm shadow-brand-600/25">
-                RU
-              </span>
+              <img
+                src="/rankup-mark.svg?v=3"
+                alt=""
+                className="h-9 w-9 rounded-xl shadow-sm shadow-brand-600/25"
+              />
               <p className="min-w-0 truncate text-sm font-semibold text-slate-900">
                 {environment.appName}
               </p>

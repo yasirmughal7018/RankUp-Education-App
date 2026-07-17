@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { FieldLabel } from "@/core/components/FieldLabel";
-import { PageHeader } from "@/core/components/PageHeader";
 import { SearchableSelect } from "@/core/components/SearchableSelect";
 import * as authApi from "@/features/authentication/data/authApi";
 import type { RegisterAccountRequest } from "@/features/authentication/data/authApi";
+import { AuthSplitLayout } from "@/features/authentication/presentation/components/AuthSplitLayout";
 
 const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+  "w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
 
 const USER_TYPES = ["Student", "Parent", "Teacher"] as const;
 
@@ -184,18 +184,41 @@ export function RequestAccessPage() {
   }
 
   const description = isParent
-    ? "Parent requests go to Portal Admin. School, campus, and roll number are not required."
-    : isTeacher
-      ? "Optionally select school and campus. No school → Portal Admin. School only → School Admin then Portal Admin. Campus → Campus Admin / School Admin then Portal Admin. Only Portal Admin approval activates the account."
-      : "Enter a roll number. Optionally select school and campus. No school → Portal Admin. School only → School Admin then Portal Admin. Campus → Campus Admin / School Admin then Portal Admin. Only Portal Admin approval activates the account.";
+    ? "Parent requests go to Portal Admin. School and campus are not required."
+    : "Optional school/campus routes approval. Only Portal Admin activates the account.";
 
   return (
-    <div className="mx-auto flex max-w-6xl justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <PageHeader title="Request account access" description={description} />
+    <AuthSplitLayout variant="request-access">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-3">
+          <Link
+            to="/login"
+            className="group mb-3 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50/80 py-1 pl-1 pr-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition group-hover:bg-brand-600 group-hover:text-white group-hover:ring-brand-600">
+              <svg
+                viewBox="0 0 20 20"
+                className="h-3.5 w-3.5 transition group-hover:-translate-x-0.5"
+                fill="currentColor"
+                aria-hidden
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M11.78 4.22a.75.75 0 010 1.06L7.06 10l4.72 4.72a.75.75 0 11-1.06 1.06l-5.25-5.25a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+            Back to login
+          </Link>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+            Request account access
+          </h1>
+          <p className="mt-1 text-xs leading-5 text-slate-600">{description}</p>
+        </div>
 
         {successMessage ? (
-          <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
             {successMessage}
           </div>
         ) : null}
@@ -203,97 +226,128 @@ export function RequestAccessPage() {
         {error ? (
           <div
             role="alert"
-            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
           >
             {error}
           </div>
         ) : null}
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div>
-            <FieldLabel htmlFor="fullName" required>
-              Full name
-            </FieldLabel>
-            <input
-              id="fullName"
-              required
-              disabled={isSubmitting}
-              value={form.fullName}
-              onChange={(event) => updateField("fullName", event.target.value)}
-              className={inputClassName}
-            />
-          </div>
+        <form className="space-y-2.5" onSubmit={handleSubmit}>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <div>
+              <FieldLabel htmlFor="fullName" required>
+                Full name
+              </FieldLabel>
+              <input
+                id="fullName"
+                required
+                disabled={isSubmitting}
+                value={form.fullName}
+                onChange={(event) => updateField("fullName", event.target.value)}
+                className={inputClassName}
+              />
+            </div>
 
-          <div>
-            <FieldLabel htmlFor="mobileNumber" required>
-              Mobile number
-            </FieldLabel>
-            <input
-              id="mobileNumber"
-              required
-              disabled={isSubmitting}
-              value={form.mobileNumber}
-              onChange={(event) => updateField("mobileNumber", event.target.value)}
-              className={inputClassName}
-              placeholder="+923001234567"
-            />
-          </div>
+            <div>
+              <FieldLabel htmlFor="mobileNumber" required>
+                Mobile number
+              </FieldLabel>
+              <input
+                id="mobileNumber"
+                required
+                disabled={isSubmitting}
+                value={form.mobileNumber}
+                onChange={(event) =>
+                  updateField("mobileNumber", event.target.value)
+                }
+                className={inputClassName}
+                placeholder="+923001234567"
+              />
+            </div>
 
-          <div>
-            <FieldLabel htmlFor="emailAddress" optional>
-              Email
-            </FieldLabel>
-            <input
-              id="emailAddress"
-              type="email"
-              disabled={isSubmitting}
-              value={form.emailAddress}
-              onChange={(event) => updateField("emailAddress", event.target.value)}
-              className={inputClassName}
-            />
-          </div>
+            <div>
+              <FieldLabel htmlFor="emailAddress" optional>
+                Email
+              </FieldLabel>
+              <input
+                id="emailAddress"
+                type="email"
+                disabled={isSubmitting}
+                value={form.emailAddress}
+                onChange={(event) =>
+                  updateField("emailAddress", event.target.value)
+                }
+                className={inputClassName}
+              />
+            </div>
 
-          <div>
-            <FieldLabel htmlFor="cnic" optional>
-              CNIC
-            </FieldLabel>
-            <input
-              id="cnic"
-              disabled={isSubmitting}
-              value={form.cnic}
-              onChange={(event) => updateField("cnic", event.target.value)}
-              className={inputClassName}
-              placeholder="12345-1234567-1"
-            />
-          </div>
+            <div>
+              <FieldLabel htmlFor="cnic" optional>
+                CNIC
+              </FieldLabel>
+              <input
+                id="cnic"
+                disabled={isSubmitting}
+                value={form.cnic}
+                onChange={(event) => updateField("cnic", event.target.value)}
+                className={inputClassName}
+                placeholder="12345-1234567-1"
+              />
+            </div>
 
-          <div>
-            <FieldLabel htmlFor="userType" required>
-              Account type
-            </FieldLabel>
-            <select
-              id="userType"
-              required
-              disabled={isSubmitting}
-              value={form.userType}
-              onChange={(event) =>
-                handleUserTypeChange(
-                  event.target.value as RegisterAccountRequest["userType"],
-                )
-              }
-              className={inputClassName}
-            >
-              {USER_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <FieldLabel htmlFor="userType" required>
+                Account type
+              </FieldLabel>
+              <select
+                id="userType"
+                required
+                disabled={isSubmitting}
+                value={form.userType}
+                onChange={(event) =>
+                  handleUserTypeChange(
+                    event.target.value as RegisterAccountRequest["userType"],
+                  )
+                }
+                className={inputClassName}
+              >
+                {USER_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {showSchoolFields ? (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2">
+            {showSchoolFields ? (
+              <div>
+                <FieldLabel
+                  htmlFor="rollNumberTeacherCode"
+                  required={isStudent}
+                  optional={isTeacher}
+                >
+                  {isTeacher ? "Teacher code" : "Roll number"}
+                </FieldLabel>
+                <input
+                  id="rollNumberTeacherCode"
+                  required={isStudent}
+                  disabled={isSubmitting}
+                  value={form.rollNumberTeacherCode}
+                  onChange={(event) =>
+                    updateField("rollNumberTeacherCode", event.target.value)
+                  }
+                  className={inputClassName}
+                  placeholder={
+                    isTeacher ? "Teacher code" : "Student roll number"
+                  }
+                />
+              </div>
+            ) : (
+              <div className="hidden sm:block" aria-hidden />
+            )}
+
+            {showSchoolFields ? (
+              <>
                 <div>
                   <FieldLabel htmlFor="schoolId" optional>
                     School
@@ -352,32 +406,9 @@ export function RequestAccessPage() {
                     onChange={(next) => updateField("campusId", next)}
                   />
                 </div>
-              </div>
-
-              <div>
-                <FieldLabel
-                  htmlFor="rollNumberTeacherCode"
-                  required={isStudent}
-                  optional={isTeacher}
-                >
-                  {isTeacher ? "Teacher code" : "Roll number"}
-                </FieldLabel>
-                <input
-                  id="rollNumberTeacherCode"
-                  required={isStudent}
-                  disabled={isSubmitting}
-                  value={form.rollNumberTeacherCode}
-                  onChange={(event) =>
-                    updateField("rollNumberTeacherCode", event.target.value)
-                  }
-                  className={inputClassName}
-                  placeholder={
-                    isTeacher ? "Teacher code" : "Student roll number"
-                  }
-                />
-              </div>
-            </>
-          ) : null}
+              </>
+            ) : null}
+          </div>
 
           <div>
             <FieldLabel htmlFor="reasonMessage" optional>
@@ -385,10 +416,12 @@ export function RequestAccessPage() {
             </FieldLabel>
             <textarea
               id="reasonMessage"
-              rows={3}
+              rows={2}
               disabled={isSubmitting}
               value={form.reasonMessage}
-              onChange={(event) => updateField("reasonMessage", event.target.value)}
+              onChange={(event) =>
+                updateField("reasonMessage", event.target.value)
+              }
               className={inputClassName}
               placeholder="Please create my account."
             />
@@ -397,13 +430,13 @@ export function RequestAccessPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Submitting..." : "Submit request"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-3 text-center text-xs text-slate-500">
           Already have an account?{" "}
           <Link
             to="/login"
@@ -413,6 +446,6 @@ export function RequestAccessPage() {
           </Link>
         </p>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }

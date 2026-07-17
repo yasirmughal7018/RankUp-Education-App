@@ -40,6 +40,10 @@ public interface IAuthService
         UpdateProfileRequest request,
         CancellationToken cancellationToken);
 
+    Task<RequestSchoolChangeResponse> RequestSchoolChangeAsync(
+        RequestSchoolChangeRequest request,
+        CancellationToken cancellationToken);
+
     Task<CurrentUserResponse> UploadAvatarAsync(
         Stream content,
         string fileName,

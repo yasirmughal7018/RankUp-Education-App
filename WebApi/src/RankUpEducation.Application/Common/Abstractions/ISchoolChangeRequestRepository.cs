@@ -39,6 +39,11 @@ public interface ISchoolChangeRequestRepository
         UserRole approverRole,
         CancellationToken cancellationToken);
 
+    Task<bool> HasRoleApprovedAsync(
+        long requestId,
+        UserRole approverRole,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproversForRequestAsync(
         long requestId,
         CancellationToken cancellationToken);

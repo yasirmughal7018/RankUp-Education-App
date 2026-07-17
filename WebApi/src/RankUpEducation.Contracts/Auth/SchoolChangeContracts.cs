@@ -12,7 +12,8 @@ public sealed record PendingSchoolChangeResponse(
     int? ToCampusId,
     string RequestedAt,
     IReadOnlyList<PendingApproverResponse> Approvers,
-    bool CurrentUserHasApproved);
+    bool CurrentUserHasApproved,
+    bool SchoolAdminHasApproved);
 
 public sealed record ApproveSchoolChangeResponse(
     long RequestId,
