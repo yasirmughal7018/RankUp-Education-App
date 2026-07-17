@@ -208,8 +208,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var query =
             from student in _dbContext.Students.AsNoTracking()
             join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
-            where !student.IsDeleted
-                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+            where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
             select new { student, user };
 
         if (schoolId is not null)
@@ -267,8 +266,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var query =
             from teacher in _dbContext.Teachers.AsNoTracking()
             join user in _dbContext.Users.AsNoTracking() on teacher.Id equals user.Id
-            where !teacher.IsDeleted
-                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Teacher)
+            where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Teacher)
             select new { teacher, user };
 
         if (schoolId is not null)
@@ -317,8 +315,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var query =
             from parent in _dbContext.Parents.AsNoTracking()
             join user in _dbContext.Users.AsNoTracking() on parent.Id equals user.Id
-            where !parent.IsDeleted
-                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Parent)
+            where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Parent)
             select new { parent, user };
 
         if (search.HasTrimmedText())
@@ -360,25 +357,25 @@ public sealed class DirectoryRepository : IDirectoryRepository
     public Task<Student?> GetStudentEntityAsync(long studentId, CancellationToken cancellationToken)
     {
         return _dbContext.Students
-            .FirstOrDefaultAsync(student => student.Id == studentId && !student.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(student => student.Id == studentId, cancellationToken);
     }
 
     public Task<Teacher?> GetTeacherEntityAsync(long teacherId, CancellationToken cancellationToken)
     {
         return _dbContext.Teachers
-            .FirstOrDefaultAsync(teacher => teacher.Id == teacherId && !teacher.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(teacher => teacher.Id == teacherId, cancellationToken);
     }
 
     public Task<Parent?> GetParentEntityAsync(long parentId, CancellationToken cancellationToken)
     {
         return _dbContext.Parents
-            .FirstOrDefaultAsync(parent => parent.Id == parentId && !parent.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(parent => parent.Id == parentId, cancellationToken);
     }
 
     public async Task SetUserActiveAsync(long userId, bool isActive, CancellationToken cancellationToken)
     {
         var user = await _dbContext.Users
-            .FirstOrDefaultAsync(item => item.Id == userId && !item.IsDeleted, cancellationToken)
+            .FirstOrDefaultAsync(item => item.Id == userId, cancellationToken)
             ?? throw new InvalidOperationException($"User {userId} was not found.");
 
         user.SetActive(isActive);
@@ -419,13 +416,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
     public Task<bool> ParentExistsAsync(long parentId, CancellationToken cancellationToken)
     {
         return _dbContext.Parents.AsNoTracking()
-            .AnyAsync(parent => parent.Id == parentId && !parent.IsDeleted, cancellationToken);
+            .AnyAsync(parent => parent.Id == parentId, cancellationToken);
     }
 
     public Task<bool> StudentExistsAsync(long studentId, CancellationToken cancellationToken)
     {
         return _dbContext.Students.AsNoTracking()
-            .AnyAsync(student => student.Id == studentId && !student.IsDeleted, cancellationToken);
+            .AnyAsync(student => student.Id == studentId, cancellationToken);
     }
 
     public Task<int> CountParentStudentLinksAsync(long parentId, CancellationToken cancellationToken)
@@ -444,8 +441,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Users.AsNoTracking()
-            .Where(user => !user.IsDeleted
-                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.SchoolAdmin));
+            .Where(user => user.RoleAssignments.Any(assignment => assignment.Role == UserRole.SchoolAdmin));
 
         if (schoolId is not null)
         {
@@ -508,8 +504,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Users.AsNoTracking()
-            .Where(user => !user.IsDeleted
-                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.CampusAdmin));
+            .Where(user => user.RoleAssignments.Any(assignment => assignment.Role == UserRole.CampusAdmin));
 
         if (schoolId is not null)
         {

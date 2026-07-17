@@ -1,20 +1,16 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { ApiError, CurrentUser, UserRole } from "@/core/api/types";
 import { getRoleLabel } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
-import { PageHeader } from "@/core/components/PageHeader";
 import { SearchableSelect } from "@/core/components/SearchableSelect";
 import * as authApi from "@/features/authentication/data/authApi";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import { AvatarUploadDialog } from "@/features/authentication/presentation/components/AvatarUploadDialog";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
-
-const sectionClassName =
-  "rounded-2xl border border-slate-200 bg-white p-6 shadow-sm";
+const fieldClass =
+  "w-full rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20";
 
 const SCHOOL_CHANGE_ROLES: UserRole[] = [
   "Teacher",
@@ -58,6 +54,65 @@ function toSchoolChangeForm(user: CurrentUser): SchoolChangeForm {
     schoolId: user.schoolId != null ? String(user.schoolId) : "",
     campusId: user.campusId != null ? String(user.campusId) : "",
   };
+}
+
+function Notice({
+  tone,
+  children,
+}: {
+  tone: "error" | "success" | "warn";
+  children: ReactNode;
+}) {
+  const map = {
+    error: "border-red-200/80 bg-red-50 text-red-800",
+    success: "border-emerald-200/80 bg-emerald-50 text-emerald-800",
+    warn: "border-amber-200/80 bg-amber-50 text-amber-900",
+  } as const;
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs leading-snug ${map[tone]}`}>
+      {children}
+    </div>
+  );
+}
+
+function Btn({
+  children,
+  disabled,
+  type = "submit",
+  onClick,
+  variant = "primary",
+  block = false,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  type?: "submit" | "button";
+  onClick?: () => void;
+  variant?: "primary" | "danger" | "soft" | "ghost";
+  block?: boolean;
+}) {
+  const styles = {
+    primary:
+      "bg-brand-600 text-white shadow-sm shadow-brand-600/25 hover:bg-brand-700",
+    danger:
+      "bg-red-600 text-white shadow-sm shadow-red-600/20 hover:bg-red-700",
+    soft: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+    ghost: "text-slate-600 hover:bg-slate-100",
+  } as const;
+
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
+      className={[
+        "inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-55",
+        styles[variant],
+        block ? "w-full" : "",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function AccountPage() {
@@ -110,9 +165,7 @@ export function AccountPage() {
     void authApi
       .getCurrentUser()
       .then((current) => {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         setProfile(current);
         setForm(toProfileForm(current));
         setSchoolForm(toSchoolChangeForm(current));
@@ -124,41 +177,28 @@ export function AccountPage() {
         }
       })
       .finally(() => {
-        if (!cancelled) {
-          setIsLoadingProfile(false);
-        }
+        if (!cancelled) setIsLoadingProfile(false);
       });
-
     return () => {
       cancelled = true;
     };
   }, [updateUser]);
 
   useEffect(() => {
-    if (!canRequestSchoolChange) {
-      return;
-    }
-
+    if (!canRequestSchoolChange) return;
     let cancelled = false;
     setIsLoadingSchools(true);
     void authApi
       .listRegistrationSchools()
       .then((items) => {
-        if (!cancelled) {
-          setSchools(items.filter((school) => school.isActive));
-        }
+        if (!cancelled) setSchools(items.filter((s) => s.isActive));
       })
       .catch(() => {
-        if (!cancelled) {
-          setSchools([]);
-        }
+        if (!cancelled) setSchools([]);
       })
       .finally(() => {
-        if (!cancelled) {
-          setIsLoadingSchools(false);
-        }
+        if (!cancelled) setIsLoadingSchools(false);
       });
-
     return () => {
       cancelled = true;
     };
@@ -170,27 +210,19 @@ export function AccountPage() {
       setCampuses([]);
       return;
     }
-
     let cancelled = false;
     setIsLoadingCampuses(true);
     void authApi
       .listRegistrationCampuses(schoolId)
       .then((items) => {
-        if (!cancelled) {
-          setCampuses(items.filter((campus) => campus.isActive));
-        }
+        if (!cancelled) setCampuses(items.filter((c) => c.isActive));
       })
       .catch(() => {
-        if (!cancelled) {
-          setCampuses([]);
-        }
+        if (!cancelled) setCampuses([]);
       })
       .finally(() => {
-        if (!cancelled) {
-          setIsLoadingCampuses(false);
-        }
+        if (!cancelled) setIsLoadingCampuses(false);
       });
-
     return () => {
       cancelled = true;
     };
@@ -198,21 +230,15 @@ export function AccountPage() {
 
   useEffect(() => {
     const hash = location.hash.replace("#", "");
-    if (!hash || isLoadingProfile) {
-      return;
-    }
+    if (!hash || isLoadingProfile) return;
     if (hash === "avatar") {
       setAvatarOpen(true);
       return;
     }
-    const el = document.getElementById(hash);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [location.hash, isLoadingProfile]);
 
-  function updateField<K extends keyof ProfileForm>(
-    key: K,
-    value: ProfileForm[K],
-  ) {
+  function updateField<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
     setForm((current) => (current ? { ...current, [key]: value } : current));
   }
 
@@ -227,23 +253,17 @@ export function AccountPage() {
 
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form || !profile) {
-      return;
-    }
-
+    if (!form || !profile) return;
     setProfileError(null);
     setProfileSuccess(null);
-
     if (!form.fullName.trim()) {
       setProfileError("Display name is required.");
       return;
     }
-
     if (!form.mobileNumber.trim()) {
       setProfileError("Mobile number is required.");
       return;
     }
-
     setIsSavingProfile(true);
     try {
       const updated = await authApi.updateProfile({
@@ -252,15 +272,13 @@ export function AccountPage() {
         emailAddress: form.emailAddress.trim() || null,
         cnic: form.cnic.trim() || null,
       });
-
       setProfile(updated);
       setForm(toProfileForm(updated));
       setSchoolForm(toSchoolChangeForm(updated));
       updateUser(updated);
-      setProfileSuccess("Profile updated successfully.");
+      setProfileSuccess("Profile saved.");
     } catch (caught) {
-      const apiError = caught as ApiError;
-      setProfileError(apiError.message || "Unable to update profile.");
+      setProfileError((caught as ApiError).message || "Unable to update profile.");
     } finally {
       setIsSavingProfile(false);
     }
@@ -268,12 +286,8 @@ export function AccountPage() {
 
   function openSchoolChangeConfirm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!schoolForm || !profile) {
-      return;
-    }
-
+    if (!schoolForm || !profile) return;
     setSchoolError(null);
-
     const nextSchoolId = isCampusAdminOnly
       ? profile.schoolId
       : schoolForm.schoolId
@@ -282,23 +296,15 @@ export function AccountPage() {
     const nextCampusId = schoolForm.campusId
       ? Number(schoolForm.campusId)
       : null;
-
-    if (
-      nextSchoolId === profile.schoolId &&
-      nextCampusId === profile.campusId
-    ) {
-      setSchoolError("Choose a different school or campus before requesting.");
+    if (nextSchoolId === profile.schoolId && nextCampusId === profile.campusId) {
+      setSchoolError("Choose a different school or campus.");
       return;
     }
-
     setConfirmSchoolChangeOpen(true);
   }
 
   async function confirmSchoolChangeRequest() {
-    if (!schoolForm || !profile) {
-      return;
-    }
-
+    if (!schoolForm || !profile) return;
     setSchoolError(null);
     setIsSavingSchoolChange(true);
     try {
@@ -310,7 +316,6 @@ export function AccountPage() {
             : null,
         campusId: schoolForm.campusId ? Number(schoolForm.campusId) : null,
       });
-
       setConfirmSchoolChangeOpen(false);
       await logout();
       navigate("/account-locked", {
@@ -318,9 +323,9 @@ export function AccountPage() {
         state: { message: result.message },
       });
     } catch (caught) {
-      const apiError = caught as ApiError;
       setSchoolError(
-        apiError.message || "Unable to submit school/campus change request.",
+        (caught as ApiError).message ||
+          "Unable to submit school/campus change request.",
       );
       setConfirmSchoolChangeOpen(false);
     } finally {
@@ -332,17 +337,14 @@ export function AccountPage() {
     event.preventDefault();
     setPasswordError(null);
     setPasswordSuccess(null);
-
     if (newPassword.length < 6) {
       setPasswordError("Password must be at least 6 characters.");
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setPasswordError("Password and confirmation do not match.");
       return;
     }
-
     setIsSubmittingPassword(true);
     try {
       const updated = await authApi.changePassword({
@@ -353,10 +355,9 @@ export function AccountPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setPasswordSuccess("Password updated successfully.");
+      setPasswordSuccess("Password updated.");
     } catch (caught) {
-      const apiError = caught as ApiError;
-      setPasswordError(apiError.message || "Unable to change password.");
+      setPasswordError((caught as ApiError).message || "Unable to change password.");
     } finally {
       setIsSubmittingPassword(false);
     }
@@ -365,27 +366,23 @@ export function AccountPage() {
   async function handleDeactivate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setDeactivateError(null);
-
     if (!deactivateConfirm) {
-      setDeactivateError("Confirm that you want to deactivate this account.");
+      setDeactivateError("Confirm deactivation first.");
       return;
     }
-
     if (!deactivatePassword.trim()) {
-      setDeactivateError("Enter your current password to deactivate.");
+      setDeactivateError("Enter your current password.");
       return;
     }
-
     setIsDeactivating(true);
     try {
-      await authApi.deactivateAccount({
-        currentPassword: deactivatePassword,
-      });
+      await authApi.deactivateAccount({ currentPassword: deactivatePassword });
       await logout();
       navigate("/login", { replace: true });
     } catch (caught) {
-      const apiError = caught as ApiError;
-      setDeactivateError(apiError.message || "Unable to deactivate account.");
+      setDeactivateError(
+        (caught as ApiError).message || "Unable to deactivate account.",
+      );
     } finally {
       setIsDeactivating(false);
     }
@@ -393,427 +390,482 @@ export function AccountPage() {
 
   if (!user || !form || !profile) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        <PageHeader title="Profile" description="Manage your account details." />
-        <p className="text-sm text-slate-600">
-          {isLoadingProfile ? "Loading profile..." : "Unable to load profile."}
+      <div className="flex min-h-[50vh] items-center justify-center px-4">
+        <p className="text-sm text-slate-500">
+          {isLoadingProfile ? "Loading profile…" : "Unable to load profile."}
         </p>
       </div>
     );
   }
 
-  const initials = userInitials(form.fullName || profile.fullName, profile.username);
+  const initials = userInitials(
+    form.fullName || profile.fullName,
+    profile.username,
+  );
   const avatarUrl = resolvePublicUrl(profile.avatarUrl);
+  const schoolLabel =
+    schools.find((s) => String(s.id) === String(profile.schoolId))?.name ??
+    (profile.schoolId != null ? `School ${profile.schoolId}` : null);
+  const campusLabel =
+    campuses.find((c) => String(c.id) === String(profile.campusId))?.name ??
+    (profile.campusId != null ? `Campus ${profile.campusId}` : null);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6">
-      <PageHeader
-        title="Profile"
-        description="Update your display name, contact details, and security settings."
+    <div className="min-h-[calc(100vh-4rem)] bg-[#f3f6fb]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-56 opacity-90"
+        style={{
+          background:
+            "radial-gradient(90% 70% at 12% 0%, rgba(29,106,245,0.18), transparent 55%), radial-gradient(70% 50% at 88% 8%, rgba(51,137,255,0.14), transparent 50%)",
+        }}
       />
 
-      <section className={sectionClassName}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            id="avatar"
-            onClick={() => setAvatarOpen(true)}
-            className="group relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-brand-100 text-2xl font-bold text-brand-700 outline-none ring-brand-500 focus-visible:ring-2"
-            aria-label="Upload avatar"
-          >
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              initials
-            )}
-            <span className="absolute inset-x-0 bottom-0 bg-slate-900/55 py-1 text-center text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
-              Upload
-            </span>
-          </button>
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-900">
-              {form.fullName || profile.username}
-            </h2>
-            <p className="text-sm text-slate-500">@{profile.username}</p>
-            <p className="mt-1 text-sm font-medium text-brand-700">
-              {getRoleLabel(profile.role)}
-            </p>
-            <p className="mt-2 text-xs text-slate-500">
-              Click the avatar to upload a profile picture.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className={sectionClassName} id="profile">
-        <h2 className="text-base font-semibold text-slate-900">
-          Profile details
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Update your display name and contact details.
-        </p>
-
-        {profileError ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {profileError}
-          </div>
-        ) : null}
-        {profileSuccess ? (
-          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            {profileSuccess}
-          </div>
-        ) : null}
-
-        <form className="mt-4 space-y-4" onSubmit={(e) => void handleProfileSubmit(e)}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <FieldLabel htmlFor="fullName" required>
-                Display name
-              </FieldLabel>
-              <input
-                id="fullName"
-                type="text"
-                required
-                value={form.fullName}
-                onChange={(event) => updateField("fullName", event.target.value)}
-                className={inputClassName}
-              />
-            </div>
-
-            <div>
-              <FieldLabel htmlFor="mobileNumber" required>
-                Mobile number
-              </FieldLabel>
-              <input
-                id="mobileNumber"
-                type="tel"
-                required
-                value={form.mobileNumber}
-                onChange={(event) =>
-                  updateField("mobileNumber", event.target.value)
-                }
-                className={inputClassName}
-              />
-            </div>
-
-            <div>
-              <FieldLabel htmlFor="emailAddress">Email address</FieldLabel>
-              <input
-                id="emailAddress"
-                type="email"
-                value={form.emailAddress}
-                onChange={(event) =>
-                  updateField("emailAddress", event.target.value)
-                }
-                className={inputClassName}
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <FieldLabel htmlFor="cnic">CNIC</FieldLabel>
-              <input
-                id="cnic"
-                type="text"
-                value={form.cnic}
-                onChange={(event) => updateField("cnic", event.target.value)}
-                className={inputClassName}
-                placeholder="Optional"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSavingProfile || isLoadingProfile}
-            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
-          >
-            {isSavingProfile ? "Saving..." : "Save profile"}
-          </button>
-        </form>
-      </section>
-
-      {canRequestSchoolChange && schoolForm ? (
-        <section className={sectionClassName} id="school-campus">
-          <h2 className="text-base font-semibold text-slate-900">
-            School / campus change
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Submit a separate request to change school or campus. After you
-            confirm, your account locks until School Admin or Portal Admin
-            reviews it.
-            {isCampusAdminOnly
-              ? " Campus admins can change campus only."
-              : null}
-          </p>
-
-          {profile.pendingSchoolChange ? (
-            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              You already have a pending change to school{" "}
-              {profile.pendingSchoolChange.toSchoolId ?? "—"} / campus{" "}
-              {profile.pendingSchoolChange.toCampusId ?? "—"} (
-              {profile.pendingSchoolChange.status}).
-            </p>
-          ) : null}
-
-          {schoolError ? (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {schoolError}
-            </div>
-          ) : null}
-
-          <form
-            className="mt-4 space-y-4"
-            onSubmit={(e) => openSchoolChangeConfirm(e)}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <FieldLabel htmlFor="schoolId">School</FieldLabel>
-                <SearchableSelect
-                  id="schoolId"
-                  disabled={
-                    isSavingSchoolChange ||
-                    isLoadingSchools ||
-                    isCampusAdminOnly
-                  }
-                  value={schoolForm.schoolId}
-                  allowEmpty
-                  emptyLabel={
-                    isLoadingSchools ? "Loading schools..." : "Select school"
-                  }
-                  placeholder={
-                    isLoadingSchools ? "Loading schools..." : "Select school"
-                  }
-                  options={schools.map((school) => ({
-                    value: String(school.id),
-                    label: school.name,
-                  }))}
-                  onChange={(next) => {
-                    updateSchoolField("schoolId", next);
-                    updateSchoolField("campusId", "");
-                  }}
-                />
-              </div>
-
-              <div>
-                <FieldLabel htmlFor="campusId">Campus</FieldLabel>
-                <SearchableSelect
-                  id="campusId"
-                  disabled={
-                    isSavingSchoolChange ||
-                    !schoolForm.schoolId ||
-                    isLoadingCampuses
-                  }
-                  value={schoolForm.campusId}
-                  allowEmpty
-                  emptyLabel={
-                    !schoolForm.schoolId
-                      ? "Select a school first"
-                      : isLoadingCampuses
-                        ? "Loading campuses..."
-                        : "Select campus"
-                  }
-                  placeholder={
-                    !schoolForm.schoolId
-                      ? "Select a school first"
-                      : isLoadingCampuses
-                        ? "Loading campuses..."
-                        : "Select campus"
-                  }
-                  options={campuses.map((campus) => ({
-                    value: String(campus.id),
-                    label: campus.name,
-                  }))}
-                  onChange={(next) => updateSchoolField("campusId", next)}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSavingSchoolChange || isLoadingProfile}
-              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+      <div className="relative mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:py-6">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.9fr)]">
+          {/* ── LEFT ── */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(20,39,87,0.06)]">
+            {/* Identity */}
+            <div
+              className="relative px-5 py-5 sm:px-6"
+              style={{
+                background:
+                  "linear-gradient(125deg, #142757 0%, #1845b6 48%, #1d6af5 100%)",
+              }}
             >
-              {isSavingSchoolChange
-                ? "Submitting..."
-                : "Request school / campus change"}
-            </button>
-          </form>
-        </section>
-      ) : null}
+              <div
+                aria-hidden
+                className="absolute inset-0 opacity-[0.12]"
+                style={{
+                  backgroundImage:
+                    "radial-gradient(circle at 20% 30%, #fff 0.7px, transparent 1px)",
+                  backgroundSize: "22px 22px",
+                }}
+              />
+              <div className="relative flex items-center gap-4">
+                <button
+                  type="button"
+                  id="avatar"
+                  onClick={() => setAvatarOpen(true)}
+                  className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white/15 text-lg font-bold text-white ring-2 ring-white/35 outline-none transition hover:ring-amber-300/70 focus-visible:ring-amber-300"
+                  aria-label="Change photo"
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center">
+                      {initials}
+                    </span>
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 bg-black/45 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-white opacity-0 transition group-hover:opacity-100">
+                    Edit
+                  </span>
+                </button>
+                <div className="min-w-0 flex-1 text-white">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-100/80">
+                    Account
+                  </p>
+                  <h1 className="mt-0.5 truncate text-xl font-semibold tracking-tight sm:text-2xl">
+                    {form.fullName || profile.username}
+                  </h1>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-sky-50/90">
+                    <span className="rounded-md bg-white/15 px-2 py-0.5 font-medium text-white">
+                      {getRoleLabel(profile.role)}
+                    </span>
+                    <span className="truncate opacity-90">@{profile.username}</span>
+                    {schoolLabel ? (
+                      <span className="truncate opacity-80">
+                        {schoolLabel}
+                        {campusLabel ? ` · ${campusLabel}` : ""}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+                <Btn
+                  type="button"
+                  variant="soft"
+                  onClick={() => setAvatarOpen(true)}
+                >
+                  <span className="hidden sm:inline">Update photo</span>
+                  <span className="sm:hidden">Photo</span>
+                </Btn>
+              </div>
+            </div>
 
-      <section className={sectionClassName} id="password">
-        <h2 className="text-base font-semibold text-slate-900">
-          Change password
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Choose a new password for your RankUp Education account.
-        </p>
+            {/* Profile form */}
+            <div id="profile" className="border-b border-slate-100 px-5 py-5 sm:px-6">
+              <div className="mb-4 flex items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Personal details
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Name and contact — school changes are separate below.
+                  </p>
+                </div>
+              </div>
 
-        {passwordError ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {passwordError}
-          </div>
-        ) : null}
-        {passwordSuccess ? (
-          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            {passwordSuccess}
-          </div>
-        ) : null}
+              <div className="space-y-3">
+                {profileError ? <Notice tone="error">{profileError}</Notice> : null}
+                {profileSuccess ? (
+                  <Notice tone="success">{profileSuccess}</Notice>
+                ) : null}
 
-        <form
-          className="mt-4 space-y-4"
-          onSubmit={(e) => void handlePasswordSubmit(e)}
-        >
-          <div>
-            <FieldLabel htmlFor="currentPassword" required>
-              Current password
-            </FieldLabel>
-            <input
-              id="currentPassword"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-              className={inputClassName}
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="newPassword" required>
-              New password
-            </FieldLabel>
-            <input
-              id="newPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              className={inputClassName}
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="confirmPassword" required>
-              Confirm new password
-            </FieldLabel>
-            <input
-              id="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className={inputClassName}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={isSubmittingPassword}
-            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
-          >
-            {isSubmittingPassword ? "Updating..." : "Update password"}
-          </button>
-        </form>
-      </section>
+                <form
+                  className="space-y-3"
+                  onSubmit={(e) => void handleProfileSubmit(e)}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <FieldLabel htmlFor="fullName" required>
+                        Display name
+                      </FieldLabel>
+                      <input
+                        id="fullName"
+                        type="text"
+                        required
+                        value={form.fullName}
+                        onChange={(e) => updateField("fullName", e.target.value)}
+                        className={fieldClass}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="mobileNumber" required>
+                        Mobile
+                      </FieldLabel>
+                      <input
+                        id="mobileNumber"
+                        type="tel"
+                        required
+                        value={form.mobileNumber}
+                        onChange={(e) =>
+                          updateField("mobileNumber", e.target.value)
+                        }
+                        className={fieldClass}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="emailAddress">Email</FieldLabel>
+                      <input
+                        id="emailAddress"
+                        type="email"
+                        value={form.emailAddress}
+                        onChange={(e) =>
+                          updateField("emailAddress", e.target.value)
+                        }
+                        className={fieldClass}
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <FieldLabel htmlFor="cnic">CNIC</FieldLabel>
+                      <input
+                        id="cnic"
+                        type="text"
+                        value={form.cnic}
+                        onChange={(e) => updateField("cnic", e.target.value)}
+                        className={fieldClass}
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <Btn disabled={isSavingProfile || isLoadingProfile}>
+                      {isSavingProfile ? "Saving…" : "Save profile"}
+                    </Btn>
+                  </div>
+                </form>
+              </div>
+            </div>
 
-      <section
-        className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm"
-        id="deactivate"
-      >
-        <h2 className="text-base font-semibold text-red-700">
-          Deactivate account
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Deactivating disables your login. An administrator may need to restore
-          access later.
-        </p>
+            {/* School change */}
+            {canRequestSchoolChange && schoolForm ? (
+              <div id="school-campus" className="px-5 py-5 sm:px-6">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      School / campus
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {isCampusAdminOnly
+                        ? "Campus only — confirming locks your login for admin review."
+                        : "Own request button — confirming locks your login for admin review."}
+                    </p>
+                  </div>
+                </div>
 
-        {deactivateError ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {deactivateError}
-          </div>
-        ) : null}
+                <div className="space-y-3">
+                  {profile.pendingSchoolChange ? (
+                    <Notice tone="warn">
+                      Pending change → school{" "}
+                      {profile.pendingSchoolChange.toSchoolId ?? "—"} / campus{" "}
+                      {profile.pendingSchoolChange.toCampusId ?? "—"} (
+                      {profile.pendingSchoolChange.status})
+                    </Notice>
+                  ) : null}
+                  {schoolError ? <Notice tone="error">{schoolError}</Notice> : null}
 
-        <form
-          className="mt-4 space-y-4"
-          onSubmit={(e) => void handleDeactivate(e)}
-        >
-          <div>
-            <FieldLabel htmlFor="deactivatePassword" required>
-              Current password
-            </FieldLabel>
-            <input
-              id="deactivatePassword"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={deactivatePassword}
-              onChange={(event) => setDeactivatePassword(event.target.value)}
-              className={inputClassName}
-            />
+                  <form
+                    className="space-y-3"
+                    onSubmit={(e) => openSchoolChangeConfirm(e)}
+                  >
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel htmlFor="schoolId">School</FieldLabel>
+                        <SearchableSelect
+                          id="schoolId"
+                          disabled={
+                            isSavingSchoolChange ||
+                            isLoadingSchools ||
+                            isCampusAdminOnly
+                          }
+                          value={schoolForm.schoolId}
+                          allowEmpty
+                          emptyLabel={
+                            isLoadingSchools ? "Loading…" : "Select school"
+                          }
+                          placeholder={
+                            isLoadingSchools ? "Loading…" : "Select school"
+                          }
+                          options={schools.map((school) => ({
+                            value: String(school.id),
+                            label: school.name,
+                          }))}
+                          onChange={(next) => {
+                            updateSchoolField("schoolId", next);
+                            updateSchoolField("campusId", "");
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel htmlFor="campusId">Campus</FieldLabel>
+                        <SearchableSelect
+                          id="campusId"
+                          disabled={
+                            isSavingSchoolChange ||
+                            !schoolForm.schoolId ||
+                            isLoadingCampuses
+                          }
+                          value={schoolForm.campusId}
+                          allowEmpty
+                          emptyLabel={
+                            !schoolForm.schoolId
+                              ? "School first"
+                              : isLoadingCampuses
+                                ? "Loading…"
+                                : "Select campus"
+                          }
+                          placeholder={
+                            !schoolForm.schoolId
+                              ? "School first"
+                              : isLoadingCampuses
+                                ? "Loading…"
+                                : "Select campus"
+                          }
+                          options={campuses.map((campus) => ({
+                            value: String(campus.id),
+                            label: campus.name,
+                          }))}
+                          onChange={(next) => updateSchoolField("campusId", next)}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <Btn disabled={isSavingSchoolChange || isLoadingProfile}>
+                        {isSavingSchoolChange ? "Submitting…" : "Request change"}
+                      </Btn>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
           </div>
-          <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={deactivateConfirm}
-              onChange={(event) => setDeactivateConfirm(event.target.checked)}
-              className="mt-0.5 rounded border-slate-300 text-red-600 focus:ring-red-500"
-            />
-            <span>
-              I understand that my account will be deactivated and I will be
-              signed out.
-            </span>
-          </label>
-          <button
-            type="submit"
-            disabled={isDeactivating || !deactivateConfirm}
-            className="rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-70"
-          >
-            {isDeactivating ? "Deactivating..." : "Deactivate account"}
-          </button>
-        </form>
-      </section>
+
+          {/* ── RIGHT (narrower) ── */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-[4.75rem]">
+            <div
+              id="password"
+              className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(20,39,87,0.06)]"
+            >
+              <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Security
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Password & account access
+                </p>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Change password
+                </h3>
+                {passwordError ? (
+                  <Notice tone="error">{passwordError}</Notice>
+                ) : null}
+                {passwordSuccess ? (
+                  <Notice tone="success">{passwordSuccess}</Notice>
+                ) : null}
+                <form
+                  className="space-y-2.5"
+                  onSubmit={(e) => void handlePasswordSubmit(e)}
+                >
+                  <div>
+                    <FieldLabel htmlFor="currentPassword" required>
+                      Current
+                    </FieldLabel>
+                    <input
+                      id="currentPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="newPassword" required>
+                      New
+                    </FieldLabel>
+                    <input
+                      id="newPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="confirmPassword" required>
+                      Confirm
+                    </FieldLabel>
+                    <input
+                      id="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <Btn block disabled={isSubmittingPassword}>
+                    {isSubmittingPassword ? "Updating…" : "Update password"}
+                  </Btn>
+                </form>
+              </div>
+            </div>
+
+            <div
+              id="deactivate"
+              className="overflow-hidden rounded-2xl border border-red-200/70 bg-white shadow-[0_8px_30px_rgba(127,29,29,0.05)]"
+            >
+              <div className="border-b border-red-100 bg-gradient-to-r from-red-50 to-white px-4 py-3">
+                <h2 className="text-sm font-semibold text-red-700">
+                  Danger zone
+                </h2>
+                <p className="mt-0.5 text-xs text-red-600/80">
+                  Deactivate disables login until an admin restores it.
+                </p>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {deactivateError ? (
+                  <Notice tone="error">{deactivateError}</Notice>
+                ) : null}
+                <form
+                  className="space-y-2.5"
+                  onSubmit={(e) => void handleDeactivate(e)}
+                >
+                  <div>
+                    <FieldLabel htmlFor="deactivatePassword" required>
+                      Current password
+                    </FieldLabel>
+                    <input
+                      id="deactivatePassword"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={deactivatePassword}
+                      onChange={(e) => setDeactivatePassword(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <label className="flex items-start gap-2.5 rounded-lg border border-red-100 bg-red-50/50 px-3 py-2.5 text-xs leading-snug text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={deactivateConfirm}
+                      onChange={(e) => setDeactivateConfirm(e.target.checked)}
+                      className="mt-0.5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span>I understand I will be signed out immediately.</span>
+                  </label>
+                  <Btn
+                    variant="danger"
+                    block
+                    disabled={isDeactivating || !deactivateConfirm}
+                  >
+                    {isDeactivating ? "Deactivating…" : "Deactivate account"}
+                  </Btn>
+                </form>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
 
       {confirmSchoolChangeOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[3px]">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="school-change-confirm-title"
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
           >
-            <h3
-              id="school-change-confirm-title"
-              className="text-lg font-semibold text-slate-900"
+            <div
+              className="px-5 py-4 text-white"
+              style={{
+                background:
+                  "linear-gradient(125deg, #142757 0%, #1845b6 55%, #1d6af5 100%)",
+              }}
             >
-              Confirm school / campus change
-            </h3>
-            <p className="mt-2 text-sm text-slate-600">
-              After you confirm, your account will be locked automatically until
-              School Admin or Portal Admin approves or rejects this request. You
-              will be signed out now.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={isSavingSchoolChange}
-                onClick={() => setConfirmSchoolChangeOpen(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">
+                Confirmation
+              </p>
+              <h3
+                id="school-change-confirm-title"
+                className="mt-1 text-lg font-semibold"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isSavingSchoolChange}
-                onClick={() => void confirmSchoolChangeRequest()}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
-              >
-                {isSavingSchoolChange ? "Submitting..." : "Confirm and lock"}
-              </button>
+                Lock account for school change?
+              </h3>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm leading-relaxed text-slate-600">
+                Your account will lock until School Admin or Portal Admin
+                approves or rejects this request. You will be signed out now.
+              </p>
+              <div className="mt-5 flex justify-end gap-2">
+                <Btn
+                  type="button"
+                  variant="soft"
+                  disabled={isSavingSchoolChange}
+                  onClick={() => setConfirmSchoolChangeOpen(false)}
+                >
+                  Cancel
+                </Btn>
+                <Btn
+                  type="button"
+                  disabled={isSavingSchoolChange}
+                  onClick={() => void confirmSchoolChangeRequest()}
+                >
+                  {isSavingSchoolChange ? "Submitting…" : "Confirm & lock"}
+                </Btn>
+              </div>
             </div>
           </div>
         </div>
