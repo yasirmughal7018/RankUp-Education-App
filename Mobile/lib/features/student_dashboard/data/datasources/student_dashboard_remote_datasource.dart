@@ -37,7 +37,7 @@ class StudentDashboardRemoteDataSource {
     );
 
     if (!response.success) {
-      throw ValidationException(response.message, response.errors);
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
     }
 
     return AppUserModel.fromJson(response.data);
@@ -54,7 +54,7 @@ class StudentDashboardRemoteDataSource {
     );
 
     if (!response.success) {
-      throw ValidationException(response.message, response.errors);
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
     }
 
     return response.data;

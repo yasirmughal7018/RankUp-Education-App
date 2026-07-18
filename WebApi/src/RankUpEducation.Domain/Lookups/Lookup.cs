@@ -1,3 +1,5 @@
+using RankUpEducation.Common.Utilities;
+
 namespace RankUpEducation.Domain.Lookups;
 
 public sealed class Lookup
@@ -11,8 +13,8 @@ public sealed class Lookup
     public Lookup(short id, string name, string type, short orderBy = 0, short? lookupRefId = null)
     {
         Id = id;
-        Name = name.Trim();
-        Type = type.Trim();
+        Name = name.AsTrimmedString();
+        Type = type.AsTrimmedString();
         OrderBy = orderBy;
         LookupRefId = lookupRefId;
     }

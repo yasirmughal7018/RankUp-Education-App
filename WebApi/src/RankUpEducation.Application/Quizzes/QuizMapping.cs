@@ -136,8 +136,11 @@ internal static class QuizMapping
             reviewAvailable,
             item.Questions.Select(question =>
             {
-                var correctOption = question.Options.FirstOrDefault(option => option.IsCorrect);
-                var isSubjective = !string.IsNullOrWhiteSpace(question.SubmittedText) && question.SelectedOptionId is null;
+                var correctOptions = question.Options.Where(option => option.IsCorrect).ToArray();
+                var correctOption = correctOptions.FirstOrDefault();
+                var isSubjective = !string.IsNullOrWhiteSpace(question.SubmittedText)
+                    && question.SelectedOptionIds.Count == 0
+                    && question.SelectedOptionId is null;
                 var awardedMarks = maskPendingReview && isSubjective ? (short)0 : question.AwardedMarks;
 
                 return new QuizResultQuestionResponse(
@@ -149,7 +152,11 @@ internal static class QuizMapping
                     question.Explanation,
                     question.SelectedOptionId,
                     maskPendingReview && isSubjective ? null : correctOption?.OptionId,
-                    question.SubmittedText);
+                    question.SubmittedText,
+                    question.SelectedOptionIds,
+                    maskPendingReview && isSubjective
+                        ? null
+                        : correctOptions.Select(option => option.OptionId).ToArray());
             }).ToArray());
     }
 }

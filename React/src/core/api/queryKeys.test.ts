@@ -29,10 +29,21 @@ describe("queryKeys", () => {
       "2026-01-31",
     ]);
     expect(queryKeys.reportRankings(5)).toEqual(["reports", "rankings", 5]);
-    expect(queryKeys.directoryParents("ali")).toEqual([
+    expect(queryKeys.directoryParents({ search: "ali" })).toEqual([
       "directory",
       "parents",
-      "ali",
+      { search: "ali" },
+    ]);
+    expect(
+      queryKeys.directoryStudents({
+        schoolId: 1,
+        pageNumber: 2,
+        pageSize: 25,
+      }),
+    ).toEqual([
+      "directory",
+      "students",
+      { schoolId: 1, pageNumber: 2, pageSize: 25 },
     ]);
     expect(queryKeys.studentQuizHistory(9)).toEqual([
       "reports",

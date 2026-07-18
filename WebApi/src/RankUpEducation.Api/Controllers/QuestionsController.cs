@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Questions;
 using RankUpEducation.Contracts.Common;
 using RankUpEducation.Contracts.Questions;
@@ -24,6 +25,7 @@ public sealed class QuestionsController : ControllerBase
         [FromQuery] short? subjectId,
         [FromQuery] short? classId,
         [FromQuery] bool pendingApprovalOnly = false,
+        [FromQuery] bool eligibleForQuizOnly = false,
         CancellationToken cancellationToken = default)
     {
         var response = await _questionService.ListAsync(
@@ -31,6 +33,7 @@ public sealed class QuestionsController : ControllerBase
             subjectId,
             classId,
             pendingApprovalOnly,
+            eligibleForQuizOnly,
             cancellationToken);
         return Ok(ApiResponse<QuestionListResponse>.Ok(response));
     }
@@ -41,6 +44,16 @@ public sealed class QuestionsController : ControllerBase
     {
         var response = await _questionService.ListPendingApprovalAsync(cancellationToken);
         return Ok(ApiResponse<QuestionListResponse>.Ok(response));
+    }
+
+    [HttpGet("import-template")]
+    public IActionResult DownloadImportTemplate()
+    {
+        var bytes = QuestionExcelImportParser.BuildTemplate();
+        return File(
+            bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "rankup-questions-import-template.xlsx");
     }
 
     [HttpGet("{questionId:long}")]
@@ -61,6 +74,36 @@ public sealed class QuestionsController : ControllerBase
         return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question created."));
     }
 
+    [HttpPost("import")]
+    [RequestSizeLimit(10_000_000)]
+    public async Task<ActionResult<ApiResponse<ImportQuestionsResponse>>> ImportAsync(
+        IFormFile file,
+        [FromQuery] bool dryRun = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (file is null || file.Length == 0)
+        {
+            throw new ValidationAppException(["Excel file is required."]);
+        }
+
+        await using var stream = file.OpenReadStream();
+        IReadOnlyList<CreateQuestionRequest> rows;
+        try
+        {
+            rows = QuestionExcelImportParser.Parse(stream);
+        }
+        catch (Exception ex)
+        {
+            throw new ValidationAppException([$"Unable to read Excel file: {ex.Message}"]);
+        }
+
+        var response = await _questionService.ImportAsync(rows, dryRun, cancellationToken);
+        var message = dryRun
+            ? $"Dry run complete. {response.ErrorCount} row error(s)."
+            : $"Imported {response.CreatedCount} question(s). {response.ErrorCount} row error(s).";
+        return Ok(ApiResponse<ImportQuestionsResponse>.Ok(response, message));
+    }
+
     [HttpPut("{questionId:long}")]
     public async Task<ActionResult<ApiResponse<QuestionDetailResponse>>> UpdateAsync(
         long questionId,
@@ -71,6 +114,15 @@ public sealed class QuestionsController : ControllerBase
         return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question updated."));
     }
 
+    [HttpPost("{questionId:long}/submit")]
+    public async Task<ActionResult<ApiResponse<QuestionDetailResponse>>> SubmitForReviewAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.SubmitForReviewAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question submitted for Portal Admin review."));
+    }
+
     [HttpPost("{questionId:long}/approve")]
     public async Task<ActionResult<ApiResponse<QuestionApprovalResponse>>> ApproveAsync(
         long questionId,
@@ -78,15 +130,6 @@ public sealed class QuestionsController : ControllerBase
     {
         var response = await _questionService.ApproveAsync(questionId, cancellationToken);
         return Ok(ApiResponse<QuestionApprovalResponse>.Ok(response, "Question approved."));
-    }
-
-    [HttpPost("{questionId:long}/approve-ai")]
-    public async Task<ActionResult<ApiResponse<QuestionApprovalResponse>>> ApproveAiAsync(
-        long questionId,
-        CancellationToken cancellationToken)
-    {
-        var response = await _questionService.ApproveAiAsync(questionId, cancellationToken);
-        return Ok(ApiResponse<QuestionApprovalResponse>.Ok(response, "Question AI-approved."));
     }
 
     [HttpPost("{questionId:long}/reject")]
@@ -115,6 +158,15 @@ public sealed class QuestionsController : ControllerBase
     {
         var response = await _questionService.DeactivateAsync(questionId, cancellationToken);
         return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question deactivated."));
+    }
+
+    [HttpPost("{questionId:long}/archive")]
+    public async Task<ActionResult<ApiResponse<QuestionActiveStateResponse>>> ArchiveAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.ArchiveAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question archived."));
     }
 
     [HttpDelete("{questionId:long}")]

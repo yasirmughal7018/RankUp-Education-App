@@ -17,6 +17,8 @@ public interface IQuestionRepository
         short? subjectId,
         short? classId,
         bool pendingApprovalOnly,
+        bool eligibleForQuizOnly,
+        bool includeAllApprovedForOwnerScope,
         CancellationToken cancellationToken);
 
     Task<QuestionDetailItem?> GetQuestionDetailAsync(long questionId, CancellationToken cancellationToken);
@@ -30,4 +32,10 @@ public interface IQuestionRepository
     Task RemoveQuestionOptionsAsync(long questionId, CancellationToken cancellationToken);
 
     Task AddQuestionOptionsAsync(IReadOnlyList<QuestionOption> options, CancellationToken cancellationToken);
+
+    Task RemoveQuestionAcceptedAnswersAsync(long questionId, CancellationToken cancellationToken);
+
+    Task AddQuestionAcceptedAnswersAsync(
+        IReadOnlyList<QuestionAcceptedAnswer> answers,
+        CancellationToken cancellationToken);
 }

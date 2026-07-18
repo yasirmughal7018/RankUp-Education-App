@@ -38,6 +38,19 @@ public sealed class QuizQuestionsController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question added."));
     }
 
+    [HttpPost("from-bank")]
+    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> AttachFromBankAsync(
+        long quizId,
+        [FromBody] AttachBankQuestionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizQuestionService.AttachBankQuestionAsync(
+            quizId,
+            request,
+            cancellationToken);
+        return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Question attached from bank."));
+    }
+
     [HttpPut("{questionId:long}")]
     public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> UpdateAsync(
         long quizId,

@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
@@ -30,16 +31,16 @@ public sealed class Quiz : SoftDeleteEntity
     {
         SchoolId = schoolId;
         SchoolCampusId = schoolCampusId;
-        QuizTitle = quizTitle.Trim();
-        Description = description.Trim();
+        QuizTitle = quizTitle.AsTrimmedString();
+        Description = description.AsTrimmedString();
         QuizTypeId = quizTypeId;
         ClassId = classId;
         SubjectId = subjectId;
         TopicId = topicId;
         DifficultyLevelId = difficultyLevelId;
         TotalQuestions = totalQuestions;
-        Instructions = instructions.Trim();
-        CreatedByName = createdBy.Trim();
+        Instructions = instructions.AsTrimmedString();
+        CreatedByName = createdBy.AsTrimmedString();
         ApprovalStatusId = approvalStatusId;
         LifecycleStatusId = lifecycleStatusId;
     }
@@ -83,13 +84,13 @@ public sealed class Quiz : SoftDeleteEntity
         bool shuffleOptions,
         bool isReviewRequired)
     {
-        QuizTitle = quizTitle.Trim();
-        Description = description.Trim();
+        QuizTitle = quizTitle.AsTrimmedString();
+        Description = description.AsTrimmedString();
         ClassId = classId;
         SubjectId = subjectId;
         TopicId = topicId;
         DifficultyLevelId = difficultyLevelId;
-        Instructions = instructions.Trim();
+        Instructions = instructions.AsTrimmedString();
         TimeLimitMinutes = timeLimitMinutes;
         AllowedAttempts = allowedAttempts;
         ShuffleQuestions = shuffleQuestions;
@@ -138,7 +139,14 @@ public sealed class Quiz : SoftDeleteEntity
     public void Approve(short approvalStatusId, string approvedBy)
     {
         ApprovalStatusId = approvalStatusId;
-        ApprovedBy = approvedBy.Trim();
+        ApprovedBy = approvedBy.AsTrimmedString();
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void Reject(short approvalStatusId)
+    {
+        ApprovalStatusId = approvalStatusId;
+        ApprovedBy = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

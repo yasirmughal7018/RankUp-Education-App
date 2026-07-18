@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Subjects;
@@ -12,7 +13,7 @@ public sealed class Subject : SoftDeleteEntity
     public Subject(long schoolId, string name)
     {
         SchoolId = schoolId;
-        Name = name.Trim();
+        Name = name.AsTrimmedString();
     }
 
     public long SchoolId { get; private set; }

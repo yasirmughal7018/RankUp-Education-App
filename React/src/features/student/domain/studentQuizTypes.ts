@@ -42,19 +42,37 @@ export interface QuizAttemptQuestion {
   options: QuizAttemptOption[];
 }
 
+export interface SavedQuizAnswer {
+  questionId: number;
+  selectedOptionId: number | null;
+  submittedText: string | null;
+}
+
 export interface StartQuizAttempt {
   attemptId: number;
   quizId: number;
   attemptNumber: number;
   timeLimitMinutes: number | null;
   startedAt: string;
+  resumed: boolean;
   questions: QuizAttemptQuestion[];
+  savedAnswers: SavedQuizAnswer[];
 }
 
 export interface SubmitQuizAnswer {
   questionId: number;
   selectedOptionId: number | null;
   submittedText: string | null;
+}
+
+export interface SaveQuizDraftInput {
+  answers: SubmitQuizAnswer[];
+  timeSpentSeconds?: number | null;
+}
+
+export interface SaveQuizDraftResult {
+  attemptId: number;
+  savedCount: number;
 }
 
 export interface QuizResultQuestion {
@@ -95,6 +113,12 @@ export function isTextQuestionType(questionType: string): boolean {
     normalized.includes("text") ||
     normalized.includes("short") ||
     normalized.includes("long") ||
-    normalized.includes("essay")
+    normalized.includes("essay") ||
+    normalized.includes("descriptive")
   );
+}
+
+export function hasInProgressAttempt(quiz: QuizDetail): boolean {
+  const result = quiz.resultStatus.toLowerCase();
+  return result.includes("in progress") || result.includes("inprogress");
 }

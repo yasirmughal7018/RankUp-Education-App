@@ -41,6 +41,34 @@ public static partial class ValueExtensions
         return trimmed.Length == 0 ? string.Empty : trimmed;
     }
 
+    /// <summary>Null, empty, or whitespace-only → <c>null</c>; otherwise trimmed text.</summary>
+    public static string? AsTrimmedOrNull(this object? value)
+    {
+        var trimmed = value.AsTrimmedString();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    /// <summary>Null, empty, or whitespace-only → <c>null</c>; otherwise trimmed text.</summary>
+    public static string? AsTrimmedOrNull(this string? value)
+    {
+        var trimmed = value.AsTrimmedString();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    /// <summary>Blank → <paramref name="defaultValue"/>; otherwise trimmed text.</summary>
+    public static string AsTrimmedOrDefault(this string? value, string defaultValue)
+    {
+        var trimmed = value.AsTrimmedString();
+        return trimmed.Length == 0 ? defaultValue : trimmed;
+    }
+
+    /// <summary>Blank → <c>null</c>; otherwise trimmed lowercase email.</summary>
+    public static string? AsNormalizedEmailOrNull(this string? email)
+    {
+        var normalized = email.AsNormalizedEmail();
+        return normalized.Length == 0 ? null : normalized;
+    }
+
     public static string EmptyIfZero(this object? value)
     {
         var text = value.AsTrimmedString();

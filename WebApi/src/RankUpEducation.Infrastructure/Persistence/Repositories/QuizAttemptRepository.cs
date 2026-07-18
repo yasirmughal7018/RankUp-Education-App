@@ -35,6 +35,21 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
         await _dbContext.QuizAttemptAnswers.AddRangeAsync(answers, cancellationToken);
     }
 
+    public Task<QuizAttempt?> GetInProgressAttemptAsync(
+        long quizId,
+        long studentId,
+        short inProgressStatusId,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.QuizAttempts
+            .Where(attempt =>
+                attempt.QuizId == quizId &&
+                attempt.StudentId == studentId &&
+                attempt.StatusId == inProgressStatusId)
+            .OrderByDescending(attempt => attempt.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<QuizAttemptDetailItem?> GetAttemptDetailAsync(
         long attemptId,
         long studentId,
@@ -93,7 +108,29 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
             attempt.SubmittedDate,
             attemptQuestions.Select(item =>
             {
-                var answer = answers.FirstOrDefault(row => row.QuizAttemptQuestionId == item.Id);
+                var questionAnswers = answers
+                    .Where(row => row.QuizAttemptQuestionId == item.Id)
+                    .ToArray();
+                var selectedOptionIds = QuizAnswerSelection.AggregateSelectedOptionIds(
+                    questionAnswers.Select(row => row.QuestionOptionId));
+                var primaryAnswer = questionAnswers.FirstOrDefault();
+                var awardedMarks = questionAnswers.Sum(row => (int)row.AwardedMarks);
+                var isCorrect = questionAnswers.Any(row => row.IsCorrect)
+                    && awardedMarks > 0;
+
+                // Prefer marks/correct from any marked row; for multi-select only the first row holds marks.
+                if (questionAnswers.Length > 1)
+                {
+                    var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
+                        ?? primaryAnswer;
+                    awardedMarks = marked?.AwardedMarks ?? 0;
+                    isCorrect = marked?.IsCorrect ?? false;
+                }
+
+                var submittedText = questionAnswers
+                    .Select(row => row.SubmittedText)
+                    .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+
                 return new QuizAttemptQuestionItem(
                     item.Id,
                     item.QuestionId,
@@ -101,10 +138,10 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                     quizQuestions.GetValueOrDefault(item.QuestionId, (short)0),
                     item.DisplayOrder,
                     item.Explanation,
-                    answer?.QuestionOptionId,
-                    answer?.SubmittedText,
-                    answer?.AwardedMarks ?? 0,
-                    answer?.IsCorrect ?? false,
+                    selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
+                    submittedText,
+                    (short)awardedMarks,
+                    isCorrect,
                     options
                         .Where(option => option.QuestionId == item.QuestionId)
                         .Select(option => new QuizQuestionOptionItem(
@@ -112,7 +149,8 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                             option.OptionText,
                             option.OptionImageUrl,
                             option.IsCorrect))
-                        .ToArray());
+                        .ToArray(),
+                    selectedOptionIds);
             }).ToArray());
     }
 
@@ -154,7 +192,26 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
         CancellationToken cancellationToken)
     {
         return _dbContext.QuizAttemptAnswers
+            .OrderBy(answer => answer.Id)
             .FirstOrDefaultAsync(answer => answer.QuizAttemptQuestionId == attemptQuestionId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<QuizAttemptAnswer>> GetAttemptAnswerEntitiesAsync(
+        long attemptQuestionId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.QuizAttemptAnswers
+            .Where(answer => answer.QuizAttemptQuestionId == attemptQuestionId)
+            .OrderBy(answer => answer.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task RemoveAttemptAnswersAsync(long attemptQuestionId, CancellationToken cancellationToken)
+    {
+        var answers = await _dbContext.QuizAttemptAnswers
+            .Where(answer => answer.QuizAttemptQuestionId == attemptQuestionId)
+            .ToListAsync(cancellationToken);
+        _dbContext.QuizAttemptAnswers.RemoveRange(answers);
     }
 
     public async Task<bool> IsSubmittedAttemptAsync(long attemptId, CancellationToken cancellationToken)

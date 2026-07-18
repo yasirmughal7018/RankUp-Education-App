@@ -16,6 +16,12 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.Property(token => token.CreatedAt).HasColumnName("created_at");
         builder.Property(token => token.ExpiresAt).HasColumnName("expires_at");
         builder.Property(token => token.RevokedAt).HasColumnName("revoked_at");
+        builder.Property(token => token.ActiveRole)
+            .HasColumnName("active_role")
+            .HasColumnType("smallint")
+            .HasConversion(
+                role => role.HasValue ? (short?)role.Value : null,
+                value => value.HasValue ? (UserRole?)value.Value : null);
         builder.HasIndex(token => token.TokenHash).IsUnique();
     }
 }

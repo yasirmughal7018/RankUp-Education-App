@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
+import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
+import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
+import 'package:rankup_education/features/quizzes/presentation/pages/teacher_quiz_views.dart';
 import 'package:rankup_education/features/quizzes/presentation/providers/quiz_providers.dart';
 
 enum _QuizView { list, details, attempt, submitted, review, history }
@@ -25,7 +29,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   final Set<int> _markedQuestions = {};
   final Map<int, Set<String>> _selectedOptionIds = {};
   final Map<int, String> _textAnswers = {};
+  final Set<int> _revealedHints = {};
   Timer? _attemptTimer;
+  Timer? _draftSaveTimer;
   DateTime? _attemptStartedAt;
 
   _QuizView _view = _QuizView.list;
@@ -38,6 +44,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   String _saveStatus = 'All answers saved';
   Duration? _remainingTime;
 
+  bool get _isTeacher =>
+      ref.watch(authControllerProvider).user?.role == UserRole.teacher;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +56,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   @override
   void dispose() {
     _attemptTimer?.cancel();
+    _draftSaveTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -66,7 +76,13 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
                 icon: const Icon(Icons.arrow_back),
               ),
         actions: [
-          if (_view == _QuizView.list)
+          if (_view == _QuizView.list && _isTeacher)
+            IconButton(
+              tooltip: 'Question bank',
+              onPressed: () => context.push('/questions'),
+              icon: const Icon(Icons.quiz_outlined),
+            ),
+          if (_view == _QuizView.list && !_isTeacher)
             IconButton(
               tooltip: 'Attempt history',
               onPressed: () => setState(() => _view = _QuizView.history),
@@ -75,40 +91,54 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         ],
       ),
       body: switch (_view) {
-        _QuizView.list => _QuizListView(
-            state: state,
-            searchController: _searchController,
-            quizType: _quizType,
-            status: _status,
-            dateFilter: _dateFilter,
-            onSearch: _load,
-            onQuizTypeChanged: (value) {
-              setState(() => _quizType = value);
-              _load();
-            },
-            onStatusChanged: (value) {
-              setState(() => _status = value);
-              _load();
-            },
-            onDateFilterChanged: (value) {
-              setState(() => _dateFilter = value);
-              _load();
-            },
-            onResetFilters: _resetFilters,
-            onRefresh: _load,
-            onOpenQuiz: _openDetails,
-          ),
-        _QuizView.details => _QuizDetailsView(
-            quiz: _selectedQuiz!,
-            isLoading: ref.watch(quizzesControllerProvider).isDetailLoading,
-            onStart: () {
-              unawaited(_startAttempt());
-            },
-            onReview: () {
-              unawaited(_openReview());
-            },
-            onCancel: () => setState(() => _view = _QuizView.list),
-          ),
+        _QuizView.list => _isTeacher
+            ? TeacherQuizListView(
+                state: state,
+                searchController: _searchController,
+                onSearch: _load,
+                onRefresh: _load,
+                onOpenQuiz: _openDetails,
+              )
+            : _QuizListView(
+                state: state,
+                searchController: _searchController,
+                quizType: _quizType,
+                status: _status,
+                dateFilter: _dateFilter,
+                onSearch: _load,
+                onQuizTypeChanged: (value) {
+                  setState(() => _quizType = value);
+                  _load();
+                },
+                onStatusChanged: (value) {
+                  setState(() => _status = value);
+                  _load();
+                },
+                onDateFilterChanged: (value) {
+                  setState(() => _dateFilter = value);
+                  _load();
+                },
+                onResetFilters: _resetFilters,
+                onRefresh: _load,
+                onOpenQuiz: _openDetails,
+              ),
+        _QuizView.details => _isTeacher
+            ? TeacherQuizDetailsView(
+                quiz: _selectedQuiz!,
+                isLoading: ref.watch(quizzesControllerProvider).isDetailLoading,
+                onBack: () => setState(() => _view = _QuizView.list),
+              )
+            : _QuizDetailsView(
+                quiz: _selectedQuiz!,
+                isLoading: ref.watch(quizzesControllerProvider).isDetailLoading,
+                onStart: () {
+                  unawaited(_startAttempt());
+                },
+                onReview: () {
+                  unawaited(_openReview());
+                },
+                onCancel: () => setState(() => _view = _QuizView.list),
+              ),
         _QuizView.attempt => _QuizAttemptView(
             quiz: _selectedQuiz!,
             questionIndex: _questionIndex,
@@ -118,10 +148,13 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
             answeredQuestions: _answeredQuestions,
             selectedOptionIds: _selectedOptionIds,
             markedQuestions: _markedQuestions,
+            revealedHints: _revealedHints,
+            textAnswers: _textAnswers,
             saveStatus: _saveStatus,
             remainingTime: _remainingTime,
             onOptionSelected: _answerOptionQuestion,
             onTextAnswerChanged: _answerTextQuestion,
+            onShowHint: _showHint,
             onPrevious: _previousQuestion,
             onNext: _nextQuestion,
             onJumpToQuestion: _jumpToQuestion,
@@ -160,8 +193,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
 
   String get _appBarTitle {
     return switch (_view) {
-      _QuizView.list => 'Student Quizzes',
-      _QuizView.details => 'Quiz Details',
+      _QuizView.list => _isTeacher ? 'Manage Quizzes' : 'Student Quizzes',
+      _QuizView.details => _isTeacher ? 'Quiz Summary' : 'Quiz Details',
       _QuizView.attempt => 'Quiz Attempt',
       _QuizView.submitted => 'Submitted',
       _QuizView.review => 'Review',
@@ -214,6 +247,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
 
   Future<void> _openDetails(QuizSummary quiz) async {
     _stopAttemptTimer();
+    _cancelDraftSave();
     ref.read(quizzesControllerProvider.notifier).clearAttemptState();
 
     final detail =
@@ -265,6 +299,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     final timeLimitMinutes =
         attempt.timeLimitMinutes ?? selectedQuiz.timeLimitMinutes;
     _stopAttemptTimer();
+    _cancelDraftSave();
 
     setState(() {
       _questionIndex = 0;
@@ -272,8 +307,12 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
       _selectedOptionIds.clear();
       _textAnswers.clear();
       _markedQuestions.clear();
+      _revealedHints.clear();
+      _hydrateSavedAnswers(attempt);
       _attemptStartedAt = attempt.startedAt;
-      _saveStatus = 'Attempt started';
+      _saveStatus = attempt.resumed
+          ? 'Resumed â€” previous answers restored'
+          : 'Attempt started';
       _remainingTime =
           timeLimitMinutes == null ? null : Duration(minutes: timeLimitMinutes);
       _view = _QuizView.attempt;
@@ -300,6 +339,39 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     }
   }
 
+  void _hydrateSavedAnswers(QuizAttemptSession attempt) {
+    if (attempt.savedAnswers.isEmpty) {
+      return;
+    }
+
+    final questionIndexById = <String, int>{
+      for (var i = 0; i < attempt.questions.length; i++)
+        attempt.questions[i].id: i,
+    };
+
+    for (final saved in attempt.savedAnswers) {
+      final index = questionIndexById[saved.questionId];
+      if (index == null) {
+        continue;
+      }
+
+      final optionIds = <String>{
+        ...saved.selectedOptionIds,
+        if (saved.selectedOptionId != null) saved.selectedOptionId!,
+      };
+      if (optionIds.isNotEmpty) {
+        _selectedOptionIds[index] = optionIds;
+        _answeredQuestions.add(index);
+      }
+
+      final text = saved.submittedText?.trim();
+      if (text != null && text.isNotEmpty) {
+        _textAnswers[index] = text;
+        _answeredQuestions.add(index);
+      }
+    }
+  }
+
   Future<void> _submitAttempt({bool autoSubmitted = false}) async {
     final quiz = _selectedQuiz;
     final attempt = ref.read(quizzesControllerProvider).activeAttempt;
@@ -308,6 +380,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     }
 
     _stopAttemptTimer();
+    _cancelDraftSave();
 
     final answers = <QuizAnswerSubmission>[
       for (var index = 0; index < attempt.questions.length; index++)
@@ -355,17 +428,79 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   ) {
     final selectedIds = _selectedOptionIds[index] ?? const <String>{};
     final textAnswer = _textAnswers[index];
+    final isMultiSelect = question.questionTypeId == 41;
 
     return QuizAnswerSubmission(
       questionId: question.id,
-      selectedOptionId: selectedIds.isEmpty ? null : selectedIds.first,
+      selectedOptionId:
+          isMultiSelect || selectedIds.isEmpty ? null : selectedIds.first,
+      selectedOptionIds: isMultiSelect && selectedIds.isNotEmpty
+          ? selectedIds.toList(growable: false)
+          : null,
       submittedText: textAnswer,
     );
+  }
+
+  void _scheduleDraftSave() {
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = Timer(const Duration(milliseconds: 800), () {
+      unawaited(_saveDraftNow());
+    });
+  }
+
+  void _cancelDraftSave() {
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = null;
+  }
+
+  Future<void> _saveDraftNow() async {
+    final quiz = _selectedQuiz;
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    if (quiz == null || attempt == null || _view != _QuizView.attempt) {
+      return;
+    }
+
+    final answers = <QuizAnswerSubmission>[
+      for (var index = 0; index < attempt.questions.length; index++)
+        if (_answeredQuestions.contains(index))
+          _buildAnswerSubmission(attempt.questions[index], index),
+    ];
+    if (answers.isEmpty) {
+      return;
+    }
+
+    final startedAt = _attemptStartedAt ?? attempt.startedAt;
+    final timeSpentSeconds = DateTime.now().difference(startedAt).inSeconds;
+
+    setState(() => _saveStatus = 'Savingâ€¦');
+
+    final ok = await ref.read(quizzesControllerProvider.notifier).saveDraft(
+          quizId: quiz.id,
+          attemptId: attempt.attemptId,
+          answers: answers,
+          timeSpentSeconds: timeSpentSeconds,
+        );
+    if (!mounted || _view != _QuizView.attempt) {
+      return;
+    }
+
+    setState(() {
+      _saveStatus = ok
+          ? 'Draft saved'
+          : (ref.read(quizzesControllerProvider).actionError ??
+              'Draft save failed');
+    });
   }
 
   void _stopAttemptTimer() {
     _attemptTimer?.cancel();
     _attemptTimer = null;
+  }
+
+  void _showHint() {
+    setState(() {
+      _revealedHints.add(_questionIndex);
+    });
   }
 
   void _answerOptionQuestion(String optionId, int questionTypeId) {
@@ -393,8 +528,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _answeredQuestions.add(_questionIndex);
       }
 
-      _saveStatus = 'Answer saved locally';
+      _saveStatus = 'Savingâ€¦';
     });
+    _scheduleDraftSave();
   }
 
   void _answerTextQuestion(String answer) {
@@ -406,8 +542,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _textAnswers[_questionIndex] = answer;
         _answeredQuestions.add(_questionIndex);
       }
-      _saveStatus = 'Answer autosaved just now';
+      _saveStatus = 'Savingâ€¦';
     });
+    _scheduleDraftSave();
   }
 
   void _previousQuestion() {
@@ -417,18 +554,18 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     }
     setState(() {
       _questionIndex -= 1;
-      _saveStatus = 'Saved before moving';
     });
   }
 
   void _nextQuestion() {
     final quiz = _selectedQuiz;
-    if (quiz == null || _questionIndex >= quiz.questionCount - 1) {
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    final maxIndex = (attempt?.questions.length ?? quiz?.questionCount ?? 1) - 1;
+    if (quiz == null || _questionIndex >= maxIndex) {
       return;
     }
     setState(() {
       _questionIndex += 1;
-      _saveStatus = 'Saved before moving';
     });
   }
 
@@ -439,7 +576,6 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     }
     setState(() {
       _questionIndex = index;
-      _saveStatus = 'Saved before moving';
     });
   }
 
@@ -456,6 +592,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   void _goBack() {
     if (_view == _QuizView.attempt) {
       _stopAttemptTimer();
+      _cancelDraftSave();
+      unawaited(_saveDraftNow());
       _remainingTime = null;
     }
     setState(() {
@@ -470,7 +608,6 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     });
   }
 }
-
 class _QuizListView extends StatelessWidget {
   const _QuizListView({
     required this.state,
@@ -589,7 +726,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                 Expanded(
                   child: SizedBox(
                     height: 44,
-                    child: TextField(
+                    child: TextFormField(
                       controller: widget.searchController,
                       decoration: InputDecoration(
                         isDense: true,
@@ -602,7 +739,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                         ),
                       ),
                       textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => widget.onSearch(),
+                      onFieldSubmitted: (_) => widget.onSearch(),
                     ),
                   ),
                 ),
@@ -1264,10 +1401,13 @@ class _QuizAttemptView extends StatelessWidget {
     required this.answeredQuestions,
     required this.selectedOptionIds,
     required this.markedQuestions,
+    required this.revealedHints,
+    required this.textAnswers,
     required this.saveStatus,
     required this.remainingTime,
     required this.onOptionSelected,
     required this.onTextAnswerChanged,
+    required this.onShowHint,
     required this.onPrevious,
     required this.onNext,
     required this.onJumpToQuestion,
@@ -1281,10 +1421,13 @@ class _QuizAttemptView extends StatelessWidget {
   final Set<int> answeredQuestions;
   final Map<int, Set<String>> selectedOptionIds;
   final Set<int> markedQuestions;
+  final Set<int> revealedHints;
+  final Map<int, String> textAnswers;
   final String saveStatus;
   final Duration? remainingTime;
   final void Function(String optionId, int questionTypeId) onOptionSelected;
   final ValueChanged<String> onTextAnswerChanged;
+  final VoidCallback onShowHint;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final ValueChanged<int> onJumpToQuestion;
@@ -1381,7 +1524,11 @@ class _QuizAttemptView extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 if (question.options.isEmpty)
-                  TextField(
+                  TextFormField(
+                    key: ValueKey(
+                      'text-answer-$questionIndex-${textAnswers[questionIndex] ?? ''}',
+                    ),
+                    initialValue: textAnswers[questionIndex] ?? '',
                     minLines: question.questionTypeId == 44 ? 4 : 1,
                     maxLines: question.questionTypeId == 44 ? 6 : 1,
                     decoration: InputDecoration(
@@ -1412,21 +1559,20 @@ class _QuizAttemptView extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                   ],
-                if ((question.hint ?? '').isNotEmpty &&
-                    question.options.isEmpty) ...[
-                  const SizedBox(height: 10),
-                  _InfoChip(
-                    icon: Icons.lightbulb_outline,
-                    label: 'Hint: ${question.hint}',
-                  ),
-                ],
-                if (quiz.hintsAllowed) ...[
+                if (quiz.hintsAllowed &&
+                    (question.hint ?? '').isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.lightbulb_outline),
-                    label: const Text('Show Hint'),
-                  ),
+                  if (revealedHints.contains(questionIndex))
+                    _InfoChip(
+                      icon: Icons.lightbulb_outline,
+                      label: 'Hint: ${question.hint}',
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: onShowHint,
+                      icon: const Icon(Icons.lightbulb_outline),
+                      label: const Text('Show Hint'),
+                    ),
                 ],
               ],
             ),
@@ -1954,18 +2100,15 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
 
   Future<void> _pickHistoryDateRange() async {
     final now = DateTime.now();
-    final currentMonthStart = DateTime(now.year, now.month);
-    final defaultEnd = currentMonthStart.subtract(const Duration(days: 1));
-    final defaultStart = defaultEnd.subtract(const Duration(days: 30));
     final selected = await showDateRangePicker(
       context: context,
       initialDateRange: _dateRange ??
           DateTimeRange(
-            start: defaultStart,
-            end: defaultEnd,
+            start: now.subtract(const Duration(days: 30)),
+            end: now,
           ),
       firstDate: DateTime(now.year - 3),
-      lastDate: defaultEnd,
+      lastDate: now,
     );
 
     if (selected != null) {
@@ -1976,11 +2119,8 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
   bool _matchesHistoryFilters(QuizSummary quiz) {
     final studentStatus = studentQuizStatus(quiz);
     final date = _quizDate(quiz);
-    final currentMonthStart =
-        DateTime(DateTime.now().year, DateTime.now().month);
     final isAllowedHistoryStatus =
         studentStatus == 'Expired' || studentStatus == 'Completed';
-    final isBeforeCurrentMonth = date.isBefore(currentMonthStart);
     final query = _searchQuery.toLowerCase();
     final searchableText = '${quiz.title} ${quiz.topic}'.toLowerCase();
     final matchesSearch = query.isEmpty || searchableText.contains(query);
@@ -1991,7 +2131,6 @@ class _AttemptHistoryViewState extends State<_AttemptHistoryView> {
     final matchesDateRange = _matchesDateRange(date, _dateRange);
 
     return isAllowedHistoryStatus &&
-        isBeforeCurrentMonth &&
         matchesSearch &&
         matchesStatus &&
         matchesType &&
@@ -2043,7 +2182,7 @@ class _HistoryFilterPanelState extends State<_HistoryFilterPanel> {
                 Expanded(
                   child: SizedBox(
                     height: 44,
-                    child: TextField(
+                    child: TextFormField(
                       controller: widget.searchController,
                       decoration: InputDecoration(
                         isDense: true,

@@ -133,6 +133,79 @@ public sealed class QuizRepository : IQuizRepository
             .ToArray();
     }
 
+    public async Task<IReadOnlyList<PendingQuizApprovalItem>> ListPendingApprovalAsync(
+        int? schoolId,
+        CancellationToken cancellationToken)
+    {
+        var pendingIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+            _dbContext,
+            QuizLookupNames.QuizApprovalStatus,
+            QuizLookupNames.PendingApprovalStatusNames,
+            cancellationToken);
+
+        if (pendingIds.Count == 0)
+        {
+            return Array.Empty<PendingQuizApprovalItem>();
+        }
+
+        var parentPrivateTypeIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+            _dbContext,
+            QuizLookupNames.QuizType,
+            QuizLookupNames.ParentPrivateQuizTypeNames,
+            cancellationToken);
+
+        var query = _dbContext.Quizzes.AsNoTracking()
+            .Where(quiz =>
+                quiz.IsActive &&
+                !quiz.IsDeleted &&
+                pendingIds.Contains(quiz.ApprovalStatusId));
+
+        if (schoolId is not null)
+        {
+            query = query.Where(quiz => quiz.SchoolId == schoolId.Value);
+        }
+
+        if (parentPrivateTypeIds.Count > 0)
+        {
+            query = query.Where(quiz => !parentPrivateTypeIds.Contains(quiz.QuizTypeId));
+        }
+
+        var quizzes = await query
+            .OrderByDescending(quiz => quiz.ModifiedDate)
+            .ThenByDescending(quiz => quiz.Id)
+            .ToListAsync(cancellationToken);
+
+        if (quizzes.Count == 0)
+        {
+            return Array.Empty<PendingQuizApprovalItem>();
+        }
+
+        var lookupNames = await QuizQueryHelper.LoadLookupNamesAsync(_dbContext, quizzes, cancellationToken);
+        var approvalIds = quizzes.Select(quiz => quiz.ApprovalStatusId).Distinct().ToArray();
+        var approvalNames = await _dbContext.Lookups.AsNoTracking()
+            .Where(lookup => approvalIds.Contains(lookup.Id))
+            .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
+        var schools = await QuizQueryHelper.LoadSchoolNamesAsync(
+            _dbContext,
+            quizzes.Select(quiz => quiz.SchoolId).Distinct(),
+            cancellationToken);
+
+        return quizzes
+            .Select(quiz => new PendingQuizApprovalItem(
+                quiz.Id,
+                quiz.QuizTitle,
+                quiz.CreatedByName,
+                schools.GetValueOrDefault(quiz.SchoolId, "School"),
+                lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
+                lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
+                lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
+                approvalNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"),
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
+                quiz.TotalQuestions,
+                quiz.ModifiedDate ?? DateOnly.FromDateTime(DateTime.UtcNow)))
+            .ToArray();
+    }
+
     public async Task<QuizDetailItem?> GetDetailForStudentAsync(
         long quizId,
         long studentId,

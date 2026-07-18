@@ -1,19 +1,24 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/app/layouts/AppLayout";
 import { AdminRoute } from "@/features/admin/presentation/components/AdminRoute";
 import { AdminOverviewPage } from "@/features/admin/presentation/pages/AdminOverviewPage";
 import { AdminQuizApprovalsPage } from "@/features/admin/presentation/pages/AdminQuizApprovalsPage";
 import { PendingRegistrationsPage } from "@/features/admin/presentation/pages/PendingRegistrationsPage";
+import { PendingSchoolChangesPage } from "@/features/admin/presentation/pages/PendingSchoolChangesPage";
 import {
   GuestRoute,
   ProtectedRoute,
 } from "@/features/authentication/presentation/components/RouteGuards";
+import { AccountLockedPage } from "@/features/authentication/presentation/pages/AccountLockedPage";
+import { AccountPage } from "@/features/authentication/presentation/pages/AccountPage";
 import { ForgotPasswordPage } from "@/features/authentication/presentation/pages/ForgotPasswordPage";
 import { LoginPage } from "@/features/authentication/presentation/pages/LoginPage";
 import { RequestAccessPage } from "@/features/authentication/presentation/pages/RequestAccessPage";
 import { DashboardPage } from "@/features/dashboard/presentation/pages/DashboardPage";
 import { DirectoryOverviewPage } from "@/features/directory/presentation/pages/DirectoryOverviewPage";
+import { DirectoryCampusAdminsPage } from "@/features/directory/presentation/pages/DirectoryCampusAdminsPage";
 import { DirectoryParentsPage } from "@/features/directory/presentation/pages/DirectoryParentsPage";
+import { DirectorySchoolAdminsPage } from "@/features/directory/presentation/pages/DirectorySchoolAdminsPage";
 import { DirectorySchoolsPage } from "@/features/directory/presentation/pages/DirectorySchoolsPage";
 import { DirectoryStudentsPage } from "@/features/directory/presentation/pages/DirectoryStudentsPage";
 import { DirectoryTeachersPage } from "@/features/directory/presentation/pages/DirectoryTeachersPage";
@@ -25,6 +30,7 @@ import { ParentChildResultPage } from "@/features/parent/presentation/pages/Pare
 import { ParentChildrenPage } from "@/features/parent/presentation/pages/ParentChildrenPage";
 import { QuestionManageRoute } from "@/features/questions/presentation/components/QuestionManageRoute";
 import { QuestionCreatePage } from "@/features/questions/presentation/pages/QuestionCreatePage";
+import { QuestionSessionReviewPage } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
 import { QuestionDetailPage } from "@/features/questions/presentation/pages/QuestionDetailPage";
 import { QuestionEditPage } from "@/features/questions/presentation/pages/QuestionEditPage";
 import { QuestionsPage } from "@/features/questions/presentation/pages/QuestionsPage";
@@ -54,12 +60,14 @@ export function AppRouter() {
 
           <Route element={<GuestRoute />}>
             <Route path="login" element={<LoginPage />} />
+            <Route path="account-locked" element={<AccountLockedPage />} />
             <Route path="forgot-password" element={<ForgotPasswordPage />} />
             <Route path="request-access" element={<RequestAccessPage />} />
           </Route>
 
           <Route element={<ProtectedRoute />}>
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="account" element={<AccountPage />} />
 
             <Route element={<AdminRoute />}>
               <Route path="admin" element={<AdminOverviewPage />} />
@@ -71,7 +79,15 @@ export function AppRouter() {
                 path="admin/quiz-approvals"
                 element={<AdminQuizApprovalsPage />}
               />
+              <Route
+                path="admin/school-changes"
+                element={<Navigate to="/admin/directory/school-changes" replace />}
+              />
               <Route path="admin/directory" element={<DirectoryOverviewPage />} />
+              <Route
+                path="admin/directory/school-changes"
+                element={<PendingSchoolChangesPage />}
+              />
               <Route
                 path="admin/directory/schools"
                 element={<DirectorySchoolsPage />}
@@ -88,6 +104,14 @@ export function AppRouter() {
                 path="admin/directory/parents"
                 element={<DirectoryParentsPage />}
               />
+              <Route
+                path="admin/directory/school-admins"
+                element={<DirectorySchoolAdminsPage />}
+              />
+              <Route
+                path="admin/directory/campus-admins"
+                element={<DirectoryCampusAdminsPage />}
+              />
             </Route>
 
             <Route element={<ReportsRoute />}>
@@ -97,6 +121,10 @@ export function AppRouter() {
             <Route element={<QuestionManageRoute />}>
               <Route path="questions" element={<QuestionsPage />} />
               <Route path="questions/new" element={<QuestionCreatePage />} />
+              <Route
+                path="questions/new/review"
+                element={<QuestionSessionReviewPage />}
+              />
               <Route path="questions/:questionId" element={<QuestionDetailPage />} />
               <Route
                 path="questions/:questionId/edit"

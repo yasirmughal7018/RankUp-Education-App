@@ -1,33 +1,57 @@
 import { useState } from "react";
 import { PageHeader } from "@/core/components/PageHeader";
-import type { QuizSummary } from "@/features/quizzes/domain/quizTypes";
+import type { PendingQuizApproval } from "@/features/quizzes/domain/quizTypes";
 import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
   useApproveQuizMutation,
-  useQuizzesQuery,
+  usePendingQuizApprovalsQuery,
+  useRejectQuizMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
 export function AdminQuizApprovalsPage() {
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
-    useQuizzesQuery();
+    usePendingQuizApprovalsQuery();
   const approveQuiz = useApproveQuizMutation();
+  const rejectQuiz = useRejectQuizMutation();
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [rejectingQuizId, setRejectingQuizId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
-  async function handleApprove(quiz: QuizSummary) {
+  const isSubmitting = approveQuiz.isPending || rejectQuiz.isPending;
+
+  async function handleApprove(quiz: PendingQuizApproval) {
     setActionError(null);
     setSuccessMessage(null);
 
     try {
-      await approveQuiz.mutateAsync(quiz.id);
+      await approveQuiz.mutateAsync(quiz.quizId);
       setSuccessMessage(`"${quiz.title}" approved.`);
     } catch (caught) {
       const apiError = caught as { message?: string };
       setActionError(apiError.message || "Unable to approve quiz.");
+    }
+  }
+
+  async function handleReject(quiz: PendingQuizApproval) {
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      await rejectQuiz.mutateAsync({
+        quizId: quiz.quizId,
+        reason: rejectReason.trim() || undefined,
+      });
+      setSuccessMessage(`"${quiz.title}" rejected.`);
+      setRejectingQuizId(null);
+      setRejectReason("");
+    } catch (caught) {
+      const apiError = caught as { message?: string };
+      setActionError(apiError.message || "Unable to reject quiz.");
     }
   }
 
@@ -40,7 +64,7 @@ export function AdminQuizApprovalsPage() {
           <button
             type="button"
             onClick={() => void refetch()}
-            disabled={isFetching || approveQuiz.isPending}
+            disabled={isFetching || isSubmitting}
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
           >
             Refresh
@@ -67,7 +91,7 @@ export function AdminQuizApprovalsPage() {
           </div>
         ) : quizzes.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No quizzes found for approval.
+            No quizzes pending approval.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -81,6 +105,9 @@ export function AdminQuizApprovalsPage() {
                     Created by
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    School
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Status
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-slate-600">
@@ -90,26 +117,83 @@ export function AdminQuizApprovalsPage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {quizzes.map((quiz) => (
-                  <tr key={quiz.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {quiz.title}
+                  <tr key={quiz.quizId} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-900">{quiz.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {quiz.subjectName} · {quiz.gradeName} ·{" "}
+                        {quiz.totalQuestions} questions
+                      </p>
                     </td>
                     <td className="px-4 py-3 text-slate-700">{quiz.createdBy}</td>
+                    <td className="px-4 py-3 text-slate-700">{quiz.schoolName}</td>
                     <td className="px-4 py-3">
                       <StatusBadge
-                        label={quiz.status}
-                        tone={getQuestionStatusTone(quiz.status, true)}
+                        label={quiz.approvalStatus || quiz.lifecycleStatus}
+                        tone={getQuestionStatusTone(
+                          quiz.approvalStatus || quiz.lifecycleStatus,
+                          true,
+                        )}
                       />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        disabled={approveQuiz.isPending}
-                        onClick={() => void handleApprove(quiz)}
-                        className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
-                      >
-                        Approve
-                      </button>
+                      {rejectingQuizId === quiz.quizId ? (
+                        <div className="ml-auto flex max-w-xs flex-col items-stretch gap-2">
+                          <input
+                            type="text"
+                            value={rejectReason}
+                            disabled={isSubmitting}
+                            onChange={(event) =>
+                              setRejectReason(event.target.value)
+                            }
+                            placeholder="Optional reason"
+                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => {
+                                setRejectingQuizId(null);
+                                setRejectReason("");
+                              }}
+                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => void handleReject(quiz)}
+                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+                            >
+                              Confirm reject
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => void handleApprove(quiz)}
+                            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => {
+                              setRejectingQuizId(quiz.quizId);
+                              setRejectReason("");
+                            }}
+                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

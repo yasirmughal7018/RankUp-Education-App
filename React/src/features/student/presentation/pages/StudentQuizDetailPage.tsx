@@ -1,9 +1,10 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+﻿import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
+import { hasInProgressAttempt } from "@/features/student/domain/studentQuizTypes";
 import {
   useStartQuizAttemptMutation,
   useStudentQuizDetailQuery,
@@ -35,10 +36,38 @@ export function StudentQuizDetailPage() {
         `rankup-quiz-attempt-${attempt.attemptId}`,
         JSON.stringify(attempt),
       );
-      sessionStorage.setItem(
-        `rankup-quiz-started-${attempt.attemptId}`,
-        String(Date.now()),
-      );
+
+      if (!attempt.resumed) {
+        sessionStorage.setItem(
+          `rankup-quiz-started-${attempt.attemptId}`,
+          String(Date.now()),
+        );
+      } else if (
+        !sessionStorage.getItem(`rankup-quiz-started-${attempt.attemptId}`)
+      ) {
+        const startedMs = Date.parse(attempt.startedAt);
+        sessionStorage.setItem(
+          `rankup-quiz-started-${attempt.attemptId}`,
+          String(Number.isNaN(startedMs) ? Date.now() : startedMs),
+        );
+      }
+
+      if (attempt.savedAnswers.length > 0) {
+        const hydrated = Object.fromEntries(
+          attempt.savedAnswers.map((answer) => [
+            answer.questionId,
+            {
+              selectedOptionId: answer.selectedOptionId,
+              submittedText: answer.submittedText ?? "",
+            },
+          ]),
+        );
+        sessionStorage.setItem(
+          `rankup-quiz-answers-${attempt.attemptId}`,
+          JSON.stringify(hydrated),
+        );
+      }
+
       navigate(`/student/quizzes/${numericQuizId}/attempts/${attempt.attemptId}`, {
         state: { attempt },
       });
@@ -76,6 +105,9 @@ export function StudentQuizDetailPage() {
     quiz.attemptLimit > 0
       ? Math.max(quiz.attemptLimit - quiz.attemptsUsed, 0)
       : null;
+  const continueQuiz = hasInProgressAttempt(quiz);
+  const canStart =
+    continueQuiz || attemptsRemaining === null || attemptsRemaining > 0;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -171,11 +203,17 @@ export function StudentQuizDetailPage() {
 
       <button
         type="button"
-        disabled={startAttempt.isPending || attemptsRemaining === 0}
+        disabled={startAttempt.isPending || !canStart}
         onClick={() => void handleStartAttempt()}
         className="w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
       >
-        {startAttempt.isPending ? "Starting attempt..." : "Start quiz"}
+        {startAttempt.isPending
+          ? continueQuiz
+            ? "Resuming..."
+            : "Starting attempt..."
+          : continueQuiz
+            ? "Continue quiz"
+            : "Start quiz"}
       </button>
     </div>
   );

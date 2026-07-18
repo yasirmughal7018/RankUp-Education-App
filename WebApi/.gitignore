@@ -3,3 +3,10 @@ obj/
 **/bin/
 **/obj/
 *.user
+
+# Local secrets / env
+.env
+.env.*
+!.env.example
+secrets.json
+**/secrets.json

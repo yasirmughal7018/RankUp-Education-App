@@ -106,6 +106,20 @@ class QuizDetail extends QuizSummary {
   final bool shuffleOptions;
 }
 
+class SavedQuizAnswer {
+  const SavedQuizAnswer({
+    required this.questionId,
+    this.selectedOptionId,
+    this.selectedOptionIds = const [],
+    this.submittedText,
+  });
+
+  final String questionId;
+  final String? selectedOptionId;
+  final List<String> selectedOptionIds;
+  final String? submittedText;
+}
+
 class QuizAttemptSession {
   const QuizAttemptSession({
     required this.attemptId,
@@ -114,6 +128,8 @@ class QuizAttemptSession {
     required this.startedAt,
     required this.questions,
     this.timeLimitMinutes,
+    this.resumed = false,
+    this.savedAnswers = const [],
   });
 
   final String attemptId;
@@ -122,6 +138,8 @@ class QuizAttemptSession {
   final DateTime startedAt;
   final List<QuizQuestion> questions;
   final int? timeLimitMinutes;
+  final bool resumed;
+  final List<SavedQuizAnswer> savedAnswers;
 }
 
 class QuizResultQuestion {

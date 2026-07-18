@@ -48,10 +48,16 @@ dotnet run --project WebApi/src/RankUpEducation.Api --launch-profile http
 Optional overrides:
 
 ```powershell
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5255/api --dart-define=USE_MOCKS=false
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5255/api
 ```
 
-Supported values: `development`, `test`, `staging`, and `production`.
+To enable offline mock auth instead of the API:
+
+```powershell
+flutter run --dart-define=USE_MOCKS=true
+```
+
+Supported `APP_ENV` values: `development`, `test`, `staging`, and `production`.
 
 ## Mock Login
 

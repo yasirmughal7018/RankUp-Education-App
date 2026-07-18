@@ -28,6 +28,7 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(question => question.CreatedDate).HasColumnName("created_date");
         builder.Property(question => question.ModifiedDate).HasColumnName("modified_date");
         builder.Property(question => question.IsAiApproved).HasColumnName("is_ai_approved").HasDefaultValue(false);
+        builder.Property(question => question.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(1000);
         builder.HasIndex(question => new { question.ClassId, question.SubjectId, question.TopicId })
             .HasDatabaseName("idx_questions_lookup_ids");
         builder.Navigation(question => question.Options).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -64,8 +65,10 @@ public sealed class QuestionAcceptedAnswerConfiguration : IEntityTypeConfigurati
         builder.Property(answer => answer.AllowPartialMatch).HasColumnName("allow_partial_match").HasDefaultValue(false);
         builder.Property(answer => answer.NormalizedAnswer).HasColumnName("normalized_answer").HasMaxLength(1000).IsRequired();
         builder.Property(answer => answer.MinimumLength).HasColumnName("minimum_length").HasDefaultValue((short)0);
-        builder.Property(answer => answer.MaximumLength).HasColumnName("maximum_length").HasDefaultValue(1000L);
+        builder.Property(answer => answer.MaximumLength).HasColumnName("maximum_length").HasDefaultValue((short)1000);
         builder.Property(answer => answer.AiReview).HasColumnName("ai_review").HasMaxLength(1000);
         builder.Property(answer => answer.TeacherReview).HasColumnName("teacher_review").HasMaxLength(1000);
+        builder.Property(answer => answer.AllowAiReview).HasColumnName("allow_ai_review").HasDefaultValue(false);
+        builder.Property(answer => answer.AllowTeacherReview).HasColumnName("allow_teacher_review").HasDefaultValue(false);
     }
 }

@@ -3,15 +3,24 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
-import type { QuestionSummary } from "@/features/questions/domain/questionTypes";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import {
+  canMutateQuestion,
+  type QuestionSummary,
+} from "@/features/questions/domain/questionTypes";
 import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
   useDeleteQuestionMutation,
+  useImportQuestionsMutation,
   useQuestionsQuery,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
+import {
+  getQuestionImportTemplateUrl,
+} from "@/features/questions/data/questionApi";
+import { readStoredSession } from "@/core/auth/tokenStorage";
 
 function truncateText(value: string, maxLength = 90): string {
   if (value.length <= maxLength) {
@@ -22,16 +31,88 @@ function truncateText(value: string, maxLength = 90): string {
 }
 
 export function QuestionsPage() {
+  const { user } = useAuth();
   const [pendingOnly, setPendingOnly] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
   const [subjectId, setSubjectId] = useState<number | "">("");
   const [classId, setClassId] = useState<number | "">("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<
+    Array<{ rowNumber: number; message: string }>
+  >([]);
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+  const [lastDryRunOk, setLastDryRunOk] = useState(false);
 
   const { data: questions = [], isLoading, error, refetch, isFetching } =
     useQuestionsQuery({ pendingOnly, activeFilter, subjectId, classId });
 
   const deleteQuestion = useDeleteQuestionMutation();
+  const importQuestions = useImportQuestionsMutation();
+
+  function canMutateRow(question: QuestionSummary): boolean {
+    if (!user) {
+      return false;
+    }
+
+    return canMutateQuestion({
+      role: user.role,
+      userId: user.id,
+      createdBy: question.createdBy,
+      status: question.status,
+    });
+  }
+
+  async function handleImport(file: File | null, dryRun: boolean) {
+    if (!file) {
+      return;
+    }
+
+    setActionError(null);
+    setImportMessage(null);
+    setImportErrors([]);
+    setPendingImportFile(file);
+    setLastDryRunOk(false);
+
+    try {
+      const result = await importQuestions.mutateAsync({ file, dryRun });
+      setImportErrors(result.errors);
+
+      if (dryRun) {
+        setImportMessage(
+          result.errorCount === 0
+            ? `Dry run OK — ${file.name} is ready to import (no row errors).`
+            : `Dry run found ${result.errorCount} row error(s). Fix the file or import anyway to skip bad rows.`,
+        );
+        setLastDryRunOk(result.errorCount === 0);
+        if (result.errors.length > 0) {
+          setActionError(
+            result.errors
+              .map((item) => `Row ${item.rowNumber}: ${item.message}`)
+              .join("\n"),
+          );
+        }
+        return;
+      }
+
+      setImportMessage(
+        `Imported ${result.createdCount} draft question(s). ${result.errorCount} row error(s).`,
+      );
+      setLastDryRunOk(false);
+      setPendingImportFile(null);
+      if (result.errors.length > 0) {
+        setActionError(
+          result.errors
+            .map((item) => `Row ${item.rowNumber}: ${item.message}`)
+            .join("\n"),
+        );
+      }
+    } catch (caught) {
+      const apiError = caught as { message?: string };
+      setActionError(apiError.message || "Unable to import questions.");
+      setLastDryRunOk(false);
+    }
+  }
 
   async function handleDelete(question: QuestionSummary) {
     const confirmed = window.confirm(
@@ -58,7 +139,7 @@ export function QuestionsPage() {
         title="Question bank"
         description="Create, review, and manage questions for quizzes and assessments."
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void refetch()}
@@ -67,6 +148,68 @@ export function QuestionsPage() {
             >
               Refresh
             </button>
+            <a
+              href={getQuestionImportTemplateUrl()}
+              onClick={(event) => {
+                event.preventDefault();
+                const token = readStoredSession()?.accessToken;
+                void (async () => {
+                  const response = await fetch(getQuestionImportTemplateUrl(), {
+                    headers: token
+                      ? { Authorization: `Bearer ${token}` }
+                      : undefined,
+                  });
+                  const blob = await response.blob();
+                  const url = URL.createObjectURL(blob);
+                  const anchor = document.createElement("a");
+                  anchor.href = url;
+                  anchor.download = "rankup-questions-import-template.xlsx";
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                })();
+              }}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Import template
+            </a>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+              {importQuestions.isPending ? "Working..." : "Dry run Excel"}
+              <input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                disabled={importQuestions.isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  void handleImport(file, true);
+                }}
+              />
+            </label>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+              {importQuestions.isPending ? "Importing..." : "Import Excel"}
+              <input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                disabled={importQuestions.isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  void handleImport(file, false);
+                }}
+              />
+            </label>
+            {pendingImportFile && lastDryRunOk ? (
+              <button
+                type="button"
+                disabled={importQuestions.isPending}
+                onClick={() => void handleImport(pendingImportFile, false)}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-70"
+              >
+                Confirm import
+              </button>
+            ) : null}
             <Link
               to="/questions/new"
               className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
@@ -122,8 +265,29 @@ export function QuestionsPage() {
       </section>
 
       {error || actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-4 whitespace-pre-wrap rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error?.message ?? actionError}
+        </div>
+      ) : null}
+
+      {importMessage ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {importMessage}
+        </div>
+      ) : null}
+
+      {importErrors.length > 0 ? (
+        <div className="mb-4 max-h-48 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="mb-2 font-semibold">
+            Import row errors ({importErrors.length})
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            {importErrors.map((item) => (
+              <li key={`${item.rowNumber}-${item.message}`}>
+                Row {item.rowNumber}: {item.message}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
@@ -194,19 +358,29 @@ export function QuestionsPage() {
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <Link
-                          to={`/questions/${question.questionId}/edit`}
+                          to={`/questions/${question.questionId}`}
                           className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                         >
-                          Edit
+                          View
                         </Link>
-                        <button
-                          type="button"
-                          disabled={deleteQuestion.isPending}
-                          onClick={() => void handleDelete(question)}
-                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                        >
-                          Delete
-                        </button>
+                        {canMutateRow(question) ? (
+                          <>
+                            <Link
+                              to={`/questions/${question.questionId}/edit`}
+                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                            >
+                              Edit
+                            </Link>
+                            <button
+                              type="button"
+                              disabled={deleteQuestion.isPending}
+                              onClick={() => void handleDelete(question)}
+                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

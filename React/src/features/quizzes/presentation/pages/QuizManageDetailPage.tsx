@@ -3,7 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { AddQuizQuestionDialog } from "@/features/quizzes/presentation/components/AddQuizQuestionDialog";
 import { AssignQuizDialog } from "@/features/quizzes/presentation/components/AssignQuizDialog";
-import { isDraftQuiz } from "@/features/quizzes/domain/quizTypes";
+import {
+  isDraftQuiz,
+  type QuizQuestionItem,
+} from "@/features/quizzes/domain/quizTypes";
 import {
   getQuestionStatusTone,
   StatusBadge,
@@ -13,6 +16,7 @@ import {
   useAllowRetryMutation,
   useArchiveQuizMutation,
   useAssignQuizMutation,
+  useAttachBankQuestionMutation,
   useCancelQuizAssignmentsMutation,
   useDeleteQuizMutation,
   useDuplicateQuizMutation,
@@ -20,6 +24,7 @@ import {
   usePublishQuizMutation,
   useQuizAssignmentsQuery,
   useRemoveQuizQuestionMutation,
+  useUpdateQuizQuestionMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
 function formatDateTime(value: string): string {
@@ -58,13 +63,18 @@ export function QuizManageDetailPage() {
   const archiveQuiz = useArchiveQuizMutation(numericQuizId);
   const removeQuestion = useRemoveQuizQuestionMutation(numericQuizId);
   const addQuestion = useAddQuizQuestionMutation(numericQuizId);
+  const updateQuestion = useUpdateQuizQuestionMutation(numericQuizId);
+  const attachBankQuestion = useAttachBankQuestionMutation(numericQuizId);
   const assignQuiz = useAssignQuizMutation(numericQuizId);
   const cancelAssignments = useCancelQuizAssignmentsMutation(numericQuizId);
   const allowRetry = useAllowRetryMutation(numericQuizId);
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [showQuestionDialog, setShowQuestionDialog] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<QuizQuestionItem | null>(
+    null,
+  );
   const [showAssignDialog, setShowAssignDialog] = useState(false);
 
   const isSubmitting =
@@ -74,6 +84,8 @@ export function QuizManageDetailPage() {
     archiveQuiz.isPending ||
     removeQuestion.isPending ||
     addQuestion.isPending ||
+    updateQuestion.isPending ||
+    attachBankQuestion.isPending ||
     assignQuiz.isPending ||
     cancelAssignments.isPending ||
     allowRetry.isPending;
@@ -91,6 +103,21 @@ export function QuizManageDetailPage() {
       const apiError = caught as { message?: string };
       setActionError(apiError.message || "Action failed.");
     }
+  }
+
+  function openAddQuestion() {
+    setEditingQuestion(null);
+    setShowQuestionDialog(true);
+  }
+
+  function openEditQuestion(question: QuizQuestionItem) {
+    setEditingQuestion(question);
+    setShowQuestionDialog(true);
+  }
+
+  function closeQuestionDialog() {
+    setShowQuestionDialog(false);
+    setEditingQuestion(null);
   }
 
   if (isLoading) {
@@ -214,7 +241,7 @@ export function QuizManageDetailPage() {
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={() => setShowAddQuestion(true)}
+              onClick={openAddQuestion}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
             >
               Add question
@@ -328,19 +355,29 @@ export function QuizManageDetailPage() {
                   </div>
 
                   {draft ? (
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() =>
-                        void runAction(
-                          () => removeQuestion.mutateAsync(question.questionId),
-                          "Question removed.",
-                        )
-                      }
-                      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => openEditQuestion(question)}
+                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() =>
+                          void runAction(
+                            () => removeQuestion.mutateAsync(question.questionId),
+                            "Question removed.",
+                          )
+                        }
+                        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               </article>
@@ -426,28 +463,70 @@ export function QuizManageDetailPage() {
         </section>
       ) : null}
 
-      {showAddQuestion ? (
+      {showQuestionDialog ? (
         <AddQuizQuestionDialog
-          isSubmitting={addQuestion.isPending}
-          onClose={() => setShowAddQuestion(false)}
+          initialQuestion={editingQuestion}
+          classId={quiz.classId}
+          subjectId={quiz.subjectId}
+          excludeQuestionIds={quiz.questions.map((item) => item.questionId)}
+          title={editingQuestion ? "Edit quiz question" : undefined}
+          submitLabel={editingQuestion ? "Save changes" : undefined}
+          isSubmitting={
+            addQuestion.isPending ||
+            updateQuestion.isPending ||
+            attachBankQuestion.isPending
+          }
+          onClose={closeQuestionDialog}
           onSubmit={async (input) => {
             setActionError(null);
             try {
-              await addQuestion.mutateAsync(input);
-              setShowAddQuestion(false);
-              setSuccessMessage("Question added to quiz.");
+              if (editingQuestion) {
+                await updateQuestion.mutateAsync({
+                  questionId: editingQuestion.questionId,
+                  input,
+                });
+                setSuccessMessage("Question updated.");
+              } else {
+                await addQuestion.mutateAsync(input);
+                setSuccessMessage("Question added to quiz.");
+              }
+              closeQuestionDialog();
             } catch (caught) {
               const apiError = caught as { message?: string };
-              setActionError(apiError.message || "Unable to add question.");
+              setActionError(
+                apiError.message ||
+                  (editingQuestion
+                    ? "Unable to update question."
+                    : "Unable to add question."),
+              );
               throw caught;
             }
           }}
+          onAttachFromBank={
+            editingQuestion
+              ? undefined
+              : async (input) => {
+                  setActionError(null);
+                  try {
+                    await attachBankQuestion.mutateAsync(input);
+                    closeQuestionDialog();
+                    setSuccessMessage("Question attached from bank.");
+                  } catch (caught) {
+                    const apiError = caught as { message?: string };
+                    setActionError(
+                      apiError.message || "Unable to attach bank question.",
+                    );
+                    throw caught;
+                  }
+                }
+          }
         />
       ) : null}
 
       {showAssignDialog ? (
         <AssignQuizDialog
           isSubmitting={assignQuiz.isPending}
+          defaultGrade={quiz.grade}
           onClose={() => setShowAssignDialog(false)}
           onSubmit={async (input) => {
             setActionError(null);

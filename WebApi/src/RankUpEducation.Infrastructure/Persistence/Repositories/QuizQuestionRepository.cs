@@ -44,6 +44,10 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             .Where(option => questionIds.Contains(option.QuestionId) && option.IsActive)
             .ToListAsync(cancellationToken);
 
+        var acceptedAnswers = await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+            .Where(answer => questionIds.Contains(answer.QuestionId))
+            .ToListAsync(cancellationToken);
+
         var lookupIds = rows.Select(row => row.QuestionTypeId).Distinct().ToArray();
 
         var lookupNames = await _dbContext.Lookups.AsNoTracking()
@@ -65,6 +69,17 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     option.OptionText,
                     option.OptionImageUrl,
                     option.IsCorrect))
+                .ToArray(),
+            acceptedAnswers
+                .Where(answer => answer.QuestionId == row.QuestionId)
+                .Select(answer => new QuestionAcceptedAnswerScoreItem(
+                    answer.Id,
+                    answer.AnswerText,
+                    answer.IsCaseSensitive,
+                    answer.AllowPartialMatch,
+                    answer.NormalizedAnswer,
+                    answer.MinimumLength,
+                    answer.MaximumLength))
                 .ToArray())).ToArray();
     }
 
@@ -142,6 +157,10 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             .Where(option => questionIds.Contains(option.QuestionId) && option.IsActive)
             .ToListAsync(cancellationToken);
 
+        var acceptedAnswers = await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+            .Where(answer => questionIds.Contains(answer.QuestionId))
+            .ToListAsync(cancellationToken);
+
         return rows.Select(row => new QuizQuestionCopyItem(
             row.Id,
             row.QuestionText,
@@ -162,6 +181,17 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     option.OptionText,
                     option.OptionImageUrl,
                     option.IsCorrect))
+                .ToArray(),
+            acceptedAnswers
+                .Where(answer => answer.QuestionId == row.Id)
+                .Select(answer => new QuestionAcceptedAnswerScoreItem(
+                    answer.Id,
+                    answer.AnswerText,
+                    answer.IsCaseSensitive,
+                    answer.AllowPartialMatch,
+                    answer.NormalizedAnswer,
+                    answer.MinimumLength,
+                    answer.MaximumLength))
                 .ToArray())).ToArray();
     }
 }

@@ -104,7 +104,7 @@ public sealed class ReportService : IReportService
             return;
         }
 
-        if (role != UserRole.SuperAdmin)
+        if (role != UserRole.PortalAdmin)
         {
             throw new ForbiddenAppException("You do not have access to student quiz history.");
         }
@@ -113,7 +113,7 @@ public sealed class ReportService : IReportService
     private void EnsureAdminOrTeacher()
     {
         var role = ParseRole();
-        if (role is not (UserRole.SuperAdmin or UserRole.SchoolAdmin or UserRole.Teacher))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher))
         {
             throw new ForbiddenAppException("You do not have access to reports.");
         }

@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
@@ -140,7 +141,7 @@ public sealed class QuizReviewService : IQuizReviewService
                     markRequest.Feedback ?? string.Empty,
                     cancellationToken);
             }
-            else if (!string.IsNullOrWhiteSpace(markRequest.Feedback))
+            else if (markRequest.Feedback.HasTrimmedText())
             {
                 await UpsertReviewFeedbackAsync(
                     scope,
@@ -184,7 +185,7 @@ public sealed class QuizReviewService : IQuizReviewService
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         var unreviewedSubjective = reviewDetail.Questions
-            .Where(question => question.RequiresReview && !string.IsNullOrWhiteSpace(question.SubmittedText))
+            .Where(question => question.RequiresReview && question.SubmittedText.HasTrimmedText())
             .Any(question => question.QuizReviewId is null);
 
         if (unreviewedSubjective)

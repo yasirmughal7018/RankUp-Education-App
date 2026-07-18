@@ -12,7 +12,7 @@ import { canManageQuizzes } from "@/features/quizzes/domain/quizTypes";
 import { canTakeStudentQuizzes } from "@/features/student/domain/studentQuizTypes";
 
 const roleModules: Record<UserRole, string[]> = {
-  SuperAdmin: [
+  PortalAdmin: [
     "Approve registration requests",
     "Approve questions and quizzes",
     "Manage the school directory",
@@ -23,6 +23,11 @@ const roleModules: Record<UserRole, string[]> = {
     "Approve teacher quizzes",
     "Manage the school directory",
     "View quiz reports and rankings",
+  ],
+  CampusAdmin: [
+    "Approve account requests",
+    "Manage campus directory (students, teachers, parents)",
+    "Approve teacher quizzes",
   ],
   Teacher: [
     "Create and assign quizzes",
@@ -44,12 +49,19 @@ const roleModules: Record<UserRole, string[]> = {
 };
 
 function quickLinksForRole(role: UserRole): Array<{ label: string; href: string }> {
-  if (isAdminRole(role)) {
+  if (role === "PortalAdmin" || role === "SchoolAdmin") {
     return [
       { label: "Registrations", href: "/admin/registrations" },
       { label: "Directory", href: "/admin/directory" },
       { label: "Reports", href: "/reports" },
       { label: "Question bank", href: "/questions" },
+    ];
+  }
+
+  if (role === "CampusAdmin") {
+    return [
+      { label: "Registrations", href: "/admin/registrations" },
+      { label: "Directory", href: "/admin/directory" },
     ];
   }
 
@@ -98,7 +110,7 @@ export function DashboardPage() {
               to="/admin/registrations"
               className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
             >
-              Review registrations
+              Registration approvals
             </Link>
           ) : canManageQuizzes(user.role) ? (
             <Link

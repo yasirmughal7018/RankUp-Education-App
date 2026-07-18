@@ -1,5 +1,8 @@
-using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Domain.Auth;
+using RankUpEducation.Domain.Parents;
+using RankUpEducation.Domain.Students;
+using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Application.Directory;
 
@@ -42,22 +45,36 @@ public interface IDirectoryRepository
 
     Task<bool> SchoolExistsAsync(long schoolId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<DirectoryStudentResponse>> ListStudentsAsync(
+    Task<(IReadOnlyList<DirectoryStudentResponse> Items, int TotalCount)> ListStudentsAsync(
         int? schoolId,
         int? campusId,
         short? grade,
         string? search,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<DirectoryTeacherResponse>> ListTeachersAsync(
+    Task<(IReadOnlyList<DirectoryTeacherResponse> Items, int TotalCount)> ListTeachersAsync(
         int? schoolId,
         int? campusId,
         string? search,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<DirectoryParentResponse>> ListParentsAsync(
+    Task<(IReadOnlyList<DirectoryParentResponse> Items, int TotalCount)> ListParentsAsync(
         string? search,
+        int pageNumber,
+        int pageSize,
         CancellationToken cancellationToken);
+
+    Task<Student?> GetStudentEntityAsync(long studentId, CancellationToken cancellationToken);
+
+    Task<Teacher?> GetTeacherEntityAsync(long teacherId, CancellationToken cancellationToken);
+
+    Task<Parent?> GetParentEntityAsync(long parentId, CancellationToken cancellationToken);
+
+    Task SetUserActiveAsync(long userId, bool isActive, CancellationToken cancellationToken);
 
     Task LinkParentStudentAsync(
         long parentId,
@@ -70,4 +87,31 @@ public interface IDirectoryRepository
     Task<bool> ParentExistsAsync(long parentId, CancellationToken cancellationToken);
 
     Task<bool> StudentExistsAsync(long studentId, CancellationToken cancellationToken);
+
+    Task<int> CountParentStudentLinksAsync(long parentId, CancellationToken cancellationToken);
+
+    Task<(IReadOnlyList<DirectorySchoolAdminResponse> Items, int TotalCount)> ListSchoolAdminsAsync(
+        int? schoolId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<(IReadOnlyList<DirectoryCampusAdminResponse> Items, int TotalCount)> ListCampusAdminsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectorySchoolStatusCounts> CountSchoolsByStatusAsync(
+        int? schoolId,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryStatusCounts> CountUsersByStatusAsync(
+        UserRole role,
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken);
 }

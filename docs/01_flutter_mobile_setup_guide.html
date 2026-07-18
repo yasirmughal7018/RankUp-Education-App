@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flutter Mobile App Setup Guide</title>
+  <style>
+    :root {
+      --ink: #1f2937;
+      --muted: #5b6472;
+      --blue: #245b8f;
+      --line: #d9e2ec;
+      --soft: #eef4f9;
+      --ok: #136f4a;
+      --warn: #8a5a00;
+      --paper: #ffffff;
+      --bg: #f7f9fb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 36px 24px 56px;
+      background: var(--paper);
+      min-height: 100vh;
+    }
+    header {
+      border-bottom: 3px solid var(--blue);
+      padding-bottom: 18px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 4vw, 42px);
+      line-height: 1.08;
+      color: #17324d;
+    }
+    .subtitle { margin: 0; color: var(--muted); font-size: 17px; }
+    h2 {
+      margin: 32px 0 10px;
+      font-size: 24px;
+      color: var(--blue);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 5px;
+    }
+    h3 { margin: 22px 0 8px; font-size: 18px; color: #1f4d78; }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 8px 0 16px 24px; padding: 0; }
+    li { margin: 4px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    th {
+      background: var(--soft);
+      color: #163957;
+      text-align: left;
+      font-weight: 700;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.95em;
+      background: #f2f4f7;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    pre {
+      margin: 12px 0 20px;
+      padding: 16px;
+      background: #172033;
+      color: #f8fafc;
+      border-radius: 8px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .note {
+      border-left: 5px solid var(--warn);
+      background: #fff8e8;
+      padding: 12px 14px;
+      margin: 14px 0 20px;
+    }
+    .success {
+      border-left: 5px solid var(--ok);
+      background: #edf8f2;
+      padding: 12px 14px;
+      margin: 14px 0 20px;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 16px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .meta div {
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+    footer {
+      margin-top: 36px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 720px) {
+      main { padding: 26px 16px 40px; }
+      .meta { grid-template-columns: 1fr; }
+      table { font-size: 14px; }
+    }
+</style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Flutter Mobile App Setup Guide</h1>
+      <p class="subtitle">Optimized installation notes for Android and iOS Flutter development, plus RankUp Education Mobile run/API setup.</p>
+      <div class="meta">
+        <div><strong>Prepared for:</strong> RankUp Education workspace</div>
+        <div><strong>Prepared on:</strong> 14 Jul 2026</div>
+        <div><strong>Primary machine:</strong> Windows development PC</div>
+        <div><strong>Editors:</strong> Cursor (primary) · VS Code (optional)</div>
+        <div><strong>Purpose:</strong> Machine toolchain checklist + RankUp Mobile run guide</div>
+      </div>
+    </header>
+    <section>
+      <h2>Executive Summary</h2>
+      <div class="success">The optimized Android Flutter setup on this Windows machine is verified. Flutter, OpenJDK 17, Android SDK command-line tools, Android emulator, Android API 36 system image, AVD Pixel_7_API_36, and Flutter/Dart editor support are available. Paths and versions below matched flutter doctor on 14 Jul 2026.</div>
+      <div class="note">iOS simulator testing and iOS builds cannot be completed on Windows. A Mac with macOS, Xcode, iOS Simulator, CocoaPods, and Flutter is required for the iOS side. This guide is written primarily for Windows + Android.</div>
+    </section>
+    <section>
+      <h2>Optimized Required Software List</h2>
+<table><thead><tr><th style="width: 25%;">Software</th><th style="width: 25%;">Status</th><th style="width: 50%;">Reason</th></tr></thead><tbody><tr><td>Flutter SDK</td><td>Installed</td><td>Core framework and included Dart SDK for building Flutter apps.</td></tr><tr><td>OpenJDK 17</td><td>Installed</td><td>Required by Android build tooling and Gradle-based Android builds.</td></tr><tr><td>Android SDK command-line tools</td><td>Installed</td><td>Required for sdkmanager, Android platforms, build tools, and emulator packages.</td></tr><tr><td>Android Platform Tools</td><td>Installed</td><td>Provides adb for emulator and device communication.</td></tr><tr><td>Android Build Tools 36.0.0</td><td>Installed</td><td>Required for compiling Android application packages.</td></tr><tr><td>Android Platform 36</td><td>Installed</td><td>Target platform installed for Android API 36 development.</td></tr><tr><td>Android Emulator</td><td>Installed</td><td>Required to run Android virtual devices without installing Android Studio.</td></tr><tr><td>Android API 36 default x86_64 system image</td><td>Installed</td><td>Optimized emulator image selected to reduce disk usage compared with larger Google APIs images.</td></tr><tr><td>Cursor / VS Code + Flutter &amp; Dart</td><td>Installed / use as needed</td><td>Primary day-to-day editor for this workspace is Cursor. VS Code with Dart-Code.flutter and Dart-Code.dart-code also works.</td></tr><tr><td>Android Studio IDE</td><td>Not installed intentionally</td><td>Skipped because the optimized setup uses an editor plus Android SDK command-line tools.</td></tr><tr><td>Separate Dart SDK</td><td>Not installed intentionally</td><td>Skipped because Flutter already includes the required Dart SDK.</td></tr></tbody></table>
+    </section>
+    <section>
+      <h2>Installed Paths and Versions</h2>
+<table><thead><tr><th style="width: 32%;">Item</th><th style="width: 68%;">Path or Version</th></tr></thead><tbody><tr><td>Flutter SDK</td><td>C:\Users\yasir\devtools\flutter — Flutter 3.44.4 stable, Dart 3.12.2</td></tr><tr><td>Java (OpenJDK Temurin 17)</td><td>C:\Users\yasir\devtools\jdk-17 — OpenJDK 17.0.19</td></tr><tr><td>Android SDK</td><td>C:\Users\yasir\devtools\android-sdk — platform android-36, build-tools 36.0.0</td></tr><tr><td>Android emulator</td><td>Android Emulator 36.6.11.0</td></tr><tr><td>Android virtual device</td><td>Pixel_7_API_36</td></tr><tr><td>Editors</td><td>Cursor (primary for this repo). VS Code optional if installed separately.</td></tr><tr><td>VS Code extensions (if using VS Code)</td><td>Dart-Code.flutter and Dart-Code.dart-code</td></tr></tbody></table>
+    </section>
+    <section>
+      <h2>Environment Variables</h2>
+<table><thead><tr><th style="width: 28%;">Variable</th><th style="width: 72%;">Value</th></tr></thead><tbody><tr><td>JAVA_HOME</td><td>C:\Users\yasir\devtools\jdk-17</td></tr><tr><td>ANDROID_HOME</td><td>C:\Users\yasir\devtools\android-sdk</td></tr><tr><td>ANDROID_SDK_ROOT</td><td>C:\Users\yasir\devtools\android-sdk</td></tr><tr><td>ANDROID_AVD_HOME</td><td>C:\Users\yasir\.android\avd</td></tr><tr><td>User Path</td><td>Includes Java bin, Flutter bin, Android cmdline-tools, platform-tools, emulator, and editor CLI if desired.</td></tr></tbody></table>
+      <p>Open a new terminal, VS Code window, or Cursor window after setup so these variables are loaded.</p>
+    </section>
+    <section>
+      <h2>Verification Commands</h2>
+      <pre>flutter doctor -v
+adb version
+emulator -version
+emulator -list-avds
+emulator-check.exe accel</pre>
+      <p>Expected: Flutter and the Android toolchain are green. A missing Visual Studio C++ workload warning is not relevant for Android/iOS mobile Flutter work on this Windows machine. flutter doctor may also report that a newer Flutter version is available — optional; this guide documents the verified 3.44.4 toolchain.</p>
+    </section>
+    <section>
+      <h2>Running the Android Emulator</h2>
+      <p>Open a new PowerShell terminal and run:</p>
+      <pre>emulator @Pixel_7_API_36</pre>
+      <p>Confirm with <code>flutter devices</code> before <code>flutter run</code>. If the emulator cannot find the AVD, set:</p>
+      <pre>$env:ANDROID_AVD_HOME = &quot;C:\Users\yasir\.android\avd&quot;</pre>
+    </section>
+    <section>
+      <h2>RankUp Education Mobile — project run guide</h2>
+      <p>The RankUp Education Flutter app lives at Mobile/ in this monorepo (package name rankup_education). android/ and ios/ wrappers are already present — do not run flutter create . unless regenerating native projects on purpose.</p>
+      <h3>1. Start the Web API</h3>
+      <pre># From repo root — bind all interfaces so the Android emulator can reach the host
+dotnet run --project WebApi/src/RankUpEducation.Api --launch-profile http
+# applicationUrl should be http://0.0.0.0:5255 (not localhost-only)</pre>
+      <h3>2. Start the Flutter app</h3>
+      <pre>cd &quot;D:\Projects\RankUp Education\Mobile&quot;
+flutter pub get
+# Start emulator in another terminal first: emulator @Pixel_7_API_36
+flutter devices
+flutter run</pre>
+      <h3>3. API base URL by device</h3>
+<table><thead><tr><th>Target</th><th>Default / recommended URL</th><th>Notes</th></tr></thead><tbody><tr><td>Android emulator (default)</td><td>http://10.0.2.2:5255/api</td><td>10.0.2.2 is the emulator alias for the host machine. localhost inside the emulator is the emulator itself.</td></tr><tr><td>iOS Simulator / desktop / web</td><td>http://localhost:5255/api</td><td>Default when not Android (see lib/app/api_base_url.dart).</td></tr><tr><td>Physical Android device</td><td>http://&lt;YOUR_PC_LAN_IP&gt;:5255/api</td><td>Use --dart-define=API_BASE_URL=... and ensure PC firewall allows port 5255. 10.0.2.2 will not work on a real phone.</td></tr></tbody></table>
+      <p>Resolution lives in <code>Mobile/lib/app/api_base_url.dart</code> and <code>Mobile/lib/app/environment.dart</code>.</p>
+      <h3>4. Dart defines</h3>
+      <pre># Default: real API, development env, Android emulator base URL
+flutter run
+
+# Explicit API URL
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5255/api
+
+# Offline mock auth (demo accounts only)
+flutter run --dart-define=USE_MOCKS=true
+
+# Environment name: development | test | staging | production
+flutter run --dart-define=APP_ENV=development</pre>
+      <h3>5. Mock login accounts (optional)</h3>
+<table><thead><tr><th>User</th><th>Username</th><th>Password</th><th>When</th></tr></thead><tbody><tr><td>Student Demo</td><td>student-demo</td><td>password</td><td>Only when USE_MOCKS=true</td></tr><tr><td>Parent Demo</td><td>parent-demo</td><td>password</td><td>Only when USE_MOCKS=true</td></tr><tr><td>Teacher Demo</td><td>teacher-demo</td><td>password</td><td>Only when USE_MOCKS=true</td></tr></tbody></table>
+      <p>With default API mode, login calls the real Web API (<code>POST /api/auth/login</code>). Use a real account from PostgreSQL.</p>
+      <h3>6. Cleartext HTTP for local API</h3>
+      <ul>
+        <li>Main manifest references res/xml/network_security_config.xml allowing cleartext to 10.0.2.2, localhost, and 127.0.0.1.</li>
+        <li>debug/ and profile/ manifests set android:usesCleartextTraffic=true for local HTTP during development.</li>
+        <li>WebApi Development profile must listen on 0.0.0.0:5255 so the emulator can connect.</li>
+      </ul>
+      <h3>7. Troubleshooting</h3>
+<table><thead><tr><th>Symptom</th><th>What to check</th></tr></thead><tbody><tr><td>Connection refused / timeouts on login</td><td>API not running, or bound to localhost only. Use launch-profile http with 0.0.0.0:5255. Confirm with flutter logs that base URL is http://10.0.2.2:5255/api on emulator.</td></tr><tr><td>No Android device in flutter devices</td><td>Start emulator @Pixel_7_API_36 or connect a USB device with USB debugging. Wait until adb devices shows the target.</td></tr><tr><td>Cleartext / network security blocked</td><td>Confirm network_security_config.xml is wired in AndroidManifest and you are not forcing HTTPS to 10.0.2.2.</td></tr><tr><td>Breakpoints on API never hit</td><td>App is still pointing at localhost inside the emulator, or USE_MOCKS=true. Check AppEnvironment / resolveApiBaseUrl.</td></tr><tr><td>Gradle / JDK errors</td><td>JAVA_HOME must point at JDK 17 (C:\Users\yasir\devtools\jdk-17).</td></tr></tbody></table>
+    </section>
+    <section>
+      <h2>iOS Development Requirement</h2>
+      <p>Flutter iOS code can be written on Windows, but the iOS simulator and iOS build chain require macOS. For iOS testing and release builds, prepare a Mac with:</p>
+      <ul>
+        <li>macOS compatible with the current Xcode version.</li>
+        <li>Xcode installed from the Mac App Store or Apple Developer downloads.</li>
+        <li>Xcode command-line tools configured with xcode-select.</li>
+        <li>iOS Simulator runtime installed through Xcode.</li>
+        <li>CocoaPods installed for Flutter plugins that need native iOS dependencies.</li>
+        <li>Flutter SDK installed and checked with flutter doctor -v.</li>
+      </ul>
+      <p>Xcode cannot replace the Android SDK for Android builds. It is required for iOS, while Android still needs the Android SDK, platform tools, build tools, platform package, and emulator or physical Android device.</p>
+    </section>
+    <section>
+      <h2>When to Install a Larger Android System Image</h2>
+      <p>The current Android emulator uses a smaller default x86_64 image for an optimized setup. Install a Google APIs or Google Play system image only if the app requires emulator-side Google Play Services, Google Maps, Play Billing, Firebase auth flows that depend on Google services, or Play Store testing. RankUp Mobile declares Firebase packages; local API login and Approvals work on the default image without Play Store.</p>
+    </section>
+    <section>
+      <h2>Reusable Future Setup Prompt</h2>
+      <p>Use this prompt before setting up another Flutter app environment:</p>
+      <pre>I need to set up an optimized Flutter development environment for a mobile app that will run on Android and iOS. Please install only required software and avoid heavy optional tools unless they are necessary.
+
+Before installing anything, first share the exact software list and explain why each item is required or skipped.
+
+Target machine:
+- Operating system: [Windows/macOS/Linux]
+- Editor preference: Cursor or VS Code
+- Android testing: emulator and/or physical Android device
+- iOS testing: iOS Simulator if on macOS, otherwise explain that iOS simulator requires a Mac with Xcode
+
+Required outcome:
+- Flutter SDK installed
+- Java installed only if needed for Android builds
+- Android SDK command-line tools installed
+- Android platform tools, build tools, platform package, emulator, and one optimized system image installed
+- A working Android virtual device created
+- Editor installed with Flutter and Dart extensions (or Cursor with Flutter tooling)
+- Environment variables configured
+- Licenses accepted
+- Verification completed with flutter doctor -v
+
+Important rules:
+- Do not install Android Studio unless it is specifically needed.
+- Do not install a separate Dart SDK because Flutter includes Dart.
+- Do not claim iOS simulator support on Windows.
+- Use a smaller Android system image unless Google Play Services are required.
+- After installation, provide installed paths, versions, emulator name, environment variables, and commands to verify or run the emulator.</pre>
+    </section>
+    <section>
+      <h2>Future App / RankUp Checklist</h2>
+      <ol>
+        <li>Open a new terminal so the Flutter and Android paths are available.</li>
+        <li>Run flutter doctor -v and confirm Android toolchain status.</li>
+        <li>Start the emulator with emulator @Pixel_7_API_36 (or plug in a physical device).</li>
+        <li>Run flutter devices and confirm an Android target appears.</li>
+        <li>For a new app: flutter create app_name. For RankUp: use the existing Mobile/ project.</li>
+        <li>Run flutter pub get then flutter run for Android testing.</li>
+        <li>For iOS testing, move the project to a Mac with Xcode and run flutter doctor -v there.</li>
+      </ol>
+    </section>
+    <footer>
+      This HTML and DOCX are generated from docs/01_build_flutter_mobile_setup.py. Edit that Python file, then re-run it to regenerate both outputs.
+    </footer>
+  </main>
+</body>
+</html>

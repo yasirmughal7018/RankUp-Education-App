@@ -11,6 +11,12 @@ public interface IQuizAttemptRepository
 
     Task AddAttemptAnswersAsync(IReadOnlyList<QuizAttemptAnswer> answers, CancellationToken cancellationToken);
 
+    Task<QuizAttempt?> GetInProgressAttemptAsync(
+        long quizId,
+        long studentId,
+        short inProgressStatusId,
+        CancellationToken cancellationToken);
+
     Task<QuizAttemptDetailItem?> GetAttemptDetailAsync(long attemptId, long studentId, CancellationToken cancellationToken);
 
     Task<QuizAttempt?> GetAttemptEntityAsync(long attemptId, long studentId, CancellationToken cancellationToken);
@@ -25,6 +31,12 @@ public interface IQuizAttemptRepository
         CancellationToken cancellationToken);
 
     Task<QuizAttemptAnswer?> GetAttemptAnswerEntityAsync(long attemptQuestionId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<QuizAttemptAnswer>> GetAttemptAnswerEntitiesAsync(
+        long attemptQuestionId,
+        CancellationToken cancellationToken);
+
+    Task RemoveAttemptAnswersAsync(long attemptQuestionId, CancellationToken cancellationToken);
 
     Task<bool> IsSubmittedAttemptAsync(long attemptId, CancellationToken cancellationToken);
 }

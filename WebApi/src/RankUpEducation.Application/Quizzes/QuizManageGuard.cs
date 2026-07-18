@@ -1,5 +1,7 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Questions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Quizzes;
@@ -73,27 +75,45 @@ internal sealed class QuizManageGuard
 
     public async Task<short> ResolveQuestionTypeIdAsync(string questionType, CancellationToken cancellationToken)
     {
-        var normalized = questionType.Trim();
-        if (QuizLookupNames.McqQuestionTypeNames.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
-        {
-            return await RequireLookupAsync(
-                QuizLookupNames.QuestionType,
-                QuizLookupNames.McqQuestionTypeNames,
-                cancellationToken);
-        }
+        var normalized = questionType.AsTrimmedString();
 
-        if (QuizLookupNames.DescriptiveQuestionTypeNames.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+        string[][] candidateGroups =
+        [
+            QuizLookupNames.SingleChoiceQuestionTypeNames,
+            QuizLookupNames.MultiSelectQuestionTypeNames,
+            QuizLookupNames.TrueFalseQuestionTypeNames,
+            QuizLookupNames.FillBlankQuestionTypeNames
+            // Descriptive and future types are rejected by QuestionBankGuard / ValidateQuestionRequest.
+        ];
+
+        foreach (var group in candidateGroups)
         {
-            return await RequireLookupAsync(
-                QuizLookupNames.QuestionType,
-                QuizLookupNames.DescriptiveQuestionTypeNames,
-                cancellationToken);
+            if (group.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                return await RequireLookupAsync(
+                    QuizLookupNames.QuestionType,
+                    group,
+                    cancellationToken);
+            }
         }
 
         var directId = await _lookups.ResolveLookupIdAsync(QuizLookupNames.QuestionType, normalized, 0, cancellationToken);
         if (directId == 0)
         {
             throw new ValidationAppException([$"Question type '{questionType}' is not supported."]);
+        }
+
+        // Reject Descriptive / future types even if present in lookup table.
+        var resolvedName = await _lookups.GetLookupNameAsync(directId, cancellationToken);
+        if (QuizQuestionHelper.IsDescriptiveType(resolvedName)
+            || (!QuizQuestionHelper.IsSingleChoiceType(resolvedName)
+                && !QuizQuestionHelper.IsMultiSelectType(resolvedName)
+                && !QuizQuestionHelper.IsTrueFalseType(resolvedName)
+                && !QuizQuestionHelper.IsFillBlankType(resolvedName)))
+        {
+            throw new ValidationAppException([
+                $"Question type '{resolvedName}' is not available yet. Use Single Choice, Multiple Choice, True/False, or Fill in the Blanks."
+            ]);
         }
 
         return directId;
@@ -112,9 +132,17 @@ internal sealed class QuizManageGuard
             errors.Add("Marks must be greater than zero.");
         }
 
-        if (request.Options.Count > 0 && !request.Options.Any(option => option.IsCorrect))
+        if (string.IsNullOrWhiteSpace(request.QuestionType))
         {
-            errors.Add("At least one option must be marked correct.");
+            errors.Add("Question type is required.");
+        }
+        else
+        {
+            errors.AddRange(QuestionBankGuard.ValidateTypeAndOptions(
+                request.QuestionType,
+                request.Options
+                    .Select(option => (option.OptionText, option.IsCorrect))
+                    .ToArray()));
         }
 
         if (errors.Count > 0)

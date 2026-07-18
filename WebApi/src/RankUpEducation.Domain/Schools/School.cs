@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Schools;
@@ -12,8 +13,8 @@ public sealed class School : SoftDeleteEntity
 
     public School(string name, string code)
     {
-        Name = name.Trim();
-        Code = code.Trim();
+        Name = name.AsTrimmedString();
+        Code = code.AsTrimmedString();
     }
 
     public string Name { get; private set; }
@@ -22,8 +23,8 @@ public sealed class School : SoftDeleteEntity
 
     public void Update(string name, string code)
     {
-        Name = name.Trim();
-        Code = code.Trim();
+        Name = name.AsTrimmedString();
+        Code = code.AsTrimmedString();
     }
 
     public void SetActive(bool isActive)

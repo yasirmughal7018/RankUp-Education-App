@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
@@ -25,6 +26,13 @@ public interface IQuizManageService
     Task<ArchiveQuizResponse> ArchiveAsync(long quizId, CancellationToken cancellationToken);
 
     Task<ApproveQuizResponse> ApproveAsync(long quizId, CancellationToken cancellationToken);
+
+    Task<RejectQuizResponse> RejectAsync(
+        long quizId,
+        RejectQuizRequest request,
+        CancellationToken cancellationToken);
+
+    Task<PendingQuizApprovalListResponse> ListPendingApprovalAsync(CancellationToken cancellationToken);
 }
 
 public sealed class QuizManageService : IQuizManageService
@@ -212,6 +220,70 @@ public sealed class QuizManageService : IQuizManageService
         return new ApproveQuizResponse(quizId, "Approved", lifecycleName);
     }
 
+    public async Task<RejectQuizResponse> RejectAsync(
+        long quizId,
+        RejectQuizRequest request,
+        CancellationToken cancellationToken)
+    {
+        var scope = QuizScopeResolver.RequireApprovalScope(GetCurrentUser());
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz was not found.");
+
+        if (scope.Role == UserRole.SchoolAdmin)
+        {
+            if (quiz.SchoolId != scope.SchoolId)
+            {
+                throw new ForbiddenAppException("You can only reject quizzes in your school.");
+            }
+        }
+
+        if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
+        {
+            throw new BusinessRuleException("Parent private quizzes do not require school approval.");
+        }
+
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        var isPending = QuizLookupNames.PendingApprovalStatusNames.Any(name =>
+            name.Equals(approvalName, StringComparison.OrdinalIgnoreCase));
+        if (!isPending)
+        {
+            throw new BusinessRuleException("Only pending quizzes can be rejected.");
+        }
+
+        var rejectedStatusId = await _guard.RequireLookupAsync(
+            QuizLookupNames.QuizApprovalStatus,
+            QuizLookupNames.RejectedApprovalStatusNames,
+            cancellationToken);
+
+        quiz.Reject(rejectedStatusId);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var reason = request.Reason.AsTrimmedOrNull();
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        return new RejectQuizResponse(quizId, "Rejected", lifecycleName, reason);
+    }
+
+    public async Task<PendingQuizApprovalListResponse> ListPendingApprovalAsync(
+        CancellationToken cancellationToken)
+    {
+        var scope = QuizScopeResolver.RequireApprovalScope(GetCurrentUser());
+        var schoolId = scope.Role == UserRole.SchoolAdmin ? scope.SchoolId : null;
+        var items = await _quizzes.ListPendingApprovalAsync(schoolId, cancellationToken);
+        return new PendingQuizApprovalListResponse(
+            items.Select(item => new PendingQuizApprovalItemResponse(
+                item.QuizId,
+                item.Title,
+                item.CreatedBy,
+                item.SchoolName,
+                item.SubjectName,
+                item.GradeName,
+                item.QuizTypeName,
+                item.ApprovalStatus,
+                item.LifecycleStatus,
+                item.TotalQuestions,
+                item.ModifiedDate)).ToArray());
+    }
+
     public async Task<ManageQuizResponse> GetManageDetailAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
@@ -308,6 +380,8 @@ public sealed class QuizManageService : IQuizManageService
                 sourceQuestion.Hint,
                 sourceQuestion.Explanation);
 
+            question.MarkFullyApproved(scope.UserId.ToString(), questionStatusId);
+
             await _questions.AddQuestionAsync(question, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -317,6 +391,20 @@ public sealed class QuizManageService : IQuizManageService
                     .Select(option => new QuestionOption(question.Id, option.OptionText, option.IsCorrect))
                     .ToArray();
                 await _questions.AddQuestionOptionsAsync(options, cancellationToken);
+            }
+
+            if (sourceQuestion.AcceptedAnswers.Count > 0)
+            {
+                var answers = sourceQuestion.AcceptedAnswers
+                    .Select(answer => new QuestionAcceptedAnswer(
+                        question.Id,
+                        answer.AnswerText,
+                        answer.IsCaseSensitive,
+                        answer.AllowPartialMatch,
+                        answer.MinimumLength,
+                        answer.MaximumLength))
+                    .ToArray();
+                await _questions.AddQuestionAcceptedAnswersAsync(answers, cancellationToken);
             }
 
             await _quizQuestions.AddQuizQuestionAsync(

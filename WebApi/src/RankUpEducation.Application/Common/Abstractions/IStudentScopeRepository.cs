@@ -1,4 +1,5 @@
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Common.Abstractions;
 
@@ -27,6 +28,6 @@ public interface IStudentScopeRepository
     Task<IReadOnlyList<long>> GetGroupMemberStudentIdsAsync(
         long groupId,
         long ownerUserId,
-        string creatorRole,
+        UserRole creatorRole,
         CancellationToken cancellationToken);
 }

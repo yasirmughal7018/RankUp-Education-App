@@ -2,6 +2,8 @@ import { apiRequest } from "@/core/api/apiClient";
 import type {
   QuizAttemptResult,
   QuizDetail,
+  SaveQuizDraftInput,
+  SaveQuizDraftResult,
   StartQuizAttempt,
   SubmitQuizAnswer,
 } from "@/features/student/domain/studentQuizTypes";
@@ -16,6 +18,23 @@ export async function startQuizAttempt(quizId: number): Promise<StartQuizAttempt
     method: "POST",
     body: { deviceId: STUDENT_DEVICE_ID },
   });
+}
+
+export async function saveQuizAttemptDraft(
+  quizId: number,
+  attemptId: number,
+  input: SaveQuizDraftInput,
+): Promise<SaveQuizDraftResult> {
+  return apiRequest<SaveQuizDraftResult>(
+    `/quizzes/${quizId}/attempts/${attemptId}/draft`,
+    {
+      method: "PUT",
+      body: {
+        answers: input.answers,
+        timeSpentSeconds: input.timeSpentSeconds ?? null,
+      },
+    },
+  );
 }
 
 export async function submitQuizAttempt(

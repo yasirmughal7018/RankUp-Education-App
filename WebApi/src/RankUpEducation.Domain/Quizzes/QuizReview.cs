@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
@@ -16,7 +17,7 @@ public sealed class QuizReview : BaseEntity
             throw new BusinessRuleException("Review must target either a quiz or a question.");
         }
 
-        ReviewBy = reviewBy.Trim();
+        ReviewBy = reviewBy.AsTrimmedString();
         QuizId = quizId;
         QuestionId = questionId;
     }
@@ -34,12 +35,12 @@ public sealed class QuizReview : BaseEntity
     public void SetParentReview(short? statusId, string? comment)
     {
         ParentReviewStatus = statusId;
-        ParentReviewComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        ParentReviewComment = comment.AsTrimmedOrNull();
     }
 
     public void SetTeacherReview(short? statusId, string? comment)
     {
         TeacherReviewStatus = statusId;
-        TeacherReviewComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        TeacherReviewComment = comment.AsTrimmedOrNull();
     }
 }

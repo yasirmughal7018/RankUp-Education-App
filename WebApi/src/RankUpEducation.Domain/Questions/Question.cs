@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Questions;
@@ -25,14 +26,14 @@ public sealed class Question : BaseEntity
         short estimatedTimeSeconds,
         short marks)
     {
-        QuestionText = questionText.Trim();
+        QuestionText = questionText.AsTrimmedString();
         QuestionTypeId = questionTypeId;
         ClassId = classId;
         SubjectId = subjectId;
         TopicId = topicId;
         DifficultyLevel = difficultyLevel;
         StatusId = statusId;
-        CreatedBy = createdBy.Trim();
+        CreatedBy = createdBy.AsTrimmedString();
         EstimatedTimeSeconds = estimatedTimeSeconds;
         Marks = marks;
     }
@@ -53,7 +54,12 @@ public sealed class Question : BaseEntity
     public string? ApprovedBy { get; private set; }
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    /// <summary>
+    /// Legacy quiz-eligibility marker. PortalAdmin Approve sets this true so existing
+    /// quiz-attach SQL remains compatible. Prefer <see cref="IsEligibleForQuiz"/>.
+    /// </summary>
     public bool IsAiApproved { get; private set; }
+    public string? RejectionReason { get; private set; }
     public IReadOnlyCollection<QuestionOption> Options => _options;
     public IReadOnlyCollection<QuestionAcceptedAnswer> AcceptedAnswers => _acceptedAnswers;
 
@@ -69,7 +75,7 @@ public sealed class Question : BaseEntity
         string? hint,
         string? explanation)
     {
-        QuestionText = questionText.Trim();
+        QuestionText = questionText.AsTrimmedString();
         QuestionTypeId = questionTypeId;
         ClassId = classId;
         SubjectId = subjectId;
@@ -77,8 +83,8 @@ public sealed class Question : BaseEntity
         DifficultyLevel = difficultyLevel;
         EstimatedTimeSeconds = estimatedTimeSeconds;
         Marks = marks;
-        Hint = string.IsNullOrWhiteSpace(hint) ? null : hint.Trim();
-        Explanation = string.IsNullOrWhiteSpace(explanation) ? null : explanation.Trim();
+        Hint = hint.AsTrimmedOrNull();
+        Explanation = explanation.AsTrimmedOrNull();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -94,38 +100,66 @@ public sealed class Question : BaseEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    public void SubmitForApproval(short pendingStatusId)
+    /// <summary>
+    /// Submit (or resubmit) for PortalAdmin review. Clears prior approval / rejection.
+    /// </summary>
+    public void SubmitForApproval(short pendingReviewStatusId)
     {
-        StatusId = pendingStatusId;
+        StatusId = pendingReviewStatusId;
+        ApprovedBy = null;
+        IsAiApproved = false;
+        RejectionReason = null;
+        IsActive = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    public void MarkDraft(short draftStatusId)
+    {
+        StatusId = draftStatusId;
         ApprovedBy = null;
         IsAiApproved = false;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>
+    /// PortalAdmin approval. Marks quiz-eligible in one step (legacy IsAiApproved also set).
+    /// </summary>
     public void Approve(string approvedBy, short approvedStatusId)
     {
         StatusId = approvedStatusId;
-        ApprovedBy = approvedBy.Trim();
-        IsAiApproved = false;
-        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
-        IsActive = true;
-    }
-
-    public void ApproveByAi(string approvedBy, short approvedStatusId)
-    {
-        StatusId = approvedStatusId;
-        ApprovedBy = approvedBy.Trim();
+        ApprovedBy = approvedBy.AsTrimmedString();
         IsAiApproved = true;
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
     }
 
-    public void Reject(short rejectedStatusId)
+    /// <summary>Kept for inline quiz-created questions and legacy callers.</summary>
+    public void MarkFullyApproved(string approvedBy, short approvedStatusId)
+        => Approve(approvedBy, approvedStatusId);
+
+    /// <summary>Quiz bank eligibility: active + PortalAdmin approved.</summary>
+    public bool IsEligibleForQuiz
+        => IsActive && ApprovedBy.HasTrimmedText();
+
+    public void Archive(short archivedStatusId)
     {
+        StatusId = archivedStatusId;
+        IsActive = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>PortalAdmin reject — reason is required (validated by application layer).</summary>
+    public void Reject(short rejectedStatusId, string reason)
+    {
+        var trimmedReason = reason.AsTrimmedString();
         StatusId = rejectedStatusId;
         ApprovedBy = null;
         IsAiApproved = false;
         IsActive = false;
+        RejectionReason = trimmedReason.Length > 1000
+            ? trimmedReason[..1000]
+            : trimmedReason;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

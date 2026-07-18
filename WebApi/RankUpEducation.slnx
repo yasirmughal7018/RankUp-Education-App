@@ -8,4 +8,7 @@
     <Project Path="src/RankUpEducation.Infrastructure/RankUpEducation.Infrastructure.csproj" />
     <Project Path="src/RankUpEducation.Integration/RankUpEducation.Integration.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RankUpEducation.Application.Tests/RankUpEducation.Application.Tests.csproj" />
+  </Folder>
 </Solution>

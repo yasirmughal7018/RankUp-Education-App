@@ -59,10 +59,10 @@ export interface StudentQuizHistory {
   items: StudentQuizHistoryItem[];
 }
 
-export type ReportViewerRole = "SuperAdmin" | "SchoolAdmin" | "Teacher";
+export type ReportViewerRole = "PortalAdmin" | "SchoolAdmin" | "Teacher";
 
 export const REPORT_VIEWER_ROLES: ReportViewerRole[] = [
-  "SuperAdmin",
+  "PortalAdmin",
   "SchoolAdmin",
   "Teacher",
 ];

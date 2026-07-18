@@ -35,6 +35,21 @@ class ApiQuizRepository implements QuizRepository {
   }
 
   @override
+  Future<void> saveDraft({
+    required String quizId,
+    required String attemptId,
+    required List<QuizAnswerSubmission> answers,
+    int? timeSpentSeconds,
+  }) {
+    return _remoteDataSource.saveDraft(
+      quizId: quizId,
+      attemptId: attemptId,
+      answers: answers,
+      timeSpentSeconds: timeSpentSeconds,
+    );
+  }
+
+  @override
   Future<QuizAttemptResult> submitAttempt({
     required String quizId,
     required String attemptId,

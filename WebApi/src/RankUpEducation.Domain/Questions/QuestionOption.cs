@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Questions;
@@ -12,7 +13,7 @@ public sealed class QuestionOption : BaseEntity
     public QuestionOption(long questionId, string optionText, bool isCorrect)
     {
         QuestionId = questionId;
-        OptionText = optionText.Trim();
+        OptionText = optionText.AsTrimmedString();
         IsCorrect = isCorrect;
     }
 

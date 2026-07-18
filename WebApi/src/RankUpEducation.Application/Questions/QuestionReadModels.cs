@@ -34,6 +34,19 @@ public sealed record QuestionDetailItem(
     string CreatedBy,
     string? ApprovedBy,
     bool IsAiApproved,
+    string? RejectionReason,
     DateOnly CreatedDate,
     DateOnly ModifiedDate,
-    IReadOnlyList<QuizQuestionOptionItem> Options);
+    IReadOnlyList<QuizQuestionOptionItem> Options,
+    IReadOnlyList<QuestionAcceptedAnswerItem> AcceptedAnswers);
+
+public sealed record QuestionAcceptedAnswerItem(
+    long AcceptedAnswerId,
+    string AnswerText,
+    bool IsCaseSensitive,
+    bool AllowPartialMatch,
+    string NormalizedAnswer,
+    short MinimumLength,
+    short MaximumLength,
+    bool AllowAiReview,
+    bool AllowTeacherReview);

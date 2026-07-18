@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
@@ -15,7 +16,7 @@ public sealed class QuizAttempt : BaseEntity
         StudentId = studentId;
         NumberOfQuestionAttempt = numberOfQuestionAttempt;
         StatusId = statusId;
-        DeviceId = deviceId.Trim();
+        DeviceId = deviceId.AsTrimmedString();
     }
 
     public long QuizId { get; private set; }
@@ -44,6 +45,11 @@ public sealed class QuizAttempt : BaseEntity
         StatusId = inProgressStatusId;
         StartedDate = DateTimeOffset.UtcNow;
         SubmittedDate = DateTimeOffset.UtcNow;
+    }
+
+    public void UpdateTimeSpent(short timeSpentSeconds)
+    {
+        TimeSpentSeconds = timeSpentSeconds;
     }
 
     public void MarkSubmitted(short submittedStatusId, short obtainedMarks, short totalMarks, short timeSpentSeconds)

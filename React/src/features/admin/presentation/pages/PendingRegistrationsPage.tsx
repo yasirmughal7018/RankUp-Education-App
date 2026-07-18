@@ -1,5 +1,6 @@
-import { useState } from "react";
-import type { ApproveRegistrationRequest, PendingRegistration } from "@/features/admin/domain/registrationTypes";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PendingRegistration } from "@/features/admin/domain/registrationTypes";
 import { isRegistrationActionRole } from "@/features/admin/domain/registrationTypes";
 import { ApproveRegistrationDialog } from "@/features/admin/presentation/components/ApproveRegistrationDialog";
 import {
@@ -8,21 +9,106 @@ import {
   useRejectRegistrationMutation,
 } from "@/features/admin/presentation/hooks/useRegistrationQueries";
 import { PageHeader } from "@/core/components/PageHeader";
+import { queryKeys } from "@/core/api/queryKeys";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import * as notificationsApi from "@/features/notifications/data/notificationsApi";
+import * as directoryApi from "@/features/directory/data/directoryApi";
+import { useDirectorySchoolsQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 
-function formatRequestedAt(value: string | null): string {
+const REASON_PREVIEW_LENGTH = 48;
+
+function formatRequestedAt(value: string | null | undefined): string {
   if (!value) {
     return "—";
   }
 
+  // DateOnly comes as "YYYY-MM-DD"; DateTimeOffset as ISO string.
+  const date = value.length === 10 ? new Date(`${value}T00:00:00`) : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+    timeStyle: value.length === 10 ? undefined : "short",
+  }).format(date);
+}
+
+function truncateReason(reason: string | null | undefined): {
+  preview: string;
+  isTruncated: boolean;
+} {
+  const text = reason?.trim() ?? "";
+  if (!text) {
+    return { preview: "—", isTruncated: false };
+  }
+
+  if (text.length <= REASON_PREVIEW_LENGTH) {
+    return { preview: text, isTruncated: false };
+  }
+
+  return {
+    preview: `${text.slice(0, REASON_PREVIEW_LENGTH).trimEnd()}…`,
+    isTruncated: true,
+  };
+}
+
+function ReasonDialog({
+  fullName,
+  reason,
+  onClose,
+}: {
+  fullName: string;
+  reason: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-8">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reason-dialog-title"
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+      >
+        <h2
+          id="reason-dialog-title"
+          className="text-lg font-semibold text-slate-900"
+        >
+          Reason
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">{fullName}</p>
+        <p className="mt-4 whitespace-pre-wrap text-sm text-slate-800">{reason}</p>
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function PendingRegistrationsPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: registrations = [], isLoading, error, refetch, isFetching } =
     usePendingRegistrationsQuery();
+  const { data: schools = [] } = useDirectorySchoolsQuery();
   const approveRegistration = useApproveRegistrationMutation();
   const rejectRegistration = useRejectRegistrationMutation();
 
@@ -30,24 +116,85 @@ export function PendingRegistrationsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedRegistration, setSelectedRegistration] =
     useState<PendingRegistration | null>(null);
+  const [reasonRegistration, setReasonRegistration] =
+    useState<PendingRegistration | null>(null);
 
   const isSubmitting =
     approveRegistration.isPending || rejectRegistration.isPending;
 
-  async function handleApprove(
-    registration: PendingRegistration,
-    request: ApproveRegistrationRequest,
-  ) {
+  const isPortalAdmin = user?.role === "PortalAdmin";
+  const isSchoolAdmin = user?.role === "SchoolAdmin";
+  const roleLabel = isPortalAdmin
+    ? "Portal Admin"
+    : isSchoolAdmin
+      ? "School Admin"
+      : "Campus Admin";
+
+  const schoolNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const school of schools) {
+      map.set(school.id, school.name);
+    }
+    return map;
+  }, [schools]);
+
+  const schoolIdsNeedingCampuses = useMemo(() => {
+    const ids = new Set<number>();
+    for (const registration of registrations) {
+      if (registration.schoolId != null && registration.campusId != null) {
+        ids.add(registration.schoolId);
+      }
+    }
+    return [...ids].sort((a, b) => a - b);
+  }, [registrations]);
+
+  const campusesQuery = useQuery({
+    queryKey: ["directory", "campuses-for-registrations", schoolIdsNeedingCampuses],
+    enabled: schoolIdsNeedingCampuses.length > 0,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        schoolIdsNeedingCampuses.map(async (schoolId) => {
+          const campuses = await directoryApi.listCampuses(schoolId);
+          return [schoolId, campuses] as const;
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+  });
+
+  const campusNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    const bySchool = campusesQuery.data ?? {};
+    for (const campuses of Object.values(bySchool)) {
+      for (const campus of campuses) {
+        map.set(campus.id, campus.name);
+      }
+    }
+    return map;
+  }, [campusesQuery.data]);
+
+  useEffect(() => {
+    void notificationsApi
+      .markNotificationCategoryRead("RegistrationRequest")
+      .then(() =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications() }),
+      )
+      .catch(() => undefined);
+  }, [queryClient]);
+
+  async function handleApprove(registration: PendingRegistration) {
     setActionError(null);
     setSuccessMessage(null);
 
     try {
-      await approveRegistration.mutateAsync({
-        userId: registration.id,
-        request,
-      });
+      const result = await approveRegistration.mutateAsync(registration.id);
       setSelectedRegistration(null);
-      setSuccessMessage(`${registration.fullName} was approved successfully.`);
+      setSuccessMessage(
+        result.message ||
+          (result.isActivated
+            ? `${registration.fullName} was approved. They must set a password on first login.`
+            : `${registration.fullName}: approval recorded. Waiting for Portal Admin.`),
+      );
     } catch (caught) {
       const apiError = caught as { message?: string };
       setActionError(apiError.message || "Unable to approve registration.");
@@ -76,20 +223,75 @@ export function PendingRegistrationsPage() {
     }
   }
 
+  function schoolLabel(registration: PendingRegistration): string {
+    if (registration.schoolId == null) {
+      return "No school";
+    }
+    return (
+      schoolNameById.get(registration.schoolId) ??
+      `School #${registration.schoolId}`
+    );
+  }
+
+  function campusLabel(registration: PendingRegistration): string | null {
+    if (registration.campusId == null) {
+      return null;
+    }
+    return (
+      campusNameById.get(registration.campusId) ??
+      `Campus #${registration.campusId}`
+    );
+  }
+
+  function formatPendingApprovers(registration: PendingRegistration): string {
+    const approvers = registration.pendingApprovers ?? [];
+    if (approvers.length === 0) {
+      return "—";
+    }
+
+    return approvers
+      .map((approver) => `${approver.fullName} (${formatApproverRole(approver.role)})`)
+      .join(", ");
+  }
+
+  function formatApproverRole(role: string): string {
+    switch (role) {
+      case "PortalAdmin":
+        return "Portal Admin";
+      case "SchoolAdmin":
+        return "School Admin";
+      case "CampusAdmin":
+        return "Campus Admin";
+      default:
+        return role;
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
-        title="Pending registrations"
-        description="Review account access requests and approve or reject new Student, Parent, and Teacher accounts."
+        title="Registration approvals"
+        description={
+          isPortalAdmin
+            ? "Portal Admin view: only Portal Admin approval activates the account. School/Campus Admin can record approval first; the user sets their password after Portal Admin activates."
+            : isSchoolAdmin
+              ? "School Admin view: your approval is recorded, but Portal Admin must still approve before the account is activated."
+              : "Campus Admin view: your approval is recorded (School Admin is then not required), but Portal Admin must still approve before the account is activated."
+        }
         action={
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching || isSubmitting}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+              {roleLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching || isSubmitting}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+            >
+              Refresh
+            </button>
+          </div>
         }
       />
 
@@ -123,13 +325,22 @@ export function PendingRegistrationsPage() {
                     Name
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Username
+                    Mobile
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Role
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Requested
+                    School / campus
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Pending with
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Created
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Reason
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-slate-600">
                     Actions
@@ -139,44 +350,88 @@ export function PendingRegistrationsPage() {
               <tbody className="divide-y divide-slate-200">
                 {registrations.map((registration) => {
                   const canApprove = isRegistrationActionRole(registration.role);
+                  const createdDisplay =
+                    registration.createdDate ?? registration.requestedAt;
+                  const campus = campusLabel(registration);
+                  const { preview, isTruncated } = truncateReason(
+                    registration.reasonMessage,
+                  );
 
                   return (
                     <tr key={registration.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        {registration.fullName}
+                        <div>{registration.fullName}</div>
+                        <div className="text-xs font-normal text-slate-500">
+                          {registration.username}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-700">
-                        {registration.username}
+                        {registration.mobileNumber ?? registration.username}
                       </td>
                       <td className="px-4 py-3">
                         <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
                           {registration.role}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {formatRequestedAt(registration.requestedAt)}
+                      <td className="max-w-[14rem] px-4 py-3 text-slate-700">
+                        <div>{schoolLabel(registration)}</div>
+                        {campus ? (
+                          <div className="text-xs font-normal text-slate-500">
+                            {campus}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="max-w-[18rem] px-4 py-3 text-slate-700">
+                        <div className="text-xs leading-5 text-slate-700">
+                          {formatPendingApprovers(registration)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-700">
+                        {formatRequestedAt(createdDisplay)}
+                      </td>
+                      <td className="max-w-[16rem] px-4 py-3 text-slate-700">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="break-words">{preview}</span>
+                          {isTruncated ? (
+                            <button
+                              type="button"
+                              onClick={() => setReasonRegistration(registration)}
+                              className="shrink-0 text-xs font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                            >
+                              Read more
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          {canApprove ? (
+                        {registration.currentUserHasApproved ? (
+                          <p className="max-w-[14rem] text-right text-xs leading-5 text-amber-800">
+                            Approved — awaiting Portal Admin.
+                          </p>
+                        ) : (
+                          <div className="flex justify-end gap-2">
+                            {canApprove ? (
+                              <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() =>
+                                  setSelectedRegistration(registration)
+                                }
+                                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+                              >
+                                Approve
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               disabled={isSubmitting}
-                              onClick={() => setSelectedRegistration(registration)}
-                              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+                              onClick={() => void handleReject(registration)}
+                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
                             >
-                              Approve
+                              Reject
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => void handleReject(registration)}
-                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                          >
-                            Reject
-                          </button>
-                        </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -190,9 +445,19 @@ export function PendingRegistrationsPage() {
       {selectedRegistration ? (
         <ApproveRegistrationDialog
           registration={selectedRegistration}
+          schoolName={schoolLabel(selectedRegistration)}
+          campusName={campusLabel(selectedRegistration)}
           isSubmitting={approveRegistration.isPending}
           onClose={() => setSelectedRegistration(null)}
-          onSubmit={handleApprove}
+          onConfirm={handleApprove}
+        />
+      ) : null}
+
+      {reasonRegistration?.reasonMessage ? (
+        <ReasonDialog
+          fullName={reasonRegistration.fullName}
+          reason={reasonRegistration.reasonMessage}
+          onClose={() => setReasonRegistration(null)}
         />
       ) : null}
     </div>

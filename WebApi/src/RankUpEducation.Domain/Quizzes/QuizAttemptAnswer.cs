@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
@@ -25,5 +26,13 @@ public sealed class QuizAttemptAnswer : BaseEntity
     {
         AwardedMarks = awardedMarks;
         IsCorrect = isCorrect;
+    }
+
+    public void UpdateDraft(long? questionOptionId, string? submittedText)
+    {
+        QuestionOptionId = questionOptionId;
+        SubmittedText = submittedText.AsTrimmedOrNull();
+        IsCorrect = false;
+        AwardedMarks = 0;
     }
 }

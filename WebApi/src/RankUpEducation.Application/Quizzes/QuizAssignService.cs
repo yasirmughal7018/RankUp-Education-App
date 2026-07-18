@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
@@ -264,7 +265,7 @@ public sealed class QuizAssignService : IQuizAssignService
         AssignQuizRequest request,
         CancellationToken cancellationToken)
     {
-        var mode = request.Mode.Trim().ToLowerInvariant();
+        var mode = request.Mode.AsLowercase();
 
         if (scope.Role == UserRole.Parent)
         {
@@ -341,7 +342,7 @@ public sealed class QuizAssignService : IQuizAssignService
         var memberIds = await _studentScope.GetGroupMemberStudentIdsAsync(
             request.GroupId.Value,
             scope.UserId,
-            groupOwnerRole.ToString().ToLowerInvariant(),
+            groupOwnerRole,
             cancellationToken);
 
         if (memberIds.Count == 0)

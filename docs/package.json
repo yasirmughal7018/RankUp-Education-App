@@ -1,0 +1,11 @@
+{
+  "name": "rankup-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:user-qa-docx": "node build_user_creation_qa_docx.mjs"
+  },
+  "dependencies": {
+    "docx": "^9.7.1"
+  }
+}

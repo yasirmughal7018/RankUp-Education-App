@@ -62,10 +62,21 @@ More detail: [`Mobile/README.md`](Mobile/README.md)
 | --- | --- | --- |
 | [`.github/workflows/react-ci.yml`](.github/workflows/react-ci.yml) | `React/**` | `npm ci`, lint, test, build |
 | [`.github/workflows/webapi-ci.yml`](.github/workflows/webapi-ci.yml) | `WebApi/**` | `dotnet build` (Release) |
+| [`.github/workflows/mobile-ci.yml`](.github/workflows/mobile-ci.yml) | `Mobile/**` | `flutter pub get`, analyze, test |
+
+## Current platform notes
+
+- **SchoolAdmin** can create schools (directory schools API + React admin UI).
+- Directory supports **user CRUD** for students, teachers, and parents, with **pagination** on list endpoints.
+- Product/API surface includes quiz, question-bank, reports, and related **stubs/endpoints** shared by Mobile and React.
+- Mobile CI runs on `Mobile/**` path changes (see table above).
+- Mobile modules for notifications, attendance, messaging, rewards, competitions, and worksheets call the stub APIs (empty lists until domain logic lands).
+- Offline sync queue and push registration are **placeholders** (see `Mobile/docs/API_INTEGRATION.md`).
+- Full multi-role E2E QA and remaining Mobile shells (goals, portfolio, AI, etc.) remain backlog.
 
 ## Roles
 
-API-backed roles used across clients: `SuperAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
+API-backed roles used across clients: `PortalAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
 
 ## Repository layout
 

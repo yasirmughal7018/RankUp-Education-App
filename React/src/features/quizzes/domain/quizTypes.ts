@@ -1,4 +1,9 @@
 import type { UserRole } from "@/core/api/types";
+import {
+  defaultOptionsForType,
+  normalizeQuestionType,
+  usesAnswerOptions,
+} from "@/features/questions/domain/questionTypes";
 
 export interface QuizSummary {
   id: number;
@@ -93,6 +98,27 @@ export interface AddQuizQuestionInput {
   hint: string;
   explanation: string;
   options: Array<{ optionText: string; isCorrect: boolean }>;
+}
+
+export type UpdateQuizQuestionInput = AddQuizQuestionInput;
+
+export interface AttachBankQuestionInput {
+  questionId: number;
+  marks?: number | null;
+}
+
+export interface PendingQuizApproval {
+  quizId: number;
+  title: string;
+  createdBy: string;
+  schoolName: string;
+  subjectName: string;
+  gradeName: string;
+  quizTypeName: string;
+  approvalStatus: string;
+  lifecycleStatus: string;
+  totalQuestions: number;
+  modifiedDate: string;
 }
 
 export interface AssignQuizInput {
@@ -205,7 +231,7 @@ export function validateQuizForm(values: QuizFormValues): string | null {
 export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
   return {
     questionText: "",
-    questionType: "MCQ",
+    questionType: "Single Choice",
     marks: 1,
     estimatedTimeSeconds: 60,
     hint: "",
@@ -213,21 +239,46 @@ export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
     options: [
       { optionText: "", isCorrect: true },
       { optionText: "", isCorrect: false },
+      { optionText: "", isCorrect: false },
+      { optionText: "", isCorrect: false },
     ],
   };
 }
 
+export function mapQuizQuestionToInput(
+  question: QuizQuestionItem,
+): AddQuizQuestionInput {
+  const questionType = normalizeQuestionType(question.questionType);
+
+  return {
+    questionText: question.questionText,
+    questionType,
+    marks: question.marks,
+    estimatedTimeSeconds: 60,
+    hint: question.hint ?? "",
+    explanation: "",
+    options: usesAnswerOptions(questionType)
+      ? question.options.length > 0
+        ? question.options.map((option) => ({
+            optionText: option.optionText,
+            isCorrect: option.isCorrect,
+          }))
+        : defaultOptionsForType(questionType)
+      : [],
+  };
+}
+
 export function buildQuizQuestionPayload(input: AddQuizQuestionInput) {
-  const isMcq = input.questionType.toLowerCase().includes("mcq");
+  const questionType = normalizeQuestionType(input.questionType);
 
   return {
     questionText: input.questionText.trim(),
-    questionType: input.questionType,
+    questionType,
     marks: input.marks,
     estimatedTimeSeconds: input.estimatedTimeSeconds,
     hint: input.hint.trim() || null,
     explanation: input.explanation.trim() || null,
-    options: isMcq
+    options: usesAnswerOptions(questionType)
       ? input.options
           .filter((option) => option.optionText.trim())
           .map((option) => ({

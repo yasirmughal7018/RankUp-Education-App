@@ -25,6 +25,19 @@ public sealed record QuizListItem(
     DateTimeOffset? LastSubmittedAt,
     string? LifecycleStatusName = null);
 
+public sealed record PendingQuizApprovalItem(
+    long QuizId,
+    string Title,
+    string CreatedBy,
+    string SchoolName,
+    string SubjectName,
+    string GradeName,
+    string QuizTypeName,
+    string ApprovalStatus,
+    string LifecycleStatus,
+    short TotalQuestions,
+    DateOnly ModifiedDate);
+
 public sealed record QuizDetailItem(
     long QuizId,
     long? AssignmentId,
@@ -83,7 +96,18 @@ public sealed record QuizQuestionItem(
     short Marks,
     short DisplayOrder,
     string? Hint,
-    IReadOnlyList<QuizQuestionOptionItem> Options);
+    IReadOnlyList<QuizQuestionOptionItem> Options,
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
+
+/// <summary>Server-side Fill scoring model — never returned on student attempt start.</summary>
+public sealed record QuestionAcceptedAnswerScoreItem(
+    long AcceptedAnswerId,
+    string AnswerText,
+    bool IsCaseSensitive,
+    bool AllowPartialMatch,
+    string NormalizedAnswer,
+    short MinimumLength,
+    short MaximumLength);
 
 public sealed record QuizQuestionOptionItem(
     long OptionId,
@@ -117,7 +141,8 @@ public sealed record QuizAttemptQuestionItem(
     string? SubmittedText,
     short AwardedMarks,
     bool IsCorrect,
-    IReadOnlyList<QuizQuestionOptionItem> Options);
+    IReadOnlyList<QuizQuestionOptionItem> Options,
+    IReadOnlyList<long> SelectedOptionIds);
 
 public sealed record QuizAssignmentAccess(
     long AssignmentId,
@@ -191,7 +216,8 @@ public sealed record AttemptReviewQuestionItem(
     string? SubmittedText,
     string? ParentFeedback,
     bool RequiresReview,
-    long? QuizReviewId);
+    long? QuizReviewId,
+    IReadOnlyList<long> SelectedOptionIds);
 
 public sealed record QuizQuestionCopyItem(
     long QuestionId,
@@ -206,7 +232,8 @@ public sealed record QuizQuestionCopyItem(
     string? Hint,
     string? Explanation,
     short DisplayOrder,
-    IReadOnlyList<QuizQuestionOptionItem> Options);
+    IReadOnlyList<QuizQuestionOptionItem> Options,
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
 
 public sealed record QuizAssignmentReviewState(
     long AssignmentId,

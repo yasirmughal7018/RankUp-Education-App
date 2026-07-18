@@ -57,6 +57,28 @@ class QuizRemoteDataSource {
     }
   }
 
+  Future<void> saveDraft({
+    required String quizId,
+    required String attemptId,
+    required List<QuizAnswerSubmission> answers,
+    int? timeSpentSeconds,
+  }) async {
+    try {
+      final response = await _dio.put<Map<String, dynamic>>(
+        '/quizzes/$quizId/attempts/$attemptId/draft',
+        data: {
+          'answers': [
+            for (final answer in answers) _answerPayload(answer),
+          ],
+          if (timeSpentSeconds != null) 'timeSpentSeconds': timeSpentSeconds,
+        },
+      );
+      _ensureSuccess(response.data);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
   Future<QuizAttemptResultModel> submitAttempt({
     required String quizId,
     required String attemptId,
@@ -68,17 +90,7 @@ class QuizRemoteDataSource {
         '/quizzes/$quizId/attempts/$attemptId/submit',
         data: {
           'answers': [
-            for (final answer in answers)
-              {
-                'questionId': int.tryParse(answer.questionId) ?? answer.questionId,
-                if (answer.selectedOptionId != null)
-                  'selectedOptionId':
-                      int.tryParse(answer.selectedOptionId!) ??
-                          answer.selectedOptionId,
-                if (answer.submittedText != null &&
-                    answer.submittedText!.trim().isNotEmpty)
-                  'submittedText': answer.submittedText,
-              },
+            for (final answer in answers) _answerPayload(answer),
           ],
           'timeSpentSeconds': timeSpentSeconds,
         },
@@ -103,6 +115,48 @@ class QuizRemoteDataSource {
     }
   }
 
+  Map<String, dynamic> _answerPayload(QuizAnswerSubmission answer) {
+    final selectedIds = answer.selectedOptionIds ??
+        (answer.selectedOptionId == null
+            ? const <String>[]
+            : <String>[answer.selectedOptionId!]);
+    final primaryId =
+        answer.selectedOptionId ?? (selectedIds.isEmpty ? null : selectedIds.first);
+
+    return {
+      'questionId': int.tryParse(answer.questionId) ?? answer.questionId,
+      if (primaryId != null)
+        'selectedOptionId': int.tryParse(primaryId) ?? primaryId,
+      if (selectedIds.length > 1)
+        'selectedOptionIds': [
+          for (final id in selectedIds) int.tryParse(id) ?? id,
+        ],
+      if (selectedIds.length == 1 && primaryId == null)
+        'selectedOptionIds': [
+          for (final id in selectedIds) int.tryParse(id) ?? id,
+        ],
+      if (selectedIds.length > 1 ||
+          (selectedIds.length == 1 && answer.selectedOptionIds != null))
+        'selectedOptionIds': [
+          for (final id in selectedIds) int.tryParse(id) ?? id,
+        ],
+      if (answer.submittedText != null &&
+          answer.submittedText!.trim().isNotEmpty)
+        'submittedText': answer.submittedText,
+    };
+  }
+
+  void _ensureSuccess(Map<String, dynamic>? json) {
+    if (json == null) {
+      throw const UnknownAppException('The server returned an empty response.');
+    }
+
+    final response = ApiResponse<Object?>.fromJson(json, (data) => data);
+    if (!response.success) {
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
+    }
+  }
+
   T _readObject<T>(
     Map<String, dynamic>? json,
     T Function(Map<String, dynamic> json) mapper,
@@ -117,7 +171,7 @@ class QuizRemoteDataSource {
     );
 
     if (!response.success) {
-      throw ValidationException(response.message, response.errors);
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
     }
 
     return mapper(response.data);
@@ -134,7 +188,7 @@ class QuizRemoteDataSource {
     final response = ApiResponse<T>.fromJson(json, mapper);
 
     if (!response.success) {
-      throw ValidationException(response.message, response.errors);
+      throw ValidationException.fromApi(message: response.message, errors: response.errors);
     }
 
     return response.data;

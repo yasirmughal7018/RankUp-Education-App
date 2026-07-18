@@ -9,12 +9,13 @@ public sealed class RefreshToken : BaseEntity
         TokenHash = string.Empty;
     }
 
-    public RefreshToken(long userId, string tokenHash, DateTimeOffset expiresAt)
+    public RefreshToken(long userId, string tokenHash, DateTimeOffset expiresAt, UserRole? activeRole = null)
     {
         UserId = userId;
         TokenHash = tokenHash;
         ExpiresAt = expiresAt;
         CreatedAt = DateTimeOffset.UtcNow;
+        ActiveRole = activeRole;
     }
 
     public long UserId { get; private set; }
@@ -22,6 +23,7 @@ public sealed class RefreshToken : BaseEntity
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset ExpiresAt { get; private set; }
     public DateTimeOffset? RevokedAt { get; private set; }
+    public UserRole? ActiveRole { get; private set; }
 
     public bool IsActive(DateTimeOffset now) => RevokedAt is null && ExpiresAt > now;
 

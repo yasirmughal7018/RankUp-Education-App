@@ -1,5 +1,6 @@
 import 'package:rankup_education/core/storage/token_store.dart';
 import 'package:rankup_education/features/authentication/data/models/auth_session_model.dart';
+import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
@@ -27,6 +28,34 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({String status, String message})> getLoginStatus({
+    required String identifier,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    final normalized = identifier.trim().toLowerCase();
+    if (normalized == 'student-demo' ||
+        normalized == 'parent-demo' ||
+        normalized == 'teacher-demo') {
+      return (
+        status: 'Ready',
+        message: 'Enter your password to sign in.',
+      );
+    }
+    throw StateError('Unknown demo account.');
+  }
+
+  @override
+  Future<void> setInitialPassword({
+    required String identifier,
+    required String newPassword,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    throw StateError(
+      'Demo accounts already have a password. Sign in with the demo password.',
+    );
+  }
+
+  @override
   Future<void> requestPasswordReset({required String identifier}) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
   }
@@ -37,12 +66,25 @@ class MockAuthRepository implements AuthRepository {
     required String mobileNumber,
     required String emailAddress,
     required String userType,
-    required String schoolCampusName,
-    required String studentOrEmployeeId,
-    required String adminTarget,
+    required String rollNumberTeacherCode,
     required String reasonMessage,
+    String? cnic,
+    int? schoolId,
+    int? campusId,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+
+  @override
+  Future<List<({int id, String name})>> listRegistrationSchools() async {
+    return const [(id: 1, name: 'Demo School')];
+  }
+
+  @override
+  Future<List<({int id, String name})>> listRegistrationCampuses(
+    int schoolId,
+  ) async {
+    return const [(id: 1, name: 'Main Campus')];
   }
 
   @override
@@ -54,6 +96,35 @@ class MockAuthRepository implements AuthRepository {
       refreshToken: session.refreshToken,
     );
     return session;
+  }
+
+  @override
+  Future<AuthSession> switchRole(String role) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    final parsed = parseUserRole(role);
+    final session = AuthSessionModel.mock(parsed);
+    _session = session;
+    await _tokenStore.saveTokens(
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    );
+    return session;
+  }
+
+  @override
+  Future<AppUser> changePassword({
+    required String newPassword,
+    String? currentPassword,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    final session = _session ?? AuthSessionModel.mock(UserRole.student);
+    final updatedUser = session.user.copyWith(mustChangePassword: false);
+    _session = AuthSessionModel(
+      user: updatedUser,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    );
+    return updatedUser;
   }
 
   @override

@@ -62,6 +62,15 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<PendingReviewListResponse>.Ok(response));
     }
 
+    [HttpGet("pending-approval")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<PendingQuizApprovalListResponse>>> ListPendingApprovalAsync(
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizManageService.ListPendingApprovalAsync(cancellationToken);
+        return Ok(ApiResponse<PendingQuizApprovalListResponse>.Ok(response));
+    }
+
     /// <summary>Returns quiz instructions, timing, and attempt rules for the current user.</summary>
     [HttpGet("{quizId:long}")]
     public async Task<ActionResult<ApiResponse<QuizDetailResponse>>> GetDetailAsync(
@@ -80,7 +89,24 @@ public sealed class QuizzesController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _quizService.StartAttemptAsync(quizId, request, cancellationToken);
-        return Ok(ApiResponse<StartQuizAttemptResponse>.Ok(response, "Quiz attempt started."));
+        var message = response.Resumed ? "Quiz attempt resumed." : "Quiz attempt started.";
+        return Ok(ApiResponse<StartQuizAttemptResponse>.Ok(response, message));
+    }
+
+    /// <summary>Saves draft answers for an in-progress attempt without submitting.</summary>
+    [HttpPut("{quizId:long}/attempts/{attemptId:long}/draft")]
+    public async Task<ActionResult<ApiResponse<SaveQuizAttemptAnswersResponse>>> SaveAttemptAnswersAsync(
+        long quizId,
+        long attemptId,
+        [FromBody] SaveQuizAttemptAnswersRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizService.SaveAttemptAnswersAsync(
+            quizId,
+            attemptId,
+            request,
+            cancellationToken);
+        return Ok(ApiResponse<SaveQuizAttemptAnswersResponse>.Ok(response, "Answers saved."));
     }
 
     /// <summary>Submits answers and scores the attempt.</summary>
@@ -256,5 +282,19 @@ public sealed class QuizzesController : ControllerBase
     {
         var response = await _quizManageService.ApproveAsync(quizId, cancellationToken);
         return Ok(ApiResponse<ApproveQuizResponse>.Ok(response, "Quiz approved."));
+    }
+
+    [HttpPost("{quizId:long}/reject")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    public async Task<ActionResult<ApiResponse<RejectQuizResponse>>> RejectAsync(
+        long quizId,
+        [FromBody] RejectQuizRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizManageService.RejectAsync(
+            quizId,
+            request ?? new RejectQuizRequest(),
+            cancellationToken);
+        return Ok(ApiResponse<RejectQuizResponse>.Ok(response, "Quiz rejected."));
     }
 }

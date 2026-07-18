@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using RankUpEducation.Application.Auth;
+using RankUpEducation.Application.Directory;
 using RankUpEducation.Contracts.Auth;
 using RankUpEducation.Contracts.Common;
+using RankUpEducation.Contracts.Directory;
 
 namespace RankUpEducation.Api.Controllers;
 
@@ -30,6 +32,46 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<LoginResponse>.Ok(result, "Login successful."));
     }
 
+    [HttpPost("switch-role")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<LoginResponse>>> SwitchRoleAsync(
+        [FromBody] SwitchRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.SwitchRoleAsync(request, cancellationToken);
+        return Ok(ApiResponse<LoginResponse>.Ok(result, "Active role updated."));
+    }
+
+    /// <summary>
+    /// Step 1 of login: check whether the account needs a password or can sign in.
+    /// </summary>
+    [HttpPost("login-status")]
+    [AllowAnonymous]
+    [EnableRateLimiting("Login")]
+    public async Task<ActionResult<ApiResponse<LoginStatusResponse>>> GetLoginStatusAsync(
+        [FromBody] LoginStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.GetLoginStatusAsync(request, cancellationToken);
+        return Ok(ApiResponse<LoginStatusResponse>.Ok(result));
+    }
+
+    /// <summary>
+    /// After admin approval: set password only. User must sign in afterward with that password.
+    /// </summary>
+    [HttpPost("set-initial-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("Login")]
+    public async Task<ActionResult<ApiResponse<object?>>> SetInitialPasswordAsync(
+        [FromBody] SetInitialPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _authService.SetInitialPasswordAsync(request, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(
+            null,
+            "Password set successfully. Sign in with your new password."));
+    }
+
     [HttpPost("register")]
     [AllowAnonymous]
     [EnableRateLimiting("UsersAnonymous")]
@@ -41,8 +83,31 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<RegisterAccountResponse>.Ok(result, "Registration request sent to admin."));
     }
 
+    [HttpGet("registration-options/schools")]
+    [AllowAnonymous]
+    [EnableRateLimiting("UsersAnonymous")]
+    public async Task<ActionResult<ApiResponse<SchoolListResponse>>> ListRegistrationSchoolsAsync(
+        [FromServices] IDirectoryService directoryService,
+        CancellationToken cancellationToken)
+    {
+        var response = await directoryService.ListPublicSchoolsAsync(cancellationToken);
+        return Ok(ApiResponse<SchoolListResponse>.Ok(response));
+    }
+
+    [HttpGet("registration-options/schools/{schoolId:long}/campuses")]
+    [AllowAnonymous]
+    [EnableRateLimiting("UsersAnonymous")]
+    public async Task<ActionResult<ApiResponse<CampusListResponse>>> ListRegistrationCampusesAsync(
+        long schoolId,
+        [FromServices] IDirectoryService directoryService,
+        CancellationToken cancellationToken)
+    {
+            var response = await directoryService.ListPublicCampusesAsync(schoolId, cancellationToken);
+        return Ok(ApiResponse<CampusListResponse>.Ok(response));
+    }
+
     [HttpGet("registrations/pending")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<PendingRegistrationResponse>>>> ListPendingRegistrationsAsync(
         [FromQuery] int take,
         CancellationToken cancellationToken)
@@ -52,18 +117,17 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("registrations/{userId:long}/approve")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
-    public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> ApproveRegistrationAsync(
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<ApproveRegistrationResponse>>> ApproveRegistrationAsync(
         long userId,
-        [FromBody] ApproveRegistrationRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _authService.ApproveRegistrationAsync(userId, request, cancellationToken);
-        return Ok(ApiResponse<CurrentUserResponse>.Ok(result, "Registration approved."));
+        var result = await _authService.ApproveRegistrationAsync(userId, cancellationToken);
+        return Ok(ApiResponse<ApproveRegistrationResponse>.Ok(result, result.Message));
     }
 
     [HttpPost("registrations/{userId:long}/reject")]
-    [Authorize(Roles = "SuperAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> RejectRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)
@@ -112,5 +176,98 @@ public sealed class AuthController : ControllerBase
     {
         var user = await _authService.GetCurrentUserAsync(cancellationToken);
         return Ok(ApiResponse<CurrentUserResponse>.Ok(user));
+    }
+
+    [HttpPut("me")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> UpdateProfileAsync(
+        [FromBody] UpdateProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _authService.UpdateProfileAsync(request, cancellationToken);
+        return Ok(ApiResponse<CurrentUserResponse>.Ok(user, "Profile updated successfully."));
+    }
+
+    [HttpPost("me/school-change")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<RequestSchoolChangeResponse>>> RequestSchoolChangeAsync(
+        [FromBody] RequestSchoolChangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.RequestSchoolChangeAsync(request, cancellationToken);
+        return Ok(ApiResponse<RequestSchoolChangeResponse>.Ok(result, result.Message));
+    }
+
+    [HttpPost("me/avatar")]
+    [Authorize]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> UploadAvatarAsync(
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<object?>.Fail("Avatar image is required."));
+        }
+
+        await using var stream = file.OpenReadStream();
+        var user = await _authService.UploadAvatarAsync(
+            stream,
+            file.FileName,
+            file.ContentType,
+            cancellationToken);
+        return Ok(ApiResponse<CurrentUserResponse>.Ok(user, "Avatar updated successfully."));
+    }
+
+    [HttpPost("me/deactivate")]
+    [Authorize]
+    [EnableRateLimiting("ChangePassword")]
+    public async Task<ActionResult<ApiResponse<object?>>> DeactivateAccountAsync(
+        [FromBody] DeactivateAccountRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _authService.DeactivateAccountAsync(request, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Account deactivated successfully."));
+    }
+
+    [HttpGet("school-changes/pending")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<PendingSchoolChangeResponse>>>> ListPendingSchoolChangesAsync(
+        [FromQuery] int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var items = await _authService.ListPendingSchoolChangesAsync(take, cancellationToken);
+        return Ok(ApiResponse<IReadOnlyList<PendingSchoolChangeResponse>>.Ok(items));
+    }
+
+    [HttpPost("school-changes/{requestId:long}/approve")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<ApproveSchoolChangeResponse>>> ApproveSchoolChangeAsync(
+        long requestId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.ApproveSchoolChangeAsync(requestId, cancellationToken);
+        return Ok(ApiResponse<ApproveSchoolChangeResponse>.Ok(result, result.Message));
+    }
+
+    [HttpPost("school-changes/{requestId:long}/reject")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> RejectSchoolChangeAsync(
+        long requestId,
+        CancellationToken cancellationToken)
+    {
+        await _authService.RejectSchoolChangeAsync(requestId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "School/campus change request rejected."));
+    }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    [EnableRateLimiting("ChangePassword")]
+    public async Task<ActionResult<ApiResponse<CurrentUserResponse>>> ChangePasswordAsync(
+        [FromBody] ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _authService.ChangePasswordAsync(request, cancellationToken);
+        return Ok(ApiResponse<CurrentUserResponse>.Ok(user, "Password changed successfully."));
     }
 }

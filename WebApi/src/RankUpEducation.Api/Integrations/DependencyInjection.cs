@@ -9,7 +9,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailService, NoOpEmailService>();
         services.AddScoped<ISmsService, NoOpSmsService>();
         services.AddScoped<IPushNotificationService, NoOpPushNotificationService>();
-        services.AddScoped<IFileStorageService, NoOpFileStorageService>();
+        services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
         return services;
     }

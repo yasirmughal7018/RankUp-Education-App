@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RankUp Education — Authentication &amp; Login Logic</title>
+  <style>
+    :root {
+      --ink: #0b2545;
+      --blue: #2e74b5;
+      --muted: #53606d;
+      --border: #d9e1ea;
+      --fill: #f4f6f9;
+      --table: #f2f4f7;
+      --code-bg: #172033;
+      --code-fg: #f8fafc;
+    }
+    body {
+      margin: 0;
+      color: #17212b;
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      background: #ffffff;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      color: var(--ink);
+      font-size: 34px;
+      line-height: 1.15;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    h2 {
+      color: var(--blue);
+      margin: 30px 0 10px;
+      font-size: 23px;
+    }
+    h3 {
+      color: #1f4d78;
+      margin: 22px 0 8px;
+      font-size: 18px;
+    }
+    ul, ol { padding-left: 24px; }
+    li { margin: 5px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 22px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+    th {
+      background: var(--table);
+      text-align: left;
+      color: var(--ink);
+    }
+    .note {
+      background: var(--fill);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 12px 0 18px;
+    }
+    .note-ok {
+      background: #eef8f1;
+      border-color: #9dcfb0;
+    }
+    code {
+      background: #eef3f8;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      border-radius: 8px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .meta-table td:first-child { font-weight: 600; width: 28%; }
+    .diagram {
+      background: #fafbfd;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0 20px;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    @media print {
+      body { font-size: 12pt; }
+      main { max-width: none; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>RankUp Education — Authentication &amp; Login Logic</h1>
+    <p class="subtitle">Web API, React portal, Flutter mobile — username rules, login identifiers, registration approval, must-change-password, and notifications</p>
+  </header>
+
+  <table class="meta-table">
+    <tr><td>Prepared for</td><td>RankUp Education workspace</td></tr>
+    <tr><td>Scope</td><td>Web API (<code>WebApi/</code>) + React (<code>React/</code>) + Flutter Mobile (<code>Mobile/</code>)</td></tr>
+    <tr><td>Auth model</td><td>JWT access token + opaque refresh token (stored hashed in PostgreSQL)</td></tr>
+    <tr><td>Registration model</td><td>Pending rows in <code>app_users</code> — no separate <code>account_requests</code> table</td></tr>
+    <tr><td>Document version</td><td>Aligned with current application logic (Jul 2026)</td></tr>
+  </table>
+
+  <h2>1. Executive Summary</h2>
+  <ul>
+    <li>All authenticated API calls use a <strong>Bearer JWT</strong> access token.</li>
+    <li>Login accepts <strong>CNIC or mobile number</strong> (also matches stored <code>username</code>). Only users with <code>is_active = true</code> and a non-null <code>password_hash</code> may sign in.</li>
+    <li><strong>Username priority:</strong> CNIC if provided, otherwise mobile number. When CNIC is set (at register or approve), <code>username</code> becomes the CNIC.</li>
+    <li>Registration creates an inactive <code>app_users</code> row with identity fields persisted. Admin approval activates the account, sets a password, forces password change, and creates the role profile row.</li>
+    <li><code>admin_target</code>: <strong>School Admin</strong> → School Admin + Portal Admin (SuperAdmin) can approve; <strong>Portal Admin</strong> → Portal Admin only. Eligible admins receive an in-app notification.</li>
+    <li><code>must_change_password</code>: <code>true</code> = must change; <code>null</code>/<code>false</code> = no force. After the user changes password once → <code>false</code>.</li>
+    <li>Five roles: <strong>SuperAdmin</strong> (Portal Admin), <strong>SchoolAdmin</strong>, <strong>Teacher</strong>, <strong>Student</strong>, <strong>Parent</strong>.</li>
+    <li>Clients use one shared login screen. Role comes from the API response — not selected on the login form.</li>
+  </ul>
+
+  <div class="note note-ok">
+    <strong>Current model:</strong> Registration fields (mobile, CNIC, email, school/campus, roll/teacher code, reason, admin target) are <strong>persisted on <code>app_users</code></strong>. School/campus/CNIC/roll/teacher code are owned by <code>app_users</code>; profile tables hold role-specific academic fields only (e.g. student grade/section).
+  </div>
+
+  <h2>2. Solution Architecture</h2>
+  <h3>2.1 Web API layers (Clean Architecture)</h3>
+  <table>
+    <tr><th>Layer</th><th>Project</th><th>Responsibility</th></tr>
+    <tr><td>API</td><td><code>RankUpEducation.Api</code></td><td>HTTP endpoints, JWT middleware, rate limiting, exception handling</td></tr>
+    <tr><td>Application</td><td><code>RankUpEducation.Application</code></td><td><code>AuthService</code>, notifications, business rules, permissions, mapping</td></tr>
+    <tr><td>Contracts</td><td><code>RankUpEducation.Contracts</code></td><td>Request/response DTOs shared with clients</td></tr>
+    <tr><td>Domain</td><td><code>RankUpEducation.Domain</code></td><td><code>User</code>, <code>RefreshToken</code>, role enums, business invariants</td></tr>
+    <tr><td>Infrastructure</td><td><code>RankUpEducation.Infrastructure</code></td><td>EF Core, repositories, JWT/password hashing, schema initializer</td></tr>
+    <tr><td>Common</td><td><code>RankUpEducation.Common</code></td><td>CORS, rate limiting, health checks, token hashing utilities</td></tr>
+  </table>
+
+  <h3>2.2 Clients</h3>
+  <table>
+    <tr><th>Client</th><th>Path</th><th>Auth UI</th></tr>
+    <tr><td>React portal</td><td><code>React/src/features/authentication/</code></td><td>Login, Request Access, Change Password modal, Pending Registrations</td></tr>
+    <tr><td>Flutter mobile</td><td><code>Mobile/lib/features/authentication/</code></td><td>LoginPage + account request sheet (Riverpod)</td></tr>
+  </table>
+
+  <h2>3. Database Model</h2>
+  <h3>3.1 Core table: <code>app_users</code></h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+    <tr><td><code>id</code></td><td>BIGINT</td><td>Primary key</td></tr>
+    <tr><td><code>username</code></td><td>VARCHAR(50)</td><td>Unique login id — <strong>CNIC if present, else mobile</strong></td></tr>
+    <tr><td><code>display_name</code></td><td>VARCHAR(50)</td><td>Full name shown in UI</td></tr>
+    <tr><td><code>role</code></td><td>TEXT</td><td>superadmin | schooladmin | teacher | student | parent</td></tr>
+    <tr><td><code>password_hash</code></td><td>TEXT NULL</td><td>PBKDF2 hash; NULL while registration is pending</td></tr>
+    <tr><td><code>is_active</code></td><td>BOOLEAN</td><td>Login gate — must be true to authenticate</td></tr>
+    <tr><td><code>mobile_number</code></td><td>VARCHAR(40)</td><td>Contact + alternate login identifier</td></tr>
+    <tr><td><code>cnic</code></td><td>VARCHAR(20) NULL</td><td>Unique when set; preferred username source</td></tr>
+    <tr><td><code>school_id</code> / <code>campus_id</code></td><td>INTEGER NULL</td><td>School/campus scope (owned on user, not profile)</td></tr>
+    <tr><td><code>email</code></td><td>VARCHAR(120) NULL</td><td>Optional email</td></tr>
+    <tr><td><code>must_change_password</code></td><td>BOOLEAN NULL</td><td><code>true</code> = force change; <code>null</code>/<code>false</code> = no force</td></tr>
+    <tr><td><code>admin_target</code></td><td>VARCHAR(80) NULL</td><td><code>School Admin</code> or <code>Portal Admin</code></td></tr>
+    <tr><td><code>roll_number_teacher_code</code></td><td>VARCHAR(80) NULL</td><td>Student roll number or teacher code</td></tr>
+    <tr><td><code>reason_message</code></td><td>VARCHAR(1000) NULL</td><td>Optional registration reason</td></tr>
+    <tr><td><code>requested_at</code></td><td>TIMESTAMPTZ NULL</td><td>When self-registration was submitted</td></tr>
+    <tr><td><code>created_date</code> / <code>modified_date</code></td><td>DATE</td><td>Audit dates</td></tr>
+  </table>
+
+  <h3>3.2 Pending registration detection</h3>
+  <pre>is_active = false AND password_hash IS NULL  →  pending registration
+is_active = true  AND password_hash IS NOT NULL  →  active account (can login after password verify)</pre>
+
+  <h3>3.3 Profile tables (slim)</h3>
+  <table>
+    <tr><th>Table</th><th>Keeps</th><th>Removed (now on <code>app_users</code>)</th></tr>
+    <tr><td><code>app_user_students</code></td><td>grade, section, mobile_number</td><td>school_id, campus_id, cnic, student_roll_number</td></tr>
+    <tr><td><code>app_user_teachers</code></td><td>mobile_number</td><td>school_id, campus_id, cnic, teacher_code</td></tr>
+    <tr><td><code>app_user_parents</code></td><td>mobile_number</td><td>cnic</td></tr>
+  </table>
+
+  <h3>3.4 Supporting auth tables</h3>
+  <table>
+    <tr><th>Table</th><th>Purpose</th></tr>
+    <tr><td><code>refresh_tokens</code></td><td>SHA-256 hash of refresh token, expiry, revocation</td></tr>
+    <tr><td><code>device_sessions</code></td><td>Registered devices / push tokens</td></tr>
+    <tr><td><code>app_notifications</code></td><td>In-app notifications (e.g. category <code>RegistrationRequest</code>)</td></tr>
+    <tr><td><code>schools</code> / <code>school_campuses</code></td><td>Directory; both include <code>is_deleted</code></td></tr>
+  </table>
+
+  <h3>3.5 Schema source</h3>
+  <ol>
+    <li><code>docs/RankUpEducatoin_sql.sql</code> — baseline schema</li>
+    <li><code>ApiSupportSchemaInitializer</code> — runtime <code>ALTER TABLE</code> for identity, soft-delete, notifications (when <code>Database:EnsureApiSupportTables=true</code>)</li>
+  </ol>
+
+  <h2>4. Username &amp; Login Rules</h2>
+  <h3>4.1 Username priority</h3>
+  <ol>
+    <li>If CNIC is provided → <code>username = CNIC</code> (and <code>cnic</code> column is set).</li>
+    <li>If CNIC is absent → <code>username = mobile_number</code>.</li>
+    <li>On approval, if CNIC is set/updated → username is updated to CNIC when needed.</li>
+  </ol>
+
+  <h3>4.2 Login identifiers</h3>
+  <p>Clients send the identifier in the <code>username</code> JSON field. Server resolves via <code>GetByLoginIdentifierAsync</code> in this order:</p>
+  <ol>
+    <li>Exact match on <code>app_users.username</code></li>
+    <li>Else match on <code>app_users.cnic</code></li>
+    <li>Else match on <code>app_users.mobile_number</code></li>
+  </ol>
+  <p>Users can therefore sign in with <strong>CNIC or mobile number</strong>.</p>
+
+  <h3>4.3 <code>must_change_password</code></h3>
+  <table>
+    <tr><th>Value</th><th>Meaning</th></tr>
+    <tr><td><code>null</code> or <code>false</code></td><td>No forced password change</td></tr>
+    <tr><td><code>true</code></td><td>User must change password (set on admin approval)</td></tr>
+  </table>
+  <p>After the user successfully calls <code>POST /api/auth/change-password</code> once → field is set to <code>false</code>. React portal blocks the UI with a change-password modal when the value is strictly <code>true</code>.</p>
+
+  <h2>5. Admin Target &amp; Approval Routing</h2>
+  <table>
+    <tr><th><code>admin_target</code></th><th>When set</th><th>Who can approve / reject</th><th>Who is notified</th></tr>
+    <tr><td><code>School Admin</code></td><td>School selected on request</td><td>School Admin (same school) <strong>and</strong> Portal Admin (SuperAdmin)</td><td>Matching School Admins + all SuperAdmins</td></tr>
+    <tr><td><code>Portal Admin</code></td><td>No school selected</td><td>Portal Admin (SuperAdmin) only</td><td>SuperAdmins only</td></tr>
+  </table>
+  <ul>
+    <li>School Admin pending list shows only <code>admin_target = 'School Admin'</code> for their <code>school_id</code>.</li>
+    <li>SuperAdmin pending list shows all pending requests.</li>
+    <li>Notifications are in-app (<code>app_notifications</code>, category <code>RegistrationRequest</code>) for eligible admins already in RankUp Education.</li>
+  </ul>
+
+  <h2>6. Roles &amp; Permissions</h2>
+  <table>
+    <tr><th>Role</th><th>Stored in DB</th><th>JWT claim</th><th>Key permissions</th></tr>
+    <tr><td>SuperAdmin (Portal Admin)</td><td>superadmin</td><td>SuperAdmin</td><td>platform.manage, user.manage, registration.review</td></tr>
+    <tr><td>SchoolAdmin</td><td>schooladmin</td><td>SchoolAdmin</td><td>school.manage, user.manage, registration.review, quiz.manage</td></tr>
+    <tr><td>Teacher</td><td>teacher</td><td>Teacher</td><td>quiz.create, quiz.assign, attendance.mark</td></tr>
+    <tr><td>Student</td><td>student</td><td>Student</td><td>quiz.attempt, dashboard.view</td></tr>
+    <tr><td>Parent</td><td>parent</td><td>Parent</td><td>child.view, dashboard.view</td></tr>
+  </table>
+  <p>Permissions are embedded in the JWT as a comma-separated <code>permissions</code> claim via <code>AuthPermissions.ForRole()</code>.</p>
+
+  <h2>7. API Endpoints</h2>
+  <table>
+    <tr><th>Method</th><th>Route</th><th>Auth</th><th>Description</th></tr>
+    <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>CNIC or mobile + password → tokens + user (incl. <code>mustChangePassword</code>)</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Anonymous</td><td>Submit registration (pending <code>app_users</code> + notify admins)</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/registration-options/schools</code></td><td>Anonymous</td><td>Active schools for Request Access dropdowns</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/registration-options/schools/{id}/campuses</code></td><td>Anonymous</td><td>Active campuses for a school</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>SuperAdmin, SchoolAdmin</td><td>List pending requests (scoped by admin target)</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/registrations/{userId}/approve</code></td><td>SuperAdmin, SchoolAdmin</td><td>Activate, set password, force change, create profile</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/registrations/{userId}/reject</code></td><td>SuperAdmin, SchoolAdmin</td><td>Delete pending registration row</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/change-password</code></td><td>Bearer JWT</td><td>Change password; clears <code>must_change_password</code> to false</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/token/refresh</code></td><td>Anonymous</td><td>Exchange refresh token for new token pair</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/logout</code></td><td>Anonymous</td><td>Revoke refresh token when provided</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/me</code></td><td>Bearer JWT</td><td>Current user profile</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/password-reset/request</code></td><td>Anonymous</td><td>Admin-mediated reset (no enumeration)</td></tr>
+  </table>
+
+  <h2>8. Registration Request Flow</h2>
+  <div class="diagram">Client (React Request Access / Mobile sheet)
+    → POST /api/auth/register
+    → AuthService.RegisterAccountAsync()
+      1. username = CNIC ?? mobile
+      2. admin_target = schoolId ? "School Admin" : "Portal Admin"
+      3. INSERT app_users (pending: is_active=false, password_hash=NULL)
+      4. ListAdminRecipientsAsync(admin_target, school_id)
+      5. Create in-app notifications (RegistrationRequest)
+    → RegisterAccountResponse { id, username, fullName, role }</div>
+
+  <h3>8.1 Persisted registration fields</h3>
+  <table>
+    <tr><th>Form field</th><th>Stored on</th></tr>
+    <tr><td>Full name</td><td><code>app_users.display_name</code></td></tr>
+    <tr><td>Mobile number</td><td><code>app_users.mobile_number</code> (+ username if no CNIC)</td></tr>
+    <tr><td>CNIC (optional)</td><td><code>app_users.cnic</code> (+ username when present)</td></tr>
+    <tr><td>Email (optional)</td><td><code>app_users.email</code></td></tr>
+    <tr><td>Account type</td><td><code>app_users.role</code></td></tr>
+    <tr><td>School / Campus</td><td><code>app_users.school_id</code> / <code>campus_id</code></td></tr>
+    <tr><td>Roll / teacher code</td><td><code>app_users.roll_number_teacher_code</code></td></tr>
+    <tr><td>Reason</td><td><code>app_users.reason_message</code></td></tr>
+    <tr><td>Admin target</td><td><code>app_users.admin_target</code> (derived from school presence)</td></tr>
+  </table>
+
+  <h3>8.2 Admin approval flow</h3>
+  <div class="diagram">Admin (React Pending Registrations)
+    → POST /api/auth/registrations/{id}/approve
+    → AuthService.ApproveRegistrationAsync()
+      1. Ensure SuperAdmin or SchoolAdmin; enforce admin_target rules
+      2. Assign school/campus; update mobile/CNIC
+      3. If CNIC set → username = CNIC
+      4. Set roll_number_teacher_code from approve payload when provided
+      5. INSERT slim profile (student grade/section | teacher | parent)
+      6. user.Activate(passwordHash)
+      7. user.RequirePasswordChange() → must_change_password = true
+      8. SaveChanges()</div>
+
+  <h3>8.3 Approve payload by role</h3>
+  <table>
+    <tr><th>Role</th><th>Required approve fields</th></tr>
+    <tr><td>Student</td><td>password, schoolId, campusId, grade, studentRollNumber; section defaults to "A"</td></tr>
+    <tr><td>Teacher</td><td>password, schoolId, campusId, teacherCode</td></tr>
+    <tr><td>Parent</td><td>password; optional cnic / mobile</td></tr>
+  </table>
+
+  <h2>9. Login Request Flow</h2>
+  <div class="diagram">Client LoginPage
+    → POST /api/auth/login  { username: &lt;CNIC or mobile&gt;, password }
+    → AuthService.LoginAsync()
+      1. UserRepository.GetByLoginIdentifierAsync()  — username → cnic → mobile
+      2. Attach profile context (profileId; school/campus from app_users)
+      3. user.EnsureCanLogin()  — is_active + password_hash required
+      4. PasswordHasher.Verify()
+      5. IssueRefreshToken() → INSERT refresh_tokens (hashed)
+      6. JwtTokenService.CreateAccessToken()
+    → ApiResponse&lt;LoginResponse&gt; including mustChangePassword
+    → Client saves tokens + user; React may show Change Password modal</div>
+
+  <h3>9.1 Login failure cases</h3>
+  <table>
+    <tr><th>Condition</th><th>HTTP</th><th>Message</th></tr>
+    <tr><td>Unknown CNIC/mobile/username</td><td>401</td><td>Invalid username or password</td></tr>
+    <tr><td>Wrong password</td><td>401</td><td>Invalid username or password</td></tr>
+    <tr><td>Pending registration</td><td>401</td><td>This account is pending admin approval</td></tr>
+    <tr><td>Inactive account</td><td>401</td><td>This account is not active</td></tr>
+    <tr><td>Missing fields</td><td>400</td><td>Validation errors array</td></tr>
+  </table>
+
+  <h2>10. Token Refresh &amp; Logout</h2>
+  <h3>10.1 Refresh</h3>
+  <div class="diagram">Client POST /api/auth/token/refresh { refreshToken }
+    → Hash token (SHA-256 hex)
+    → Lookup refresh_tokens by token_hash
+    → Verify not expired/revoked
+    → Revoke old token
+    → Issue new refresh + access JWT
+    → Return AuthTokensResponse</div>
+
+  <h3>10.2 Logout</h3>
+  <div class="diagram">Client POST /api/auth/logout { refreshToken }
+    → Revoke matching refresh_tokens row
+    → Client clears token store + local user cache</div>
+
+  <h3>10.3 Access token lifetime</h3>
+  <p>Configured in <code>appsettings.json</code> → <code>Jwt:AccessTokenMinutes</code> (default 30 minutes). Refresh token lifetime is 30 days in <code>AuthService</code>.</p>
+
+  <h2>11. JWT Structure</h2>
+  <h3>11.1 Claims issued by JwtTokenService</h3>
+  <table>
+    <tr><th>Claim</th><th>Example</th><th>Source</th></tr>
+    <tr><td>sub / userId / NameIdentifier</td><td>42</td><td><code>app_users.id</code></td></tr>
+    <tr><td>name</td><td>CNIC or mobile</td><td><code>app_users.username</code></td></tr>
+    <tr><td>role</td><td>Student</td><td><code>UserRole</code> enum</td></tr>
+    <tr><td>permissions</td><td>dashboard.view,quiz.attempt,...</td><td><code>AuthPermissions.ForRole()</code></td></tr>
+    <tr><td>profileId</td><td>42</td><td>Student/teacher/parent profile id</td></tr>
+    <tr><td>schoolId</td><td>1</td><td><code>app_users.school_id</code> (when set)</td></tr>
+    <tr><td>campusId</td><td>1</td><td><code>app_users.campus_id</code> (when set)</td></tr>
+  </table>
+  <p><code>mustChangePassword</code> is returned on login / <code>/auth/me</code> / change-password responses — not as a JWT claim.</p>
+
+  <h2>12. Class Hierarchy</h2>
+  <h3>12.1 Web API — authentication classes</h3>
+  <pre>RankUpEducation.Api
+  └── Controllers.AuthController
+
+RankUpEducation.Application
+  ├── Auth.IAuthService / Auth.AuthService
+  ├── Auth.AuthMapping / RegistrationMapping / AuthPermissions
+  ├── Notifications.INotificationService
+  └── Common.Abstractions (IUserRepository, ITokenService, IPasswordHasher, ...)
+
+RankUpEducation.Infrastructure
+  ├── Authentication.JwtTokenService / PasswordHasher / CurrentUserService
+  ├── Persistence.Repositories.UserRepository
+  └── Persistence.ApiSupportSchemaInitializer
+
+RankUpEducation.Domain.Auth
+  ├── User (CreateRegistrationRequest, SetUsername, RequirePasswordChange, ...)
+  ├── RefreshToken, DeviceSession, UserRole
+
+RankUpEducation.Contracts.Auth
+  ├── LoginRequest / LoginResponse
+  ├── RegisterAccountRequest / RegisterAccountResponse
+  ├── ApproveRegistrationRequest / PendingRegistrationResponse
+  ├── ChangePasswordRequest / CurrentUserResponse
+  └── AuthTokensResponse / RefreshTokenRequest</pre>
+
+  <h3>12.2 Domain — User key methods</h3>
+  <table>
+    <tr><th>Method</th><th>Purpose</th></tr>
+    <tr><td><code>CreateRegistrationRequest()</code></td><td>Factory for pending registration row</td></tr>
+    <tr><td><code>SetUsername()</code></td><td>Updates username (e.g. to CNIC on approve)</td></tr>
+    <tr><td><code>EnsureCanLogin()</code></td><td>Throws if inactive or password missing</td></tr>
+    <tr><td><code>Activate(passwordHash)</code></td><td>Sets password, is_active=true</td></tr>
+    <tr><td><code>RequirePasswordChange()</code></td><td>must_change_password = true</td></tr>
+    <tr><td><code>ClearPasswordChangeRequirement()</code></td><td>must_change_password = false</td></tr>
+    <tr><td><code>AssignSchoolCampus()</code> / <code>UpdateContactInfo()</code></td><td>School/campus and mobile/CNIC</td></tr>
+    <tr><td><code>SetRollNumberTeacherCode()</code></td><td>Shared roll / teacher code field</td></tr>
+    <tr><td><code>AttachProfileContext()</code></td><td>Loads profileId; school/campus from app_users</td></tr>
+  </table>
+
+  <h2>13. Sequence Diagrams</h2>
+  <h3>13.1 Login (happy path)</h3>
+  <div class="diagram">Client           API              AuthService       UserRepository     DB
+  |-- POST login -->|                  |                    |                |
+  |                 |-- LoginAsync --->|                    |                |
+  |                 |                  |-- GetByLoginId --->|                |
+  |                 |                  |                    |-- SELECT ----->|
+  |                 |                  |<-- User + profile -|                |
+  |                 |                  |-- Verify password  |                |
+  |                 |                  |-- IssueRefreshToken|                |
+  |                 |                  |-- CreateAccessToken|                |
+  |                 |<-- LoginResponse-|                    |                |
+  |<-- 200 OK ------|                  |                    |                |</div>
+
+  <h3>13.2 Registration + notification + approval</h3>
+  <div class="diagram">User              API           Admins (in-app)      DB
+  |-- register ---->|             |                    |
+  |                 |-- INSERT pending app_users ----->|
+  |                 |-- notify eligible admins ------->| app_notifications
+  |<-- 200 OK ------|             |                    |
+  |                               |-- list pending ---->|
+  |                               |-- approve --------->|
+  |                               |                    | INSERT slim profile
+  |                               |                    | UPDATE active + must_change_password=true
+  User logs in with CNIC/mobile + admin password, then must change password</div>
+
+  <h2>14. Security &amp; Rate Limiting</h2>
+  <ul>
+    <li>Passwords hashed with <strong>PBKDF2-SHA256</strong> (100,000 iterations) via <code>PasswordHasher</code>.</li>
+    <li>Refresh tokens stored as <strong>SHA-256 hex</strong> only — raw token returned once to client.</li>
+    <li>Login endpoint rate-limited: <code>LoginPermitLimit = 8</code> per 60 seconds.</li>
+    <li>Password reset always returns success message to prevent identifier enumeration.</li>
+    <li>JWT signing key must be ≥ 32 characters — configure in <code>Jwt:SigningKey</code>.</li>
+    <li>CORS policy <code>RankUpEducation</code> applied for configured origins.</li>
+  </ul>
+
+  <h2>15. API Response Format</h2>
+  <pre>{
+  "success": true,
+  "message": "Login successful.",
+  "data": {
+    "accessToken": "eyJ...",
+    "refreshToken": "base64...",
+    "user": {
+      "id": 42,
+      "username": "12345-1234567-1",
+      "fullName": "Ali Khan",
+      "name": "Ali Khan",
+      "role": "Student",
+      "profileId": 42,
+      "schoolId": 1,
+      "campusId": 1,
+      "permissions": ["dashboard.view", "quiz.attempt"],
+      "mustChangePassword": true
+    }
+  },
+  "errors": []
+}</pre>
+
+  <h2>16. Configuration Reference</h2>
+  <table>
+    <tr><th>Setting</th><th>Location</th><th>Default</th></tr>
+    <tr><td>JWT issuer / audience / signing key</td><td><code>appsettings.json → Jwt</code></td><td>RankUpEducation / 30 min access</td></tr>
+    <tr><td>DB connection</td><td><code>ConnectionStrings:DefaultConnection</code></td><td>PostgreSQL</td></tr>
+    <tr><td>Auto schema support</td><td><code>Database:EnsureApiSupportTables</code></td><td>true</td></tr>
+    <tr><td>Mobile API base URL</td><td>Flutter env / config</td><td>See <code>Mobile/docs/API_INTEGRATION.md</code></td></tr>
+    <tr><td>Mock auth</td><td><code>USE_MOCKS=true</code></td><td>Uses MockAuthRepository when enabled</td></tr>
+  </table>
+
+  <h2>17. Related Source Files</h2>
+  <table>
+    <tr><th>Area</th><th>Primary files</th></tr>
+    <tr><td>API controller</td><td><code>WebApi/src/RankUpEducation.Api/Controllers/AuthController.cs</code></td></tr>
+    <tr><td>Business logic</td><td><code>WebApi/src/RankUpEducation.Application/Auth/AuthService.cs</code></td></tr>
+    <tr><td>JWT</td><td><code>WebApi/src/RankUpEducation.Infrastructure/Authentication/JwtTokenService.cs</code></td></tr>
+    <tr><td>User persistence</td><td><code>WebApi/src/RankUpEducation.Infrastructure/Persistence/Repositories/UserRepository.cs</code></td></tr>
+    <tr><td>Schema initializer</td><td><code>WebApi/src/RankUpEducation.Infrastructure/Persistence/ApiSupportSchemaInitializer.cs</code></td></tr>
+    <tr><td>Baseline SQL</td><td><code>docs/RankUpEducatoin_sql.sql</code></td></tr>
+    <tr><td>Auth docs (same name)</td><td><code>docs/RankUp_Authentication_Logic.html</code>, <code>.docx</code>, <code>.py</code></td></tr>
+    <tr><td>React login / request access</td><td><code>React/src/features/authentication/</code></td></tr>
+    <tr><td>React pending approvals</td><td><code>React/src/features/admin/presentation/pages/PendingRegistrationsPage.tsx</code></td></tr>
+    <tr><td>Mobile login UI</td><td><code>Mobile/lib/features/authentication/presentation/pages/login_page.dart</code></td></tr>
+    <tr><td>Mobile API client</td><td><code>Mobile/lib/features/authentication/data/datasources/auth_remote_datasource.dart</code></td></tr>
+  </table>
+
+  <div class="note">
+    <strong>Document version:</strong> Merged with current application logic — CNIC/mobile username &amp; login, persisted registration identity on <code>app_users</code>, slim profile tables, <code>admin_target</code> approval routing, <code>must_change_password</code>, and in-app registration notifications.
+  </div>
+</main>
+</body>
+</html>

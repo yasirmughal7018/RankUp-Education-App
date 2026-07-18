@@ -2,7 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as quizApi from "@/features/quizzes/data/quizApi";
 import * as studentQuizApi from "@/features/student/data/studentQuizApi";
-import type { SubmitQuizAnswer } from "@/features/student/domain/studentQuizTypes";
+import type {
+  SaveQuizDraftInput,
+  SubmitQuizAnswer,
+} from "@/features/student/domain/studentQuizTypes";
 
 export function useStudentQuizzesQuery() {
   return useQuery({
@@ -29,6 +32,13 @@ export function useStartQuizAttemptMutation(quizId: number) {
         queryKey: queryKeys.studentQuizDetail(quizId),
       });
     },
+  });
+}
+
+export function useSaveQuizDraftMutation(quizId: number, attemptId: number) {
+  return useMutation({
+    mutationFn: (input: SaveQuizDraftInput) =>
+      studentQuizApi.saveQuizAttemptDraft(quizId, attemptId, input),
   });
 }
 

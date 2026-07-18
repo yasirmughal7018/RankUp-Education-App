@@ -29,7 +29,9 @@ public sealed class QuestionRepository : IQuestionRepository
 
     public Task<Question?> GetQuestionEntityForManageAsync(long questionId, CancellationToken cancellationToken)
     {
-        return _dbContext.Questions.FirstOrDefaultAsync(question => question.Id == questionId, cancellationToken);
+        return _dbContext.Questions
+            .Include(question => question.Options)
+            .FirstOrDefaultAsync(question => question.Id == questionId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<QuestionListItem>> ListQuestionsAsync(
@@ -38,15 +40,11 @@ public sealed class QuestionRepository : IQuestionRepository
         short? subjectId,
         short? classId,
         bool pendingApprovalOnly,
+        bool eligibleForQuizOnly,
+        bool includeAllApprovedForOwnerScope,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Questions.AsNoTracking().AsQueryable();
-
-        if (createdByUserId.HasValue)
-        {
-            var createdBy = createdByUserId.Value.ToString();
-            query = query.Where(question => question.CreatedBy == createdBy);
-        }
 
         if (isActive.HasValue)
         {
@@ -61,6 +59,37 @@ public sealed class QuestionRepository : IQuestionRepository
         if (classId.HasValue)
         {
             query = query.Where(question => question.ClassId == classId.Value);
+        }
+
+        if (eligibleForQuizOnly)
+        {
+            query = query.Where(question =>
+                question.IsActive
+                && question.ApprovedBy != null
+                && question.ApprovedBy != "");
+        }
+
+        if (createdByUserId.HasValue && includeAllApprovedForOwnerScope)
+        {
+            var approvedLookups = await _dbContext.Lookups.AsNoTracking()
+                .Where(lookup => lookup.Type == QuizLookupNames.QuestionStatus)
+                .ToListAsync(cancellationToken);
+            var approvedStatusIdList = approvedLookups
+                .Where(lookup =>
+                    QuizLookupNames.IsApprovedQuestionStatusId(lookup.Id)
+                    || QuizLookupNames.IsApprovedQuestionStatusName(lookup.Name))
+                .Select(lookup => lookup.Id)
+                .ToList();
+
+            var ownerKey = createdByUserId.Value.ToString();
+            query = query.Where(question =>
+                question.CreatedBy == ownerKey
+                || approvedStatusIdList.Contains(question.StatusId));
+        }
+        else if (createdByUserId.HasValue)
+        {
+            var ownerKey = createdByUserId.Value.ToString();
+            query = query.Where(question => question.CreatedBy == ownerKey);
         }
 
         var rows = await query
@@ -98,19 +127,30 @@ public sealed class QuestionRepository : IQuestionRepository
 
         var pendingStatusIds = pendingApprovalOnly
             ? lookupNames
-                .Where(pair => QuizLookupNames.PendingQuestionStatusNames.Any(name =>
-                    name.Equals(pair.Value, StringComparison.OrdinalIgnoreCase)))
+                .Where(pair =>
+                    QuizLookupNames.IsPendingQuestionStatusId(pair.Key)
+                    || QuizLookupNames.IsPendingQuestionStatusName(pair.Value))
+                .Select(pair => pair.Key)
+                .ToHashSet()
+            : null;
+
+        var approvedStatusIds = eligibleForQuizOnly
+            ? lookupNames
+                .Where(pair =>
+                    QuizLookupNames.IsApprovedQuestionStatusId(pair.Key)
+                    || QuizLookupNames.IsApprovedQuestionStatusName(pair.Value))
                 .Select(pair => pair.Key)
                 .ToHashSet()
             : null;
 
         return rows
             .Where(row => pendingStatusIds is null || pendingStatusIds.Contains(row.StatusId))
+            .Where(row => approvedStatusIds is null || approvedStatusIds.Contains(row.StatusId))
             .Select(row => new QuestionListItem(
                 row.Id,
                 row.QuestionText,
                 lookupNames.GetValueOrDefault(row.QuestionTypeId, "Multiple Choice"),
-                lookupNames.GetValueOrDefault(row.StatusId, "Pending"),
+                lookupNames.GetValueOrDefault(row.StatusId, "PendingReview"),
                 row.Marks,
                 row.IsActive,
                 row.CreatedBy,
@@ -140,6 +180,20 @@ public sealed class QuestionRepository : IQuestionRepository
                 option.IsCorrect))
             .ToListAsync(cancellationToken);
 
+        var acceptedAnswers = await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+            .Where(answer => answer.QuestionId == questionId)
+            .Select(answer => new QuestionAcceptedAnswerItem(
+                answer.Id,
+                answer.AnswerText,
+                answer.IsCaseSensitive,
+                answer.AllowPartialMatch,
+                answer.NormalizedAnswer,
+                answer.MinimumLength,
+                answer.MaximumLength,
+                answer.AllowAiReview,
+                answer.AllowTeacherReview))
+            .ToListAsync(cancellationToken);
+
         var lookupIds = new[] { question.QuestionTypeId, question.StatusId };
         var lookupNames = await _dbContext.Lookups.AsNoTracking()
             .Where(lookup => lookupIds.Contains(lookup.Id))
@@ -164,9 +218,11 @@ public sealed class QuestionRepository : IQuestionRepository
             question.CreatedBy,
             question.ApprovedBy,
             question.IsAiApproved,
+            question.RejectionReason,
             question.CreatedDate,
             question.ModifiedDate,
-            options);
+            options,
+            acceptedAnswers);
     }
 
     public Task<int> CountQuizLinksAsync(long questionId, CancellationToken cancellationToken)
@@ -200,5 +256,20 @@ public sealed class QuestionRepository : IQuestionRepository
     public async Task AddQuestionOptionsAsync(IReadOnlyList<QuestionOption> options, CancellationToken cancellationToken)
     {
         await _dbContext.QuestionOptions.AddRangeAsync(options, cancellationToken);
+    }
+
+    public async Task RemoveQuestionAcceptedAnswersAsync(long questionId, CancellationToken cancellationToken)
+    {
+        var answers = await _dbContext.QuestionAcceptedAnswers
+            .Where(answer => answer.QuestionId == questionId)
+            .ToListAsync(cancellationToken);
+        _dbContext.QuestionAcceptedAnswers.RemoveRange(answers);
+    }
+
+    public async Task AddQuestionAcceptedAnswersAsync(
+        IReadOnlyList<QuestionAcceptedAnswer> answers,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.QuestionAcceptedAnswers.AddRangeAsync(answers, cancellationToken);
     }
 }

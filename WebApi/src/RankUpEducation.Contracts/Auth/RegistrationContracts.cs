@@ -5,10 +5,11 @@ public sealed record RegisterAccountRequest(
     string MobileNumber,
     string? EmailAddress,
     string UserType,
-    string? SchoolCampusName,
-    string? StudentOrEmployeeId,
-    string AdminTarget,
-    string? ReasonMessage);
+    string? RollNumberTeacherCode,
+    string? ReasonMessage,
+    int? SchoolId = null,
+    int? CampusId = null,
+    string? Cnic = null);
 
 public sealed record RegisterAccountResponse(
     long Id,
@@ -16,20 +17,37 @@ public sealed record RegisterAccountResponse(
     string FullName,
     string Role);
 
+public sealed record PendingApproverResponse(
+    long UserId,
+    string FullName,
+    string Username,
+    string Role);
+
 public sealed record PendingRegistrationResponse(
     long Id,
     string Username,
     string FullName,
     string Role,
-    DateTimeOffset? RequestedAt);
-
-public sealed record ApproveRegistrationRequest(
-    string Password,
+    DateTimeOffset? RequestedAt,
+    string? MobileNumber,
+    string? EmailAddress,
+    string? Cnic,
     int? SchoolId,
     int? CampusId,
-    string? StudentRollNumber,
-    short? Grade,
-    string? Section,
-    string? TeacherCode,
-    string? MobileNumber,
-    string? Cnic);
+    DateOnly? CreatedDate,
+    string? ReasonMessage,
+    string? RollNumberTeacherCode,
+    IReadOnlyList<PendingApproverResponse> PendingApprovers,
+    /// <summary>True when the current admin already recorded approval and is waiting on Portal Admin.</summary>
+    bool CurrentUserHasApproved);
+
+/// <summary>Approve uses registration details as submitted. No password or field edits.</summary>
+public sealed record ApproveRegistrationRequest();
+
+public sealed record ApproveRegistrationResponse(
+    long UserId,
+    string Username,
+    string FullName,
+    /// <summary>True when Portal Admin approved and the account is ready for set-initial-password.</summary>
+    bool IsActivated,
+    string Message);

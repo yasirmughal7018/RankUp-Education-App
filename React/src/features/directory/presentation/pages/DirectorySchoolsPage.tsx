@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { ApiError } from "@/core/api/types";
 import { PageHeader } from "@/core/components/PageHeader";
-import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
   DirectoryCampus,
   DirectorySchool,
@@ -25,9 +24,6 @@ import {
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 
 export function DirectorySchoolsPage() {
-  const { user } = useAuth();
-  const isSuperAdmin = user?.role === "SuperAdmin";
-
   const [selectedSchoolId, setSelectedSchoolId] = useState<number | null>(null);
   const [schoolDialog, setSchoolDialog] = useState<
     "create" | DirectorySchool | null
@@ -171,21 +167,19 @@ export function DirectorySchoolsPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Schools"
-        description="Manage schools and campuses. Create schools as SuperAdmin; edit and activate from either admin role."
+        description="Manage schools and campuses. PortalAdmin and SchoolAdmin can create, edit, and activate."
         action={
           <div className="flex flex-wrap gap-2">
-            {isSuperAdmin ? (
-              <button
-                type="button"
-                onClick={() => {
-                  clearMessages();
-                  setSchoolDialog("create");
-                }}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-              >
-                Create school
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                clearMessages();
+                setSchoolDialog("create");
+              }}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+            >
+              Create school
+            </button>
             <button
               type="button"
               onClick={() => void refetch()}

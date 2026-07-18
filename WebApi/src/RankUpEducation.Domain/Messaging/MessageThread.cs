@@ -1,3 +1,4 @@
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Messaging;
@@ -12,7 +13,7 @@ public sealed class MessageThread : AuditableEntity
     public MessageThread(long schoolId, string subject)
     {
         SchoolId = schoolId;
-        Subject = subject.Trim();
+        Subject = subject.AsTrimmedString();
     }
 
     public long SchoolId { get; private set; }

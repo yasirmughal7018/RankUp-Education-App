@@ -1,3 +1,4 @@
+import { RequiredMark } from "@/core/components/RequiredMark";
 import { useLookups } from "@/core/hooks/useLookups";
 
 interface LookupSelectProps {
@@ -32,13 +33,17 @@ export function LookupSelect({
 
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-slate-700">
-        {label}
-      </label>
+      {label ? (
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          {label}
+          {required ? <RequiredMark /> : null}
+        </label>
+      ) : null}
       <select
         value={value === "" ? "" : String(value)}
         disabled={disabled || isLoading}
         required={required}
+        aria-label={label || placeholder}
         onChange={(event) =>
           onChange(event.target.value ? Number(event.target.value) : "")
         }
@@ -61,7 +66,7 @@ export function LookupSelect({
       ) : null}
       {!error && !isLoading && items.length === 0 ? (
         <p className="mt-1 text-xs text-slate-500">
-          No {label.toLowerCase()} values found for type "{type}".
+          No {(label || "lookup").toLowerCase()} values found for type "{type}".
         </p>
       ) : null}
     </div>

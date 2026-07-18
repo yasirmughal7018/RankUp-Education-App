@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
@@ -18,14 +19,95 @@ public sealed class UserRepository : IUserRepository
 
     public Task<User?> GetByIdAsync(long id, CancellationToken cancellationToken)
     {
-        return WithProfileContextAsync(_dbContext.Users
-            .FirstOrDefaultAsync(user => user.Id == id, cancellationToken), cancellationToken);
+        return WithProfileContextAsync(
+            UsersWithRoles().FirstOrDefaultAsync(user => user.Id == id, cancellationToken),
+            activeRole: null,
+            cancellationToken);
     }
 
     public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken)
     {
-        return WithProfileContextAsync(_dbContext.Users
-            .FirstOrDefaultAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken), cancellationToken);
+        return WithProfileContextAsync(
+            PreferActiveRegistrationAsync(
+                UsersWithRoles().Where(user => user.Username.ToLower() == username.ToLower()),
+                cancellationToken),
+            activeRole: null,
+            cancellationToken);
+    }
+
+    public async Task<User?> GetByLoginIdentifierAsync(string identifier, CancellationToken cancellationToken)
+    {
+        var normalized = identifier.AsLowercase();
+
+        // Priority: username → CNIC → mobile number.
+        // Prefer non-rejected rows so a re-request after soft-reject is found first.
+        var byUsername = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(user => user.Username.ToLower() == normalized),
+            cancellationToken);
+        if (byUsername is not null)
+        {
+            return await WithProfileContextAsync(Task.FromResult<User?>(byUsername), null, cancellationToken);
+        }
+
+        var byCnic = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(
+                user => user.Cnic != null && user.Cnic.ToLower() == normalized),
+            cancellationToken);
+        if (byCnic is not null)
+        {
+            return await WithProfileContextAsync(Task.FromResult<User?>(byCnic), null, cancellationToken);
+        }
+
+        var byMobile = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(
+                user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized),
+            cancellationToken);
+        return await WithProfileContextAsync(Task.FromResult(byMobile), null, cancellationToken);
+    }
+
+    public Task<User?> GetByMobileNumberAsync(string mobileNumber, CancellationToken cancellationToken)
+    {
+        var normalized = mobileNumber.AsTrimmedString().ToLowerInvariant();
+        return WithProfileContextAsync(
+            PreferActiveRegistrationAsync(
+                UsersWithRoles().Where(
+                    user => user.MobileNumber != null && user.MobileNumber.ToLower() == normalized),
+                cancellationToken),
+            activeRole: null,
+            cancellationToken);
+    }
+
+    public Task<User?> GetByCnicAsync(string cnic, CancellationToken cancellationToken)
+    {
+        var normalized = cnic.AsTrimmedString().ToLowerInvariant();
+        return WithProfileContextAsync(
+            PreferActiveRegistrationAsync(
+                UsersWithRoles().Where(
+                    user => user.Cnic != null && user.Cnic.ToLower() == normalized),
+                cancellationToken),
+            activeRole: null,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Soft-rejected rows remain for audit; prefer the live (non-rejected) match when present.
+    /// </summary>
+    private static Task<User?> PreferActiveRegistrationAsync(
+        IQueryable<User> query,
+        CancellationToken cancellationToken)
+    {
+        return query
+            .OrderBy(user => user.RejectedAt == null ? 0 : 1)
+            .ThenByDescending(user => user.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public Task<User?> GetByIdForRoleAsync(long id, UserRole activeRole, CancellationToken cancellationToken)
+    {
+        return WithProfileContextAsync(
+            UsersWithRoles().FirstOrDefaultAsync(user => user.Id == id, cancellationToken),
+            activeRole,
+            cancellationToken);
     }
 
     public Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken)
@@ -35,7 +117,31 @@ public sealed class UserRepository : IUserRepository
 
     public Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken)
     {
-        return _dbContext.Users.AnyAsync(user => user.Username.ToLower() == username.ToLower(), cancellationToken);
+        return _dbContext.Users.AnyAsync(
+            user => user.RejectedAt == null && user.Username.ToLower() == username.ToLower(),
+            cancellationToken);
+    }
+
+    public Task<bool> CnicExistsAsync(string cnic, CancellationToken cancellationToken)
+    {
+        var normalized = cnic.AsTrimmedString();
+        return _dbContext.Users.AnyAsync(
+            user =>
+                user.RejectedAt == null
+                && user.Cnic != null
+                && user.Cnic.ToLower() == normalized.ToLower(),
+            cancellationToken);
+    }
+
+    public Task<bool> MobileNumberExistsAsync(string mobileNumber, CancellationToken cancellationToken)
+    {
+        var normalized = mobileNumber.AsTrimmedString();
+        return _dbContext.Users.AnyAsync(
+            user =>
+                user.RejectedAt == null
+                && user.MobileNumber != null
+                && user.MobileNumber.ToLower() == normalized.ToLower(),
+            cancellationToken);
     }
 
     public async Task AddAsync(User user, CancellationToken cancellationToken)
@@ -43,13 +149,202 @@ public sealed class UserRepository : IUserRepository
         await _dbContext.Users.AddAsync(user, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(
+        int take,
+        int? schoolIdFilter,
+        int? campusIdFilter,
+        CancellationToken cancellationToken)
     {
-        return await _dbContext.Users.AsNoTracking()
-            .Where(user => !user.IsActive && user.PasswordHash == null)
+        var query = _dbContext.Users.AsNoTracking()
+            .Include(user => user.RoleAssignments)
+            .Where(user =>
+                !user.IsActive
+                && (user.PasswordHash == null || user.PasswordHash == "")
+                && user.RejectedAt == null);
+
+        if (campusIdFilter.HasValue)
+        {
+            // Campus Admin: only requests scoped to their campus.
+            query = query.Where(user =>
+                user.CampusId == campusIdFilter.Value
+                && user.SchoolId != null);
+
+            if (schoolIdFilter.HasValue)
+            {
+                query = query.Where(user => user.SchoolId == schoolIdFilter.Value);
+            }
+        }
+        else if (schoolIdFilter.HasValue)
+        {
+            // School Admin: school-scoped requests (school-only or with campus).
+            // Portal-only requests (no school) are excluded.
+            query = query.Where(user => user.SchoolId == schoolIdFilter.Value);
+        }
+
+        return await query
             .OrderByDescending(user => user.RequestedAt)
             .Take(take)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproverCandidatesAsync(
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        var users = await _dbContext.Users.AsNoTracking()
+            .Include(user => user.RoleAssignments)
+            .Where(user => user.IsActive && user.PasswordHash != null)
+            .Where(user =>
+                user.RoleAssignments.Any(assignment =>
+                    assignment.Role == UserRole.PortalAdmin
+                    || assignment.Role == UserRole.SchoolAdmin
+                    || assignment.Role == UserRole.CampusAdmin))
+            .ToListAsync(cancellationToken);
+
+        // Approval queue rules (school / campus on the request):
+        // - no school → PortalAdmin
+        // - school only → SchoolAdmin + PortalAdmin
+        // - campus → CampusAdmin + SchoolAdmin + PortalAdmin
+        var includeSchoolAdmins = schoolId.HasValue;
+        var includeCampusAdmins = schoolId.HasValue && campusId.HasValue;
+
+        var results = new List<PendingApproverCandidate>();
+
+        foreach (var user in users)
+        {
+            var roles = user.Roles;
+
+            if (roles.Contains(UserRole.PortalAdmin))
+            {
+                results.Add(new PendingApproverCandidate(
+                    user.Id,
+                    user.FullName,
+                    user.Username,
+                    UserRole.PortalAdmin));
+            }
+
+            if (includeSchoolAdmins
+                && roles.Contains(UserRole.SchoolAdmin)
+                && user.SchoolId == schoolId)
+            {
+                results.Add(new PendingApproverCandidate(
+                    user.Id,
+                    user.FullName,
+                    user.Username,
+                    UserRole.SchoolAdmin));
+            }
+
+            if (includeCampusAdmins
+                && roles.Contains(UserRole.CampusAdmin)
+                && user.SchoolId == schoolId
+                && user.CampusId == campusId)
+            {
+                results.Add(new PendingApproverCandidate(
+                    user.Id,
+                    user.FullName,
+                    user.Username,
+                    UserRole.CampusAdmin));
+            }
+        }
+
+        return results
+            .OrderBy(candidate => candidate.Role)
+            .ThenBy(candidate => candidate.FullName)
+            .ToList();
+    }
+
+    public async Task AddApprovalAsync(UserApproval approval, CancellationToken cancellationToken)
+    {
+        await _dbContext.UserApprovals.AddAsync(approval, cancellationToken);
+    }
+
+    public async Task AddApprovalsAsync(
+        IEnumerable<UserApproval> approvals,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.UserApprovals.AddRangeAsync(approvals, cancellationToken);
+    }
+
+    public Task<UserApproval?> GetPendingApprovalAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+            approval =>
+                approval.UserId == userId
+                && approval.ApprovedByUserId == approverUserId
+                && approval.ApprovedByRole == approverRole
+                && approval.IsApproved == null
+                && approval.ApprovedAt == null,
+            cancellationToken);
+    }
+
+    public Task<UserApproval?> GetApprovalAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+            approval =>
+                approval.UserId == userId
+                && approval.ApprovedByUserId == approverUserId
+                && approval.ApprovedByRole == approverRole,
+            cancellationToken);
+    }
+
+    public Task<bool> HasApprovedAsync(
+        long userId,
+        long approverUserId,
+        UserRole approverRole,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserApprovals.AnyAsync(
+            approval =>
+                approval.UserId == userId
+                && approval.ApprovedByUserId == approverUserId
+                && approval.ApprovedByRole == approverRole
+                && approval.IsApproved == true,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PendingApproverCandidate>> ListPendingApproversForUserAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var pending = await (
+            from approval in _dbContext.UserApprovals.AsNoTracking()
+            join admin in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals admin.Id
+            where approval.UserId == userId
+                && approval.IsApproved == null
+                && approval.ApprovedAt == null
+            orderby approval.ApprovedByRole, admin.FullName
+            select new PendingApproverCandidate(
+                admin.Id,
+                admin.FullName,
+                admin.Username,
+                approval.ApprovedByRole)
+        ).ToListAsync(cancellationToken);
+
+        // CampusAdmin approval covers SchoolAdmin — SchoolAdmin is no longer required.
+        var campusAdminAlreadyApproved = await _dbContext.UserApprovals.AsNoTracking()
+            .AnyAsync(
+                approval =>
+                    approval.UserId == userId
+                    && approval.ApprovedByRole == UserRole.CampusAdmin
+                    && approval.IsApproved == true,
+                cancellationToken);
+        if (campusAdminAlreadyApproved)
+        {
+            pending = pending
+                .Where(candidate => candidate.Role != UserRole.SchoolAdmin)
+                .ToList();
+        }
+
+        return pending;
     }
 
     public Task<bool> HasStudentProfileAsync(long userId, CancellationToken cancellationToken)
@@ -88,7 +383,28 @@ public sealed class UserRepository : IUserRepository
         return Task.CompletedTask;
     }
 
-    private async Task<User?> WithProfileContextAsync(Task<User?> userTask, CancellationToken cancellationToken)
+    public async Task RevokeRefreshTokensForUserAsync(
+        long userId,
+        DateTimeOffset revokedAt,
+        CancellationToken cancellationToken)
+    {
+        var tokens = await _dbContext.RefreshTokens
+            .Where(token => token.UserId == userId && token.RevokedAt == null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var token in tokens)
+        {
+            token.Revoke(revokedAt);
+        }
+    }
+
+    private IQueryable<User> UsersWithRoles()
+        => _dbContext.Users.Include(user => user.RoleAssignments);
+
+    private async Task<User?> WithProfileContextAsync(
+        Task<User?> userTask,
+        UserRole? activeRole,
+        CancellationToken cancellationToken)
     {
         var user = await userTask;
         if (user is null)
@@ -96,23 +412,30 @@ public sealed class UserRepository : IUserRepository
             return null;
         }
 
-        switch (user.Role)
+        var role = activeRole ?? user.Role;
+        if (!user.HasRole(role))
+        {
+            role = user.Role;
+        }
+
+        switch (role)
         {
             case UserRole.Student:
                 var student = await _dbContext.Students.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(student?.Id, student?.SchoolId, student?.CampusId);
+                user.AttachProfileContext(student?.Id, user.SchoolId, user.CampusId);
                 break;
             case UserRole.Teacher:
                 var teacher = await _dbContext.Teachers.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(teacher?.Id, teacher?.SchoolId, teacher?.CampusId);
+                user.AttachProfileContext(teacher?.Id, user.SchoolId, user.CampusId);
                 break;
             case UserRole.Parent:
                 var parent = await _dbContext.Parents.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(parent?.Id, null, null);
+                user.AttachProfileContext(parent?.Id, user.SchoolId, user.CampusId);
                 break;
-            case UserRole.SuperAdmin:
+            case UserRole.PortalAdmin:
             case UserRole.SchoolAdmin:
-                user.AttachProfileContext(user.Id, null, null);
+            case UserRole.CampusAdmin:
+                user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
         }
 

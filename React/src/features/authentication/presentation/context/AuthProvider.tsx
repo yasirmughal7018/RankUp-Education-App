@@ -9,7 +9,13 @@ import {
   type ReactNode,
 } from "react";
 import { configureApiAuth } from "@/core/api/apiClient";
-import type { ApiError, AuthSession, CurrentUser } from "@/core/api/types";
+import {
+  normalizeCurrentUser,
+  type ApiError,
+  type AuthSession,
+  type CurrentUser,
+  type UserRole,
+} from "@/core/api/types";
 import {
   clearStoredSession,
   readStoredRefreshToken,
@@ -18,6 +24,7 @@ import {
   updateStoredTokens,
 } from "@/core/auth/tokenStorage";
 import * as authApi from "@/features/authentication/data/authApi";
+import { ChangePasswordModal } from "@/features/authentication/presentation/components/ChangePasswordModal";
 
 interface AuthContextValue {
   user: CurrentUser | null;
@@ -26,8 +33,11 @@ interface AuthContextValue {
   isSubmitting: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
+  setInitialPassword: (username: string, newPassword: string) => Promise<void>;
+  switchRole: (role: UserRole) => Promise<CurrentUser>;
   logout: () => Promise<void>;
   clearError: () => void;
+  updateUser: (user: CurrentUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -41,6 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
 
   const setActiveSession = useCallback((nextSession: AuthSession | null) => {
+    if (nextSession) {
+      nextSession = {
+        ...nextSession,
+        user: normalizeCurrentUser(nextSession.user),
+      };
+    }
     sessionRef.current = nextSession;
     setSession(nextSession);
   }, []);
@@ -155,6 +171,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setActiveSession],
   );
 
+  const setInitialPassword = useCallback(
+    async (username: string, newPassword: string) => {
+      setIsSubmitting(true);
+      setError(null);
+
+      try {
+        await authApi.setInitialPassword({
+          username,
+          newPassword,
+        });
+      } catch (caught) {
+        const apiError = caught as ApiError;
+        setError(apiError.message || "Unable to set password.");
+        throw caught;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     const refreshToken =
       sessionRef.current?.refreshToken ?? readStoredRefreshToken();
@@ -170,6 +207,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [setActiveSession]);
 
+  const switchRole = useCallback(
+    async (role: UserRole) => {
+      setIsSubmitting(true);
+      setError(null);
+
+      try {
+        const nextSession = await authApi.switchRole(role);
+        saveStoredSession(nextSession);
+        setActiveSession(nextSession);
+        return normalizeCurrentUser(nextSession.user);
+      } catch (caught) {
+        const apiError = caught as ApiError;
+        setError(apiError.message || "Unable to switch role.");
+        throw caught;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [setActiveSession],
+  );
+
+  const updateUser = useCallback(
+    (user: CurrentUser) => {
+      if (!sessionRef.current) {
+        return;
+      }
+
+      const nextSession = {
+        ...sessionRef.current,
+        user: normalizeCurrentUser(user),
+      };
+      saveStoredSession(nextSession);
+      setActiveSession(nextSession);
+    },
+    [setActiveSession],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
@@ -178,13 +252,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isSubmitting,
       error,
       login,
+      setInitialPassword,
+      switchRole,
       logout,
       clearError: () => setError(null),
+      updateUser,
     }),
-    [session, isBootstrapping, isSubmitting, error, login, logout],
+    [
+      session,
+      isBootstrapping,
+      isSubmitting,
+      error,
+      login,
+      setInitialPassword,
+      switchRole,
+      logout,
+      updateUser,
+    ],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const mustChangePassword = session?.user?.mustChangePassword === true;
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {mustChangePassword ? (
+        <ChangePasswordModal
+          onSuccess={(user) => {
+            updateUser({ ...user, mustChangePassword: false });
+          }}
+        />
+      ) : null}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {
