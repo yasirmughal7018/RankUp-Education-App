@@ -42,10 +42,15 @@ const TAB_META: Record<
     href: "/admin/directory/schools",
     searchPlaceholder: "Search schools by name or code…",
   },
-  students: {
-    label: "Students",
-    href: "/admin/directory/students",
-    searchPlaceholder: "Search students by name, roll number, or username…",
+  schoolAdmins: {
+    label: "School Admins",
+    href: "/admin/directory/school-admins",
+    searchPlaceholder: "Search school admins…",
+  },
+  campusAdmins: {
+    label: "Campus Admins",
+    href: "/admin/directory/campus-admins",
+    searchPlaceholder: "Search campus admins…",
   },
   parents: {
     label: "Parents",
@@ -57,17 +62,22 @@ const TAB_META: Record<
     href: "/admin/directory/teachers",
     searchPlaceholder: "Search teachers by name, code, or username…",
   },
-  schoolAdmins: {
-    label: "School Admins",
-    href: "/admin/directory/school-admins",
-    searchPlaceholder: "Search school admins…",
-  },
-  campusAdmins: {
-    label: "Campus Admins",
-    href: "/admin/directory/campus-admins",
-    searchPlaceholder: "Search campus admins…",
+  students: {
+    label: "Students",
+    href: "/admin/directory/students",
+    searchPlaceholder: "Search students by name, roll number, or username…",
   },
 };
+
+/** Display order for summary cards and tabs. */
+const DASHBOARD_TAB_ORDER: DashboardTab[] = [
+  "schools",
+  "schoolAdmins",
+  "campusAdmins",
+  "parents",
+  "teachers",
+  "students",
+];
 
 const STATUS_FILTERS = [
   { id: "all", label: "All" },
@@ -174,9 +184,7 @@ export function DirectoryOverviewPage() {
 
   const visibleTabs = useMemo(() => {
     const sections = summary?.visibleSections ?? [];
-    return (Object.keys(TAB_META) as DashboardTab[]).filter((tab) =>
-      sections.includes(tab),
-    );
+    return DASHBOARD_TAB_ORDER.filter((tab) => sections.includes(tab));
   }, [summary?.visibleSections]);
 
   const activeTab: DashboardTab = useMemo(() => {
@@ -184,7 +192,7 @@ export function DirectoryOverviewPage() {
     if (isDashboardTab(fromQuery) && visibleTabs.includes(fromQuery)) {
       return fromQuery;
     }
-    return visibleTabs[0] ?? "students";
+    return visibleTabs[0] ?? "schools";
   }, [searchParams, visibleTabs]);
 
   useEffect(() => {
@@ -305,58 +313,57 @@ export function DirectoryOverviewPage() {
     if (!summary) {
       return [];
     }
-    const cards: Array<{
-      key: DashboardTab;
-      label: string;
-      accent: string;
-      kind: "schools" | "people";
-      schools?: DirectorySchoolStatusCounts;
-      people?: DirectoryStatusCounts;
-    }> = [
+    const cardByKey: Record<
+      DashboardTab,
       {
+        key: DashboardTab;
+        label: string;
+        kind: "schools" | "people";
+        schools?: DirectorySchoolStatusCounts;
+        people?: DirectoryStatusCounts;
+      }
+    > = {
+      schools: {
         key: "schools",
         label: "Schools",
-        accent: "bg-sky-50 text-sky-700 ring-sky-100",
         kind: "schools",
         schools: summary.schools,
       },
-      {
-        key: "students",
-        label: "Students",
-        accent: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-        kind: "people",
-        people: summary.students,
-      },
-      {
-        key: "parents",
-        label: "Parents",
-        accent: "bg-amber-50 text-amber-700 ring-amber-100",
-        kind: "people",
-        people: summary.parents,
-      },
-      {
-        key: "teachers",
-        label: "Teachers",
-        accent: "bg-indigo-50 text-indigo-700 ring-indigo-100",
-        kind: "people",
-        people: summary.teachers,
-      },
-      {
+      schoolAdmins: {
         key: "schoolAdmins",
         label: "School Admins",
-        accent: "bg-violet-50 text-violet-700 ring-violet-100",
         kind: "people",
         people: summary.schoolAdmins,
       },
-      {
+      campusAdmins: {
         key: "campusAdmins",
         label: "Campus Admins",
-        accent: "bg-rose-50 text-rose-700 ring-rose-100",
         kind: "people",
         people: summary.campusAdmins,
       },
-    ];
-    return cards.filter((card) => summary.visibleSections.includes(card.key));
+      parents: {
+        key: "parents",
+        label: "Parents",
+        kind: "people",
+        people: summary.parents,
+      },
+      teachers: {
+        key: "teachers",
+        label: "Teachers",
+        kind: "people",
+        people: summary.teachers,
+      },
+      students: {
+        key: "students",
+        label: "Students",
+        kind: "people",
+        people: summary.students,
+      },
+    };
+
+    return DASHBOARD_TAB_ORDER.filter((key) =>
+      summary.visibleSections.includes(key),
+    ).map((key) => cardByKey[key]);
   }, [summary]);
 
   const showSchoolChanges = summary?.visibleSections.includes("schoolChanges");
@@ -443,45 +450,47 @@ export function DirectoryOverviewPage() {
                   key={card.key}
                   type="button"
                   onClick={() => setActiveTab(card.key)}
-                  className="flex h-full min-h-[20.5rem] w-full flex-col justify-start self-stretch rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500 sm:min-h-[21.5rem] sm:p-5"
+                  className="flex h-full min-h-0 w-full flex-col justify-start self-stretch rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500 sm:min-h-[18rem] sm:p-5"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500">
+                  <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] items-start gap-2 sm:gap-3">
+                    <div className="min-w-0 pr-1 text-left">
+                      <p className="truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl md:text-2xl">
                         {card.label}
                       </p>
-                      <div className="mt-1.5 flex items-baseline gap-2">
-                        <p className="text-3xl font-semibold tracking-tight text-emerald-700">
-                          {activeCount}
-                        </p>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
-                          Active
-                        </p>
-                      </div>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        {totalCount} total
+                      <p className="mt-1 text-xs text-slate-500 sm:mt-1.5 sm:text-sm">
+                        {totalCount}{" "}
+                        <span className="font-medium text-slate-400">total</span>
                       </p>
                     </div>
-                    <span
-                      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ring-1 ring-inset ${card.accent}`}
-                    >
-                      {card.label.slice(0, 1)}
-                    </span>
+                    <div className="min-w-0 text-right">
+                      <p className="text-2xl font-semibold tracking-tight text-emerald-700 sm:text-3xl md:text-4xl">
+                        {activeCount}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 sm:text-xs">
+                        Active
+                      </p>
+                    </div>
                   </div>
 
                   {card.kind === "schools" ? (
-                    <ul className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-                      <StatusRow
-                        label="Active"
-                        count={schools?.active ?? 0}
-                        tone="active"
-                      />
-                      <StatusRow
-                        label="Inactive"
-                        count={schools?.inactive ?? 0}
-                        tone="muted"
-                      />
-                    </ul>
+                    <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:gap-3">
+                      <div className="rounded-xl bg-emerald-50 px-3 py-3 text-center sm:px-3.5 sm:py-3.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 sm:text-xs">
+                          Active
+                        </p>
+                        <p className="mt-1 text-2xl font-semibold tracking-tight text-emerald-800 sm:text-3xl">
+                          {schools?.active ?? 0}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 px-3 py-3 text-center sm:px-3.5 sm:py-3.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:text-xs">
+                          Inactive
+                        </p>
+                        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-700 sm:text-3xl">
+                          {schools?.inactive ?? 0}
+                        </p>
+                      </div>
+                    </div>
                   ) : (
                     <ul className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
                       <StatusRow

@@ -596,7 +596,10 @@ public sealed class DirectoryRepository : IDirectoryRepository
         int? campusId,
         CancellationToken cancellationToken)
     {
-        var users = BuildUserQueryForRole(role);
+        // Count by role assignment on app_users so pending registrations
+        // (no Student/Teacher/Parent profile yet) are included in totals.
+        var users = _dbContext.Users.AsNoTracking()
+            .Where(user => user.RoleAssignments.Any(assignment => assignment.Role == role));
 
         if (schoolId is not null)
         {
@@ -679,7 +682,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
             }
         }
 
-        var active = activeReady + needsPasswordSetup;
+        // Align with QA login-status states (mutually exclusive):
+        // Active = Ready only (is_active + password set). NeedsPasswordSetup is separate.
+        var active = activeReady;
         var total = activeReady + pendingApproval + needsPasswordSetup + locked + deactivated + rejected;
         return new DirectoryStatusCounts(
             active,

@@ -1,9 +1,17 @@
 namespace RankUpEducation.Contracts.Directory;
 
 /// <summary>
-/// User lifecycle counts aligned with login-status / QA state machine.
-/// <see cref="Active"/> = users with <c>is_active=true</c> (ActiveReady + NeedsPasswordSetup).
-/// The six status fields below are mutually exclusive and sum to <see cref="Total"/>.
+/// User lifecycle counts aligned with login-status / QA state machine
+/// (<c>02_RankUp_User_Creation_Approval_QA</c>).
+/// <list type="bullet">
+/// <item><see cref="Active"/> / <see cref="ActiveReady"/> = Ready (<c>is_active</c> + password set).</item>
+/// <item><see cref="NeedsPasswordSetup"/> = approved, password not set (not Active).</item>
+/// <item><see cref="PendingApproval"/> = pending registration.</item>
+/// <item><see cref="Locked"/> = school/campus change lock.</item>
+/// <item><see cref="Deactivated"/> = inactive with password, no pending school change.</item>
+/// <item><see cref="Rejected"/> = soft-rejected registration.</item>
+/// </list>
+/// The six status buckets are mutually exclusive and sum to <see cref="Total"/>.
 /// </summary>
 public sealed record DirectoryStatusCounts(
     int Active,

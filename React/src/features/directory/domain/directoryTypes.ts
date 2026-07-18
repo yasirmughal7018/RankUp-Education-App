@@ -8,7 +8,11 @@ export type DirectorySectionKey =
   | "schoolChanges";
 
 export interface DirectoryStatusCounts {
-  /** is_active=true (ActiveReady + NeedsPasswordSetup) — used as the tile hero number */
+  /**
+   * Ready only (is_active + password set) — hero "Active" number.
+   * NeedsPasswordSetup is a separate state and must not be included.
+   * See docs/02_RankUp_User_Creation_Approval_QA.
+   */
   active: number;
   activeReady: number;
   pendingApproval: number;
@@ -16,6 +20,7 @@ export interface DirectoryStatusCounts {
   locked: number;
   deactivated: number;
   rejected: number;
+  /** Sum of all six mutually exclusive lifecycle states. */
   total: number;
 }
 

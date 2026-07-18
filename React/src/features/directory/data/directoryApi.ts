@@ -60,16 +60,16 @@ function normalizePeopleCounts(
   const locked = Number(value.locked) || 0;
   const deactivated = Number(value.deactivated) || 0;
   const rejected = Number(value.rejected) || 0;
-  const active =
-    Number(value.active) || activeReady + needsPasswordSetup;
+  // QA: Active/Ready ≠ NeedsPasswordSetup. Hero Active = Ready only.
+  const active = activeReady;
+  // Total = all mutually exclusive states for this role.
   const total =
-    Number(value.total) ||
     activeReady +
-      pendingApproval +
-      needsPasswordSetup +
-      locked +
-      deactivated +
-      rejected;
+    pendingApproval +
+    needsPasswordSetup +
+    locked +
+    deactivated +
+    rejected;
   return {
     active,
     activeReady,
@@ -93,7 +93,7 @@ function normalizeSchoolCounts(
   return {
     active,
     inactive,
-    total: Number(value.total) || active + inactive,
+    total: active + inactive,
   };
 }
 
