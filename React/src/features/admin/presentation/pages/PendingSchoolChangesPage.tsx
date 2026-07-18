@@ -59,10 +59,10 @@ export function PendingSchoolChangesPage() {
         description="School Admin or Portal Admin can approve and apply Teacher/Student school or campus changes. Portal Admin can see whether School Admin already approved."
         action={
           <Link
-            to="/admin"
+            to="/admin/directory"
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            Back to admin
+            Back to directory
           </Link>
         }
       />

@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/app/layouts/AppLayout";
 import { AdminRoute } from "@/features/admin/presentation/components/AdminRoute";
 import { AdminOverviewPage } from "@/features/admin/presentation/pages/AdminOverviewPage";
@@ -76,14 +76,18 @@ export function AppRouter() {
                 element={<PendingRegistrationsPage />}
               />
               <Route
-                path="admin/school-changes"
-                element={<PendingSchoolChangesPage />}
-              />
-              <Route
                 path="admin/quiz-approvals"
                 element={<AdminQuizApprovalsPage />}
               />
+              <Route
+                path="admin/school-changes"
+                element={<Navigate to="/admin/directory/school-changes" replace />}
+              />
               <Route path="admin/directory" element={<DirectoryOverviewPage />} />
+              <Route
+                path="admin/directory/school-changes"
+                element={<PendingSchoolChangesPage />}
+              />
               <Route
                 path="admin/directory/schools"
                 element={<DirectorySchoolsPage />}

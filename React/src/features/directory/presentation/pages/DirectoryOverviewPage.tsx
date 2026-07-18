@@ -10,6 +10,12 @@ const directoryLinks = [
     href: "/admin/directory/schools",
   },
   {
+    title: "School / campus changes",
+    description:
+      "Approve Teacher, Student, Parent, and Campus Admin school or campus change requests.",
+    href: "/admin/directory/school-changes",
+  },
+  {
     title: "Students",
     description: "Search students by name, roll number, or username.",
     href: "/admin/directory/students",
@@ -54,7 +60,7 @@ export function DirectoryOverviewPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="School directory"
-        description="Browse schools, campuses, students, teachers, and parent links."
+        description="Browse schools, campuses, people, admins, and school/campus change requests."
         action={
           <Link
             to="/admin"

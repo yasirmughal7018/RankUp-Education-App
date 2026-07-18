@@ -78,7 +78,7 @@ export function NotificationsBell() {
 
   function hrefForCategory(category: string) {
     return category === "SchoolChangeRequest"
-      ? "/admin/school-changes"
+      ? "/admin/directory/school-changes"
       : "/admin/registrations";
   }
 
@@ -179,7 +179,7 @@ export function NotificationsBell() {
               Registration approvals
             </Link>
             <Link
-              to="/admin/school-changes"
+              to="/admin/directory/school-changes"
               onClick={() => {
                 setOpen(false);
                 void markCategoryRead("SchoolChangeRequest");

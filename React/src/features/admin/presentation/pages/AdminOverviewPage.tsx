@@ -10,12 +10,6 @@ const adminLinks = [
     href: "/admin/registrations",
   },
   {
-    title: "School / campus changes",
-    description:
-      "Approve profile school and campus change requests (same multi-admin approval flow).",
-    href: "/admin/school-changes",
-  },
-  {
     title: "Question bank",
     description: "Create, approve, and manage assessment questions.",
     href: "/questions",
@@ -27,7 +21,8 @@ const adminLinks = [
   },
   {
     title: "School directory",
-    description: "Browse schools, campuses, students, teachers, parents, and admins.",
+    description:
+      "Browse schools, campuses, students, teachers, parents, admins, and school/campus change requests.",
     href: "/admin/directory",
   },
 ];
