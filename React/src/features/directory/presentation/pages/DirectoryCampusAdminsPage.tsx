@@ -20,6 +20,7 @@ import {
   useDirectorySchoolsQuery,
   useUpdateCampusAdminMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
 
 const PAGE_SIZE = 50;
 
@@ -356,22 +357,10 @@ export function DirectoryCampusAdminsPage() {
                         {admin.campusName}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1.5">
-                          <span
-                            className={`rounded-full px-2 py-1 text-xs font-medium ${
-                              admin.isActive
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {admin.isActive ? "Active" : "Inactive"}
-                          </span>
-                          {admin.needsPasswordSetup ? (
-                            <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
-                              Needs password setup
-                            </span>
-                          ) : null}
-                        </div>
+                        <AccountStatusBadge
+                          accountStatus={admin.accountStatus}
+                          isActive={admin.isActive}
+                        />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">

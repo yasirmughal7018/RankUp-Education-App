@@ -61,7 +61,9 @@ public sealed record DirectoryStudentResponse(
     string Section,
     int SchoolId,
     int CampusId,
-    bool IsActive);
+    bool IsActive,
+    /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
+    string AccountStatus);
 
 public sealed record CreateDirectoryStudentRequest(
     string FullName,
@@ -94,7 +96,9 @@ public sealed record DirectoryTeacherResponse(
     string TeacherCode,
     int SchoolId,
     int CampusId,
-    bool IsActive);
+    bool IsActive,
+    /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
+    string AccountStatus);
 
 public sealed record CreateDirectoryTeacherRequest(
     string FullName,
@@ -121,7 +125,9 @@ public sealed record DirectoryParentResponse(
     string FullName,
     string Username,
     int LinkedStudentCount,
-    bool IsActive);
+    bool IsActive,
+    /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
+    string AccountStatus);
 
 public sealed record CreateDirectoryParentRequest(
     string FullName,
@@ -161,7 +167,9 @@ public sealed record DirectorySchoolAdminResponse(
     string? MobileNumber,
     string? Cnic,
     bool IsActive,
-    bool NeedsPasswordSetup);
+    bool NeedsPasswordSetup,
+    /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
+    string AccountStatus);
 
 public sealed record CreateDirectorySchoolAdminRequest(
     string FullName,
@@ -195,7 +203,9 @@ public sealed record DirectoryCampusAdminResponse(
     string? MobileNumber,
     string? Cnic,
     bool IsActive,
-    bool NeedsPasswordSetup);
+    bool NeedsPasswordSetup,
+    /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
+    string AccountStatus);
 
 public sealed record CreateDirectoryCampusAdminRequest(
     string FullName,

@@ -236,21 +236,47 @@ public sealed class DirectoryRepository : IDirectoryRepository
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query
+        var rows = await query
             .OrderBy(row => row.user.FullName)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
-            .Select(row => new DirectoryStudentResponse(
+            .Select(row => new
+            {
                 row.student.Id,
                 row.user.FullName,
                 row.user.Username,
-                row.user.RollNumberTeacherCode ?? string.Empty,
+                RollNumber = row.user.RollNumberTeacherCode ?? string.Empty,
                 row.student.Grade,
                 row.student.Section,
-                row.user.SchoolId ?? 0,
-                row.user.CampusId ?? 0,
-                row.user.IsActive))
+                SchoolId = row.user.SchoolId ?? 0,
+                CampusId = row.user.CampusId ?? 0,
+                row.user.IsActive,
+                row.user.PasswordHash,
+                row.user.RejectedAt,
+            })
             .ToListAsync(cancellationToken);
+
+        var lockedSet = await GetLockedUserIdsAsync(
+            rows.Select(row => row.Id).ToArray(),
+            cancellationToken);
+
+        var items = rows
+            .Select(row => new DirectoryStudentResponse(
+                row.Id,
+                row.FullName,
+                row.Username,
+                row.RollNumber,
+                row.Grade,
+                row.Section,
+                row.SchoolId,
+                row.CampusId,
+                row.IsActive,
+                DirectoryAccountStatuses.Resolve(
+                    row.IsActive,
+                    !string.IsNullOrWhiteSpace(row.PasswordHash),
+                    row.RejectedAt is not null,
+                    lockedSet.Contains(row.Id))))
+            .ToArray();
 
         return (items, totalCount);
     }
@@ -289,19 +315,43 @@ public sealed class DirectoryRepository : IDirectoryRepository
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query
+        var rows = await query
             .OrderBy(row => row.user.FullName)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
-            .Select(row => new DirectoryTeacherResponse(
+            .Select(row => new
+            {
                 row.teacher.Id,
                 row.user.FullName,
                 row.user.Username,
-                row.user.RollNumberTeacherCode ?? string.Empty,
-                row.user.SchoolId ?? 0,
-                row.user.CampusId ?? 0,
-                row.user.IsActive))
+                TeacherCode = row.user.RollNumberTeacherCode ?? string.Empty,
+                SchoolId = row.user.SchoolId ?? 0,
+                CampusId = row.user.CampusId ?? 0,
+                row.user.IsActive,
+                row.user.PasswordHash,
+                row.user.RejectedAt,
+            })
             .ToListAsync(cancellationToken);
+
+        var lockedSet = await GetLockedUserIdsAsync(
+            rows.Select(row => row.Id).ToArray(),
+            cancellationToken);
+
+        var items = rows
+            .Select(row => new DirectoryTeacherResponse(
+                row.Id,
+                row.FullName,
+                row.Username,
+                row.TeacherCode,
+                row.SchoolId,
+                row.CampusId,
+                row.IsActive,
+                DirectoryAccountStatuses.Resolve(
+                    row.IsActive,
+                    !string.IsNullOrWhiteSpace(row.PasswordHash),
+                    row.RejectedAt is not null,
+                    lockedSet.Contains(row.Id))))
+            .ToArray();
 
         return (items, totalCount);
     }
@@ -344,12 +394,17 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .Select(group => new { ParentId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(item => item.ParentId, item => item.Count, cancellationToken);
 
+        var lockedSet = await GetLockedUserIdsAsync(
+            rows.Select(row => row.parent.Id).ToArray(),
+            cancellationToken);
+
         var items = rows.Select(row => new DirectoryParentResponse(
             row.parent.Id,
             row.user.FullName,
             row.user.Username,
             linkCounts.GetValueOrDefault(row.parent.Id),
-            row.user.IsActive)).ToArray();
+            row.user.IsActive,
+            DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.parent.Id)))).ToArray();
 
         return (items, totalCount);
     }
@@ -474,6 +529,10 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .Where(school => schoolIds.Contains(school.Id) && !school.IsDeleted)
             .ToDictionaryAsync(school => school.Id, school => school.Name, cancellationToken);
 
+        var lockedSet = await GetLockedUserIdsAsync(
+            users.Select(user => user.Id).ToArray(),
+            cancellationToken);
+
         var items = users
             .Select(user =>
             {
@@ -488,7 +547,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     user.MobileNumber,
                     user.Cnic,
                     user.IsActive,
-                    user.NeedsPasswordSetup);
+                    user.NeedsPasswordSetup,
+                    DirectoryAccountStatuses.FromUser(user, lockedSet.Contains(user.Id)));
             })
             .ToArray();
 
@@ -550,6 +610,10 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .Where(campus => campusIds.Contains(campus.Id) && !campus.IsDeleted)
             .ToDictionaryAsync(campus => campus.Id, campus => campus.Name, cancellationToken);
 
+        var lockedSet = await GetLockedUserIdsAsync(
+            users.Select(user => user.Id).ToArray(),
+            cancellationToken);
+
         var items = users
             .Select(user =>
             {
@@ -566,11 +630,32 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     user.MobileNumber,
                     user.Cnic,
                     user.IsActive,
-                    user.NeedsPasswordSetup);
+                    user.NeedsPasswordSetup,
+                    DirectoryAccountStatuses.FromUser(user, lockedSet.Contains(user.Id)));
             })
             .ToArray();
 
         return (items, totalCount);
+    }
+
+    private async Task<HashSet<long>> GetLockedUserIdsAsync(
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return [];
+        }
+
+        var pendingChange = SchoolChangeRequestStatus.Pending;
+        var lockedIds = await _dbContext.UserSchoolChangeRequests.AsNoTracking()
+            .Where(request =>
+                request.Status == pendingChange && userIds.Contains(request.UserId))
+            .Select(request => request.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return lockedIds.ToHashSet();
     }
 
     public async Task<DirectorySchoolStatusCounts> CountSchoolsByStatusAsync(

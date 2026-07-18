@@ -350,7 +350,8 @@ public sealed class DirectoryService : IDirectoryService
             section,
             schoolId,
             campusId,
-            user.IsActive);
+            user.IsActive,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task<DirectoryStudentResponse> UpdateStudentAsync(
@@ -392,7 +393,8 @@ public sealed class DirectoryService : IDirectoryService
             student.Section,
             user.SchoolId ?? 0,
             user.CampusId ?? 0,
-            user.IsActive);
+            user.IsActive,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task ActivateStudentAsync(long studentId, CancellationToken cancellationToken)
@@ -509,7 +511,8 @@ public sealed class DirectoryService : IDirectoryService
             request.TeacherCode.AsTrimmedString(),
             schoolId,
             campusId,
-            user.IsActive);
+            user.IsActive,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task<DirectoryTeacherResponse> UpdateTeacherAsync(
@@ -549,7 +552,8 @@ public sealed class DirectoryService : IDirectoryService
             user.RollNumberTeacherCode ?? string.Empty,
             user.SchoolId ?? 0,
             user.CampusId ?? 0,
-            user.IsActive);
+            user.IsActive,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task ActivateTeacherAsync(long teacherId, CancellationToken cancellationToken)
@@ -642,7 +646,13 @@ public sealed class DirectoryService : IDirectoryService
         user.AttachProfileContext(user.Id, null, null);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new DirectoryParentResponse(user.Id, user.FullName, user.Username, 0, user.IsActive);
+        return new DirectoryParentResponse(
+            user.Id,
+            user.FullName,
+            user.Username,
+            0,
+            user.IsActive,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task<DirectoryParentResponse> UpdateParentAsync(
@@ -670,7 +680,8 @@ public sealed class DirectoryService : IDirectoryService
             user.FullName,
             user.Username,
             linkedCount,
-            user.IsActive);
+            user.IsActive,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task ActivateParentAsync(long parentId, CancellationToken cancellationToken)
@@ -895,7 +906,8 @@ public sealed class DirectoryService : IDirectoryService
                 existing.MobileNumber,
                 existing.Cnic,
                 existing.IsActive,
-                existing.NeedsPasswordSetup);
+                existing.NeedsPasswordSetup,
+                DirectoryAccountStatuses.FromUser(existing));
         }
 
         var username = request.Username.AsTrimmedString();
@@ -927,7 +939,8 @@ public sealed class DirectoryService : IDirectoryService
             user.MobileNumber,
             user.Cnic,
             user.IsActive,
-            user.NeedsPasswordSetup);
+            user.NeedsPasswordSetup,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task<DirectorySchoolAdminResponse> UpdateSchoolAdminAsync(
@@ -965,7 +978,8 @@ public sealed class DirectoryService : IDirectoryService
             user.MobileNumber,
             user.Cnic,
             user.IsActive,
-            user.NeedsPasswordSetup);
+            user.NeedsPasswordSetup,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     public async Task ActivateSchoolAdminAsync(long userId, CancellationToken cancellationToken)
@@ -1151,7 +1165,8 @@ public sealed class DirectoryService : IDirectoryService
             user.MobileNumber,
             user.Cnic,
             user.IsActive,
-            user.NeedsPasswordSetup);
+            user.NeedsPasswordSetup,
+            DirectoryAccountStatuses.FromUser(user));
     }
 
     private void EnsureCanManageCampusAdmins()
@@ -1532,7 +1547,8 @@ public sealed class DirectoryService : IDirectoryService
             request.TeacherCode.AsTrimmedString(),
             schoolId,
             campusId,
-            existing.IsActive);
+            existing.IsActive,
+            DirectoryAccountStatuses.FromUser(existing));
     }
 
     private async Task<DirectoryParentResponse> AddParentRoleToExistingUserAsync(
@@ -1566,7 +1582,8 @@ public sealed class DirectoryService : IDirectoryService
             existing.FullName,
             existing.Username,
             linkedCount,
-            existing.IsActive);
+            existing.IsActive,
+            DirectoryAccountStatuses.FromUser(existing));
     }
 
     private void EnsureSchoolAccess(long schoolId)

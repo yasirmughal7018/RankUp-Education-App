@@ -84,6 +84,15 @@ export interface UpsertCampusInput {
   isActive: boolean;
 }
 
+/** Lifecycle codes from directory list APIs (QA login-status machine). */
+export type DirectoryAccountStatus =
+  | "Active"
+  | "ApprovedInactive"
+  | "PendingApproval"
+  | "Locked"
+  | "Deactivated"
+  | "Rejected";
+
 export interface DirectoryStudent {
   studentId: number;
   fullName: string;
@@ -94,6 +103,7 @@ export interface DirectoryStudent {
   schoolId: number;
   campusId: number;
   isActive: boolean;
+  accountStatus: DirectoryAccountStatus;
 }
 
 export interface DirectoryTeacher {
@@ -104,6 +114,7 @@ export interface DirectoryTeacher {
   schoolId: number;
   campusId: number;
   isActive: boolean;
+  accountStatus: DirectoryAccountStatus;
 }
 
 export interface DirectoryParent {
@@ -112,6 +123,7 @@ export interface DirectoryParent {
   username: string;
   linkedStudentCount: number;
   isActive: boolean;
+  accountStatus: DirectoryAccountStatus;
 }
 
 export interface PagedDirectoryResult<T> {
@@ -174,6 +186,7 @@ export interface DirectorySchoolAdmin {
   cnic: string | null;
   isActive: boolean;
   needsPasswordSetup: boolean;
+  accountStatus: DirectoryAccountStatus;
 }
 
 export interface CreateDirectorySchoolAdminInput {
@@ -212,6 +225,7 @@ export interface DirectoryCampusAdmin {
   cnic: string | null;
   isActive: boolean;
   needsPasswordSetup: boolean;
+  accountStatus: DirectoryAccountStatus;
 }
 
 export interface CreateDirectoryCampusAdminInput {

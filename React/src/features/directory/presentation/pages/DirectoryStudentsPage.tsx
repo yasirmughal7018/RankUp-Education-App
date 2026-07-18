@@ -22,6 +22,7 @@ import {
   useDirectoryStudentsQuery,
   useUpdateStudentMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
 
 const PAGE_SIZE = 50;
 
@@ -432,15 +433,10 @@ export function DirectoryStudentsPage() {
                         {student.schoolId} / {student.campusId}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full px-2 py-1 text-xs font-medium ${
-                            student.isActive
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {student.isActive ? "Active" : "Inactive"}
-                        </span>
+                        <AccountStatusBadge
+                          accountStatus={student.accountStatus}
+                          isActive={student.isActive}
+                        />
                       </td>
                       {canManage ? (
                         <td className="px-4 py-3 text-right">
