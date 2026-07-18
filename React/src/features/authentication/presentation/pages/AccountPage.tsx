@@ -158,6 +158,7 @@ export function AccountPage() {
   const canRequestSchoolChange =
     !!profile && SCHOOL_CHANGE_ROLES.includes(profile.role);
   const isCampusAdminOnly = profile?.role === "CampusAdmin";
+  const canDeactivateAccount = profile?.role !== "PortalAdmin";
 
   useEffect(() => {
     let cancelled = false;
@@ -762,59 +763,63 @@ export function AccountPage() {
               </div>
             </div>
 
-            <div
-              id="deactivate"
-              className="overflow-hidden rounded-2xl border border-red-200/70 bg-white shadow-[0_8px_30px_rgba(127,29,29,0.05)]"
-            >
-              <div className="border-b border-red-100 bg-gradient-to-r from-red-50 to-white px-4 py-3">
-                <h2 className="text-sm font-semibold text-red-700">
-                  Danger zone
-                </h2>
-                <p className="mt-0.5 text-xs text-red-600/80">
-                  Deactivate disables login until an admin restores it.
-                </p>
-              </div>
-              <div className="space-y-3 px-4 py-4">
-                {deactivateError ? (
-                  <Notice tone="error">{deactivateError}</Notice>
-                ) : null}
-                <form
-                  className="space-y-2.5"
-                  onSubmit={(e) => void handleDeactivate(e)}
-                >
-                  <div>
-                    <FieldLabel htmlFor="deactivatePassword" required>
-                      Current password
-                    </FieldLabel>
-                    <input
-                      id="deactivatePassword"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      value={deactivatePassword}
-                      onChange={(e) => setDeactivatePassword(e.target.value)}
-                      className={fieldClass}
-                    />
-                  </div>
-                  <label className="flex items-start gap-2.5 rounded-lg border border-red-100 bg-red-50/50 px-3 py-2.5 text-xs leading-snug text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={deactivateConfirm}
-                      onChange={(e) => setDeactivateConfirm(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-300 text-red-600 focus:ring-red-500"
-                    />
-                    <span>I understand I will be signed out immediately.</span>
-                  </label>
-                  <Btn
-                    variant="danger"
-                    block
-                    disabled={isDeactivating || !deactivateConfirm}
+            {canDeactivateAccount ? (
+              <div
+                id="deactivate"
+                className="overflow-hidden rounded-2xl border border-red-200/70 bg-white shadow-[0_8px_30px_rgba(127,29,29,0.05)]"
+              >
+                <div className="border-b border-red-100 bg-gradient-to-r from-red-50 to-white px-4 py-3">
+                  <h2 className="text-sm font-semibold text-red-700">
+                    Danger zone
+                  </h2>
+                  <p className="mt-0.5 text-xs text-red-600/80">
+                    Deactivate disables login until an admin restores it.
+                  </p>
+                </div>
+                <div className="space-y-3 px-4 py-4">
+                  {deactivateError ? (
+                    <Notice tone="error">{deactivateError}</Notice>
+                  ) : null}
+                  <form
+                    className="space-y-2.5"
+                    onSubmit={(e) => void handleDeactivate(e)}
                   >
-                    {isDeactivating ? "Deactivating…" : "Deactivate account"}
-                  </Btn>
-                </form>
+                    <div>
+                      <FieldLabel htmlFor="deactivatePassword" required>
+                        Current password
+                      </FieldLabel>
+                      <input
+                        id="deactivatePassword"
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        value={deactivatePassword}
+                        onChange={(e) => setDeactivatePassword(e.target.value)}
+                        className={fieldClass}
+                      />
+                    </div>
+                    <label className="flex items-start gap-2.5 rounded-lg border border-red-100 bg-red-50/50 px-3 py-2.5 text-xs leading-snug text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={deactivateConfirm}
+                        onChange={(e) => setDeactivateConfirm(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                      />
+                      <span>
+                        I understand I will be signed out immediately.
+                      </span>
+                    </label>
+                    <Btn
+                      variant="danger"
+                      block
+                      disabled={isDeactivating || !deactivateConfirm}
+                    >
+                      {isDeactivating ? "Deactivating…" : "Deactivate account"}
+                    </Btn>
+                  </form>
+                </div>
               </div>
-            </div>
+            ) : null}
           </aside>
         </div>
       </div>

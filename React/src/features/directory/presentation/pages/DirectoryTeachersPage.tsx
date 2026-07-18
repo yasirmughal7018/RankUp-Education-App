@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { PageHeader } from "@/core/components/PageHeader";
@@ -28,9 +28,11 @@ const PAGE_SIZE = 50;
 export function DirectoryTeachersPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
+  const [searchParams] = useSearchParams();
+  const initialSearch = searchParams.get("search") ?? "";
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
   const [schoolId, setSchoolId] = useState("");
   const [campusId, setCampusId] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveStatusFilter>("all");

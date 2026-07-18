@@ -23,6 +23,7 @@ export const queryKeys = {
   linkedStudents: () => ["parents", "me", "students"] as const,
   studentQuizHistory: (studentId: number) =>
     ["reports", "students", studentId, "quiz-history"] as const,
+  directorySummary: () => ["directory", "summary"] as const,
   directorySchools: () => ["directory", "schools"] as const,
   directoryCampuses: (schoolId: number) =>
     ["directory", "schools", schoolId, "campuses"] as const,

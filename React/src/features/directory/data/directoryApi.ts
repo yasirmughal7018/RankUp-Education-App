@@ -17,8 +17,13 @@ import type {
   DirectorySchoolAdminFilters,
   DirectoryStudent,
   DirectoryStudentFilters,
+  DirectorySchoolStatusCounts,
+  DirectoryStatusCounts,
+  DirectorySummary,
   DirectoryTeacher,
   DirectoryTeacherFilters,
+  EMPTY_SCHOOL_STATUS_COUNTS,
+  EMPTY_STATUS_COUNTS,
   LinkParentStudentInput,
   LinkParentStudentResult,
   PagedDirectoryResult,
@@ -41,6 +46,70 @@ function toQuery(params: Record<string, string | number | null | undefined>) {
   }
   const query = search.toString();
   return query ? `?${query}` : "";
+}
+
+function normalizePeopleCounts(
+  value: DirectoryStatusCounts | null | undefined,
+): DirectoryStatusCounts {
+  if (!value || typeof value !== "object") {
+    return { ...EMPTY_STATUS_COUNTS };
+  }
+  const activeReady = Number(value.activeReady) || 0;
+  const pendingApproval = Number(value.pendingApproval) || 0;
+  const needsPasswordSetup = Number(value.needsPasswordSetup) || 0;
+  const locked = Number(value.locked) || 0;
+  const deactivated = Number(value.deactivated) || 0;
+  const rejected = Number(value.rejected) || 0;
+  const active =
+    Number(value.active) || activeReady + needsPasswordSetup;
+  const total =
+    Number(value.total) ||
+    activeReady +
+      pendingApproval +
+      needsPasswordSetup +
+      locked +
+      deactivated +
+      rejected;
+  return {
+    active,
+    activeReady,
+    pendingApproval,
+    needsPasswordSetup,
+    locked,
+    deactivated,
+    rejected,
+    total,
+  };
+}
+
+function normalizeSchoolCounts(
+  value: DirectorySchoolStatusCounts | null | undefined,
+): DirectorySchoolStatusCounts {
+  if (!value || typeof value !== "object") {
+    return { ...EMPTY_SCHOOL_STATUS_COUNTS };
+  }
+  const active = Number(value.active) || 0;
+  const inactive = Number(value.inactive) || 0;
+  return {
+    active,
+    inactive,
+    total: Number(value.total) || active + inactive,
+  };
+}
+
+export async function getDirectorySummary(): Promise<DirectorySummary> {
+  const raw = await apiRequest<DirectorySummary>("/directory/summary");
+  return {
+    schools: normalizeSchoolCounts(raw.schools),
+    students: normalizePeopleCounts(raw.students),
+    parents: normalizePeopleCounts(raw.parents),
+    teachers: normalizePeopleCounts(raw.teachers),
+    schoolAdmins: normalizePeopleCounts(raw.schoolAdmins),
+    campusAdmins: normalizePeopleCounts(raw.campusAdmins),
+    visibleSections: Array.isArray(raw.visibleSections)
+      ? raw.visibleSections
+      : [],
+  };
 }
 
 export async function listSchools(): Promise<DirectorySchool[]> {

@@ -18,6 +18,15 @@ public sealed class DirectoryController : ControllerBase
         _directoryService = directoryService;
     }
 
+    [HttpGet("summary")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectorySummaryResponse>>> GetSummaryAsync(
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GetSummaryAsync(cancellationToken);
+        return Ok(ApiResponse<DirectorySummaryResponse>.Ok(response));
+    }
+
     [HttpGet("schools")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<SchoolListResponse>>> ListSchoolsAsync(

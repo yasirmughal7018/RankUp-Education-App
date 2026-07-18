@@ -1,3 +1,57 @@
+export type DirectorySectionKey =
+  | "schools"
+  | "students"
+  | "parents"
+  | "teachers"
+  | "schoolAdmins"
+  | "campusAdmins"
+  | "schoolChanges";
+
+export interface DirectoryStatusCounts {
+  /** is_active=true (ActiveReady + NeedsPasswordSetup) — used as the tile hero number */
+  active: number;
+  activeReady: number;
+  pendingApproval: number;
+  needsPasswordSetup: number;
+  locked: number;
+  deactivated: number;
+  rejected: number;
+  total: number;
+}
+
+export interface DirectorySchoolStatusCounts {
+  active: number;
+  inactive: number;
+  total: number;
+}
+
+export const EMPTY_STATUS_COUNTS: DirectoryStatusCounts = {
+  active: 0,
+  activeReady: 0,
+  pendingApproval: 0,
+  needsPasswordSetup: 0,
+  locked: 0,
+  deactivated: 0,
+  rejected: 0,
+  total: 0,
+};
+
+export const EMPTY_SCHOOL_STATUS_COUNTS: DirectorySchoolStatusCounts = {
+  active: 0,
+  inactive: 0,
+  total: 0,
+};
+
+export interface DirectorySummary {
+  schools: DirectorySchoolStatusCounts;
+  students: DirectoryStatusCounts;
+  parents: DirectoryStatusCounts;
+  teachers: DirectoryStatusCounts;
+  schoolAdmins: DirectoryStatusCounts;
+  campusAdmins: DirectoryStatusCounts;
+  visibleSections: DirectorySectionKey[];
+}
+
 export interface DirectorySchool {
   id: number;
   name: string;

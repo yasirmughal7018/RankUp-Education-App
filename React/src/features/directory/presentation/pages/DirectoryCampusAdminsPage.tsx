@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { ApiError } from "@/core/api/types";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -49,9 +49,11 @@ export function DirectoryCampusAdminsPage() {
   const canManage = isPortalAdmin || isSchoolAdmin;
   const lockedSchoolId =
     isSchoolAdmin && user?.schoolId != null ? user.schoolId : null;
+  const [searchParams] = useSearchParams();
+  const initialSearch = searchParams.get("search") ?? "";
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
   const [schoolId, setSchoolId] = useState(
     lockedSchoolId != null ? String(lockedSchoolId) : "",
   );

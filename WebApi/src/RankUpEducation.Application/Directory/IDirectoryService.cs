@@ -4,6 +4,8 @@ namespace RankUpEducation.Application.Directory;
 
 public interface IDirectoryService
 {
+    Task<DirectorySummaryResponse> GetSummaryAsync(CancellationToken cancellationToken);
+
     Task<SchoolListResponse> ListSchoolsAsync(CancellationToken cancellationToken);
 
     Task<SchoolResponse> CreateSchoolAsync(UpsertSchoolRequest request, CancellationToken cancellationToken);

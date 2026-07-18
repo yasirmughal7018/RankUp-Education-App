@@ -1,5 +1,5 @@
-using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
@@ -103,5 +103,15 @@ public interface IDirectoryRepository
         string? search,
         int pageNumber,
         int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectorySchoolStatusCounts> CountSchoolsByStatusAsync(
+        int? schoolId,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryStatusCounts> CountUsersByStatusAsync(
+        UserRole role,
+        int? schoolId,
+        int? campusId,
         CancellationToken cancellationToken);
 }

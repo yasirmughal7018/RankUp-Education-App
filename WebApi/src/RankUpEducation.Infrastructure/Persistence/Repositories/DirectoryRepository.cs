@@ -572,4 +572,150 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         return (items, totalCount);
     }
+
+    public async Task<DirectorySchoolStatusCounts> CountSchoolsByStatusAsync(
+        int? schoolId,
+        CancellationToken cancellationToken)
+    {
+        var query = _dbContext.Schools.AsNoTracking()
+            .Where(school => !school.IsDeleted);
+
+        if (schoolId is not null)
+        {
+            query = query.Where(school => school.Id == schoolId.Value);
+        }
+
+        var active = await query.CountAsync(school => school.IsActive, cancellationToken);
+        var inactive = await query.CountAsync(school => !school.IsActive, cancellationToken);
+        return new DirectorySchoolStatusCounts(active, inactive, active + inactive);
+    }
+
+    public async Task<DirectoryStatusCounts> CountUsersByStatusAsync(
+        UserRole role,
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        var users = BuildUserQueryForRole(role);
+
+        if (schoolId is not null)
+        {
+            users = users.Where(user => user.SchoolId == schoolId.Value);
+        }
+
+        if (campusId is not null)
+        {
+            users = users.Where(user => user.CampusId == campusId.Value);
+        }
+
+        var pendingChange = SchoolChangeRequestStatus.Pending;
+
+        var rows = await users
+            .Select(user => new
+            {
+                user.Id,
+                user.IsActive,
+                user.PasswordHash,
+                user.RejectedAt,
+            })
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return new DirectoryStatusCounts(0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        var userIds = rows.Select(row => row.Id).ToArray();
+        var lockedUserIds = await _dbContext.UserSchoolChangeRequests.AsNoTracking()
+            .Where(request =>
+                request.Status == pendingChange && userIds.Contains(request.UserId))
+            .Select(request => request.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var lockedSet = lockedUserIds.ToHashSet();
+
+        var activeReady = 0;
+        var pendingApproval = 0;
+        var needsPasswordSetup = 0;
+        var locked = 0;
+        var deactivated = 0;
+        var rejected = 0;
+
+        foreach (var row in rows)
+        {
+            var hasPassword = !string.IsNullOrWhiteSpace(row.PasswordHash);
+
+            if (row.RejectedAt is not null)
+            {
+                rejected++;
+                continue;
+            }
+
+            if (row.IsActive && !hasPassword)
+            {
+                needsPasswordSetup++;
+                continue;
+            }
+
+            if (row.IsActive && hasPassword)
+            {
+                activeReady++;
+                continue;
+            }
+
+            if (!hasPassword)
+            {
+                pendingApproval++;
+                continue;
+            }
+
+            if (lockedSet.Contains(row.Id))
+            {
+                locked++;
+            }
+            else
+            {
+                deactivated++;
+            }
+        }
+
+        var active = activeReady + needsPasswordSetup;
+        var total = activeReady + pendingApproval + needsPasswordSetup + locked + deactivated + rejected;
+        return new DirectoryStatusCounts(
+            active,
+            activeReady,
+            pendingApproval,
+            needsPasswordSetup,
+            locked,
+            deactivated,
+            rejected,
+            total);
+    }
+
+    private IQueryable<User> BuildUserQueryForRole(UserRole role)
+    {
+        return role switch
+        {
+            UserRole.Student =>
+                from student in _dbContext.Students.AsNoTracking()
+                join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+                where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+                select user,
+
+            UserRole.Teacher =>
+                from teacher in _dbContext.Teachers.AsNoTracking()
+                join user in _dbContext.Users.AsNoTracking() on teacher.Id equals user.Id
+                where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Teacher)
+                select user,
+
+            UserRole.Parent =>
+                from parent in _dbContext.Parents.AsNoTracking()
+                join user in _dbContext.Users.AsNoTracking() on parent.Id equals user.Id
+                where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Parent)
+                select user,
+
+            _ => _dbContext.Users.AsNoTracking()
+                .Where(user => user.RoleAssignments.Any(assignment => assignment.Role == role)),
+        };
+    }
 }

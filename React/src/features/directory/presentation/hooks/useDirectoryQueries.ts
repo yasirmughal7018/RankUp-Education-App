@@ -46,6 +46,14 @@ function invalidateCampusAdmins(queryClient: ReturnType<typeof useQueryClient>) 
   });
 }
 
+export function useDirectorySummaryQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.directorySummary(),
+    queryFn: () => directoryApi.getDirectorySummary(),
+    enabled,
+  });
+}
+
 export function useDirectorySchoolsQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.directorySchools(),

@@ -1,5 +1,31 @@
 namespace RankUpEducation.Contracts.Directory;
 
+/// <summary>
+/// User lifecycle counts aligned with login-status / QA state machine.
+/// <see cref="Active"/> = users with <c>is_active=true</c> (ActiveReady + NeedsPasswordSetup).
+/// The six status fields below are mutually exclusive and sum to <see cref="Total"/>.
+/// </summary>
+public sealed record DirectoryStatusCounts(
+    int Active,
+    int ActiveReady,
+    int PendingApproval,
+    int NeedsPasswordSetup,
+    int Locked,
+    int Deactivated,
+    int Rejected,
+    int Total);
+
+public sealed record DirectorySchoolStatusCounts(int Active, int Inactive, int Total);
+
+public sealed record DirectorySummaryResponse(
+    DirectorySchoolStatusCounts Schools,
+    DirectoryStatusCounts Students,
+    DirectoryStatusCounts Parents,
+    DirectoryStatusCounts Teachers,
+    DirectoryStatusCounts SchoolAdmins,
+    DirectoryStatusCounts CampusAdmins,
+    IReadOnlyList<string> VisibleSections);
+
 public sealed record SchoolListResponse(IReadOnlyList<SchoolResponse> Items);
 
 public sealed record SchoolResponse(long Id, string Name, string Code, bool IsActive);

@@ -739,6 +739,11 @@ public sealed class AuthService : IAuthService
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundAppException("User account was not found.");
 
+        if (user.HasRole(UserRole.PortalAdmin))
+        {
+            throw new ForbiddenAppException("Portal Admin accounts cannot be deactivated.");
+        }
+
         try
         {
             user.EnsureCanLogin();

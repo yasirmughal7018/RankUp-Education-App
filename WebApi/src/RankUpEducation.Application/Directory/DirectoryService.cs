@@ -29,6 +29,88 @@ public sealed class DirectoryService : IDirectoryService
         _unitOfWork = unitOfWork;
     }
 
+    public async Task<DirectorySummaryResponse> GetSummaryAsync(CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        var role = ParseRole();
+
+        // SchoolAdmin: whole school. CampusAdmin: school + campus. PortalAdmin: no filter.
+        int? schoolId = null;
+        int? campusId = null;
+        if (role == UserRole.CampusAdmin)
+        {
+            schoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            campusId = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+        }
+        else if (role == UserRole.SchoolAdmin)
+        {
+            schoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+        }
+
+        var schools = await _directory.CountSchoolsByStatusAsync(schoolId, cancellationToken);
+        var students = await _directory.CountUsersByStatusAsync(
+            UserRole.Student,
+            schoolId,
+            campusId,
+            cancellationToken);
+        var teachers = await _directory.CountUsersByStatusAsync(
+            UserRole.Teacher,
+            schoolId,
+            campusId,
+            cancellationToken);
+
+        // Parents are not school/campus scoped in directory list today — keep the same scope.
+        var parents = await _directory.CountUsersByStatusAsync(
+            UserRole.Parent,
+            schoolId: null,
+            campusId: null,
+            cancellationToken);
+
+        var visibleSections = new List<string>
+        {
+            "schools",
+            "students",
+            "parents",
+            "teachers",
+            "schoolChanges",
+        };
+
+        var schoolAdmins = new DirectoryStatusCounts(0, 0, 0, 0, 0, 0, 0, 0);
+        var campusAdmins = new DirectoryStatusCounts(0, 0, 0, 0, 0, 0, 0, 0);
+
+        if (role == UserRole.PortalAdmin)
+        {
+            schoolAdmins = await _directory.CountUsersByStatusAsync(
+                UserRole.SchoolAdmin,
+                schoolId: null,
+                campusId: null,
+                cancellationToken);
+            visibleSections.Add("schoolAdmins");
+        }
+
+        if (role is UserRole.PortalAdmin or UserRole.SchoolAdmin)
+        {
+            campusAdmins = await _directory.CountUsersByStatusAsync(
+                UserRole.CampusAdmin,
+                schoolId,
+                campusId: null,
+                cancellationToken);
+            visibleSections.Add("campusAdmins");
+        }
+
+        return new DirectorySummaryResponse(
+            schools,
+            students,
+            parents,
+            teachers,
+            schoolAdmins,
+            campusAdmins,
+            visibleSections);
+    }
+
     public async Task<SchoolListResponse> ListSchoolsAsync(CancellationToken cancellationToken)
     {
         EnsureAdmin();
