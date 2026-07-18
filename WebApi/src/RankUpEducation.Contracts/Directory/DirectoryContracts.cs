@@ -36,7 +36,12 @@ public sealed record DirectorySummaryResponse(
 
 public sealed record SchoolListResponse(IReadOnlyList<SchoolResponse> Items);
 
-public sealed record SchoolResponse(long Id, string Name, string Code, bool IsActive);
+public sealed record SchoolResponse(
+    long Id,
+    string Name,
+    string Code,
+    bool IsActive,
+    int CampusCount);
 
 public sealed record UpsertSchoolRequest(string Name, string Code, bool IsActive = true);
 
@@ -62,6 +67,10 @@ public sealed record DirectoryStudentResponse(
     int SchoolId,
     int CampusId,
     bool IsActive,
+    string? AvatarUrl,
+    string SchoolName,
+    string CampusName,
+    IReadOnlyList<string> TeacherNames,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -97,6 +106,10 @@ public sealed record DirectoryTeacherResponse(
     int SchoolId,
     int CampusId,
     bool IsActive,
+    string? AvatarUrl,
+    string SchoolName,
+    string CampusName,
+    int StudentCount,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -126,6 +139,7 @@ public sealed record DirectoryParentResponse(
     string Username,
     int LinkedStudentCount,
     bool IsActive,
+    string? AvatarUrl,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -168,6 +182,10 @@ public sealed record DirectorySchoolAdminResponse(
     string? Cnic,
     bool IsActive,
     bool NeedsPasswordSetup,
+    string? AvatarUrl,
+    int ActiveCampusCount,
+    int ActiveTeacherCount,
+    int ActiveStudentCount,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -204,6 +222,9 @@ public sealed record DirectoryCampusAdminResponse(
     string? Cnic,
     bool IsActive,
     bool NeedsPasswordSetup,
+    string? AvatarUrl,
+    int ActiveTeacherCount,
+    int ActiveStudentCount,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 

@@ -62,6 +62,7 @@ export interface DirectorySchool {
   name: string;
   code: string;
   isActive: boolean;
+  campusCount: number;
 }
 
 export interface UpsertSchoolInput {
@@ -103,6 +104,10 @@ export interface DirectoryStudent {
   schoolId: number;
   campusId: number;
   isActive: boolean;
+  avatarUrl?: string | null;
+  schoolName: string;
+  campusName: string;
+  teacherNames: string[];
   accountStatus: DirectoryAccountStatus;
 }
 
@@ -114,6 +119,10 @@ export interface DirectoryTeacher {
   schoolId: number;
   campusId: number;
   isActive: boolean;
+  avatarUrl?: string | null;
+  schoolName: string;
+  campusName: string;
+  studentCount: number;
   accountStatus: DirectoryAccountStatus;
 }
 
@@ -123,6 +132,7 @@ export interface DirectoryParent {
   username: string;
   linkedStudentCount: number;
   isActive: boolean;
+  avatarUrl?: string | null;
   accountStatus: DirectoryAccountStatus;
 }
 
@@ -186,6 +196,10 @@ export interface DirectorySchoolAdmin {
   cnic: string | null;
   isActive: boolean;
   needsPasswordSetup: boolean;
+  avatarUrl?: string | null;
+  activeCampusCount: number;
+  activeTeacherCount: number;
+  activeStudentCount: number;
   accountStatus: DirectoryAccountStatus;
 }
 
@@ -225,6 +239,9 @@ export interface DirectoryCampusAdmin {
   cnic: string | null;
   isActive: boolean;
   needsPasswordSetup: boolean;
+  avatarUrl?: string | null;
+  activeTeacherCount: number;
+  activeStudentCount: number;
   accountStatus: DirectoryAccountStatus;
 }
 

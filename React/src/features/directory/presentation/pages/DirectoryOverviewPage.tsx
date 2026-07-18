@@ -22,6 +22,7 @@ import {
   useDirectorySummaryQuery,
   useDirectoryTeachersQuery,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import {
   directoryAccountStatusClass,
   directoryAccountStatusLabel,
@@ -33,15 +34,37 @@ type DashboardTab = Exclude<DirectorySectionKey, "schoolChanges">;
 type SchoolStatusCode = "Active" | "Inactive";
 type PreviewStatusCode = DirectoryAccountStatus | SchoolStatusCode;
 
+type PreviewStat = {
+  label: string;
+  value: string | number;
+};
+
 type PreviewItem = {
   id: string;
   title: string;
   subtitle: string;
   meta: string;
+  /** Compact stats row under subtitle (campuses / teachers / students). */
+  stats?: PreviewStat[];
+  avatarUrl?: string | null;
   statusCode: PreviewStatusCode;
   statusLabel: string;
   href: string;
 };
+
+function initialsFromName(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) {
+    return "??";
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+}
 
 const TAB_META: Record<
   DashboardTab,
@@ -89,25 +112,8 @@ const DASHBOARD_TAB_ORDER: DashboardTab[] = [
   "students",
 ];
 
-const SCHOOL_STATUS_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "Active", label: "Active" },
-  { id: "Inactive", label: "Inactive" },
-] as const;
-
-const PEOPLE_STATUS_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "Active", label: "Active" },
-  { id: "ApprovedInactive", label: "Approved (Inactive)" },
-  { id: "PendingApproval", label: "Pending approval" },
-  { id: "Locked", label: "Locked" },
-  { id: "Deactivated", label: "Deactivated" },
-  { id: "Rejected", label: "Rejected" },
-] as const;
-
-type StatusFilterId =
-  | (typeof SCHOOL_STATUS_FILTERS)[number]["id"]
-  | (typeof PEOPLE_STATUS_FILTERS)[number]["id"];
+/** Overview list shows Active/ready records only (not pending/locked/etc.). */
+const OVERVIEW_LIST_LIMIT = 6;
 
 function isDashboardTab(value: string | null): value is DashboardTab {
   return (
@@ -122,11 +128,13 @@ function isDashboardTab(value: string | null): value is DashboardTab {
 
 function mapSchool(item: DirectorySchool): PreviewItem {
   const statusCode: SchoolStatusCode = item.isActive ? "Active" : "Inactive";
+  const campusCount = item.campusCount ?? 0;
   return {
     id: `school-${item.id}`,
     title: item.name,
     subtitle: item.code,
-    meta: "School",
+    meta: `${campusCount} campus${campusCount === 1 ? "" : "es"}`,
+    stats: [{ label: "Campuses", value: campusCount }],
     statusCode,
     statusLabel: statusCode,
     href: "/admin/directory/schools",
@@ -138,11 +146,17 @@ function mapStudent(item: DirectoryStudent): PreviewItem {
     item.accountStatus,
     item.isActive,
   );
+  const teachers =
+    item.teacherNames?.filter((name) => name.trim().length > 0) ?? [];
+  const teacherLabel =
+    teachers.length === 0 ? "—" : teachers.join(", ");
   return {
     id: `student-${item.studentId}`,
     title: item.fullName,
-    subtitle: `Roll ${item.rollNumber} · Grade ${item.grade}${item.section}`,
-    meta: item.username,
+    subtitle: `${item.schoolName || "—"} | ${item.campusName || "—"}`,
+    meta: teacherLabel === "—" ? "No teacher linked" : teacherLabel,
+    stats: [{ label: "Teacher", value: teacherLabel }],
+    avatarUrl: item.avatarUrl,
     statusCode,
     statusLabel: directoryAccountStatusLabel(statusCode),
     href: "/admin/directory/students",
@@ -157,8 +171,10 @@ function mapParent(item: DirectoryParent): PreviewItem {
   return {
     id: `parent-${item.parentId}`,
     title: item.fullName,
-    subtitle: `${item.linkedStudentCount} linked child${item.linkedStudentCount === 1 ? "" : "ren"}`,
-    meta: item.username,
+    subtitle: item.username,
+    meta: `${item.linkedStudentCount} linked child${item.linkedStudentCount === 1 ? "" : "ren"}`,
+    stats: [{ label: "Children", value: item.linkedStudentCount }],
+    avatarUrl: item.avatarUrl,
     statusCode,
     statusLabel: directoryAccountStatusLabel(statusCode),
     href: "/admin/directory/parents",
@@ -173,8 +189,10 @@ function mapTeacher(item: DirectoryTeacher): PreviewItem {
   return {
     id: `teacher-${item.teacherId}`,
     title: item.fullName,
-    subtitle: item.teacherCode,
-    meta: item.username,
+    subtitle: `${item.schoolName || "—"} | ${item.campusName || "—"}`,
+    meta: `${item.studentCount} student${item.studentCount === 1 ? "" : "s"}`,
+    stats: [{ label: "Students", value: item.studentCount ?? 0 }],
+    avatarUrl: item.avatarUrl,
     statusCode,
     statusLabel: directoryAccountStatusLabel(statusCode),
     href: "/admin/directory/teachers",
@@ -191,6 +209,12 @@ function mapSchoolAdmin(item: DirectorySchoolAdmin): PreviewItem {
     title: item.fullName,
     subtitle: item.schoolName,
     meta: item.username,
+    stats: [
+      { label: "Campuses", value: item.activeCampusCount ?? 0 },
+      { label: "Teachers", value: item.activeTeacherCount ?? 0 },
+      { label: "Students", value: item.activeStudentCount ?? 0 },
+    ],
+    avatarUrl: item.avatarUrl,
     statusCode,
     statusLabel: directoryAccountStatusLabel(statusCode),
     href: "/admin/directory/school-admins",
@@ -207,6 +231,11 @@ function mapCampusAdmin(item: DirectoryCampusAdmin): PreviewItem {
     title: item.fullName,
     subtitle: `${item.schoolName} · ${item.campusName}`,
     meta: item.username,
+    stats: [
+      { label: "Teachers", value: item.activeTeacherCount ?? 0 },
+      { label: "Students", value: item.activeStudentCount ?? 0 },
+    ],
+    avatarUrl: item.avatarUrl,
     statusCode,
     statusLabel: directoryAccountStatusLabel(statusCode),
     href: "/admin/directory/campus-admins",
@@ -218,7 +247,6 @@ export function DirectoryOverviewPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilterId>("all");
   const [selectedItem, setSelectedItem] = useState<PreviewItem | null>(null);
   /** Expanded summary cards show status details; collapsed by default. */
   const [expandedCards, setExpandedCards] = useState<
@@ -265,7 +293,8 @@ export function DirectoryOverviewPage() {
     () => ({
       search: search || undefined,
       pageNumber: 1,
-      pageSize: 8,
+      // Over-fetch so Active-only filter still fills the overview list.
+      pageSize: 40,
     }),
     [search],
   );
@@ -340,10 +369,9 @@ export function DirectoryOverviewPage() {
         break;
     }
 
-    if (statusFilter === "all") {
-      return items;
-    }
-    return items.filter((item) => item.statusCode === statusFilter);
+    return items
+      .filter((item) => item.statusCode === "Active")
+      .slice(0, OVERVIEW_LIST_LIMIT);
   }, [
     activeTab,
     campusAdminsQuery.data?.items,
@@ -351,7 +379,6 @@ export function DirectoryOverviewPage() {
     schoolAdminsQuery.data?.items,
     schoolsQuery.data,
     search,
-    statusFilter,
     studentsQuery.data?.items,
     teachersQuery.data?.items,
   ]);
@@ -424,14 +451,10 @@ export function DirectoryOverviewPage() {
       },
       { replace: true },
     );
-    setStatusFilter("all");
     setSearchInput("");
     setSearch("");
     setSelectedItem(null);
   }
-
-  const statusFilters =
-    activeTab === "schools" ? SCHOOL_STATUS_FILTERS : PEOPLE_STATUS_FILTERS;
 
   function runSearch(event: FormEvent) {
     event.preventDefault();
@@ -651,10 +674,11 @@ export function DirectoryOverviewPage() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-                    Directory list
+                    Active directory
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Browse people and schools with the same statuses as above.
+                    Only active (ready) people and schools. Open the full list
+                    for other statuses.
                   </p>
                 </div>
                 <button
@@ -713,33 +737,9 @@ export function DirectoryOverviewPage() {
                 </button>
               </form>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {statusFilters.map((filter) => {
-                  const selected = statusFilter === filter.id;
-                  return (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      onClick={() => setStatusFilter(filter.id)}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
-                        selected
-                          ? "bg-slate-900 text-white"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      {filter.label}
-                    </button>
-                  );
-                })}
-                {listFetching && !listLoading ? (
-                  <span className="text-xs text-slate-400">Updating…</span>
-                ) : null}
-                {!listLoading && !listError ? (
-                  <span className="ml-auto text-xs text-slate-400">
-                    {previewItems.length} shown
-                  </span>
-                ) : null}
-              </div>
+              {listFetching && !listLoading ? (
+                <p className="text-xs text-slate-400">Updating…</p>
+              ) : null}
 
               <div>
                 {listLoading ? <DirectoryListSkeleton /> : null}
@@ -757,46 +757,23 @@ export function DirectoryOverviewPage() {
 
                 {!listLoading && !listError && previewItems.length === 0 ? (
                   <DirectoryEmptyState
-                    title={`No ${TAB_META[activeTab].label.toLowerCase()} found`}
+                    title={`No active ${TAB_META[activeTab].label.toLowerCase()} found`}
                     description={
-                      search || statusFilter !== "all"
-                        ? "Try a different search or status filter."
-                        : "Nothing is available for your role in this section yet."
+                      search
+                        ? "Try a different search, or open the full list for other statuses."
+                        : "No active records for your role in this section yet. Open the full list to manage pending or inactive accounts."
                     }
                   />
                 ) : null}
 
                 {!listLoading && !listError && previewItems.length > 0 ? (
-                  <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                  <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {previewItems.map((item) => (
                       <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedItem(item)}
-                          className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium text-slate-900">
-                              {item.title}
-                            </p>
-                            <p className="mt-0.5 truncate text-sm text-slate-500">
-                              {item.subtitle}
-                              {item.meta ? (
-                                <span className="text-slate-400">
-                                  {" "}
-                                  · {item.meta}
-                                </span>
-                              ) : null}
-                            </p>
-                          </div>
-                          <span
-                            className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${directoryAccountStatusClass(
-                              item.statusCode,
-                            )}`}
-                          >
-                            {item.statusLabel}
-                          </span>
-                        </button>
+                        <DirectoryPreviewTile
+                          item={item}
+                          onSelect={() => setSelectedItem(item)}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -866,20 +843,81 @@ function DirectoryLoadingSkeleton() {
   );
 }
 
+function DirectoryPreviewTile({
+  item,
+  onSelect,
+}: {
+  item: PreviewItem;
+  onSelect: () => void;
+}) {
+  const initials = initialsFromName(item.title);
+  const imageUrl = resolvePublicUrl(item.avatarUrl);
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="group relative flex h-full w-full items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 pr-16 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+    >
+      <span
+        className="absolute right-3 top-3 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-600"
+        aria-label="Active"
+      >
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        </span>
+        Active
+      </span>
+
+      <span className="relative inline-flex h-14 w-14 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-brand-100 to-brand-200 ring-2 ring-white shadow-sm">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center text-sm font-bold tracking-wide text-brand-800">
+            {initials}
+          </span>
+        )}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-semibold tracking-tight text-slate-900">
+          {item.title}
+        </p>
+        <p className="mt-0.5 truncate text-sm text-slate-500">{item.subtitle}</p>
+        {item.stats && item.stats.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            {item.stats.map((stat) => (
+              <p
+                key={stat.label}
+                className="text-xs text-slate-500"
+                title={`${stat.label}: ${stat.value}`}
+              >
+                <span className="font-medium text-slate-700">{stat.value}</span>{" "}
+                <span className="text-slate-400">{stat.label}</span>
+              </p>
+            ))}
+          </div>
+        ) : item.meta ? (
+          <p className="mt-1.5 truncate text-xs text-slate-400">{item.meta}</p>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
 function DirectoryListSkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200">
-      {Array.from({ length: 5 }).map((_, index) => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, index) => (
         <div
           key={index}
-          className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5 last:border-b-0"
-        >
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-4 w-2/5 animate-pulse rounded bg-slate-100" />
-            <div className="h-3 w-3/5 animate-pulse rounded bg-slate-100" />
-          </div>
-          <div className="h-6 w-20 animate-pulse rounded-md bg-slate-100" />
-        </div>
+          className="h-[88px] animate-pulse rounded-2xl border border-slate-200 bg-slate-100"
+        />
       ))}
     </div>
   );

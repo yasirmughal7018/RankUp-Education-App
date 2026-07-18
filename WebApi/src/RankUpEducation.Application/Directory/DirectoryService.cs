@@ -351,6 +351,10 @@ public sealed class DirectoryService : IDirectoryService
             schoolId,
             campusId,
             user.IsActive,
+            user.AvatarUrl,
+            "—",
+            "—",
+            Array.Empty<string>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -394,6 +398,10 @@ public sealed class DirectoryService : IDirectoryService
             user.SchoolId ?? 0,
             user.CampusId ?? 0,
             user.IsActive,
+            user.AvatarUrl,
+            "—",
+            "—",
+            Array.Empty<string>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -512,6 +520,10 @@ public sealed class DirectoryService : IDirectoryService
             schoolId,
             campusId,
             user.IsActive,
+            user.AvatarUrl,
+            "—",
+            "—",
+            0,
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -553,6 +565,10 @@ public sealed class DirectoryService : IDirectoryService
             user.SchoolId ?? 0,
             user.CampusId ?? 0,
             user.IsActive,
+            user.AvatarUrl,
+            "—",
+            "—",
+            0,
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -652,6 +668,7 @@ public sealed class DirectoryService : IDirectoryService
             user.Username,
             0,
             user.IsActive,
+            user.AvatarUrl,
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -681,6 +698,7 @@ public sealed class DirectoryService : IDirectoryService
             user.Username,
             linkedCount,
             user.IsActive,
+            user.AvatarUrl,
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -907,6 +925,10 @@ public sealed class DirectoryService : IDirectoryService
                 existing.Cnic,
                 existing.IsActive,
                 existing.NeedsPasswordSetup,
+                existing.AvatarUrl,
+                0,
+                0,
+                0,
                 DirectoryAccountStatuses.FromUser(existing));
         }
 
@@ -940,6 +962,10 @@ public sealed class DirectoryService : IDirectoryService
             user.Cnic,
             user.IsActive,
             user.NeedsPasswordSetup,
+            user.AvatarUrl,
+            0,
+            0,
+            0,
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -979,6 +1005,10 @@ public sealed class DirectoryService : IDirectoryService
             user.Cnic,
             user.IsActive,
             user.NeedsPasswordSetup,
+            user.AvatarUrl,
+            0,
+            0,
+            0,
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -1166,6 +1196,9 @@ public sealed class DirectoryService : IDirectoryService
             user.Cnic,
             user.IsActive,
             user.NeedsPasswordSetup,
+            user.AvatarUrl,
+            0,
+            0,
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -1548,6 +1581,10 @@ public sealed class DirectoryService : IDirectoryService
             schoolId,
             campusId,
             existing.IsActive,
+            existing.AvatarUrl,
+            "—",
+            "—",
+            0,
             DirectoryAccountStatuses.FromUser(existing));
     }
 
@@ -1583,6 +1620,7 @@ public sealed class DirectoryService : IDirectoryService
             existing.Username,
             linkedCount,
             existing.IsActive,
+            existing.AvatarUrl,
             DirectoryAccountStatuses.FromUser(existing));
     }
 
