@@ -52,6 +52,7 @@ public sealed class QuizService : IQuizService
     private readonly IQuizAssignmentRepository _assignments;
     private readonly IQuizQuestionRepository _quizQuestions;
     private readonly IQuizAttemptRepository _attempts;
+    private readonly IQuizReviewRepository _reviews;
     private readonly ILookupRepository _lookups;
     private readonly IStudentScopeRepository _studentScope;
     private readonly ICurrentUserService _currentUser;
@@ -63,6 +64,7 @@ public sealed class QuizService : IQuizService
         IQuizAssignmentRepository assignments,
         IQuizQuestionRepository quizQuestions,
         IQuizAttemptRepository attempts,
+        IQuizReviewRepository reviews,
         ILookupRepository lookups,
         IStudentScopeRepository studentScope,
         ICurrentUserService currentUser,
@@ -73,6 +75,7 @@ public sealed class QuizService : IQuizService
         _assignments = assignments;
         _quizQuestions = quizQuestions;
         _attempts = attempts;
+        _reviews = reviews;
         _lookups = lookups;
         _studentScope = studentScope;
         _currentUser = currentUser;
@@ -433,6 +436,36 @@ public sealed class QuizService : IQuizService
                             StringComparison.OrdinalIgnoreCase));
                 awardedMarks = isCorrect ? question.Marks : (short)0;
                 obtainedMarks += awardedMarks;
+
+                // Question-level OR: any accepted-answer flag enables that review path.
+                var allowTeacherReview = question.AcceptedAnswers.Any(answer => answer.AllowTeacherReview);
+                var allowAiReview = question.AcceptedAnswers.Any(answer => answer.AllowAiReview);
+                if (allowTeacherReview)
+                {
+                    // Suggested auto-score is kept; student result stays pending until teacher finalize.
+                    hasSubjectiveAnswers = true;
+                }
+
+                await ReplaceAttemptAnswersAsync(
+                    attemptQuestion.AttemptQuestionId,
+                    selectedOptionIds,
+                    submitted.SubmittedText,
+                    awardedMarks,
+                    isCorrect,
+                    cancellationToken);
+
+                if (allowAiReview)
+                {
+                    await EnsureFillAiReviewStubAsync(
+                        attemptId,
+                        attemptQuestion.QuestionId,
+                        isCorrect,
+                        awardedMarks,
+                        question.Marks,
+                        cancellationToken);
+                }
+
+                continue;
             }
             else if (selectedOptionIds.Count > 0)
             {
@@ -764,6 +797,43 @@ public sealed class QuizService : IQuizService
     {
         return _currentUser.ProfileId ?? _currentUser.UserId
             ?? throw new ForbiddenAppException("Student profile was not found.");
+    }
+
+    private async Task EnsureFillAiReviewStubAsync(
+        long attemptId,
+        long questionId,
+        bool isCorrect,
+        short awardedMarks,
+        short maxMarks,
+        CancellationToken cancellationToken)
+    {
+        var attemptQuestion = await _attempts.GetAttemptQuestionEntityAsync(
+            attemptId,
+            questionId,
+            cancellationToken);
+        if (attemptQuestion is null)
+        {
+            return;
+        }
+
+        var suggestion =
+            $"AI suggested: {(isCorrect ? "correct" : "incorrect")} ({awardedMarks}/{maxMarks} marks). "
+            + "Awaiting teacher confirmation when teacher review is required.";
+
+        if (attemptQuestion.QuizReviewId is not null)
+        {
+            var existing = await _reviews.GetQuestionReviewEntityAsync(
+                attemptQuestion.QuizReviewId.Value,
+                cancellationToken);
+            existing?.SetAiReview(statusId: null, suggestion);
+            return;
+        }
+
+        var review = new QuizReview("AI", quizId: null, questionId: questionId);
+        review.SetAiReview(statusId: null, suggestion);
+        await _reviews.AddReviewAsync(review, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        attemptQuestion.LinkReview(review.Id);
     }
 
     private static bool MatchesAcceptedAnswer(QuestionAcceptedAnswerScoreItem answer, string submittedText)

@@ -17,26 +17,6 @@ function formatRequestedAt(value: string): string {
   }).format(date);
 }
 
-function canApplySchoolChange(
-  role: string | undefined,
-  requesterRole: string,
-): boolean {
-  if (role === "PortalAdmin") {
-    return true;
-  }
-  if (role === "SchoolAdmin") {
-    return (
-      requesterRole === "Teacher" ||
-      requesterRole === "Student" ||
-      requesterRole === "CampusAdmin"
-    );
-  }
-  if (role === "CampusAdmin") {
-    return requesterRole === "Teacher" || requesterRole === "Student";
-  }
-  return false;
-}
-
 export function PendingSchoolChangesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -69,6 +49,9 @@ export function PendingSchoolChangesPage() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
     },
   });
+
+  const actionsDisabled =
+    approveMutation.isPending || rejectMutation.isPending;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -120,90 +103,70 @@ export function PendingSchoolChangesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {data.map((item) => {
-                const canApply = canApplySchoolChange(
-                  user?.role,
-                  item.requesterRole,
-                );
-                const approveDisabled =
-                  approveMutation.isPending ||
-                  rejectMutation.isPending ||
-                  (!canApply && item.currentUserHasApproved);
-
-                return (
-                  <tr key={item.id}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-900">{item.fullName}</p>
-                      <p className="text-xs text-slate-500">
-                        @{item.username} · {item.requesterRole}
+              {data.map((item) => (
+                <tr key={item.id}>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-900">{item.fullName}</p>
+                    <p className="text-xs text-slate-500">
+                      @{item.username} · {item.requesterRole}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    <p>
+                      School {item.fromSchoolId ?? "—"} →{" "}
+                      {item.toSchoolId ?? "—"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Campus {item.fromCampusId ?? "—"} →{" "}
+                      {item.toCampusId ?? "—"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {formatRequestedAt(item.requestedAt)}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    <p
+                      className={
+                        item.schoolAdminHasApproved
+                          ? "font-medium text-green-700"
+                          : "font-medium text-amber-700"
+                      }
+                    >
+                      {item.schoolAdminHasApproved
+                        ? "School Admin approved"
+                        : "School Admin not approved yet"}
+                    </p>
+                    {item.approvers.length > 0 ? (
+                      <p className="mt-1">
+                        Pending:{" "}
+                        {item.approvers
+                          .map((a) => `${a.fullName} (${a.role})`)
+                          .join(", ")}
                       </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      <p>
-                        School {item.fromSchoolId ?? "—"} →{" "}
-                        {item.toSchoolId ?? "—"}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Campus {item.fromCampusId ?? "—"} →{" "}
-                        {item.toCampusId ?? "—"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatRequestedAt(item.requestedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
-                      <p
-                        className={
-                          item.schoolAdminHasApproved
-                            ? "font-medium text-green-700"
-                            : "font-medium text-amber-700"
-                        }
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={actionsDisabled}
+                        onClick={() => approveMutation.mutate(item.id)}
+                        className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
                       >
-                        {item.schoolAdminHasApproved
-                          ? "School Admin approved"
-                          : "School Admin not approved yet"}
-                      </p>
-                      {item.approvers.length > 0 ? (
-                        <p className="mt-1">
-                          Pending:{" "}
-                          {item.approvers
-                            .map((a) => `${a.fullName} (${a.role})`)
-                            .join(", ")}
-                        </p>
-                      ) : null}
-                      {item.currentUserHasApproved ? (
-                        <p className="mt-1 font-medium text-brand-700">
-                          {canApply
-                            ? "You already approved — approve again to apply"
-                            : "You already approved"}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          disabled={approveDisabled}
-                          onClick={() => approveMutation.mutate(item.id)}
-                          className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
-                        >
-                          {canApply ? "Approve & apply" : "Record approval"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={
-                            approveMutation.isPending || rejectMutation.isPending
-                          }
-                          onClick={() => rejectMutation.mutate(item.id)}
-                          className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                        Approve & apply
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actionsDisabled}
+                        onClick={() => rejectMutation.mutate(item.id)}
+                        className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

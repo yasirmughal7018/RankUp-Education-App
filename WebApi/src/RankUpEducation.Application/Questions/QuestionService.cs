@@ -47,7 +47,7 @@ public interface IQuestionService
     Task<DeleteQuestionResponse> DeleteAsync(long questionId, CancellationToken cancellationToken);
 
     Task<ImportQuestionsResponse> ImportAsync(
-        IReadOnlyList<CreateQuestionRequest> rows,
+        IReadOnlyList<QuestionExcelImportRow> rows,
         bool dryRun,
         CancellationToken cancellationToken);
 }
@@ -146,6 +146,7 @@ public sealed class QuestionService : IQuestionService
         QuestionBankGuard.ValidateCreateRequest(request);
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
+        var difficultyLevelId = await _guard.ResolveDifficultyLevelIdAsync(request.DifficultyLevel, cancellationToken);
         var statusId = request.SubmitForReview
             ? await RequirePendingReviewStatusIdAsync(cancellationToken)
             : await RequireDraftStatusIdAsync(cancellationToken);
@@ -156,7 +157,7 @@ public sealed class QuestionService : IQuestionService
             request.ClassId,
             request.SubjectId,
             request.TopicId,
-            request.DifficultyLevel,
+            difficultyLevelId,
             statusId,
             scope.UserId.ToString(),
             request.EstimatedTimeSeconds,
@@ -168,7 +169,7 @@ public sealed class QuestionService : IQuestionService
             request.ClassId,
             request.SubjectId,
             request.TopicId,
-            request.DifficultyLevel,
+            difficultyLevelId,
             request.EstimatedTimeSeconds,
             request.Marks,
             request.Hint,
@@ -199,13 +200,14 @@ public sealed class QuestionService : IQuestionService
         await EnsureCanUpdateAsync(question, scope, cancellationToken);
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
+        var difficultyLevelId = await _guard.ResolveDifficultyLevelIdAsync(request.DifficultyLevel, cancellationToken);
         question.UpdateDetails(
             request.QuestionText,
             questionTypeId,
             request.ClassId,
             request.SubjectId,
             request.TopicId,
-            request.DifficultyLevel,
+            difficultyLevelId,
             request.EstimatedTimeSeconds,
             request.Marks,
             request.Hint,
@@ -350,7 +352,7 @@ public sealed class QuestionService : IQuestionService
     }
 
     public async Task<ImportQuestionsResponse> ImportAsync(
-        IReadOnlyList<CreateQuestionRequest> rows,
+        IReadOnlyList<QuestionExcelImportRow> rows,
         bool dryRun,
         CancellationToken cancellationToken)
     {
@@ -372,15 +374,50 @@ public sealed class QuestionService : IQuestionService
         for (var index = 0; index < rows.Count; index++)
         {
             var rowNumber = index + 2; // header = row 1
-            var row = rows[index] with { SubmitForReview = false }; // import as Draft
+            var draft = rows[index];
             try
             {
-                QuestionBankGuard.ValidateCreateRequest(row);
-                await _guard.ResolveQuestionTypeIdAsync(row.QuestionType, cancellationToken);
+                var classId = await ResolveRequiredLookupTokenAsync(
+                    "Class",
+                    draft.ClassToken,
+                    cancellationToken);
+                var subjectId = await ResolveRequiredLookupTokenAsync(
+                    "Subject",
+                    draft.SubjectToken,
+                    cancellationToken);
+                short? topicId = null;
+                if (draft.TopicToken.HasTrimmedText())
+                {
+                    topicId = await ResolveRequiredLookupTokenAsync(
+                        "Topic",
+                        draft.TopicToken!,
+                        cancellationToken);
+                }
+
+                // Default Draft when Status blank; PendingReview when Status says so.
+                var submitForReview = draft.SubmitForReview ?? false;
+                var request = new CreateQuestionRequest(
+                    draft.QuestionText,
+                    draft.QuestionType,
+                    classId,
+                    subjectId,
+                    topicId,
+                    draft.DifficultyLevel,
+                    draft.Marks,
+                    draft.EstimatedTimeSeconds,
+                    draft.Hint,
+                    draft.Explanation,
+                    draft.Options,
+                    draft.AcceptedAnswers,
+                    submitForReview);
+
+                QuestionBankGuard.ValidateCreateRequest(request);
+                await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
+                await _guard.ResolveDifficultyLevelIdAsync(request.DifficultyLevel, cancellationToken);
 
                 if (!dryRun)
                 {
-                    var detail = await CreateAsync(row, cancellationToken);
+                    var detail = await CreateAsync(request, cancellationToken);
                     created.Add(detail);
                 }
             }
@@ -404,6 +441,27 @@ public sealed class QuestionService : IQuestionService
             ErrorCount: errors.Count,
             Created: created,
             Errors: errors);
+    }
+
+    private async Task<short> ResolveRequiredLookupTokenAsync(
+        string lookupType,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (!token.HasTrimmedText())
+        {
+            throw new ValidationAppException([$"{lookupType} is required (name or ID)."]);
+        }
+
+        var id = await _lookups.ResolveLookupIdOrNameAsync(lookupType, token, cancellationToken);
+        if (id == 0)
+        {
+            throw new ValidationAppException([
+                $"{lookupType} '{token}' was not found. Use a valid lookup name or ID."
+            ]);
+        }
+
+        return id;
     }
 
     private async Task EnsureCanUpdateAsync(

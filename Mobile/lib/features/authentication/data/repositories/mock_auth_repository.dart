@@ -128,6 +128,20 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    return (
+      requestId: 1,
+      isLocked: true,
+      message:
+          'Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.',
+    );
+  }
+
+  @override
   Future<void> logout() async {
     _session = null;
     await _tokenStore.clear();

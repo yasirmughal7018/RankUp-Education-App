@@ -200,7 +200,37 @@ class AuthRemoteDataSource {
     }
   }
 
-  Future<void> logout() => _requestVoid('/auth/logout');
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/me/school-change',
+        data: {
+          'schoolId': schoolId,
+          'campusId': campusId,
+        },
+      );
+      final payload = _unwrap(response.data);
+      return (
+        requestId: (payload['requestId'] as num?)?.toInt() ?? 0,
+        isLocked: payload['isLocked'] as bool? ?? true,
+        message: payload['message'] as String? ??
+            'Your account is locked until an admin finishes the school or campus change.',
+      );
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
+  Future<void> logout({String? refreshToken}) {
+    final token = refreshToken?.trim();
+    return _requestVoid(
+      '/auth/logout',
+      data: token == null || token.isEmpty ? null : {'refreshToken': token},
+    );
+  }
 
   Future<AuthSession> _requestSession(
     String path, {

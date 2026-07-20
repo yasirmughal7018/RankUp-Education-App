@@ -45,6 +45,12 @@ abstract class AuthRepository {
     String? currentPassword,
   });
 
+  /// Teacher / Student / CampusAdmin: request school or campus move (locks account).
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  });
+
   Future<void> logout();
 
   Future<AuthSession?> restoreSession();

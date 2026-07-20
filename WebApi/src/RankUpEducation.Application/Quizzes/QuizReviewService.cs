@@ -186,7 +186,8 @@ public sealed class QuizReviewService : IQuizReviewService
 
         var unreviewedSubjective = reviewDetail.Questions
             .Where(question => question.RequiresReview && question.SubmittedText.HasTrimmedText())
-            .Any(question => question.QuizReviewId is null);
+            .Any(question =>
+                question.QuizReviewId is null || !question.HasHumanReviewFeedback);
 
         if (unreviewedSubjective)
         {

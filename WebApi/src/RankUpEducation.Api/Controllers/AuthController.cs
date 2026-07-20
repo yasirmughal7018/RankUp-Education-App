@@ -147,6 +147,21 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "If the account exists, the school admin has been notified."));
     }
 
+    /// <summary>
+    /// Admin clears a user's password after a forgot-password notification so they can set a new one on login.
+    /// </summary>
+    [HttpPost("password-reset/clear")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> ClearPasswordForResetAsync(
+        [FromBody] PasswordResetRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _authService.ClearPasswordForResetAsync(request, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(
+            null,
+            "Password cleared. The user can set a new password on the login screen."));
+    }
+
     [HttpPost("token/refresh")]
     [AllowAnonymous]
     [EnableRateLimiting("UsersAnonymous")]

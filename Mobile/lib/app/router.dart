@@ -67,7 +67,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const SplashPage()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) {
+          final extra = state.extra;
+          String? lockedMessage;
+          if (extra is Map) {
+            final value = extra['lockedMessage'];
+            if (value is String && value.trim().isNotEmpty) {
+              lockedMessage = value.trim();
+            }
+          }
+          return LoginPage(initialLockedMessage: lockedMessage);
+        },
+      ),
       GoRoute(
         path: '/change-password',
         builder: (context, state) => const ChangePasswordPage(),

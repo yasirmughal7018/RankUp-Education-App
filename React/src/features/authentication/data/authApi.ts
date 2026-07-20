@@ -229,6 +229,14 @@ export async function requestPasswordReset(username: string): Promise<void> {
   });
 }
 
+/** Admin: clear password after a forgot-password request (user then uses set-initial-password). */
+export async function clearPasswordForReset(username: string): Promise<void> {
+  await apiRequestVoid("/auth/password-reset/clear", {
+    method: "POST",
+    body: { username },
+  });
+}
+
 export async function registerAccount(
   request: RegisterAccountRequest,
 ): Promise<RegisterAccountResponse> {

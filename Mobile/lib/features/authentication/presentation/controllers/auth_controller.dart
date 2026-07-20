@@ -242,6 +242,31 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      final result = await _repository.requestSchoolChange(
+        schoolId: schoolId,
+        campusId: campusId,
+      );
+      state = state.copyWith(isLoading: false);
+      return result;
+    } on AppException catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.message);
+      rethrow;
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+      rethrow;
+    }
+  }
+
   Future<void> refreshSession() async {
     state = state.copyWith(
       isLoading: true,

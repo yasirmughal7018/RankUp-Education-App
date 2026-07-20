@@ -143,9 +143,21 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) {
+    return _remoteDataSource.requestSchoolChange(
+      schoolId: schoolId,
+      campusId: campusId,
+    );
+  }
+
+  @override
   Future<void> logout() async {
+    final refreshToken = await _tokenStore.readRefreshToken();
     try {
-      await _remoteDataSource.logout();
+      await _remoteDataSource.logout(refreshToken: refreshToken);
     } finally {
       await _tokenStore.clear();
       await _localDataSource.clear();

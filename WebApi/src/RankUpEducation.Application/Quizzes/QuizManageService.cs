@@ -402,7 +402,9 @@ public sealed class QuizManageService : IQuizManageService
                         answer.IsCaseSensitive,
                         answer.AllowPartialMatch,
                         answer.MinimumLength,
-                        answer.MaximumLength))
+                        answer.MaximumLength,
+                        answer.AllowAiReview,
+                        answer.AllowTeacherReview))
                     .ToArray();
                 await _questions.AddQuestionAcceptedAnswersAsync(answers, cancellationToken);
             }

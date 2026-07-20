@@ -69,6 +69,33 @@ public sealed class LookupRepository : ILookupRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<short> ResolveLookupIdOrNameAsync(
+        string type,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var normalized = token.Trim();
+        if (normalized.Length == 0)
+        {
+            return 0;
+        }
+
+        if (short.TryParse(normalized, out var id))
+        {
+            var byId = await GetByIdAndTypeAsync(id, type, cancellationToken);
+            if (byId is not null)
+            {
+                return byId.Id;
+            }
+        }
+
+        var lower = normalized.ToLowerInvariant();
+        return await _dbContext.Lookups.AsNoTracking()
+            .Where(lookup => lookup.Type == type && lookup.Name.ToLower() == lower)
+            .Select(lookup => lookup.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<LookupListItem>> ListActiveAsync(
         string? type,
         short? parentId,

@@ -7,21 +7,36 @@ import 'package:rankup_education/core/widgets/field_label.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.initialLockedMessage});
+
+  /// Shown when navigating here after a school/campus change request.
+  final String? initialLockedMessage;
 
   @override
   ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-enum _LoginStep { identifier, setPassword, password }
+enum _LoginStep { identifier, setPassword, password, accountLocked }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  _LoginStep _step = _LoginStep.identifier;
+  late _LoginStep _step;
   String? _localError;
   String? _infoMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    final locked = widget.initialLockedMessage?.trim();
+    if (locked != null && locked.isNotEmpty) {
+      _step = _LoginStep.accountLocked;
+      _infoMessage = locked;
+    } else {
+      _step = _LoginStep.identifier;
+    }
+  }
 
   @override
   void dispose() {
@@ -67,11 +82,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _step == _LoginStep.setPassword
-                        ? 'Set your password, then sign in.'
-                        : _step == _LoginStep.password
-                            ? 'Enter your password to sign in.'
-                            : 'Enter CNIC or mobile number to continue.',
+                    switch (_step) {
+                      _LoginStep.setPassword =>
+                        'Set your password, then sign in.',
+                      _LoginStep.password => 'Enter your password to sign in.',
+                      _LoginStep.accountLocked =>
+                        'Your account is locked until an admin finishes your school or campus change.',
+                      _LoginStep.identifier =>
+                        'Enter CNIC or mobile number to continue.',
+                    },
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyLarge,
                   ),
@@ -194,7 +213,58 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       },
                     ),
                   ],
-                  if (_infoMessage != null) ...[
+                  if (_step == _LoginStep.accountLocked) ...[
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.colorScheme.tertiary.withValues(
+                            alpha: 0.35,
+                          ),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Account locked',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Why you are locked',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _infoMessage ??
+                                  'Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'After approval or rejection, your account unlocks and you can sign in again with the same CNIC or mobile number.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (_infoMessage != null &&
+                      _step != _LoginStep.accountLocked) ...[
                     const SizedBox(height: 12),
                     DecoratedBox(
                       decoration: BoxDecoration(
@@ -258,6 +328,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 _submitSetPassword();
                               case _LoginStep.password:
                                 _submitLogin();
+                              case _LoginStep.accountLocked:
+                                _backToIdentifier();
                             }
                           },
                     icon: busy
@@ -266,21 +338,24 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : Icon(
-                            _step == _LoginStep.setPassword
-                                ? Icons.lock_open
-                                : _step == _LoginStep.password
-                                    ? Icons.login
-                                    : Icons.arrow_forward,
+                            switch (_step) {
+                              _LoginStep.setPassword => Icons.lock_open,
+                              _LoginStep.password => Icons.login,
+                              _LoginStep.accountLocked => Icons.login,
+                              _LoginStep.identifier => Icons.arrow_forward,
+                            },
                           ),
                     label: Text(
-                      _step == _LoginStep.setPassword
-                          ? 'Set password'
-                          : _step == _LoginStep.password
-                              ? 'Login'
-                              : 'Continue',
+                      switch (_step) {
+                        _LoginStep.setPassword => 'Set password',
+                        _LoginStep.password => 'Login',
+                        _LoginStep.accountLocked => 'Back to sign in',
+                        _LoginStep.identifier => 'Continue',
+                      },
                     ),
                   ),
-                  if (_step != _LoginStep.identifier) ...[
+                  if (_step != _LoginStep.identifier &&
+                      _step != _LoginStep.accountLocked) ...[
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: busy ? null : _backToIdentifier,
@@ -370,7 +445,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       setState(() {
         _passwordController.clear();
         _confirmPasswordController.clear();
-        if (result.status == 'PendingApproval' || result.status == 'Rejected') {
+        if (result.status == 'LockedPendingSchoolChange') {
+          _infoMessage = result.message;
+          _step = _LoginStep.accountLocked;
+        } else if (result.status == 'PendingApproval' ||
+            result.status == 'Rejected') {
           _infoMessage = result.message;
           _step = _LoginStep.identifier;
         } else if (result.status == 'NeedsPasswordSetup') {

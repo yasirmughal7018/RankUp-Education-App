@@ -19,6 +19,30 @@ public static class QuizLookupNames
         public const short Archived = 114;
     }
 
+    /// <summary>Canonical QuestionType lookup IDs (seeded / preferred for writes).</summary>
+    public static class QuestionTypeIds
+    {
+        public const short SingleChoice = 100;
+        public const short MultipleChoice = 101;
+        public const short TrueFalse = 102;
+        public const short FillInTheBlanks = 103;
+        public const short Descriptive = 104;
+    }
+
+    /// <summary>Canonical DifficultyLevel lookup IDs (seeded / preferred for writes).</summary>
+    public static class DifficultyLevelIds
+    {
+        public const short Easy = 2001;
+        public const short Medium = 2002;
+        public const short Hard = 2003;
+    }
+
+    public const string DifficultyLevel = "DifficultyLevel";
+
+    public static readonly string[] EasyDifficultyNames = ["Easy"];
+    public static readonly string[] MediumDifficultyNames = ["Medium"];
+    public static readonly string[] HardDifficultyNames = ["Hard"];
+
     public static readonly string[] ParentPrivateQuizTypeNames = ["ParentPrivate", "Parent Private", "Private"];
     public static readonly string[] SchoolQuizTypeNames = ["Practice", "Assessment", "Competition", "Surprise"];
     public static readonly string[] PendingApprovalStatusNames = ["Pending", "Draft", "Under Review"];

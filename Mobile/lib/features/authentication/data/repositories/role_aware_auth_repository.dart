@@ -143,6 +143,17 @@ class RoleAwareAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) async {
+    return (await _repositoryForSession()).requestSchoolChange(
+      schoolId: schoolId,
+      campusId: campusId,
+    );
+  }
+
+  @override
   Future<void> logout() async {
     final repository = await _repositoryForSession();
     await repository.logout();

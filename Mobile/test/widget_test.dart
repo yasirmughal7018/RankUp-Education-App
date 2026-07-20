@@ -124,10 +124,23 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<void> logout() async {}
 
   @override
   Future<AuthSession> refreshSession() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AuthSession> switchRole(String role) {
     throw UnimplementedError();
   }
 

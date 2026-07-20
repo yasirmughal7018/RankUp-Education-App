@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
+import * as authApi from "@/features/authentication/data/authApi";
 import * as notificationsApi from "@/features/notifications/data/notificationsApi";
 
 function formatCreatedAt(value: string): string {
@@ -19,10 +20,36 @@ function formatCreatedAt(value: string): string {
 const ADMIN_NOTIFICATION_CATEGORIES = new Set([
   "RegistrationRequest",
   "SchoolChangeRequest",
+  "PasswordResetRequest",
 ]);
+
+const PASSWORD_RESET_TITLE_PREFIX = "Password reset: ";
+
+function usernameFromPasswordResetTitle(title: string): string | null {
+  if (!title.startsWith(PASSWORD_RESET_TITLE_PREFIX)) {
+    return null;
+  }
+
+  const username = title.slice(PASSWORD_RESET_TITLE_PREFIX.length).trim();
+  return username.length > 0 ? username : null;
+}
+
+function hrefForCategory(category: string): string {
+  if (category === "SchoolChangeRequest") {
+    return "/admin/directory/school-changes";
+  }
+
+  if (category === "PasswordResetRequest") {
+    return "/admin/directory";
+  }
+
+  return "/admin/registrations";
+}
 
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
+  const [clearingUsername, setClearingUsername] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -76,10 +103,39 @@ export function NotificationsBell() {
     }
   }
 
-  function hrefForCategory(category: string) {
-    return category === "SchoolChangeRequest"
-      ? "/admin/directory/school-changes"
-      : "/admin/registrations";
+  async function handleClearPassword(notificationId: number, username: string) {
+    const confirmed = window.confirm(
+      `Clear the password for "${username}"?\n\nThey will set a new password on the login screen (NeedsPasswordSetup).`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setClearError(null);
+    setClearingUsername(username);
+    try {
+      await authApi.clearPasswordForReset(username);
+      // Mark only this notification (and any other unread resets for the same user).
+      const relatedIds = adminItems
+        .filter(
+          (item) =>
+            item.category === "PasswordResetRequest" &&
+            !item.isRead &&
+            (item.id === notificationId ||
+              usernameFromPasswordResetTitle(item.title) === username),
+        )
+        .map((item) => item.id);
+      await Promise.all(
+        relatedIds.map((id) => notificationsApi.markNotificationRead(id)),
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+      setOpen(false);
+    } catch (caught) {
+      const apiError = caught as { message?: string };
+      setClearError(apiError.message || "Unable to clear password.");
+    } finally {
+      setClearingUsername(null);
+    }
   }
 
   return (
@@ -119,7 +175,7 @@ export function NotificationsBell() {
               Admin requests
             </p>
             <p className="text-xs text-slate-500">
-              Registrations and school/campus changes
+              Registrations, school changes, and password resets
             </p>
           </div>
 
@@ -138,34 +194,75 @@ export function NotificationsBell() {
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">
-                {recentItems.map((item) => (
-                  <li key={item.id}>
-                    <Link
-                      to={hrefForCategory(item.category)}
-                      onClick={() => {
-                        setOpen(false);
-                        void markCategoryRead(item.category);
-                      }}
-                      className={[
-                        "block px-4 py-3 transition hover:bg-slate-50",
-                        item.isRead ? "bg-white" : "bg-brand-50/40",
-                      ].join(" ")}
-                    >
-                      <p className="text-sm font-medium text-slate-900">
-                        {item.title}
-                      </p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
-                        {item.body}
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {formatCreatedAt(item.createdAt)}
-                      </p>
-                    </Link>
-                  </li>
-                ))}
+                {recentItems.map((item) => {
+                  const resetUsername =
+                    item.category === "PasswordResetRequest"
+                      ? usernameFromPasswordResetTitle(item.title)
+                      : null;
+
+                  if (resetUsername) {
+                    return (
+                      <li key={item.id} className="px-4 py-3">
+                        <p className="text-sm font-medium text-slate-900">
+                          {item.title}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
+                          {item.body}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {formatCreatedAt(item.createdAt)}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={clearingUsername === resetUsername}
+                          onClick={() =>
+                            void handleClearPassword(item.id, resetUsername)
+                          }
+                          className="mt-2 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+                        >
+                          {clearingUsername === resetUsername
+                            ? "Clearing..."
+                            : "Clear password"}
+                        </button>
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li key={item.id}>
+                      <Link
+                        to={hrefForCategory(item.category)}
+                        onClick={() => {
+                          setOpen(false);
+                          void markCategoryRead(item.category);
+                        }}
+                        className={[
+                          "block px-4 py-3 transition hover:bg-slate-50",
+                          item.isRead ? "bg-white" : "bg-brand-50/40",
+                        ].join(" ")}
+                      >
+                        <p className="text-sm font-medium text-slate-900">
+                          {item.title}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
+                          {item.body}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {formatCreatedAt(item.createdAt)}
+                        </p>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
+
+          {clearError ? (
+            <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+              {clearError}
+            </p>
+          ) : null}
 
           <div className="flex flex-col gap-1 border-t border-slate-100 px-4 py-2">
             <Link

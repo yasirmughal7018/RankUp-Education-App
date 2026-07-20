@@ -24,6 +24,15 @@ public interface ILookupRepository
         string type,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Resolves a lookup by numeric id (when token is a number) or by name (case-insensitive).
+    /// Returns 0 when not found.
+    /// </summary>
+    Task<short> ResolveLookupIdOrNameAsync(
+        string type,
+        string token,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<LookupListItem>> ListActiveAsync(
         string? type,
         short? parentId,

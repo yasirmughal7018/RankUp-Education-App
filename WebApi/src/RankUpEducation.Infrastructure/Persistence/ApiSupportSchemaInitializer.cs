@@ -36,6 +36,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionStatusLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(DifficultyLevelLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
@@ -227,32 +228,155 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         """;
 
     private const string QuestionTypeLookupSql = """
-        WITH seed(name, order_by) AS (
-            VALUES
-                ('Single Choice'::varchar, 1::smallint),
-                ('Multiple Choice', 2),
-                ('True/False', 3),
-                ('Fill in the Blanks', 4),
-                ('Descriptive', 5)
-        ),
-        missing AS (
-            SELECT seed.name, seed.order_by,
-                   ROW_NUMBER() OVER (ORDER BY seed.order_by) AS rn
-            FROM seed
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM public.lookups existing
-                WHERE existing.type = 'QuestionType'
-                  AND lower(existing.name) = lower(seed.name)
-            )
-        ),
-        base AS (
-            SELECT COALESCE(MAX(id), 0) AS max_id FROM public.lookups
-        )
+        -- Canonical QuestionType IDs 100–104.
         INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
-        SELECT base.max_id + missing.rn, missing.name, 'QuestionType', missing.order_by, TRUE, NULL
-        FROM missing
-        CROSS JOIN base;
+        SELECT v.id, v.name, 'QuestionType', v.ord, TRUE, NULL
+        FROM (
+            VALUES
+                (100::smallint, 'Single Choice'::varchar, 1::smallint),
+                (101, 'Multiple Choice', 2),
+                (102, 'True/False', 3),
+                (103, 'Fill in the Blanks', 4),
+                (104, 'Descriptive', 5)
+        ) AS v(id, name, ord)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public.lookups existing WHERE existing.id = v.id
+        );
+
+        UPDATE public.lookups SET name = 'Single Choice', order_by = 1, is_active = TRUE
+        WHERE id = 100 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Single Choice';
+        UPDATE public.lookups SET name = 'Multiple Choice', order_by = 2, is_active = TRUE
+        WHERE id = 101 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Multiple Choice';
+        UPDATE public.lookups SET name = 'True/False', order_by = 3, is_active = TRUE
+        WHERE id = 102 AND type = 'QuestionType' AND name IS DISTINCT FROM 'True/False';
+        UPDATE public.lookups SET name = 'Fill in the Blanks', order_by = 4, is_active = TRUE
+        WHERE id = 103 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Fill in the Blanks';
+        UPDATE public.lookups SET name = 'Descriptive', order_by = 5, is_active = TRUE
+        WHERE id = 104 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Descriptive';
+
+        -- Remap questions from legacy type names onto canonical IDs.
+        UPDATE public.questions q
+        SET question_type_id = 100
+        FROM public.lookups l
+        WHERE q.question_type_id = l.id
+          AND l.type = 'QuestionType'
+          AND lower(l.name) IN ('single choice', 'singlechoice', 'mcq')
+          AND q.question_type_id <> 100
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 100 AND c.type = 'QuestionType');
+
+        UPDATE public.questions q
+        SET question_type_id = 101
+        FROM public.lookups l
+        WHERE q.question_type_id = l.id
+          AND l.type = 'QuestionType'
+          AND lower(l.name) IN ('multiple choice', 'multiplechoice', 'multi select', 'multiselect', 'multiple')
+          AND q.question_type_id <> 101
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 101 AND c.type = 'QuestionType');
+
+        UPDATE public.questions q
+        SET question_type_id = 102
+        FROM public.lookups l
+        WHERE q.question_type_id = l.id
+          AND l.type = 'QuestionType'
+          AND lower(replace(l.name, ' ', '')) IN ('true/false', 'truefalse')
+          AND q.question_type_id <> 102
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 102 AND c.type = 'QuestionType');
+
+        UPDATE public.questions q
+        SET question_type_id = 103
+        FROM public.lookups l
+        WHERE q.question_type_id = l.id
+          AND l.type = 'QuestionType'
+          AND lower(l.name) IN ('fill in the blanks', 'fill in the blank', 'fillblank', 'fill blanks')
+          AND q.question_type_id <> 103
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 103 AND c.type = 'QuestionType');
+
+        UPDATE public.questions q
+        SET question_type_id = 104
+        FROM public.lookups l
+        WHERE q.question_type_id = l.id
+          AND l.type = 'QuestionType'
+          AND lower(l.name) IN ('descriptive', 'short answer', 'shortanswer')
+          AND q.question_type_id <> 104
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 104 AND c.type = 'QuestionType');
+        """;
+
+    private const string DifficultyLevelLookupSql = """
+        -- Canonical DifficultyLevel IDs 2001–2003.
+        INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
+        SELECT v.id, v.name, 'DifficultyLevel', v.ord, TRUE, NULL
+        FROM (
+            VALUES
+                (2001::smallint, 'Easy'::varchar, 1::smallint),
+                (2002, 'Medium', 2),
+                (2003, 'Hard', 3)
+        ) AS v(id, name, ord)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public.lookups existing WHERE existing.id = v.id
+        );
+
+        UPDATE public.lookups SET name = 'Easy', order_by = 1, is_active = TRUE
+        WHERE id = 2001 AND type = 'DifficultyLevel' AND name IS DISTINCT FROM 'Easy';
+        UPDATE public.lookups SET name = 'Medium', order_by = 2, is_active = TRUE
+        WHERE id = 2002 AND type = 'DifficultyLevel' AND name IS DISTINCT FROM 'Medium';
+        UPDATE public.lookups SET name = 'Hard', order_by = 3, is_active = TRUE
+        WHERE id = 2003 AND type = 'DifficultyLevel' AND name IS DISTINCT FROM 'Hard';
+
+        -- Remap questions.difficulty_level from legacy DifficultyLevel names.
+        UPDATE public.questions q
+        SET difficulty_level = 2001
+        FROM public.lookups l
+        WHERE q.difficulty_level = l.id
+          AND l.type = 'DifficultyLevel'
+          AND lower(l.name) = 'easy'
+          AND q.difficulty_level <> 2001
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 2001 AND c.type = 'DifficultyLevel');
+
+        UPDATE public.questions q
+        SET difficulty_level = 2002
+        FROM public.lookups l
+        WHERE q.difficulty_level = l.id
+          AND l.type = 'DifficultyLevel'
+          AND lower(l.name) = 'medium'
+          AND q.difficulty_level <> 2002
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 2002 AND c.type = 'DifficultyLevel');
+
+        UPDATE public.questions q
+        SET difficulty_level = 2003
+        FROM public.lookups l
+        WHERE q.difficulty_level = l.id
+          AND l.type = 'DifficultyLevel'
+          AND lower(l.name) = 'hard'
+          AND q.difficulty_level <> 2003
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 2003 AND c.type = 'DifficultyLevel');
+
+        -- Remap quizzes.difficulty_level_id when column exists.
+        UPDATE public.quizzes qz
+        SET difficulty_level_id = 2001
+        FROM public.lookups l
+        WHERE qz.difficulty_level_id = l.id
+          AND l.type = 'DifficultyLevel'
+          AND lower(l.name) = 'easy'
+          AND qz.difficulty_level_id <> 2001
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 2001 AND c.type = 'DifficultyLevel');
+
+        UPDATE public.quizzes qz
+        SET difficulty_level_id = 2002
+        FROM public.lookups l
+        WHERE qz.difficulty_level_id = l.id
+          AND l.type = 'DifficultyLevel'
+          AND lower(l.name) = 'medium'
+          AND qz.difficulty_level_id <> 2002
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 2002 AND c.type = 'DifficultyLevel');
+
+        UPDATE public.quizzes qz
+        SET difficulty_level_id = 2003
+        FROM public.lookups l
+        WHERE qz.difficulty_level_id = l.id
+          AND l.type = 'DifficultyLevel'
+          AND lower(l.name) = 'hard'
+          AND qz.difficulty_level_id <> 2003
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 2003 AND c.type = 'DifficultyLevel');
         """;
 
     private const string UserRoleSupportSql = """

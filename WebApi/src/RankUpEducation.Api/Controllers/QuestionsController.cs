@@ -87,7 +87,7 @@ public sealed class QuestionsController : ControllerBase
         }
 
         await using var stream = file.OpenReadStream();
-        IReadOnlyList<CreateQuestionRequest> rows;
+        IReadOnlyList<QuestionExcelImportRow> rows;
         try
         {
             rows = QuestionExcelImportParser.Parse(stream);

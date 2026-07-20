@@ -372,6 +372,38 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>
+    /// Admin-mediated forgot-password: clear hash so the user can set a new one via set-initial-password.
+    /// </summary>
+    public void ClearPasswordForAdminReset()
+    {
+        if (IsDeleted)
+        {
+            throw new BusinessRuleException("This account is not active.");
+        }
+
+        if (IsPendingRegistration || IsRejectedRegistration)
+        {
+            throw new BusinessRuleException("Pending or rejected registrations cannot use password reset.");
+        }
+
+        if (!IsActive)
+        {
+            throw new BusinessRuleException(
+                "This account is not active. Unlock or reactivate it before clearing the password.");
+        }
+
+        if (!PasswordHash.HasTrimmedText())
+        {
+            throw new BusinessRuleException(
+                "Password is already cleared. The user can set a new password on the login screen.");
+        }
+
+        PasswordHash = null;
+        MustChangePassword = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
     public void AttachProfileContext(long? profileId, int? schoolId, int? campusId)
     {
         ProfileId = profileId;

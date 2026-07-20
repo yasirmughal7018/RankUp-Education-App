@@ -32,6 +32,11 @@ public interface IAuthService
 
     Task RequestPasswordResetAsync(PasswordResetRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Admin clears the user's password after a forgot-password request so they can set a new one on login.
+    /// </summary>
+    Task ClearPasswordForResetAsync(PasswordResetRequest request, CancellationToken cancellationToken);
+
     Task<AuthTokensResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken);
 
     Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken);

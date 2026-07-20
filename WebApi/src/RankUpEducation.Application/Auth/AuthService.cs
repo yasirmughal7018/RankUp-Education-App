@@ -17,6 +17,7 @@ public sealed class AuthService : IAuthService
     private static readonly string[] AllowedRegistrationRoles = ["Student", "Parent", "Teacher"];
     private const string RegistrationRequestCategory = "RegistrationRequest";
     private const string SchoolChangeRequestCategory = "SchoolChangeRequest";
+    private const string PasswordResetRequestCategory = "PasswordResetRequest";
     private const string LockedPendingSchoolChangeMessage =
         "Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.";
 
@@ -576,7 +577,81 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException(["Username is required."]);
         }
 
-        _ = await _users.GetByLoginIdentifierAsync(request.Username.AsTrimmedString(), cancellationToken);
+        // Never reveal whether the identifier exists — always return success to the client.
+        // Only notify for accounts an admin can clear: active + password set
+        // (locked school-change / deactivated would fail ClearPasswordForAdminReset).
+        var user = await _users.GetByLoginIdentifierAsync(
+            request.Username.AsTrimmedString(),
+            cancellationToken);
+        if (user is null
+            || user.IsDeleted
+            || !user.IsActive
+            || user.IsPendingRegistration
+            || user.IsRejectedRegistration
+            || !user.PasswordHash.HasTrimmedText())
+        {
+            return;
+        }
+
+        // Notify only admins who can actually Clear for this target (not raw registration
+        // candidates — CampusAdmin peers cannot clear SchoolAdmin/CampusAdmin passwords).
+        var approverCandidates = await _users.ListPendingApproverCandidatesAsync(
+            user.SchoolId,
+            user.CampusId,
+            cancellationToken);
+        var recipientIds = approverCandidates
+            .Where(candidate =>
+                candidate.UserId != user.Id
+                && RoleCanClearPasswordForUser(candidate.Role, user))
+            .Select(candidate => candidate.UserId)
+            .Distinct()
+            .ToArray();
+        if (recipientIds.Length == 0)
+        {
+            return;
+        }
+
+        await _notifications.CreateAsync(
+            recipientIds,
+            $"Password reset: {user.Username}",
+            $"{user.FullName} ({user.Role}) requested a password reset. "
+            + "Clear their password so they can set a new one on the login screen.",
+            PasswordResetRequestCategory,
+            cancellationToken);
+    }
+
+    public async Task ClearPasswordForResetAsync(
+        PasswordResetRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureRegistrationReviewer();
+
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            throw new ValidationAppException(["CNIC or mobile number is required."]);
+        }
+
+        var user = await _users.GetByLoginIdentifierAsync(
+            request.Username.AsTrimmedString(),
+            cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        EnsureCanClearPasswordForReset(user);
+
+        try
+        {
+            user.ClearPasswordForAdminReset();
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _users.RevokeRefreshTokensForUserAsync(
+            user.Id,
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken)
@@ -1433,6 +1508,90 @@ public sealed class AuthService : IAuthService
             && !string.Equals(role, UserRole.CampusAdmin.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             throw new ForbiddenAppException("Only admins can review registration requests.");
+        }
+    }
+
+    /// <summary>
+    /// Role-level Clear rules (school/campus scope checked separately for the signed-in admin):
+    /// PortalAdmin — any user;
+    /// SchoolAdmin — any non-PortalAdmin in their school;
+    /// CampusAdmin — Teacher / Student / Parent in their campus (not SchoolAdmin / CampusAdmin / PortalAdmin).
+    /// </summary>
+    private static bool RoleCanClearPasswordForUser(UserRole clearerRole, User target)
+    {
+        if (clearerRole == UserRole.PortalAdmin)
+        {
+            return true;
+        }
+
+        if (target.HasRole(UserRole.PortalAdmin))
+        {
+            return false;
+        }
+
+        if (clearerRole == UserRole.SchoolAdmin)
+        {
+            return true;
+        }
+
+        if (clearerRole == UserRole.CampusAdmin)
+        {
+            return !target.HasRole(UserRole.SchoolAdmin)
+                && !target.HasRole(UserRole.CampusAdmin);
+        }
+
+        return false;
+    }
+
+    private void EnsureCanClearPasswordForReset(User user)
+    {
+        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var clearerRole))
+        {
+            throw new ForbiddenAppException("You are not allowed to clear passwords for reset.");
+        }
+
+        if (!RoleCanClearPasswordForUser(clearerRole, user))
+        {
+            if (user.HasRole(UserRole.PortalAdmin))
+            {
+                throw new ForbiddenAppException("Only Portal Admin can reset a Portal Admin password.");
+            }
+
+            if (clearerRole == UserRole.CampusAdmin
+                && (user.HasRole(UserRole.SchoolAdmin) || user.HasRole(UserRole.CampusAdmin)))
+            {
+                throw new ForbiddenAppException(
+                    "Campus admins cannot reset School Admin or Campus Admin passwords.");
+            }
+
+            throw new ForbiddenAppException("You are not allowed to clear passwords for reset.");
+        }
+
+        if (clearerRole == UserRole.PortalAdmin)
+        {
+            return;
+        }
+
+        if (clearerRole == UserRole.SchoolAdmin)
+        {
+            var adminSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            if (user.SchoolId != adminSchoolId)
+            {
+                throw new ForbiddenAppException("You can only reset passwords for users in your school.");
+            }
+
+            return;
+        }
+
+        // CampusAdmin — role rules already passed; enforce campus scope.
+        var campusSchoolId = _currentUser.SchoolId
+            ?? throw new ForbiddenAppException("School context was not found.");
+        var campusId = _currentUser.CampusId
+            ?? throw new ForbiddenAppException("Campus context was not found.");
+        if (user.SchoolId != campusSchoolId || user.CampusId != campusId)
+        {
+            throw new ForbiddenAppException("You can only reset passwords for users in your campus.");
         }
     }
 

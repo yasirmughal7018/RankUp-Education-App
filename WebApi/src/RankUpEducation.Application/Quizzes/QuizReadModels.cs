@@ -107,7 +107,9 @@ public sealed record QuestionAcceptedAnswerScoreItem(
     bool AllowPartialMatch,
     string NormalizedAnswer,
     short MinimumLength,
-    short MaximumLength);
+    short MaximumLength,
+    bool AllowAiReview = false,
+    bool AllowTeacherReview = false);
 
 public sealed record QuizQuestionOptionItem(
     long OptionId,
@@ -217,7 +219,8 @@ public sealed record AttemptReviewQuestionItem(
     string? ParentFeedback,
     bool RequiresReview,
     long? QuizReviewId,
-    IReadOnlyList<long> SelectedOptionIds);
+    IReadOnlyList<long> SelectedOptionIds,
+    bool HasHumanReviewFeedback = false);
 
 public sealed record QuizQuestionCopyItem(
     long QuestionId,

@@ -43,4 +43,10 @@ public sealed class QuizReview : BaseEntity
         TeacherReviewStatus = statusId;
         TeacherReviewComment = comment.AsTrimmedOrNull();
     }
+
+    public void SetAiReview(short? statusId, string? comment)
+    {
+        AiReviewStatus = statusId;
+        AiReviewComment = comment.AsTrimmedOrNull();
+    }
 }

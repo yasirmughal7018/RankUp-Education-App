@@ -79,7 +79,9 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.AllowPartialMatch,
                     answer.NormalizedAnswer,
                     answer.MinimumLength,
-                    answer.MaximumLength))
+                    answer.MaximumLength,
+                    answer.AllowAiReview,
+                    answer.AllowTeacherReview))
                 .ToArray())).ToArray();
     }
 
@@ -191,7 +193,9 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.AllowPartialMatch,
                     answer.NormalizedAnswer,
                     answer.MinimumLength,
-                    answer.MaximumLength))
+                    answer.MaximumLength,
+                    answer.AllowAiReview,
+                    answer.AllowTeacherReview))
                 .ToArray())).ToArray();
     }
 }

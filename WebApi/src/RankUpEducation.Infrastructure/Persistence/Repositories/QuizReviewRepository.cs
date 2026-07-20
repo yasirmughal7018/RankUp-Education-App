@@ -192,28 +192,53 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             .Where(answer => attemptQuestions.Select(item => item.Id).Contains(answer.QuizAttemptQuestionId))
             .ToListAsync(cancellationToken);
 
+        var fillQuestionIds = attemptQuestions
+            .Where(item => QuizQuestionHelper.IsFillBlankType(
+                typeNames.GetValueOrDefault(item.QuestionTypeId, string.Empty)))
+            .Select(item => item.QuestionId)
+            .ToArray();
+
+        var teacherReviewFlags = fillQuestionIds.Length == 0
+            ? new Dictionary<long, bool>()
+            : await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+                .Where(answer => fillQuestionIds.Contains(answer.QuestionId))
+                .GroupBy(answer => answer.QuestionId)
+                .ToDictionaryAsync(
+                    group => group.Key,
+                    group => group.Any(answer => answer.AllowTeacherReview),
+                    cancellationToken);
+
         var reviewIds = attemptQuestions
             .Where(item => item.QuizReviewId is not null)
             .Select(item => item.QuizReviewId!.Value)
             .ToArray();
 
         var reviews = reviewIds.Length == 0
-            ? new Dictionary<long, string>()
+            ? new Dictionary<long, (string Feedback, bool HasHumanFeedback)>()
             : await _dbContext.QuizReviews.AsNoTracking()
                 .Where(review => reviewIds.Contains(review.Id))
                 .ToDictionaryAsync(
                     review => review.Id,
-                    review => !string.IsNullOrWhiteSpace(review.ParentReviewComment)
-                        ? review.ParentReviewComment!
-                        : review.TeacherReviewComment ?? string.Empty,
+                    review =>
+                    {
+                        var feedback = !string.IsNullOrWhiteSpace(review.ParentReviewComment)
+                            ? review.ParentReviewComment!
+                            : review.TeacherReviewComment ?? string.Empty;
+                        var hasHuman = !string.IsNullOrWhiteSpace(review.TeacherReviewComment)
+                            || !string.IsNullOrWhiteSpace(review.ParentReviewComment)
+                            || review.TeacherReviewStatus is not null
+                            || review.ParentReviewStatus is not null;
+                        return (Feedback: feedback, HasHumanFeedback: hasHuman);
+                    },
                     cancellationToken);
 
-        var totalMarks = quizQuestions.Values.DefaultIfEmpty((short)0).Sum(marks => marks);
-        var studentName = await _dbContext.Users.AsNoTracking()
-            .Where(user => user.Id == attempt.StudentId)
-            .Select(user => user.FullName)
-            .FirstOrDefaultAsync(cancellationToken)
+        var studentName = await (
+            from student in _dbContext.Users.AsNoTracking()
+            where student.Id == attempt.StudentId
+            select student.FullName).FirstOrDefaultAsync(cancellationToken)
             ?? $"Student {attempt.StudentId}";
+
+        var totalMarks = quizQuestions.Values.Sum(marks => marks);
 
         return new AttemptReviewDetailItem(
             attempt.Id,
@@ -239,14 +264,19 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
                     ?? primaryAnswer;
                 var typeName = typeNames.GetValueOrDefault(item.QuestionTypeId, "Multiple Choice");
+                var isFillBlank = QuizQuestionHelper.IsFillBlankType(typeName);
                 var requiresReview = QuizQuestionHelper.IsDescriptiveType(typeName)
-                    || (selectedOptionIds.Count == 0
+                    || (isFillBlank
+                        && teacherReviewFlags.GetValueOrDefault(item.QuestionId)
                         && !string.IsNullOrWhiteSpace(primaryAnswer?.SubmittedText));
 
                 string? feedback = null;
-                if (item.QuizReviewId is not null)
+                var hasHumanReviewFeedback = false;
+                if (item.QuizReviewId is not null
+                    && reviews.TryGetValue(item.QuizReviewId.Value, out var reviewInfo))
                 {
-                    reviews.TryGetValue(item.QuizReviewId.Value, out feedback);
+                    feedback = reviewInfo.Feedback.AsTrimmedOrNull();
+                    hasHumanReviewFeedback = reviewInfo.HasHumanFeedback;
                 }
 
                 var submittedText = questionAnswers
@@ -263,10 +293,11 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     marked?.IsCorrect ?? false,
                     selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
                     submittedText,
-                    feedback.AsTrimmedOrNull(),
+                    feedback,
                     requiresReview,
                     item.QuizReviewId,
-                    selectedOptionIds);
+                    selectedOptionIds,
+                    hasHumanReviewFeedback);
             }).ToArray());
     }
 

@@ -77,21 +77,34 @@ internal sealed class QuizManageGuard
     {
         var normalized = questionType.AsTrimmedString();
 
-        string[][] candidateGroups =
+        // Accept canonical IDs (100–104) when callers pass numeric values (e.g. Excel).
+        if (short.TryParse(normalized, out var typedId))
+        {
+            var byId = await _lookups.GetByIdAndTypeAsync(
+                typedId,
+                QuizLookupNames.QuestionType,
+                cancellationToken);
+            if (byId is not null)
+            {
+                return EnsureSupportedQuestionTypeId(byId.Id, byId.Name);
+            }
+        }
+
+        (short PreferredId, string[] Names)[] candidateGroups =
         [
-            QuizLookupNames.SingleChoiceQuestionTypeNames,
-            QuizLookupNames.MultiSelectQuestionTypeNames,
-            QuizLookupNames.TrueFalseQuestionTypeNames,
-            QuizLookupNames.FillBlankQuestionTypeNames
-            // Descriptive and future types are rejected by QuestionBankGuard / ValidateQuestionRequest.
+            (QuizLookupNames.QuestionTypeIds.SingleChoice, QuizLookupNames.SingleChoiceQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.MultipleChoice, QuizLookupNames.MultiSelectQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.TrueFalse, QuizLookupNames.TrueFalseQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.FillInTheBlanks, QuizLookupNames.FillBlankQuestionTypeNames)
         ];
 
-        foreach (var group in candidateGroups)
+        foreach (var (preferredId, group) in candidateGroups)
         {
             if (group.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
             {
-                return await RequireLookupAsync(
+                return await RequirePreferredLookupAsync(
                     QuizLookupNames.QuestionType,
+                    preferredId,
                     group,
                     cancellationToken);
             }
@@ -103,8 +116,61 @@ internal sealed class QuizManageGuard
             throw new ValidationAppException([$"Question type '{questionType}' is not supported."]);
         }
 
-        // Reject Descriptive / future types even if present in lookup table.
         var resolvedName = await _lookups.GetLookupNameAsync(directId, cancellationToken);
+        return EnsureSupportedQuestionTypeId(directId, resolvedName);
+    }
+
+    public async Task<short> ResolveDifficultyLevelIdAsync(
+        short difficultyLevel,
+        CancellationToken cancellationToken)
+    {
+        var preferred = await _lookups.GetByIdAndTypeAsync(
+            difficultyLevel,
+            QuizLookupNames.DifficultyLevel,
+            cancellationToken);
+        if (preferred is not null)
+        {
+            return preferred.Id;
+        }
+
+        var legacyName = await _lookups.GetLookupNameAsync(difficultyLevel, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(legacyName))
+        {
+            if (QuizLookupNames.EasyDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return await RequirePreferredLookupAsync(
+                    QuizLookupNames.DifficultyLevel,
+                    QuizLookupNames.DifficultyLevelIds.Easy,
+                    QuizLookupNames.EasyDifficultyNames,
+                    cancellationToken);
+            }
+
+            if (QuizLookupNames.MediumDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return await RequirePreferredLookupAsync(
+                    QuizLookupNames.DifficultyLevel,
+                    QuizLookupNames.DifficultyLevelIds.Medium,
+                    QuizLookupNames.MediumDifficultyNames,
+                    cancellationToken);
+            }
+
+            if (QuizLookupNames.HardDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return await RequirePreferredLookupAsync(
+                    QuizLookupNames.DifficultyLevel,
+                    QuizLookupNames.DifficultyLevelIds.Hard,
+                    QuizLookupNames.HardDifficultyNames,
+                    cancellationToken);
+            }
+        }
+
+        throw new ValidationAppException([
+            $"Difficulty level '{difficultyLevel}' is invalid. Use Easy (2001), Medium (2002), or Hard (2003)."
+        ]);
+    }
+
+    private static short EnsureSupportedQuestionTypeId(short typeId, string resolvedName)
+    {
         if (QuizQuestionHelper.IsDescriptiveType(resolvedName)
             || (!QuizQuestionHelper.IsSingleChoiceType(resolvedName)
                 && !QuizQuestionHelper.IsMultiSelectType(resolvedName)
@@ -116,7 +182,22 @@ internal sealed class QuizManageGuard
             ]);
         }
 
-        return directId;
+        return typeId;
+    }
+
+    private async Task<short> RequirePreferredLookupAsync(
+        string type,
+        short preferredId,
+        IReadOnlyList<string> names,
+        CancellationToken cancellationToken)
+    {
+        var preferred = await _lookups.GetByIdAndTypeAsync(preferredId, type, cancellationToken);
+        if (preferred is not null)
+        {
+            return preferred.Id;
+        }
+
+        return await RequireLookupAsync(type, names, cancellationToken);
     }
 
     public static void ValidateQuestionRequest(AddQuizQuestionRequest request)
