@@ -15,7 +15,6 @@ const fieldClass =
 const SCHOOL_CHANGE_ROLES: UserRole[] = [
   "Teacher",
   "Student",
-  "Parent",
   "CampusAdmin",
 ];
 
@@ -851,8 +850,9 @@ export function AccountPage() {
             </div>
             <div className="px-5 py-4">
               <p className="text-sm leading-relaxed text-slate-600">
-                Your account will lock until School Admin or Portal Admin
-                approves or rejects this request. You will be signed out now.
+                Your account will lock until an admin for the destination school
+                or campus approves or rejects this request. You will be signed
+                out now.
               </p>
               <div className="mt-5 flex justify-end gap-2">
                 <Btn

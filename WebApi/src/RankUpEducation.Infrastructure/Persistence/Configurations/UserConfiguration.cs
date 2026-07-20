@@ -38,9 +38,9 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.RollNumberTeacherCode)
             .HasColumnName("roll_number_teacher_code")
             .HasMaxLength(80);
+        builder.Property(user => user.LastLoginAt).HasColumnName("last_login_at");
 
         builder.Ignore(user => user.ProfileId);
-        builder.Ignore(user => user.LastLoginAt);
         builder.Ignore(user => user.CreatedAt);
         builder.Ignore(user => user.CreatedBy);
         builder.Ignore(user => user.UpdatedAt);

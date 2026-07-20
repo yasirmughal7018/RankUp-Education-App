@@ -17,11 +17,29 @@ function formatRequestedAt(value: string): string {
   }).format(date);
 }
 
+function canApplySchoolChange(
+  role: string | undefined,
+  requesterRole: string,
+): boolean {
+  if (role === "PortalAdmin") {
+    return true;
+  }
+  if (role === "SchoolAdmin") {
+    return (
+      requesterRole === "Teacher" ||
+      requesterRole === "Student" ||
+      requesterRole === "CampusAdmin"
+    );
+  }
+  if (role === "CampusAdmin") {
+    return requesterRole === "Teacher" || requesterRole === "Student";
+  }
+  return false;
+}
+
 export function PendingSchoolChangesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const canApply =
-    user?.role === "PortalAdmin" || user?.role === "SchoolAdmin";
 
   const { data = [], isLoading, isError, error } = useQuery({
     queryKey: ["admin", "school-changes", "pending"],
@@ -56,7 +74,15 @@ export function PendingSchoolChangesPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="School / campus change requests"
-        description="School Admin or Portal Admin can approve and apply Teacher/Student school or campus changes. Portal Admin can see whether School Admin already approved."
+        description={
+          user?.role === "PortalAdmin"
+            ? "Portal Admin can approve and apply every pending school or campus change."
+            : user?.role === "SchoolAdmin"
+              ? "School Admin can approve Teacher/Student (and related) requests into your school campuses."
+              : user?.role === "CampusAdmin"
+                ? "Campus Admin can approve Teacher/Student requests into your campus."
+                : "Review pending school or campus change requests for your scope."
+        }
         action={
           <Link
             to="/admin/directory"
@@ -95,6 +121,10 @@ export function PendingSchoolChangesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {data.map((item) => {
+                const canApply = canApplySchoolChange(
+                  user?.role,
+                  item.requesterRole,
+                );
                 const approveDisabled =
                   approveMutation.isPending ||
                   rejectMutation.isPending ||
@@ -157,7 +187,7 @@ export function PendingSchoolChangesPage() {
                           onClick={() => approveMutation.mutate(item.id)}
                           className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
                         >
-                          Approve
+                          {canApply ? "Approve & apply" : "Record approval"}
                         </button>
                         <button
                           type="button"

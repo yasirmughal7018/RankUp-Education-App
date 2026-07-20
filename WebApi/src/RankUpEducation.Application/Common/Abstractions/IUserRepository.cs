@@ -88,4 +88,10 @@ public interface IUserRepository
         long userId,
         DateTimeOffset revokedAt,
         CancellationToken cancellationToken);
+
+    /// <summary>Persists <c>app_users.last_login_at</c> after a successful password login.</summary>
+    Task UpdateLastLoginAtAsync(
+        long userId,
+        DateTimeOffset loginAt,
+        CancellationToken cancellationToken);
 }

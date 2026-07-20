@@ -133,7 +133,7 @@
     <p class="subtitle">RankUp Education — Web (React), Mobile (Flutter), and API</p>
     <div class="meta">
       <span class="chip">Version: current codebase</span>
-      <span class="chip">Date: 17 Jul 2026</span>
+      <span class="chip">Date: 19 Jul 2026</span>
       <span class="chip">Roles: PortalAdmin · SchoolAdmin · CampusAdmin · Teacher · Parent · Student</span>
       <span class="chip">Registration + school/campus change lock</span>
     </div>
@@ -162,7 +162,7 @@
     <li><strong>Self-service registration</strong> — Student / Parent / Teacher submit → approval queue in <code>app_user_approval</code> → School/Campus may soft-approve → <strong>only Portal Admin activates</strong> → user sets password → Login.</li>
     <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / SchoolAdmin / CampusAdmin with <strong>no password</strong> → auto-approved → user sets password on first login.</li>
     <li><strong>Add role to existing account</strong> — Directory create matching an existing mobile/CNIC adds a second role (multi-role) when combination rules allow.</li>
-    <li><strong>School / campus change (Web)</strong> — Teacher / Student / Parent / CampusAdmin request a change from Profile → confirmation → account <strong>locks</strong> → SchoolAdmin <strong>or</strong> PortalAdmin applies (or any allowed reviewer rejects) → account <strong>unlocks</strong>.</li>
+    <li><strong>School / campus change (Web)</strong> — Teacher / Student / CampusAdmin request a change from Profile → confirmation → account <strong>locks</strong> → destination admin applies (PortalAdmin any; SchoolAdmin for their school; CampusAdmin for Teacher/Student into their campus) or any allowed reviewer rejects → account <strong>unlocks</strong>. <strong>Parent cannot request</strong> school/campus change (parents are not school-scoped).</li>
   </ol>
   <p><strong>PortalAdmin</strong> is not created via the app (seed/DB). <strong>SchoolAdmin</strong> is created by PortalAdmin only. <strong>CampusAdmin</strong> is created by PortalAdmin or SchoolAdmin.</p>
   <p><strong>Important:</strong> Approving a registration or directory-creating a user does <em>not</em> set a password. The user must set a password on first login, then sign in.</p>
@@ -221,8 +221,8 @@
       <tr><td>Record registration approval</td><td>Yes (activates)</td><td>Own school (does not activate)</td><td>Own campus (does not activate)</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Activate registration</td><td>Yes — required</td><td>No</td><td>No</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Reject registrations (soft)</td><td>All pending</td><td>Own school</td><td>Own campus</td><td>—</td><td>—</td><td>—</td></tr>
-      <tr><td>Request school / campus change</td><td>—</td><td>—</td><td>Campus only</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-      <tr><td>Apply school / campus change (unlock)</td><td>Yes</td><td>Yes (own destination school)</td><td>Soft-approve only</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Request school / campus change</td><td>—</td><td>—</td><td>Campus only</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+      <tr><td>Apply school / campus change (unlock)</td><td>Yes (any request)</td><td>Yes — Teacher/Student/CampusAdmin into own destination school</td><td>Yes — Teacher/Student into own destination campus*</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Reject school / campus change (unlock)</td><td>Yes</td><td>Own destination school</td><td>Own destination campus*</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create Student / Teacher / Parent</td><td>Any school</td><td>Own school</td><td>Own school + campus</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Directory create SchoolAdmin</td><td>Yes</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
@@ -233,7 +233,7 @@
       <tr><td>Create PortalAdmin via app</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
     </tbody>
   </table>
-  <p><small>* CampusAdmin cannot review CampusAdmin-to-CampusAdmin change requests (those go to SchoolAdmin + PortalAdmin only).</small></p>
+  <p><small>* CampusAdmin can review/apply only Teacher/Student requests into their own campus. CampusAdmin cannot review CampusAdmin-to-CampusAdmin change requests (those go to SchoolAdmin + PortalAdmin only).</small></p>
 
   <h2 id="paths">3. Ways to create users</h2>
   <h3>Path A — Self-service → Approval queue → Portal Admin activates → Set password → Login</h3>
@@ -363,7 +363,7 @@
   </table>
 
   <h2 id="school-change">6. School / campus change (request, lock, unlock)</h2>
-  <p>This is <strong>separate from registration</strong>. An already-active Teacher / Student / Parent / CampusAdmin can request a school and/or campus change from Profile. The request does <strong>not</strong> use the profile “Save” button — it has its own save action and confirmation.</p>
+  <p>This is <strong>separate from registration</strong>. An already-active Teacher / Student / CampusAdmin can request a school and/or campus change from Profile. The request does <strong>not</strong> use the profile “Save” button — it has its own save action and confirmation. <strong>Parent cannot request</strong> a school/campus change (same rule as registration: parents are not assigned school/campus).</p>
 
   <h3>Who can request</h3>
   <table>
@@ -373,7 +373,7 @@
     <tbody>
       <tr><td>Teacher</td><td>Yes</td><td>Yes</td></tr>
       <tr><td>Student</td><td>Yes</td><td>Yes</td></tr>
-      <tr><td>Parent</td><td>Yes</td><td>Yes</td></tr>
+      <tr><td>Parent</td><td>No</td><td>No</td></tr>
       <tr><td>CampusAdmin</td><td>No (school fixed)</td><td>Yes</td></tr>
       <tr><td>PortalAdmin / SchoolAdmin</td><td>No</td><td>No</td></tr>
     </tbody>
@@ -395,19 +395,19 @@
     <tbody>
       <tr><td>Change requested</td><td>Account locked (<code>is_active=false</code>); sessions revoked; login-status = <code>LockedPendingSchoolChange</code></td></tr>
       <tr><td>User tries to sign in while locked</td><td>Web opens <code>/account-locked</code> with message explaining school/campus change is pending approval</td></tr>
-      <tr><td>SchoolAdmin <strong>or</strong> PortalAdmin Approves (applies)</td><td>New school/campus applied; account unlocked (<code>is_active=true</code>); user can sign in again</td></tr>
+      <tr><td>PortalAdmin / SchoolAdmin / CampusAdmin Approves (when allowed to apply)</td><td>New school/campus applied; account unlocked (<code>is_active=true</code>); user can sign in again</td></tr>
       <tr><td>Any allowed reviewer Rejects</td><td>School/campus unchanged; account unlocked; user can sign in again</td></tr>
-      <tr><td>CampusAdmin Approves</td><td>Soft-approval only — account stays locked until SchoolAdmin or PortalAdmin applies (or someone rejects)</td></tr>
+      <tr><td>Reviewer Approves but cannot apply that requester type</td><td>Approval recorded; account stays locked until an applying admin finalizes (or someone rejects)</td></tr>
     </tbody>
   </table>
   <div class="note">
-    Lock message (API): “Your account is locked because you requested a school or campus change. School Admin or Portal Admin must approve (or reject) the change before you can sign in again.”
+    Lock message (API): “Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.”
   </div>
 
-  <h3>Who can apply vs soft-approve</h3>
+  <h3>Who can apply (unlock + move school/campus)</h3>
   <table>
     <thead>
-      <tr><th>Reviewer</th><th>Teacher / Student / Parent change</th><th>CampusAdmin campus change</th></tr>
+      <tr><th>Reviewer</th><th>Teacher / Student change</th><th>CampusAdmin campus change</th></tr>
     </thead>
     <tbody>
       <tr>
@@ -417,12 +417,12 @@
       </tr>
       <tr>
         <td><strong>SchoolAdmin</strong></td>
-        <td>Can apply immediately for destination school (unlock).</td>
-        <td>Can apply immediately (unlock).</td>
+        <td>Can apply immediately for destination school (including any campus under that school).</td>
+        <td>Can apply (unlock).</td>
       </tr>
       <tr>
         <td><strong>CampusAdmin</strong></td>
-        <td>Soft-approve only (does not unlock).</td>
+        <td>Can apply immediately when destination is <strong>their</strong> campus (Teacher/Student inbound switch).</td>
         <td>Cannot review other CampusAdmin change requests.</td>
       </tr>
     </tbody>
@@ -430,12 +430,22 @@
   <ul>
     <li>Approver queue for destination school/campus uses the same school/campus candidate rules as registration.</li>
     <li>CampusAdmin requester → queue is SchoolAdmin + PortalAdmin only (no peer CampusAdmins).</li>
-    <li>Admin UI: <code>/admin/school-changes</code> shows School Admin approved / not approved yet.</li>
+    <li>Admin UI: <code>/admin/directory/school-changes</code> (also redirected from <code>/admin/school-changes</code>). Portal/School/Campus Admin all see the button on Directory overview when <code>schoolChanges</code> is in visible sections.</li>
+    <li>UI action label: <strong>Approve &amp; apply</strong> when the signed-in role can finalize that requester type; otherwise <strong>Record approval</strong>.</li>
     <li>Notifications category: <code>SchoolChangeRequest</code>.</li>
   </ul>
 
   <h2 id="directory">7. Directory (admin) create rules</h2>
   <p>No password on create. Directory users are auto-approved and must set password on first login (<code>NeedsPasswordSetup</code>). Directory create does <em>not</em> use <code>app_user_approval</code>.</p>
+
+  <h3>Directory overview (Web)</h3>
+  <ul>
+    <li>Route: <code>/admin/directory</code> — summary tiles drive the active section (Schools, School Admins, Campus Admins, Parents, Teachers, Students).</li>
+    <li>Active list shows <strong>Active/Ready</strong> records only. Clicking a people tile opens a details popup (contact, audit fields, approval history when present). Header shows stats already visible on the tile; those fields are not repeated in the body.</li>
+    <li><strong>Last login</strong> is shown on the right of active people tiles and in the popup header (date on one line, time on the next). Source: <code>app_users.last_login_at</code>, updated on successful password login (<code>POST /api/auth/login</code>).</li>
+    <li>School tile: one campus → school + campus details; multiple campuses → choose campus, then school + campus details.</li>
+    <li><strong>School / campus changes</strong> button on Directory overview opens the pending school-change queue for PortalAdmin, SchoolAdmin, and CampusAdmin.</li>
+  </ul>
   <table>
     <thead>
       <tr><th>Entity</th><th>Who</th><th>Required fields</th><th>Optional</th></tr>
@@ -544,9 +554,9 @@
       <tr><td>Login status UI</td><td>Enter identifier; see Pending / Rejected / Needs password / Locked / Ready / not active</td><td>Web + Mobile</td></tr>
       <tr><td>Locked page</td><td><code>/account-locked</code> with school-change reason</td><td>Web</td></tr>
       <tr><td>Registration pending list</td><td>Appears while registration pending</td><td>Web + Mobile</td></tr>
-      <tr><td>School-change pending list</td><td><code>/admin/school-changes</code></td><td>Web</td></tr>
-      <tr><td>Directory list</td><td>Active / Inactive column</td><td>Web</td></tr>
-      <tr><td>Database</td><td><code>app_users.is_active</code>, <code>password_hash</code>, <code>rejected_at</code>, pending school-change request</td><td>QA / DB</td></tr>
+      <tr><td>School-change pending list</td><td><code>/admin/directory/school-changes</code></td><td>Web</td></tr>
+      <tr><td>Directory list / overview</td><td>Status badges; overview tiles show Last login</td><td>Web</td></tr>
+      <tr><td>Database</td><td><code>app_users.is_active</code>, <code>password_hash</code>, <code>rejected_at</code>, <code>last_login_at</code>, pending school-change request</td><td>QA / DB</td></tr>
     </tbody>
   </table>
 
@@ -561,7 +571,8 @@
       <tr><td>Request account</td><td><code>/request-access</code></td><td>Login → Request account access</td></tr>
       <tr><td>Profile / school change</td><td><code>/account</code> (separate school/campus section + confirm)</td><td>Not implemented yet</td></tr>
       <tr><td>Registration approvals</td><td><code>/admin/registrations</code></td><td>Admin → Approvals</td></tr>
-      <tr><td>School/campus change approvals</td><td><code>/admin/school-changes</code></td><td>Not available</td></tr>
+      <tr><td>School/campus change approvals</td><td><code>/admin/directory/school-changes</code></td><td>Not available</td></tr>
+      <tr><td>Directory overview</td><td><code>/admin/directory</code></td><td>Not available</td></tr>
       <tr><td>Directory create / activate</td><td><code>/admin/directory/*</code></td><td>Not available</td></tr>
       <tr><td>School Admins</td><td><code>/admin/directory/school-admins</code></td><td>Not available</td></tr>
       <tr><td>Campus Admins</td><td><code>/admin/directory/campus-admins</code></td><td>Not available</td></tr>
@@ -921,10 +932,10 @@
       <li>Confirmation popup appears → Confirm and lock.</li>
       <li>User is signed out and lands on <code>/account-locked</code> with lock reason.</li>
       <li>Enter identifier on <code>/login</code> → redirected again to <code>/account-locked</code> (<code>LockedPendingSchoolChange</code>).</li>
-      <li>As SchoolAdmin of destination school, open <code>/admin/school-changes</code> → Approve.</li>
-      <li>Teacher logs in again → Ready; school/campus updated.</li>
+      <li>As SchoolAdmin of destination school, open <code>/admin/directory/school-changes</code> → Approve &amp; apply.</li>
+      <li>Teacher logs in again → Ready; school/campus updated; Last login updates on Directory overview.</li>
     </ol>
-    <div class="expect">Expected: Lock on request; SchoolAdmin alone can unlock by applying; school/campus changed.</div>
+    <div class="expect">Expected: Lock on request; SchoolAdmin can unlock by applying; school/campus changed.</div>
   </div>
 
   <div class="scenario" id="qa-32">
@@ -932,12 +943,12 @@
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
       <li>Student requests campus (or school) change → locked.</li>
-      <li>As PortalAdmin, open <code>/admin/school-changes</code>.</li>
+      <li>As PortalAdmin, open <code>/admin/directory/school-changes</code>.</li>
       <li>Before SchoolAdmin acts, status shows <strong>School Admin not approved yet</strong>.</li>
-      <li>PortalAdmin Approves → Student unlocked with new campus/school.</li>
-      <li>Optional: instead have CampusAdmin soft-approve first; account stays locked; PortalAdmin still sees School Admin not approved yet, then PortalAdmin applies.</li>
+      <li>PortalAdmin Approves &amp; apply → Student unlocked with new campus/school.</li>
+      <li>Optional: instead have CampusAdmin Approve &amp; apply first (destination campus) → Student unlocked without PortalAdmin.</li>
     </ol>
-    <div class="expect">Expected: PortalAdmin can apply without SchoolAdmin; visibility of SchoolAdmin approval is shown.</div>
+    <div class="expect">Expected: PortalAdmin can apply any request; CampusAdmin can apply Teacher/Student into their campus; SchoolAdmin approval flag is still visible.</div>
   </div>
 
   <div class="scenario" id="qa-33">
@@ -953,15 +964,15 @@
   </div>
 
   <div class="scenario" id="qa-34">
-    <h3><span class="id">QA-34</span> CampusAdmin soft-approve does not unlock</h3>
+    <h3><span class="id">QA-34</span> CampusAdmin applies Teacher/Student inbound campus change</h3>
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
-      <li>Teacher/Student requests change to a campus → locked.</li>
-      <li>CampusAdmin Approves → message that change stays pending until School/Portal Admin.</li>
-      <li>Login still <code>LockedPendingSchoolChange</code>.</li>
-      <li>SchoolAdmin or PortalAdmin Approves → unlocked.</li>
+      <li>Teacher/Student requests change <strong>into</strong> CampusAdmin’s campus → locked.</li>
+      <li>As that CampusAdmin, open <code>/admin/directory/school-changes</code> → Approve &amp; apply.</li>
+      <li>Login-status returns Ready; school/campus updated to destination.</li>
+      <li>Negative: CampusAdmin for a <em>different</em> campus must not see/apply this request.</li>
     </ol>
-    <div class="expect">Expected: CampusAdmin cannot unlock; SchoolAdmin or PortalAdmin must apply.</div>
+    <div class="expect">Expected: Destination CampusAdmin can unlock Teacher/Student inbound switches for their campus.</div>
   </div>
 
   <div class="scenario" id="qa-35">
@@ -1015,13 +1026,15 @@
       <tr><td>19</td><td>Profile school change uses separate button + confirm popup</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>20</td><td>School/campus change request locks account + signs out</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>21</td><td>login-status LockedPendingSchoolChange → locked page/message</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>22</td><td>SchoolAdmin can apply school/campus change (unlock)</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>23</td><td>PortalAdmin can apply school/campus change (unlock)</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>22</td><td>SchoolAdmin can apply school/campus change into own school (unlock)</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>23</td><td>PortalAdmin can apply any school/campus change (unlock)</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>24</td><td>PortalAdmin sees SchoolAdmin approved / not yet</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>25</td><td>CampusAdmin soft-approve does not unlock</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>25</td><td>CampusAdmin can apply Teacher/Student into own campus (unlock)</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>26</td><td>Reject school/campus change unlocks without applying</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>27</td><td>CampusAdmin can change campus only (school fixed)</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>28</td><td>Switch role survives token refresh</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>29</td><td>Directory overview shows Last login (date + time) after password login</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>30</td><td>Directory School / campus changes button visible for Portal/School/Campus Admin</td><td>☐</td><td>—</td><td></td></tr>
     </tbody>
   </table>
 
@@ -1039,15 +1052,17 @@
       <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Soft-reject registration</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login-status</code></td><td>Anonymous</td><td>PendingApproval | Rejected | NeedsPasswordSetup | LockedPendingSchoolChange | Ready</td></tr>
       <tr><td>POST</td><td><code>/api/auth/set-initial-password</code></td><td>Anonymous</td><td>First password after registration activation</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>Sign in (returns role + roles)</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>Sign in (returns role + roles); updates <code>app_users.last_login_at</code></td></tr>
       <tr><td>POST</td><td><code>/api/auth/switch-role</code></td><td>Bearer</td><td>Change active role; new tokens</td></tr>
       <tr><td>POST</td><td><code>/api/auth/token/refresh</code></td><td>Anonymous</td><td>Refresh (keeps active_role)</td></tr>
       <tr><td>GET</td><td><code>/api/auth/me</code></td><td>Bearer</td><td>Current user (+ pendingSchoolChange if any)</td></tr>
       <tr><td>PUT</td><td><code>/api/auth/me</code></td><td>Bearer</td><td>Update profile contact fields (not school/campus change)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/me/school-change</code></td><td>Bearer</td><td>Request school/campus change; locks account</td></tr>
       <tr><td>GET</td><td><code>/api/auth/school-changes/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending changes + <code>schoolAdminHasApproved</code></td></tr>
-      <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>SchoolAdmin/PortalAdmin apply+unlock; CampusAdmin soft-approve</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Apply+unlock when allowed: PortalAdmin any; SchoolAdmin destination school; CampusAdmin Teacher/Student into own campus</td></tr>
       <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Reject + unlock (no apply)</td></tr>
+      <tr><td>GET</td><td><code>/api/directory/summary</code></td><td>Admins</td><td>Directory overview counts + <code>visibleSections</code> (includes <code>schoolChanges</code>)</td></tr>
+      <tr><td>GET</td><td><code>/api/directory/students|teachers|parents|…</code></td><td>Admins</td><td>List users (includes contact, audit fields, <code>lastLoginAt</code>, approval history)</td></tr>
       <tr><td>POST</td><td><code>/api/directory/students|teachers|parents</code></td><td>Admins</td><td>Create / add-role users</td></tr>
       <tr><td>POST</td><td><code>/api/directory/school-admins</code></td><td>PortalAdmin</td><td>Create SchoolAdmin</td></tr>
       <tr><td>POST</td><td><code>/api/directory/campus-admins</code></td><td>Portal/School Admin</td><td>Create CampusAdmin</td></tr>
@@ -1056,10 +1071,11 @@
   </table>
 
   <footer>
-    Regenerated 17 Jul 2026 from current business logic in WebApi AuthService / DirectoryService,
-    React AccountPage / AccountLockedPage / PendingSchoolChangesPage / LoginPage.
+    Updated 19 Jul 2026 from current business logic in WebApi AuthService / DirectoryService,
+    React AccountPage / AccountLockedPage / PendingSchoolChangesPage / DirectoryOverviewPage / LoginPage.
     Tables: <code>app_user_roles</code>, <code>app_user_approval</code>,
-    <code>app_user_school_change_request</code>, <code>app_user_school_change_approval</code>.
+    <code>app_user_school_change_request</code>, <code>app_user_school_change_approval</code>,
+    <code>app_users.last_login_at</code>.
     Companion DOCX (if present): <code>docs/02_RankUp_User_Creation_Approval_QA.docx</code> — update manually or rebuild when a generator script is available.
   </footer>
 </main>

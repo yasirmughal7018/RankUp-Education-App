@@ -57,6 +57,14 @@ public sealed record DirectoryStudentListResponse(
     int PageSize,
     int TotalCount);
 
+public sealed record DirectoryApprovalHistoryItem(
+    long ApproverUserId,
+    string ApproverName,
+    string ApproverRole,
+    /// <summary>Pending | Approved | Rejected</summary>
+    string Decision,
+    DateTimeOffset? DecidedAt);
+
 public sealed record DirectoryStudentResponse(
     long StudentId,
     string FullName,
@@ -71,6 +79,16 @@ public sealed record DirectoryStudentResponse(
     string SchoolName,
     string CampusName,
     IReadOnlyList<string> TeacherNames,
+    string? MobileNumber,
+    string? Cnic,
+    string? EmailAddress,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    bool NeedsPasswordSetup,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -110,6 +128,16 @@ public sealed record DirectoryTeacherResponse(
     string SchoolName,
     string CampusName,
     int StudentCount,
+    string? MobileNumber,
+    string? Cnic,
+    string? EmailAddress,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    bool NeedsPasswordSetup,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -138,8 +166,19 @@ public sealed record DirectoryParentResponse(
     string FullName,
     string Username,
     int LinkedStudentCount,
+    IReadOnlyList<string> LinkedStudentNames,
     bool IsActive,
     string? AvatarUrl,
+    string? MobileNumber,
+    string? Cnic,
+    string? EmailAddress,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    bool NeedsPasswordSetup,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -180,12 +219,19 @@ public sealed record DirectorySchoolAdminResponse(
     string SchoolName,
     string? MobileNumber,
     string? Cnic,
+    string? EmailAddress,
     bool IsActive,
     bool NeedsPasswordSetup,
     string? AvatarUrl,
     int ActiveCampusCount,
     int ActiveTeacherCount,
     int ActiveStudentCount,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -220,11 +266,18 @@ public sealed record DirectoryCampusAdminResponse(
     string CampusName,
     string? MobileNumber,
     string? Cnic,
+    string? EmailAddress,
     bool IsActive,
     bool NeedsPasswordSetup,
     string? AvatarUrl,
     int ActiveTeacherCount,
     int ActiveStudentCount,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 

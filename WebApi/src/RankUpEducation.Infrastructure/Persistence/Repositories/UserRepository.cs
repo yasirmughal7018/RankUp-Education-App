@@ -398,6 +398,18 @@ public sealed class UserRepository : IUserRepository
         }
     }
 
+    public Task UpdateLastLoginAtAsync(
+        long userId,
+        DateTimeOffset loginAt,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.Users
+            .Where(user => user.Id == userId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(user => user.LastLoginAt, loginAt),
+                cancellationToken);
+    }
+
     private IQueryable<User> UsersWithRoles()
         => _dbContext.Users.Include(user => user.RoleAssignments);
 

@@ -355,6 +355,16 @@ public sealed class DirectoryService : IDirectoryService
             "—",
             "—",
             Array.Empty<string>(),
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -402,6 +412,16 @@ public sealed class DirectoryService : IDirectoryService
             "—",
             "—",
             Array.Empty<string>(),
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -524,6 +544,16 @@ public sealed class DirectoryService : IDirectoryService
             "—",
             "—",
             0,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -569,6 +599,16 @@ public sealed class DirectoryService : IDirectoryService
             "—",
             "—",
             0,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -667,8 +707,19 @@ public sealed class DirectoryService : IDirectoryService
             user.FullName,
             user.Username,
             0,
+            Array.Empty<string>(),
             user.IsActive,
             user.AvatarUrl,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -697,8 +748,19 @@ public sealed class DirectoryService : IDirectoryService
             user.FullName,
             user.Username,
             linkedCount,
+            Array.Empty<string>(),
             user.IsActive,
             user.AvatarUrl,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -923,12 +985,19 @@ public sealed class DirectoryService : IDirectoryService
                 existingSchool?.Name ?? "—",
                 existing.MobileNumber,
                 existing.Cnic,
+                existing.EmailAddress,
                 existing.IsActive,
                 existing.NeedsPasswordSetup,
                 existing.AvatarUrl,
                 0,
                 0,
                 0,
+                existing.CreatedDate,
+                existing.RequestedAt,
+                existing.RejectedAt,
+                existing.LastLoginAt,
+                existing.ReasonMessage,
+                Array.Empty<DirectoryApprovalHistoryItem>(),
                 DirectoryAccountStatuses.FromUser(existing));
         }
 
@@ -960,12 +1029,19 @@ public sealed class DirectoryService : IDirectoryService
             school?.Name ?? "—",
             user.MobileNumber,
             user.Cnic,
+            user.EmailAddress,
             user.IsActive,
             user.NeedsPasswordSetup,
             user.AvatarUrl,
             0,
             0,
             0,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -1003,12 +1079,19 @@ public sealed class DirectoryService : IDirectoryService
             school?.Name ?? "—",
             user.MobileNumber,
             user.Cnic,
+            user.EmailAddress,
             user.IsActive,
             user.NeedsPasswordSetup,
             user.AvatarUrl,
             0,
             0,
             0,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -1194,11 +1277,18 @@ public sealed class DirectoryService : IDirectoryService
             campus?.Name ?? "—",
             user.MobileNumber,
             user.Cnic,
+            user.EmailAddress,
             user.IsActive,
             user.NeedsPasswordSetup,
             user.AvatarUrl,
             0,
             0,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -1585,6 +1675,16 @@ public sealed class DirectoryService : IDirectoryService
             "—",
             "—",
             0,
+            existing.MobileNumber,
+            existing.Cnic,
+            existing.EmailAddress,
+            existing.CreatedDate,
+            existing.RequestedAt,
+            existing.RejectedAt,
+            existing.LastLoginAt,
+            existing.ReasonMessage,
+            existing.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(existing));
     }
 
@@ -1619,8 +1719,19 @@ public sealed class DirectoryService : IDirectoryService
             existing.FullName,
             existing.Username,
             linkedCount,
+            Array.Empty<string>(),
             existing.IsActive,
             existing.AvatarUrl,
+            existing.MobileNumber,
+            existing.Cnic,
+            existing.EmailAddress,
+            existing.CreatedDate,
+            existing.RequestedAt,
+            existing.RejectedAt,
+            existing.LastLoginAt,
+            existing.ReasonMessage,
+            existing.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(existing));
     }
 

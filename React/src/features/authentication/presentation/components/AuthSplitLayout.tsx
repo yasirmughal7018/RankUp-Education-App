@@ -49,10 +49,10 @@ const panelCopy: Record<
   },
   "account-locked": {
     headline: "Your account is temporarily locked",
-    lead: "School or campus change requests lock your login until School Admin or Portal Admin reviews them.",
+    lead: "School or campus change requests lock your login until a destination school or campus admin reviews them.",
     points: [
       "Your request is waiting in the admin approval queue",
-      "School Admin or Portal Admin can approve or reject",
+      "Campus, School, or Portal Admin can approve or reject in their scope",
       "Approval applies the new school/campus and unlocks you",
       "Rejection keeps your current school/campus and unlocks you",
     ],
