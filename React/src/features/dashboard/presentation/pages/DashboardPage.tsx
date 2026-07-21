@@ -62,12 +62,14 @@ function quickLinksForRole(role: UserRole): Array<{ label: string; href: string 
     return [
       { label: "Registrations", href: "/admin/registrations" },
       { label: "Directory", href: "/admin/directory" },
+      { label: "Question bank", href: "/questions" },
     ];
   }
 
   if (role === "Teacher") {
     return [
       { label: "Quizzes", href: "/quizzes" },
+      { label: "Question bank", href: "/questions" },
       { label: "Assignments", href: "/quizzes/assignments" },
       { label: "Pending reviews", href: "/quizzes/reviews/pending" },
       { label: "Reports", href: "/reports" },
@@ -78,6 +80,7 @@ function quickLinksForRole(role: UserRole): Array<{ label: string; href: string 
     return [
       { label: "Children", href: "/parent/children" },
       { label: "Quizzes", href: "/quizzes" },
+      { label: "Question bank", href: "/questions" },
       { label: "Assignments", href: "/quizzes/assignments" },
     ];
   }

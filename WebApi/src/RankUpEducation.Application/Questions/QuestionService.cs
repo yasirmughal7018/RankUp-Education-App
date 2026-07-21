@@ -147,9 +147,8 @@ public sealed class QuestionService : IQuestionService
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
         var difficultyLevelId = await _guard.ResolveDifficultyLevelIdAsync(request.DifficultyLevel, cancellationToken);
-        var statusId = request.SubmitForReview
-            ? await RequirePendingReviewStatusIdAsync(cancellationToken)
-            : await RequireDraftStatusIdAsync(cancellationToken);
+        // No Draft: create always enters PendingReview (IsActive=false until Approve).
+        var statusId = await RequirePendingReviewStatusIdAsync(cancellationToken);
 
         var question = new Question(
             request.QuestionText,
@@ -174,6 +173,9 @@ public sealed class QuestionService : IQuestionService
             request.Marks,
             request.Hint,
             request.Explanation);
+
+        // Ensure PendingReview + inactive even if entity defaults change.
+        question.SubmitForApproval(statusId);
 
         await _questions.AddQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -309,6 +311,8 @@ public sealed class QuestionService : IQuestionService
     {
         QuestionScopeResolver.RequireLifecycleScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
+        // Soft-hide quiz use while keeping Approved status; non-Approved must stay inactive.
+        await EnsureApprovedAsync(question, cancellationToken);
 
         question.Deactivate();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -394,8 +398,7 @@ public sealed class QuestionService : IQuestionService
                         cancellationToken);
                 }
 
-                // Default Draft when Status blank; PendingReview when Status says so.
-                var submitForReview = draft.SubmitForReview ?? false;
+                // Always PendingReview (no Draft). Status column ignored for create path.
                 var request = new CreateQuestionRequest(
                     draft.QuestionText,
                     draft.QuestionType,
@@ -409,7 +412,7 @@ public sealed class QuestionService : IQuestionService
                     draft.Explanation,
                     draft.Options,
                     draft.AcceptedAnswers,
-                    submitForReview);
+                    SubmitForReview: true);
 
                 QuestionBankGuard.ValidateCreateRequest(request);
                 await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
@@ -498,7 +501,7 @@ public sealed class QuestionService : IQuestionService
         if (!IsOwnerEditableStatus(statusName))
         {
             throw new BusinessRuleException(
-                "You can only delete your own Draft, PendingReview, or Rejected questions. Approved questions can only be deleted by Portal Admin.");
+                "You can only delete your own PendingReview or Rejected questions. Approved questions can only be deleted by Portal Admin.");
         }
     }
 
@@ -654,12 +657,6 @@ public sealed class QuestionService : IQuestionService
         => RequireQuestionStatusIdAsync(
             QuizLookupNames.QuestionStatusIds.PendingReview,
             QuizLookupNames.PendingQuestionStatusNames,
-            cancellationToken);
-
-    private Task<short> RequireDraftStatusIdAsync(CancellationToken cancellationToken)
-        => RequireQuestionStatusIdAsync(
-            QuizLookupNames.QuestionStatusIds.Draft,
-            QuizLookupNames.DraftQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireApprovedStatusIdAsync(CancellationToken cancellationToken)

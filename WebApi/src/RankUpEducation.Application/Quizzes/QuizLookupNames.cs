@@ -108,15 +108,16 @@ public static class QuizLookupNames
     public static readonly string[] RejectedQuestionStatusNames = ["Rejected"];
     public static readonly string[] RejectedQuestionStatusLegacyAliases = ["Declined"];
     public static readonly string[] ArchivedQuestionStatusNames = ["Archived"];
-    /// <summary>Statuses owners may still edit/delete (not Approved / Archived).</summary>
+    /// <summary>Statuses owners may still edit/delete (not Approved / Archived). Draft removed from product flow.</summary>
     public static readonly string[] OwnerEditableQuestionStatusNames =
     [
-        "Draft",
         "PendingReview",
         "Pending",
         "Under Review",
         "Rejected",
-        "Declined"
+        "Declined",
+        // Legacy Draft rows remain editable until migrated to PendingReview.
+        "Draft"
     ];
     /// <summary>Status used when creating inline quiz questions (quiz-ready).</summary>
     public static readonly string[] ActiveQuestionStatusNames = ["Approved"];

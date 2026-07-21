@@ -17,7 +17,7 @@ public sealed record QuestionExcelImportRow(
     short EstimatedTimeSeconds,
     string? Hint,
     string? Explanation,
-    /// <summary>Null = Draft (default). True = PendingReview. False = Draft.</summary>
+    /// <summary>Ignored — imports always create PendingReview.</summary>
     bool? SubmitForReview,
     IReadOnlyList<QuestionOptionRequest> Options,
     IReadOnlyList<QuestionAcceptedAnswerRequest> AcceptedAnswers);

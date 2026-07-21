@@ -28,6 +28,9 @@ export interface QuestionSummary {
   questionText: string;
   questionType: string;
   status: string;
+  classId: number;
+  subjectId: number;
+  difficultyLevel: number;
   marks: number;
   isActive: boolean;
   createdBy: string;
@@ -202,13 +205,14 @@ export const QUESTION_STATUS_IDS = {
 
 export function isOwnerEditableQuestionStatus(status: string): boolean {
   return (
-    isDraftQuestionStatus(status) ||
     isPendingQuestionStatus(status) ||
-    isRejectedQuestionStatus(status)
+    isRejectedQuestionStatus(status) ||
+    // Legacy Draft rows remain editable until API migrates them to PendingReview.
+    isDraftQuestionStatus(status)
   );
 }
 
-/** PortalAdmin any; otherwise owner + Draft / PendingReview / Rejected. */
+/** PortalAdmin any; otherwise owner + PendingReview / Rejected. */
 export function canMutateQuestion(args: {
   role: UserRole;
   userId: number | string;

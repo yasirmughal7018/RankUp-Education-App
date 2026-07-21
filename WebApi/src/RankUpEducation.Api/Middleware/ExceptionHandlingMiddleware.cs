@@ -22,6 +22,11 @@ public sealed class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // Client disconnected / navigated away — not an API failure.
+            // Let the host complete without logging a 500.
+        }
         catch (Exception exception)
         {
             await HandleAsync(context, exception);
@@ -32,6 +37,7 @@ public sealed class ExceptionHandlingMiddleware
     {
         var (statusCode, message, errors) = exception switch
         {
+            OperationCanceledException => (HttpStatusCode.RequestTimeout, "Request was cancelled.", Array.Empty<string>()),
             ValidationAppException validation => (HttpStatusCode.BadRequest, validation.Message, validation.Errors),
             AuthenticationAppException authentication => (HttpStatusCode.Unauthorized, authentication.Message, Array.Empty<string>()),
             ForbiddenAppException forbidden => (HttpStatusCode.Forbidden, forbidden.Message, Array.Empty<string>()),
@@ -39,6 +45,12 @@ public sealed class ExceptionHandlingMiddleware
             BusinessRuleException businessRule => (HttpStatusCode.BadRequest, businessRule.Message, Array.Empty<string>()),
             _ => (HttpStatusCode.InternalServerError, "Something went wrong. Please try again.", Array.Empty<string>())
         };
+
+        // Prefer not writing a body when the client already disconnected.
+        if (exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
 
         if (statusCode == HttpStatusCode.InternalServerError)
         {

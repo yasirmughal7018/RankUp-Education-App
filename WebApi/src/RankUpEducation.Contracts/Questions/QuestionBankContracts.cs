@@ -41,7 +41,7 @@ public sealed record CreateQuestionRequest(
     string? Explanation,
     IReadOnlyList<QuestionOptionRequest> Options,
     IReadOnlyList<QuestionAcceptedAnswerRequest>? AcceptedAnswers = null,
-    /// <summary>When true (default), status = PendingReview. When false, Draft.</summary>
+    /// <summary>Ignored for create — always PendingReview. Kept for API compatibility.</summary>
     bool SubmitForReview = true);
 
 public sealed record UpdateQuestionRequest(
@@ -63,6 +63,9 @@ public sealed record QuestionSummaryResponse(
     string QuestionText,
     string QuestionType,
     string Status,
+    short ClassId,
+    short SubjectId,
+    short DifficultyLevel,
     short Marks,
     bool IsActive,
     string CreatedBy,

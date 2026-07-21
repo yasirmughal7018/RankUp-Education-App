@@ -90,14 +90,11 @@ export function QuestionCreatePage() {
     formValues.topicId,
   ]);
 
-  async function saveQuestion(
-    values: QuestionFormValues,
-    submitForReview: boolean,
-  ) {
+  async function saveQuestion(values: QuestionFormValues) {
     setIsSubmitting(true);
     setSuccessMessage(null);
     try {
-      const created = await questionApi.createQuestion(values, submitForReview);
+      const created = await questionApi.createQuestion(values, true);
       setSavedQuestions((current) => {
         const next = [...current, created];
         setReviewIndex(next.length - 1);
@@ -106,9 +103,7 @@ export function QuestionCreatePage() {
 
       setFormValues(resetQuestionContent(values));
       setSuccessMessage(
-        submitForReview
-          ? `Submitted question #${created.questionId} for review. Class / Subject / Topic kept — add the next one.`
-          : `Saved draft question #${created.questionId}. Class / Subject / Topic kept — add the next one.`,
+        `Submitted question #${created.questionId} for review (PendingReview). Class / Subject / Topic kept — add the next one.`,
       );
     } finally {
       setIsSubmitting(false);
@@ -181,11 +176,9 @@ export function QuestionCreatePage() {
             initialValues={formValues}
             lockScope
             submitLabel="Submit for review & Add"
-            secondarySubmitLabel="Save as Draft"
             isSubmitting={isSubmitting}
             onValuesChange={setFormValues}
-            onSubmit={(values) => saveQuestion(values, true)}
-            onSecondarySubmit={(values) => saveQuestion(values, false)}
+            onSubmit={(values) => saveQuestion(values)}
             onCancel={() => navigate("/questions")}
           />
         </div>
@@ -322,10 +315,10 @@ export function QuestionCreatePage() {
               <li>1. Set Class, Subject, Topic, and Difficulty once.</li>
               <li>2. Choose the question type — answer UI changes with it.</li>
               <li>
-                3. Use <strong className="text-white">Save as Draft</strong> to
-                keep working privately, or{" "}
+                3. Use{" "}
                 <strong className="text-white">Submit for review &amp; Add</strong>{" "}
-                to queue PortalAdmin approval — scope stays sticky either way.
+                — creates PendingReview (inactive until PortalAdmin Approves).
+                Scope stays sticky for the next question.
               </li>
               <li>
                 4. Open full detail to browse every question saved in this

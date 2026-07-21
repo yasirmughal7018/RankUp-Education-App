@@ -101,7 +101,7 @@ public static class QuestionExcelImportParser
                 EstimatedTimeSeconds: GetShort(row, headers, "EstimatedTimeSeconds", defaultValue: 60),
                 Hint: GetNullableString(row, headers, "Hint"),
                 Explanation: GetNullableString(row, headers, "Explanation"),
-                SubmitForReview: ParseSubmitForReview(GetNullableString(row, headers, "Status")),
+                SubmitForReview: true, // Always PendingReview — Draft removed from product.
                 Options: options,
                 AcceptedAnswers: acceptedAnswers));
         }
@@ -116,7 +116,7 @@ public static class QuestionExcelImportParser
         var headers = new[]
         {
             "QuestionText", "QuestionType", "Class", "Subject", "Topic",
-            "DifficultyLevel", "Marks", "EstimatedTimeSeconds", "Hint", "Explanation", "Status",
+            "DifficultyLevel", "Marks", "EstimatedTimeSeconds", "Hint", "Explanation",
             "Option1", "IsCorrect1", "Option2", "IsCorrect2", "Option3", "IsCorrect3",
             "Option4", "IsCorrect4", "CorrectOption",
             "AcceptedAnswer1", "IsCaseSensitive1", "AllowPartialMatch1",
@@ -129,7 +129,7 @@ public static class QuestionExcelImportParser
             sheet.Cell(1, i + 1).Style.Font.Bold = true;
         }
 
-        // Sample Single Choice — Class/Subject as IDs; CorrectOption=1 (Option1 correct).
+        // Sample Single Choice — always imports as PendingReview (IsActive=false).
         sheet.Cell(2, 1).Value = "Sample: Capital of Pakistan?";
         sheet.Cell(2, 2).Value = "Single Choice"; // or type id 100
         sheet.Cell(2, 3).Value = 1; // Class id or name
@@ -137,12 +137,11 @@ public static class QuestionExcelImportParser
         sheet.Cell(2, 6).Value = 2001; // Easy (2001) / Medium (2002) / Hard (2003) or name
         sheet.Cell(2, 7).Value = 1;
         sheet.Cell(2, 8).Value = 60;
-        sheet.Cell(2, 11).Value = "Draft"; // or PendingReview
-        sheet.Cell(2, 12).Value = "Islamabad";
-        sheet.Cell(2, 14).Value = "Karachi";
-        sheet.Cell(2, 20).Value = 1; // CorrectOption index (1-based)
+        sheet.Cell(2, 11).Value = "Islamabad";
+        sheet.Cell(2, 13).Value = "Karachi";
+        sheet.Cell(2, 19).Value = 1; // CorrectOption index (1-based)
 
-        // Sample Fill — Status PendingReview; accepted answers.
+        // Sample Fill — accepted answers.
         sheet.Cell(3, 1).Value = "The chemical symbol for water is ____.";
         sheet.Cell(3, 2).Value = "Fill in the Blanks";
         sheet.Cell(3, 3).Value = 1;
@@ -150,11 +149,10 @@ public static class QuestionExcelImportParser
         sheet.Cell(3, 6).Value = "Easy";
         sheet.Cell(3, 7).Value = 1;
         sheet.Cell(3, 8).Value = 45;
-        sheet.Cell(3, 11).Value = "PendingReview";
-        sheet.Cell(3, 21).Value = "H2O";
+        sheet.Cell(3, 20).Value = "H2O";
+        sheet.Cell(3, 21).Value = false;
         sheet.Cell(3, 22).Value = false;
-        sheet.Cell(3, 23).Value = false;
-        sheet.Cell(3, 24).Value = "H₂O";
+        sheet.Cell(3, 23).Value = "H₂O";
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -162,23 +160,19 @@ public static class QuestionExcelImportParser
     }
 
     /// <summary>
-    /// Maps Status column: empty/Draft → Draft; PendingReview (aliases) → submit for review.
-    /// Returns null for empty (caller defaults to Draft).
+    /// Status column is deprecated (Draft removed). Blank or any value → PendingReview.
+    /// Rejects Approved/Rejected/Archived so import never skips the approval queue.
     /// </summary>
     internal static bool? ParseSubmitForReview(string? status)
     {
         if (string.IsNullOrWhiteSpace(status))
         {
-            return null;
+            return true;
         }
 
         var normalized = status.Trim();
-        if (normalized.Equals("Draft", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (normalized.Equals("PendingReview", StringComparison.OrdinalIgnoreCase)
+        if (normalized.Equals("Draft", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("PendingReview", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("Pending", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("Under Review", StringComparison.OrdinalIgnoreCase))
         {
@@ -186,7 +180,7 @@ public static class QuestionExcelImportParser
         }
 
         throw new InvalidOperationException(
-            $"Status '{status}' is not allowed on import. Use Draft or PendingReview only.");
+            $"Status '{status}' is not allowed on import. Imports always create PendingReview (Draft is no longer used).");
     }
 
     private static void RequireHeader(IReadOnlyDictionary<string, int> headers, string name)

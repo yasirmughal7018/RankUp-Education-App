@@ -24,7 +24,10 @@ function buildQuestionFilters(filters: QuestionListFilters) {
   };
 }
 
-export function useQuestionsQuery(filters: QuestionListFilters) {
+export function useQuestionsQuery(
+  filters: QuestionListFilters,
+  options?: { enabled?: boolean },
+) {
   const normalized = buildQuestionFilters(filters);
 
   return useQuery({
@@ -37,6 +40,8 @@ export function useQuestionsQuery(filters: QuestionListFilters) {
         classId: normalized.classId,
         eligibleForQuizOnly: normalized.eligibleForQuizOnly,
       }),
+    staleTime: 30_000,
+    enabled: options?.enabled ?? true,
   });
 }
 

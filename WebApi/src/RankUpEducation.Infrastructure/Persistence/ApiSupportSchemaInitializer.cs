@@ -181,14 +181,15 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         WHERE id = 114 AND type = 'QuestionStatus' AND name IS DISTINCT FROM 'Archived';
 
         -- Remap questions from legacy status names onto canonical IDs when those IDs exist.
+        -- Draft product flow removed: legacy Draft name/id → PendingReview (111).
         UPDATE public.questions q
-        SET status_id = 110
+        SET status_id = 111, is_active = FALSE
         FROM public.lookups l
         WHERE q.status_id = l.id
           AND l.type = 'QuestionStatus'
-          AND lower(l.name) = 'draft'
-          AND q.status_id <> 110
-          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 110 AND c.type = 'QuestionStatus');
+          AND (lower(l.name) = 'draft' OR q.status_id = 110)
+          AND q.status_id <> 111
+          AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 111 AND c.type = 'QuestionStatus');
 
         UPDATE public.questions q
         SET status_id = 111
@@ -225,7 +226,15 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
           AND lower(l.name) = 'archived'
           AND q.status_id <> 114
           AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 114 AND c.type = 'QuestionStatus');
-        """;
+
+        -- IsActive tied to status: Approved may be active; all other statuses forced inactive.
+        UPDATE public.questions SET is_active = FALSE WHERE status_id IN (110, 111, 113, 114);
+        UPDATE public.questions SET is_active = TRUE WHERE status_id = 112 AND is_active IS DISTINCT FROM TRUE;
+
+        -- Keep Draft lookup row for ID stability but hide from normal use.
+        UPDATE public.lookups SET is_active = FALSE, order_by = 99
+        WHERE id = 110 AND type = 'QuestionStatus';
+""";
 
     private const string QuestionTypeLookupSql = """
         -- Canonical QuestionType IDs 100–104.

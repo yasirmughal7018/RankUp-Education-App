@@ -179,6 +179,7 @@ export function AddQuizQuestionDialog({
       hint: values.hint,
       explanation: values.explanation,
       options: values.options,
+      acceptedAnswers: [],
     });
     if (
       validationError &&

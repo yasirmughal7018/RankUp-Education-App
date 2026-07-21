@@ -48,7 +48,7 @@ public sealed class Question : BaseEntity
     public string? Hint { get; private set; }
     public short EstimatedTimeSeconds { get; private set; }
     public short Marks { get; private set; }
-    public bool IsActive { get; private set; } = true;
+    public bool IsActive { get; private set; }
     public short StatusId { get; private set; }
     public string CreatedBy { get; private set; }
     public string? ApprovedBy { get; private set; }
@@ -88,12 +88,14 @@ public sealed class Question : BaseEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Only Approved questions may be activated (quiz visibility).</summary>
     public void Deactivate()
     {
         IsActive = false;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Only Approved questions may be activated (quiz visibility).</summary>
     public void Activate()
     {
         IsActive = true;
@@ -102,6 +104,7 @@ public sealed class Question : BaseEntity
 
     /// <summary>
     /// Submit (or resubmit) for PortalAdmin review. Clears prior approval / rejection.
+    /// PendingReview is always inactive until Approve.
     /// </summary>
     public void SubmitForApproval(short pendingReviewStatusId)
     {
@@ -109,20 +112,12 @@ public sealed class Question : BaseEntity
         ApprovedBy = null;
         IsAiApproved = false;
         RejectionReason = null;
-        IsActive = true;
-        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
-    }
-
-    public void MarkDraft(short draftStatusId)
-    {
-        StatusId = draftStatusId;
-        ApprovedBy = null;
-        IsAiApproved = false;
+        IsActive = false;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     /// <summary>
-    /// PortalAdmin approval. Marks quiz-eligible in one step (legacy IsAiApproved also set).
+    /// PortalAdmin approval. Marks quiz-eligible; IsActive becomes true (only Approved is active).
     /// </summary>
     public void Approve(string approvedBy, short approvedStatusId)
     {

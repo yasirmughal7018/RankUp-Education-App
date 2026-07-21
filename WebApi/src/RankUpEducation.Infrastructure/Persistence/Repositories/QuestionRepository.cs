@@ -69,6 +69,13 @@ public sealed class QuestionRepository : IQuestionRepository
                 && question.ApprovedBy != "");
         }
 
+        if (pendingApprovalOnly)
+        {
+            // Prefer fixed PendingReview id; also accept legacy name-matched ids via lookup load below only if needed.
+            query = query.Where(question =>
+                question.StatusId == QuizLookupNames.QuestionStatusIds.PendingReview);
+        }
+
         if (createdByUserId.HasValue && includeAllApprovedForOwnerScope)
         {
             var approvedLookups = await _dbContext.Lookups.AsNoTracking()
@@ -101,6 +108,9 @@ public sealed class QuestionRepository : IQuestionRepository
                 question.QuestionText,
                 question.QuestionTypeId,
                 question.StatusId,
+                question.ClassId,
+                question.SubjectId,
+                question.DifficultyLevel,
                 question.Marks,
                 question.IsActive,
                 question.CreatedBy,
@@ -125,15 +135,6 @@ public sealed class QuestionRepository : IQuestionRepository
             .Where(lookup => lookupIds.Contains(lookup.Id))
             .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
 
-        var pendingStatusIds = pendingApprovalOnly
-            ? lookupNames
-                .Where(pair =>
-                    QuizLookupNames.IsPendingQuestionStatusId(pair.Key)
-                    || QuizLookupNames.IsPendingQuestionStatusName(pair.Value))
-                .Select(pair => pair.Key)
-                .ToHashSet()
-            : null;
-
         var approvedStatusIds = eligibleForQuizOnly
             ? lookupNames
                 .Where(pair =>
@@ -144,13 +145,15 @@ public sealed class QuestionRepository : IQuestionRepository
             : null;
 
         return rows
-            .Where(row => pendingStatusIds is null || pendingStatusIds.Contains(row.StatusId))
             .Where(row => approvedStatusIds is null || approvedStatusIds.Contains(row.StatusId))
             .Select(row => new QuestionListItem(
                 row.Id,
                 row.QuestionText,
                 lookupNames.GetValueOrDefault(row.QuestionTypeId, "Multiple Choice"),
                 lookupNames.GetValueOrDefault(row.StatusId, "PendingReview"),
+                row.ClassId,
+                row.SubjectId,
+                row.DifficultyLevel,
                 row.Marks,
                 row.IsActive,
                 row.CreatedBy,

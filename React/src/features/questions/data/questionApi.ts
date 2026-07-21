@@ -124,6 +124,7 @@ export interface ImportQuestionsResult {
   createdCount: number;
   errorCount: number;
   errors: Array<{ rowNumber: number; message: string }>;
+  created?: Array<{ status?: string }>;
 }
 
 export async function importQuestionsFromExcel(
@@ -146,7 +147,10 @@ export async function importQuestionsFromExcel(
   const payload = (await response.json()) as {
     success?: boolean;
     message?: string;
-    data?: ImportQuestionsResult;
+    data?: ImportQuestionsResult & {
+      created?: Array<{ status?: string; Status?: string }>;
+      Created?: Array<{ status?: string; Status?: string }>;
+    };
     errors?: string[];
   };
 
@@ -158,7 +162,21 @@ export async function importQuestionsFromExcel(
     );
   }
 
-  return payload.data as ImportQuestionsResult;
+  const data = payload.data;
+  if (!data) {
+    throw new Error("Unable to import questions from Excel.");
+  }
+
+  const rawCreated = data.created ?? data.Created ?? [];
+  return {
+    dryRun: data.dryRun,
+    createdCount: data.createdCount,
+    errorCount: data.errorCount,
+    errors: data.errors ?? [],
+    created: rawCreated.map((item) => ({
+      status: item.status ?? item.Status,
+    })),
+  };
 }
 
 export function getQuestionImportTemplateUrl(): string {

@@ -7,7 +7,6 @@ import {
   canLifecycleQuestions,
   canMutateQuestion,
   isApprovedQuestionStatus,
-  isDraftQuestionStatus,
   isEligibleForQuizQuestion,
   isPendingQuestionStatus,
   isRejectedQuestionStatus,
@@ -104,7 +103,6 @@ export function QuestionDetailPage() {
   const isPending = isPendingQuestionStatus(question.status);
   const isApproved = isApprovedQuestionStatus(question.status);
   const isRejected = isRejectedQuestionStatus(question.status);
-  const isDraft = isDraftQuestionStatus(question.status);
   const canEdit =
     user != null &&
     canMutateQuestion({
@@ -115,7 +113,7 @@ export function QuestionDetailPage() {
     });
   const canDelete = canEdit;
   const canSubmit =
-    (canLifecycle || isOwner) && (isDraft || isRejected);
+    (canLifecycle || isOwner) && isRejected;
   const isQuizReady = isEligibleForQuizQuestion(question);
 
   return (
