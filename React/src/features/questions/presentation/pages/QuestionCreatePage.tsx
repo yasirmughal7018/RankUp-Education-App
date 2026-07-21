@@ -1,3 +1,7 @@
+/**
+ * Batch create page: sticky Class/Subject/Topic scope, submit each as PendingReview,
+ * keep a session sidebar for quick review. Full detail opens a separate review route.
+ */
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
@@ -19,6 +23,7 @@ import {
 } from "@/features/questions/presentation/components/StatusBadge";
 import type { QuestionSessionReviewState } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
 
+/** One-shot location.state when returning from the session review page. */
 interface CreatePageRestoreState {
   savedQuestions?: QuestionDetail[];
   formValues?: QuestionFormValues;
@@ -90,6 +95,10 @@ export function QuestionCreatePage() {
     formValues.topicId,
   ]);
 
+  /**
+   * Submit for review, append to session list, then reset content while keeping sticky scope.
+   * Created rows are PendingReview until Campus/School/Portal Admin approves.
+   */
   async function saveQuestion(values: QuestionFormValues) {
     setIsSubmitting(true);
     setSuccessMessage(null);
@@ -110,6 +119,7 @@ export function QuestionCreatePage() {
     }
   }
 
+  /** Hand off the in-session batch to the full review page. */
   function openSessionReview() {
     if (!hasSaved) {
       return;
@@ -317,7 +327,7 @@ export function QuestionCreatePage() {
               <li>
                 3. Use{" "}
                 <strong className="text-white">Submit for review &amp; Add</strong>{" "}
-                — creates PendingReview (inactive until PortalAdmin Approves).
+                — creates PendingReview (inactive until Campus/School/Portal Admin Approves).
                 Scope stays sticky for the next question.
               </li>
               <li>

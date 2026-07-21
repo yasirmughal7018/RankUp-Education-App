@@ -96,12 +96,51 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
         """;
 
+    /// <summary>
+    /// Ensures questions schema for rejection, AI flag, org scope, and 3-tier visibility.
+    /// Backfills SchoolId/CampusId from creator and maps legacy Approved → Public (3).
+    /// </summary>
     private const string QuestionSupportSql = """
         ALTER TABLE public.questions
             ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(1000) NULL;
 
         ALTER TABLE public.questions
             ADD COLUMN IF NOT EXISTS is_ai_approved BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE public.questions
+            ADD COLUMN IF NOT EXISTS school_id INTEGER NULL;
+
+        ALTER TABLE public.questions
+            ADD COLUMN IF NOT EXISTS campus_id INTEGER NULL;
+
+        ALTER TABLE public.questions
+            ADD COLUMN IF NOT EXISTS visibility_level SMALLINT NOT NULL DEFAULT 0;
+
+        -- Backfill org from creator user when missing.
+        UPDATE public.questions q
+        SET school_id = u.school_id
+        FROM public.app_users u
+        WHERE q.school_id IS NULL
+          AND q.created_by ~ '^[0-9]+$'
+          AND u.id = q.created_by::bigint
+          AND u.school_id IS NOT NULL;
+
+        UPDATE public.questions q
+        SET campus_id = u.campus_id
+        FROM public.app_users u
+        WHERE q.campus_id IS NULL
+          AND q.created_by ~ '^[0-9]+$'
+          AND u.id = q.created_by::bigint
+          AND u.campus_id IS NOT NULL;
+
+        -- Legacy Approved rows were globally shared → Public visibility (3).
+        UPDATE public.questions
+        SET visibility_level = 3
+        WHERE status_id = 112
+          AND (visibility_level IS NULL OR visibility_level = 0);
+
+        CREATE INDEX IF NOT EXISTS idx_questions_visibility_scope
+            ON public.questions (school_id, campus_id, visibility_level);
 
         ALTER TABLE public.question_accepted_answers
             ADD COLUMN IF NOT EXISTS allow_ai_review BOOLEAN NOT NULL DEFAULT FALSE;

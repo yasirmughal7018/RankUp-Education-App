@@ -1,3 +1,10 @@
+/**
+ * Question bank domain types and helpers.
+ *
+ * 3-tier approval visibility (set by who approves):
+ *   CampusAdmin → Campus | SchoolAdmin → School | PortalAdmin → Public
+ * Lifecycle (activate / deactivate / archive) is PortalAdmin-only.
+ */
 import type { UserRole } from "@/core/api/types";
 
 export interface QuestionOptionInput {
@@ -23,6 +30,10 @@ export interface QuestionAcceptedAnswer extends QuestionAcceptedAnswerInput {
   acceptedAnswerId: number;
 }
 
+/** Visibility tier after approval: None | Campus | School | Public. */
+export type QuestionVisibility = "None" | "Campus" | "School" | "Public" | string;
+
+/** List-row shape returned by GET /questions. */
 export interface QuestionSummary {
   questionId: number;
   questionText: string;
@@ -36,10 +47,15 @@ export interface QuestionSummary {
   createdBy: string;
   approvedBy: string | null;
   isAiApproved: boolean;
+  schoolId?: number | null;
+  campusId?: number | null;
+  /** Campus / School / Public once approved; None while pending. */
+  visibility?: QuestionVisibility;
   createdDate: string;
   modifiedDate: string;
 }
 
+/** Full question including options / accepted answers for detail & edit. */
 export interface QuestionDetail {
   questionId: number;
   questionText: string;
@@ -57,6 +73,9 @@ export interface QuestionDetail {
   createdBy: string;
   approvedBy: string | null;
   isAiApproved: boolean;
+  schoolId?: number | null;
+  campusId?: number | null;
+  visibility?: QuestionVisibility;
   createdDate: string;
   modifiedDate: string;
   options: QuestionOption[];
@@ -64,6 +83,7 @@ export interface QuestionDetail {
   rejectionReason?: string | null;
 }
 
+/** Client form model for create / edit. */
 export interface QuestionFormValues {
   questionText: string;
   questionType: string;
@@ -79,6 +99,7 @@ export interface QuestionFormValues {
   acceptedAnswers: QuestionAcceptedAnswerInput[];
 }
 
+/** Optional server-side list query params. */
 export interface QuestionListFilters {
   isActive?: boolean;
   subjectId?: number;
@@ -87,7 +108,7 @@ export interface QuestionListFilters {
   eligibleForQuizOnly?: boolean;
 }
 
-/** Sticky scope kept while adding multiple questions. */
+/** Sticky scope kept while adding multiple questions in one session. */
 export interface QuestionScopeValues {
   classId: number;
   subjectId: number;
@@ -95,6 +116,7 @@ export interface QuestionScopeValues {
   difficultyLevel: number;
 }
 
+/** Types available on the create form today. */
 export const QUESTION_TYPES_NOW = [
   "Single Choice",
   "Multiple Choice",
@@ -111,6 +133,7 @@ export const QUESTION_TYPES = [
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type QuestionTypeNow = (typeof QUESTION_TYPES_NOW)[number];
 
+/** True when the type can be created via the current UI (excludes Descriptive). */
 export function isCreatableQuestionType(type: string): boolean {
   const normalized = normalizeQuestionType(type);
   return (QUESTION_TYPES_NOW as readonly string[]).includes(normalized);
@@ -147,6 +170,7 @@ export const QUESTION_TYPE_META: Record<
   },
 };
 
+/** Roles allowed into the question bank routes (not Students). */
 export const QUESTION_MANAGER_ROLES: UserRole[] = [
   "PortalAdmin",
   "SchoolAdmin",
@@ -155,20 +179,46 @@ export const QUESTION_MANAGER_ROLES: UserRole[] = [
   "Parent",
 ];
 
+/** Whether the role may browse / create in the question bank. */
 export function canManageQuestions(role: UserRole): boolean {
   return QUESTION_MANAGER_ROLES.includes(role);
 }
 
-/** Only PortalAdmin approves / rejects. */
+/**
+ * Whether the role may approve / reject PendingReview items in their org scope.
+ * CampusAdmin, SchoolAdmin, and PortalAdmin.
+ */
 export function canApproveQuestions(role: UserRole): boolean {
-  return role === "PortalAdmin";
+  return (
+    role === "PortalAdmin" ||
+    role === "SchoolAdmin" ||
+    role === "CampusAdmin"
+  );
 }
 
-/** Only PortalAdmin activate / deactivate / archive. */
+/**
+ * Visibility granted when this role approves a question.
+ * CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
+ */
+export function approvalVisibilityForRole(role: UserRole): QuestionVisibility {
+  switch (role) {
+    case "PortalAdmin":
+      return "Public";
+    case "SchoolAdmin":
+      return "School";
+    case "CampusAdmin":
+      return "Campus";
+    default:
+      return "None";
+  }
+}
+
+/** Activate / deactivate / archive — PortalAdmin only. */
 export function canLifecycleQuestions(role: UserRole): boolean {
   return role === "PortalAdmin";
 }
 
+/** PendingReview (canonical) plus legacy Pending / UnderReview aliases. */
 export function isPendingQuestionStatus(status: string): boolean {
   const normalized = status.toLowerCase().replace(/\s+/g, "");
   // Canonical: PendingReview. Legacy aliases still recognized for old rows.
@@ -179,11 +229,13 @@ export function isDraftQuestionStatus(status: string): boolean {
   return status.trim().toLowerCase() === "draft";
 }
 
+/** Rejected or legacy Declined. */
 export function isRejectedQuestionStatus(status: string): boolean {
   const normalized = status.toLowerCase();
   return normalized === "rejected" || normalized === "declined";
 }
 
+/** Approved (canonical) plus legacy Active / Published status names. */
 export function isApprovedQuestionStatus(status: string): boolean {
   const normalized = status.toLowerCase();
   // Canonical: Approved. Legacy Active/Published still recognized for old rows.
@@ -203,6 +255,7 @@ export const QUESTION_STATUS_IDS = {
   Archived: 114,
 } as const;
 
+/** Statuses where the owner (non-PortalAdmin) may still edit or delete. */
 export function isOwnerEditableQuestionStatus(status: string): boolean {
   return (
     isPendingQuestionStatus(status) ||
@@ -212,7 +265,10 @@ export function isOwnerEditableQuestionStatus(status: string): boolean {
   );
 }
 
-/** PortalAdmin any; otherwise owner + PendingReview / Rejected. */
+/**
+ * Edit / delete permission: PortalAdmin any status;
+ * otherwise owner + PendingReview / Rejected (or legacy Draft).
+ */
 export function canMutateQuestion(args: {
   role: UserRole;
   userId: number | string;
@@ -227,7 +283,10 @@ export function canMutateQuestion(args: {
   return isOwner && isOwnerEditableQuestionStatus(args.status);
 }
 
-/** Eligible for quiz bank attach after PortalAdmin approve. */
+/**
+ * Quiz-bank attach eligibility: active + has approver + Approved status
+ * (typically after PortalAdmin public approval).
+ */
 export function isEligibleForQuizQuestion(question: {
   isActive: boolean;
   approvedBy: string | null;
@@ -240,6 +299,7 @@ export function isEligibleForQuizQuestion(question: {
   );
 }
 
+/** Normalize free-text / legacy type strings to a canonical QuestionType. */
 export function normalizeQuestionType(type: string): QuestionType {
   const value = type.trim().toLowerCase();
 
@@ -300,6 +360,7 @@ export function isDescriptiveType(type: string): boolean {
   return normalizeQuestionType(type) === "Descriptive";
 }
 
+/** MCQ-style types that store discrete option rows. */
 export function usesAnswerOptions(type: string): boolean {
   const normalized = normalizeQuestionType(type);
   return (
@@ -309,6 +370,7 @@ export function usesAnswerOptions(type: string): boolean {
   );
 }
 
+/** Fill-in types that store accepted-answer rows instead of options. */
 export function usesAcceptedAnswers(type: string): boolean {
   return isFillBlankType(type);
 }
@@ -325,12 +387,14 @@ export function createEmptyAcceptedAnswer(): QuestionAcceptedAnswerInput {
   };
 }
 
+/** Seed accepted-answer rows for Fill in the Blanks; empty otherwise. */
 export function defaultAcceptedAnswersForType(
   type: string,
 ): QuestionAcceptedAnswerInput[] {
   return isFillBlankType(type) ? [createEmptyAcceptedAnswer()] : [];
 }
 
+/** Default option rows (or none) for the given question type. */
 export function defaultOptionsForType(type: string): QuestionOptionInput[] {
   const normalized = normalizeQuestionType(type);
 
@@ -361,6 +425,7 @@ export function defaultOptionsForType(type: string): QuestionOptionInput[] {
   }
 }
 
+/** Empty create form, optionally pre-filled with sticky batch scope. */
 export function createEmptyQuestionForm(
   scope?: Partial<QuestionScopeValues>,
 ): QuestionFormValues {
@@ -380,7 +445,10 @@ export function createEmptyQuestionForm(
   };
 }
 
-/** Keep Class / Subject / Topic / Difficulty; clear question-specific fields. */
+/**
+ * After a successful save: keep Class / Subject / Topic / Difficulty (and type/marks),
+ * clear question text and rebuild options for the current type.
+ */
 export function resetQuestionContent(
   current: QuestionFormValues,
 ): QuestionFormValues {
@@ -399,9 +467,14 @@ export function resetQuestionContent(
   };
 }
 
+/**
+ * Map API detail → form values.
+ * Legacy fill-in rows stored as options are promoted to acceptedAnswers.
+ */
 export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
   const questionType = normalizeQuestionType(detail.questionType);
   const acceptedFromApi = detail.acceptedAnswers ?? [];
+  // Older fill-in questions stored answers as options; migrate into acceptedAnswers.
   const legacyFillFromOptions =
     isFillBlankType(questionType) &&
     acceptedFromApi.length === 0 &&
@@ -447,6 +520,7 @@ export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
   };
 }
 
+/** Build create/update API body; drops empty options / answers by type. */
 export function buildQuestionPayload(values: QuestionFormValues) {
   const questionType = normalizeQuestionType(values.questionType);
   const withOptions = usesAnswerOptions(questionType);
@@ -487,6 +561,7 @@ export function buildQuestionPayload(values: QuestionFormValues) {
   };
 }
 
+/** Client-side validation; returns the first error message or null if valid. */
 export function validateQuestionForm(values: QuestionFormValues): string | null {
   if (!values.questionText.trim()) {
     return "Question text is required.";

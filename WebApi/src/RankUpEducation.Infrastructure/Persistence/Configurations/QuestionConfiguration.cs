@@ -4,6 +4,10 @@ using RankUpEducation.Domain.Questions;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// EF mapping for <see cref="Question"/> including org scope and visibility_level
+/// (None / Campus / School / Public) used by bank list filters.
+/// </summary>
 public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
 {
     public void Configure(EntityTypeBuilder<Question> builder)
@@ -29,8 +33,16 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(question => question.ModifiedDate).HasColumnName("modified_date");
         builder.Property(question => question.IsAiApproved).HasColumnName("is_ai_approved").HasDefaultValue(false);
         builder.Property(question => question.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(1000);
+        // Creator/approver org stamp for pending queues and School/Campus visibility.
+        builder.Property(question => question.SchoolId).HasColumnName("school_id");
+        builder.Property(question => question.CampusId).HasColumnName("campus_id");
+        // 0=None, 1=Campus, 2=School, 3=Public — set on Approve by role.
+        builder.Property(question => question.VisibilityLevel).HasColumnName("visibility_level").HasDefaultValue((short)0);
         builder.HasIndex(question => new { question.ClassId, question.SubjectId, question.TopicId })
             .HasDatabaseName("idx_questions_lookup_ids");
+        // Speeds org-scoped list / pending-queue filters.
+        builder.HasIndex(question => new { question.SchoolId, question.CampusId, question.VisibilityLevel })
+            .HasDatabaseName("idx_questions_visibility_scope");
         builder.Navigation(question => question.Options).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(question => question.AcceptedAnswers).UsePropertyAccessMode(PropertyAccessMode.Field);
     }

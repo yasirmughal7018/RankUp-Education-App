@@ -5,12 +5,14 @@ using RankUpEducation.Contracts.Questions;
 namespace RankUpEducation.Application.Questions;
 
 /// <summary>
+/// Validates question-bank payloads by type.
 /// NOW types: Single Choice, Multiple Choice, True/False, Fill in the Blanks.
 /// Descriptive and future types are rejected until enabled.
 /// Fill answers use <see cref="QuestionAcceptedAnswerRequest"/>; choice types use options.
 /// </summary>
 internal static class QuestionBankGuard
 {
+    /// <summary>Validates create request text, marks, type, and answers/options.</summary>
     public static void ValidateCreateRequest(CreateQuestionRequest request)
     {
         ValidateCore(
@@ -21,6 +23,7 @@ internal static class QuestionBankGuard
             request.AcceptedAnswers);
     }
 
+    /// <summary>Validates update request text, marks, type, and answers/options.</summary>
     public static void ValidateUpdateRequest(UpdateQuestionRequest request)
     {
         ValidateCore(
@@ -31,6 +34,7 @@ internal static class QuestionBankGuard
             request.AcceptedAnswers);
     }
 
+    /// <summary>Shared create/update validation (does not check org or status).</summary>
     public static void ValidateCore(
         string questionText,
         string questionType,
@@ -65,6 +69,7 @@ internal static class QuestionBankGuard
         }
     }
 
+    /// <summary>Tuple overload used by quiz-inline and import helpers.</summary>
     public static IReadOnlyList<string> ValidateTypeAndAnswers(
         string questionType,
         IReadOnlyList<(string OptionText, bool IsCorrect)> options,
@@ -88,6 +93,10 @@ internal static class QuestionBankGuard
         IReadOnlyList<(string OptionText, bool IsCorrect)> options)
         => ValidateTypeAndAnswers(questionType, options, Array.Empty<string>());
 
+    /// <summary>
+    /// Type-specific answer rules: Fill needs ≥1 accepted answer (options fallback for legacy);
+    /// True/False exactly 2 options / 1 correct; Single ≥2 / 1 correct; Multi ≥2 / ≥1 correct.
+    /// </summary>
     private static IReadOnlyList<string> ValidateTypeAndAnswers(
         string questionType,
         IReadOnlyList<QuestionOptionRequest> options,

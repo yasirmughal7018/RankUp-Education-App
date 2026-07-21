@@ -6,6 +6,11 @@ namespace RankUpEducation.Application.Questions;
 /// <summary>Parses Web Excel (.xlsx) question import templates into import draft rows.</summary>
 public static class QuestionExcelImportParser
 {
+    /// <summary>
+    /// Reads the first worksheet into <see cref="QuestionExcelImportRow"/> drafts.
+    /// Always intended for PendingReview create (Status column ignored by service).
+    /// Class/Subject/Topic accept name or ID headers; choice types use OptionN + IsCorrectN/CorrectOption.
+    /// </summary>
     public static IReadOnlyList<QuestionExcelImportRow> Parse(Stream stream)
     {
         using var workbook = new XLWorkbook(stream);

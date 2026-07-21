@@ -3,6 +3,10 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Questions;
 
+/// <summary>
+/// Choice option for Single Choice, Multiple Choice, or True/False questions.
+/// Fill-in-the-Blank answers use <see cref="QuestionAcceptedAnswer"/> instead.
+/// </summary>
 public sealed class QuestionOption : BaseEntity
 {
     private QuestionOption()

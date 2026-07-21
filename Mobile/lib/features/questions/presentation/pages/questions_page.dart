@@ -7,6 +7,18 @@ import 'package:rankup_education/features/authentication/presentation/providers/
 import 'package:rankup_education/features/questions/data/models/question_summary_model.dart';
 import 'package:rankup_education/features/questions/presentation/providers/question_providers.dart';
 
+/// Question-bank browse screen for roles allowed by [canManageQuestions].
+///
+/// Students are blocked (they only see questions inside quizzes). This page
+/// lists summaries from [questionsListProvider] and marks “quiz ready” when
+/// [QuestionSummaryModel.isActive] and [QuestionSummaryModel.approvedBy] are set.
+///
+/// **Approval / visibility note:** Mobile still treats approval as binary
+/// (`approvedBy` present). WebApi now uses 3-tier visibility (`Campus` /
+/// `School` / `Public`) with optional `schoolId` / `campusId` on each summary —
+/// those fields are parsed on the model but not yet shown or filtered here.
+/// AI approve remains a PortalAdmin-oriented API action; human approve sets the
+/// visibility tier from the approver’s role.
 class QuestionsPage extends ConsumerWidget {
   const QuestionsPage({super.key});
 
@@ -112,6 +124,7 @@ class QuestionsPage extends ConsumerWidget {
   }
 }
 
+/// Single bank question row: type, marks, approval, and status chip.
 class _QuestionCard extends StatelessWidget {
   const _QuestionCard({required this.question});
 
@@ -120,6 +133,7 @@ class _QuestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Binary approval signal until UI consumes visibility / schoolId / campusId.
     final approved =
         question.approvedBy != null && question.approvedBy!.isNotEmpty;
     final quizReady = question.isActive && approved;
@@ -154,6 +168,7 @@ class _QuestionCard extends StatelessWidget {
   }
 }
 
+/// Home route for the signed-in role after leaving a restricted bank view.
 String _dashboardPath(UserRole role) {
   return switch (role) {
     UserRole.student => '/student',

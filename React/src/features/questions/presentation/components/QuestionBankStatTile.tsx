@@ -1,3 +1,7 @@
+/**
+ * Clickable approval-system stat tile on the question bank dashboard.
+ * Toggles the client-side approval lens when pressed.
+ */
 interface QuestionBankStatTileProps {
   label: string;
   value: number;

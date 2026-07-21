@@ -3,6 +3,9 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Questions;
 
+/// <summary>
+/// Accepted answer for Fill-in-the-Blank questions (case / partial-match rules + length bounds).
+/// </summary>
 public sealed class QuestionAcceptedAnswer : BaseEntity
 {
     private QuestionAcceptedAnswer()
@@ -46,6 +49,7 @@ public sealed class QuestionAcceptedAnswer : BaseEntity
     public bool AllowAiReview { get; private set; }
     public bool AllowTeacherReview { get; private set; }
 
+    /// <summary>Evaluates a submitted fill answer against length, case, and partial-match rules.</summary>
     public bool Matches(string submittedText)
     {
         if (string.IsNullOrWhiteSpace(submittedText))

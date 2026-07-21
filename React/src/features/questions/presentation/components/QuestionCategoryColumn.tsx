@@ -1,3 +1,7 @@
+/**
+ * Filter column for Subject / Class / Difficulty on the question bank dashboard.
+ * Relative bar width is normalized to the max count in the column.
+ */
 interface CategoryCountItem {
   id: number;
   label: string;
@@ -6,7 +10,6 @@ interface CategoryCountItem {
 
 interface QuestionCategoryColumnProps {
   title: string;
-  subtitle: string;
   accent: "teal" | "indigo" | "amber";
   items: CategoryCountItem[];
   selectedId: number | "";
@@ -18,7 +21,6 @@ interface QuestionCategoryColumnProps {
 const accentStyles = {
   teal: {
     shell: "from-teal-50/90 via-white to-white border-teal-100",
-    eyebrow: "text-teal-700",
     bar: "bg-teal-500",
     barTrack: "bg-teal-100",
     active:
@@ -28,7 +30,6 @@ const accentStyles = {
   },
   indigo: {
     shell: "from-indigo-50/90 via-white to-white border-indigo-100",
-    eyebrow: "text-indigo-700",
     bar: "bg-indigo-500",
     barTrack: "bg-indigo-100",
     active:
@@ -38,7 +39,6 @@ const accentStyles = {
   },
   amber: {
     shell: "from-amber-50/90 via-white to-white border-amber-100",
-    eyebrow: "text-amber-800",
     bar: "bg-amber-500",
     barTrack: "bg-amber-100",
     active:
@@ -50,7 +50,6 @@ const accentStyles = {
 
 export function QuestionCategoryColumn({
   title,
-  subtitle,
   accent,
   items,
   selectedId,
@@ -59,44 +58,33 @@ export function QuestionCategoryColumn({
   onSelect,
 }: QuestionCategoryColumnProps) {
   const styles = accentStyles[accent];
+  // Floor at 1 so empty columns still render a tiny bar without divide-by-zero.
   const maxCount = Math.max(1, ...items.map((item) => item.count));
-  const totalCount = items.reduce((sum, item) => sum + item.count, 0);
 
   return (
     <div
       className={`flex h-full flex-col overflow-hidden rounded-3xl border bg-gradient-to-b p-4 shadow-sm ${styles.shell}`}
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${styles.eyebrow}`}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        <div className="flex shrink-0 items-center gap-2">
+          {selectedId !== "" ? (
+            <button
+              type="button"
+              onClick={() => onSelect("")}
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50"
+            >
+              Clear
+            </button>
+          ) : null}
+          <span
+            className="inline-flex min-w-8 items-center justify-center rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200/80"
+            title={`${items.length} ${title.toLowerCase()}${items.length === 1 ? "" : "s"}`}
           >
-            Category
-          </p>
-          <h3 className="mt-1 text-base font-semibold text-slate-900">
-            {title}
-          </h3>
-          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-lg font-semibold tabular-nums text-slate-900">
             {items.length}
-          </p>
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">
-            {totalCount} qs
-          </p>
+          </span>
         </div>
       </div>
-
-      {selectedId !== "" ? (
-        <button
-          type="button"
-          onClick={() => onSelect("")}
-          className="mb-3 self-start rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50"
-        >
-          Clear {title.toLowerCase()} filter
-        </button>
-      ) : null}
 
       {loading ? (
         <div className="space-y-2">
@@ -115,6 +103,7 @@ export function QuestionCategoryColumn({
         <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
           {items.map((item) => {
             const active = selectedId === item.id;
+            // Relative bar; minimum 4% so zero-count items stay visible.
             const widthPct = Math.max(
               4,
               Math.round((item.count / maxCount) * 100),

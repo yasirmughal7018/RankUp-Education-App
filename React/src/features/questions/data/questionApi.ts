@@ -1,3 +1,6 @@
+/**
+ * Question bank HTTP client — list/CRUD, 3-tier approve/reject, PortalAdmin lifecycle, Excel import.
+ */
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 import { environment } from "@/app/environment";
 import { readStoredSession } from "@/core/auth/tokenStorage";
@@ -9,6 +12,7 @@ import type {
 } from "@/features/questions/domain/questionTypes";
 import { buildQuestionPayload } from "@/features/questions/domain/questionTypes";
 
+/** Build GET /questions query string from optional filters. */
 function buildListQuery(filters: QuestionListFilters = {}): string {
   const params = new URLSearchParams();
 
@@ -36,6 +40,7 @@ function buildListQuery(filters: QuestionListFilters = {}): string {
   return query ? `?${query}` : "";
 }
 
+/** List questions visible to the current user (server applies org scope). */
 export async function listQuestions(
   filters: QuestionListFilters = {},
 ): Promise<QuestionSummary[]> {
@@ -46,6 +51,7 @@ export async function listQuestions(
   return response.items;
 }
 
+/** Dedicated pending-approval endpoint for approver queues. */
 export async function listPendingApprovalQuestions(): Promise<QuestionSummary[]> {
   const response = await apiRequest<{ items: QuestionSummary[] }>(
     "/questions/pending-approval",
@@ -58,6 +64,9 @@ export async function getQuestion(questionId: number): Promise<QuestionDetail> {
   return apiRequest<QuestionDetail>(`/questions/${questionId}`);
 }
 
+/**
+ * Create a question. Default submitForReview=true → PendingReview (inactive until approved).
+ */
 export async function createQuestion(
   values: QuestionFormValues,
   submitForReview = true,
@@ -81,6 +90,7 @@ export async function updateQuestion(
   });
 }
 
+/** Move Rejected (or draft) back into PendingReview. */
 export async function submitQuestionForReview(
   questionId: number,
 ): Promise<QuestionDetail> {
@@ -89,6 +99,10 @@ export async function submitQuestionForReview(
   });
 }
 
+/**
+ * Approve PendingReview. Server sets visibility by role:
+ * CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
+ */
 export async function approveQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/approve`, { method: "POST" });
 }
@@ -103,14 +117,17 @@ export async function rejectQuestion(
   });
 }
 
+/** PortalAdmin-only: set IsActive=true. */
 export async function activateQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/activate`, { method: "POST" });
 }
 
+/** PortalAdmin-only: set IsActive=false. */
 export async function deactivateQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/deactivate`, { method: "POST" });
 }
 
+/** PortalAdmin-only: archive the question. */
 export async function archiveQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/archive`, { method: "POST" });
 }
@@ -127,6 +144,11 @@ export interface ImportQuestionsResult {
   created?: Array<{ status?: string }>;
 }
 
+/**
+ * Multipart Excel import. dryRun validates without writing;
+ * commit always creates PendingReview (never Approved).
+ * Uses fetch + FormData (not apiRequest) for file upload.
+ */
 export async function importQuestionsFromExcel(
   file: File,
   dryRun = false,
@@ -167,6 +189,7 @@ export async function importQuestionsFromExcel(
     throw new Error("Unable to import questions from Excel.");
   }
 
+  // Normalize PascalCase / camelCase created rows from the API envelope.
   const rawCreated = data.created ?? data.Created ?? [];
   return {
     dryRun: data.dryRun,
@@ -179,6 +202,7 @@ export async function importQuestionsFromExcel(
   };
 }
 
+/** Absolute URL for the blank Excel import template download. */
 export function getQuestionImportTemplateUrl(): string {
   return `${environment.apiBaseUrl}/questions/import-template`;
 }

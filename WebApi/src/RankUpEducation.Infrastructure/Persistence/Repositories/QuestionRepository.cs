@@ -6,6 +6,10 @@ using RankUpEducation.Domain.Questions;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// EF Core question-bank repository. List filtering encodes own-rows + Approved visibility
+/// (Public / School / Campus, with SchoolAdmin campus widen) and org-scoped pending queues.
+/// </summary>
 public sealed class QuestionRepository : IQuestionRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -34,6 +38,7 @@ public sealed class QuestionRepository : IQuestionRepository
             .FirstOrDefaultAsync(question => question.Id == questionId, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<QuestionListItem>> ListQuestionsAsync(
         long? createdByUserId,
         bool? isActive,
@@ -41,7 +46,7 @@ public sealed class QuestionRepository : IQuestionRepository
         short? classId,
         bool pendingApprovalOnly,
         bool eligibleForQuizOnly,
-        bool includeAllApprovedForOwnerScope,
+        QuestionListVisibilityScope? visibilityScope,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Questions.AsNoTracking().AsQueryable();
@@ -61,22 +66,45 @@ public sealed class QuestionRepository : IQuestionRepository
             query = query.Where(question => question.ClassId == classId.Value);
         }
 
+        // Quiz eligibility: active + has approver + non-None visibility (Approved).
         if (eligibleForQuizOnly)
         {
             query = query.Where(question =>
                 question.IsActive
                 && question.ApprovedBy != null
-                && question.ApprovedBy != "");
+                && question.ApprovedBy != ""
+                && question.VisibilityLevel != QuestionVisibilityLevels.None);
         }
 
         if (pendingApprovalOnly)
         {
-            // Prefer fixed PendingReview id; also accept legacy name-matched ids via lookup load below only if needed.
             query = query.Where(question =>
                 question.StatusId == QuizLookupNames.QuestionStatusIds.PendingReview);
+
+            // Approver queues are org-scoped (PortalAdmin passes null visibilityScope).
+            if (visibilityScope is not null)
+            {
+                if (visibilityScope.IsSchoolAdmin && visibilityScope.SchoolId.HasValue)
+                {
+                    var schoolId = visibilityScope.SchoolId.Value;
+                    query = query.Where(question => question.SchoolId == schoolId);
+                }
+                else if (visibilityScope.CampusId.HasValue)
+                {
+                    var campusId = visibilityScope.CampusId.Value;
+                    query = query.Where(question => question.CampusId == campusId);
+                }
+                else
+                {
+                    // No org on approver → empty pending queue.
+                    return Array.Empty<QuestionListItem>();
+                }
+            }
         }
 
-        if (createdByUserId.HasValue && includeAllApprovedForOwnerScope)
+        // Non–PortalAdmin bank list: own rows OR Approved within Public/School/Campus visibility.
+        // SchoolAdmin also sees Campus-approved rows across their school.
+        if (visibilityScope is not null && !pendingApprovalOnly)
         {
             var approvedLookups = await _dbContext.Lookups.AsNoTracking()
                 .Where(lookup => lookup.Type == QuizLookupNames.QuestionStatus)
@@ -88,15 +116,52 @@ public sealed class QuestionRepository : IQuestionRepository
                 .Select(lookup => lookup.Id)
                 .ToList();
 
-            var ownerKey = createdByUserId.Value.ToString();
+            var ownerKey = visibilityScope.UserId.ToString();
+            var schoolId = visibilityScope.SchoolId;
+            var campusId = visibilityScope.CampusId;
+            var isSchoolAdmin = visibilityScope.IsSchoolAdmin;
+
             query = query.Where(question =>
                 question.CreatedBy == ownerKey
-                || approvedStatusIdList.Contains(question.StatusId));
+                || (approvedStatusIdList.Contains(question.StatusId)
+                    && (
+                        question.VisibilityLevel == QuestionVisibilityLevels.Public
+                        || (question.VisibilityLevel == QuestionVisibilityLevels.School
+                            && schoolId.HasValue
+                            && question.SchoolId == schoolId)
+                        || (question.VisibilityLevel == QuestionVisibilityLevels.Campus
+                            && campusId.HasValue
+                            && question.CampusId == campusId)
+                        || (question.VisibilityLevel == QuestionVisibilityLevels.Campus
+                            && isSchoolAdmin
+                            && schoolId.HasValue
+                            && question.SchoolId == schoolId))));
         }
         else if (createdByUserId.HasValue)
         {
             var ownerKey = createdByUserId.Value.ToString();
             query = query.Where(question => question.CreatedBy == ownerKey);
+        }
+
+        // Quiz picker: same org visibility rules when scope is provided (PortalAdmin skips).
+        if (eligibleForQuizOnly && visibilityScope is not null)
+        {
+            var schoolId = visibilityScope.SchoolId;
+            var campusId = visibilityScope.CampusId;
+            var isSchoolAdmin = visibilityScope.IsSchoolAdmin;
+
+            query = query.Where(question =>
+                question.VisibilityLevel == QuestionVisibilityLevels.Public
+                || (question.VisibilityLevel == QuestionVisibilityLevels.School
+                    && schoolId.HasValue
+                    && question.SchoolId == schoolId)
+                || (question.VisibilityLevel == QuestionVisibilityLevels.Campus
+                    && campusId.HasValue
+                    && question.CampusId == campusId)
+                || (question.VisibilityLevel == QuestionVisibilityLevels.Campus
+                    && isSchoolAdmin
+                    && schoolId.HasValue
+                    && question.SchoolId == schoolId));
         }
 
         var rows = await query
@@ -116,6 +181,9 @@ public sealed class QuestionRepository : IQuestionRepository
                 question.CreatedBy,
                 question.ApprovedBy,
                 question.IsAiApproved,
+                question.SchoolId,
+                question.CampusId,
+                question.VisibilityLevel,
                 question.CreatedDate,
                 question.ModifiedDate
             })
@@ -159,6 +227,10 @@ public sealed class QuestionRepository : IQuestionRepository
                 row.CreatedBy,
                 row.ApprovedBy,
                 row.IsAiApproved,
+                row.SchoolId,
+                row.CampusId,
+                row.VisibilityLevel,
+                QuestionVisibilityLevels.ToName(row.VisibilityLevel),
                 row.CreatedDate,
                 row.ModifiedDate))
             .ToArray();
@@ -222,6 +294,10 @@ public sealed class QuestionRepository : IQuestionRepository
             question.ApprovedBy,
             question.IsAiApproved,
             question.RejectionReason,
+            question.SchoolId,
+            question.CampusId,
+            question.VisibilityLevel,
+            QuestionVisibilityLevels.ToName(question.VisibilityLevel),
             question.CreatedDate,
             question.ModifiedDate,
             options,

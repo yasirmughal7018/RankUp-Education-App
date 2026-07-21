@@ -1,3 +1,7 @@
+/**
+ * Route guard for /questions/* — allows PortalAdmin, SchoolAdmin, CampusAdmin,
+ * Teacher, and Parent; Students are blocked (they use quizzes only).
+ */
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { canManageQuestions } from "@/features/questions/domain/questionTypes";

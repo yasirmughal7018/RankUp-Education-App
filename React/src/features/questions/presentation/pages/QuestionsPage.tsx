@@ -1,3 +1,9 @@
+/**
+ * Question bank dashboard: approval-lens stats, category filters, list + Excel import.
+ *
+ * Client-side filters over one unfiltered list fetch. Approvers (Campus/School/Portal Admin)
+ * see review CTAs; lifecycle messaging notes PortalAdmin-only activate/archive.
+ */
 import {
   startTransition,
   useDeferredValue,
@@ -32,6 +38,7 @@ import {
   useQuestionsQuery,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
 
+/** Client-side status / activity filter driven by the stat tiles. */
 type ApprovalLens =
   | "all"
   | "active"
@@ -60,6 +67,7 @@ function buildImportSuccessMessage(result: ImportQuestionsResult): string {
   return `Imported ${result.createdCount} question(s) as PendingReview. ${result.errorCount} row error(s).`;
 }
 
+/** Match a question against the selected approval-lens tile. */
 function matchesApprovalLens(
   question: QuestionSummary,
   lens: ApprovalLens,
@@ -84,6 +92,7 @@ function matchesApprovalLens(
   }
 }
 
+/** Tally questions by a numeric foreign key (subject / class / difficulty). */
 function countById(
   questions: QuestionSummary[],
   pick: (q: QuestionSummary) => number,
@@ -150,6 +159,7 @@ export function QuestionsPage() {
     return map;
   }, [subjectsQuery.data, classesQuery.data, difficultiesQuery.data]);
 
+  // Status + isActive tallies for the approval-system tiles (independent of table filters).
   const approvalStats = useMemo(() => {
     let active = 0;
     let pending = 0;
@@ -186,6 +196,7 @@ export function QuestionsPage() {
     };
   }, [questions]);
 
+  // Merge lookup catalogs with live question counts; orphan IDs still appear.
   const categoryColumns = useMemo(() => {
     const subjectCounts = countById(questions, (q) => q.subjectId);
     const classCounts = countById(questions, (q) => q.classId);
@@ -217,6 +228,7 @@ export function QuestionsPage() {
         }
       }
 
+      // Subject/class: A–Z; difficulty defaults to count-desc then label.
       return [...items.values()].sort((a, b) => {
         if (sortMode === "labelAsc") {
           return a.label.localeCompare(b.label, undefined, {
@@ -241,6 +253,7 @@ export function QuestionsPage() {
     difficultiesQuery.data,
   ]);
 
+  // Approval lens → category chips → deferred text search.
   const tableRows = useMemo(() => {
     return questions.filter((question) => {
       if (!matchesApprovalLens(question, approvalLens)) {
@@ -291,6 +304,7 @@ export function QuestionsPage() {
     });
   }
 
+  /** Toggle lens; clicking the active tile resets to "all". */
   function selectApprovalLens(next: ApprovalLens) {
     startTransition(() => {
       setApprovalLens((current) => (current === next ? "all" : next));
@@ -307,6 +321,10 @@ export function QuestionsPage() {
     });
   }
 
+  /**
+   * Excel import: dry-run validates rows and enables Confirm when clean;
+   * real import always creates PendingReview (never Approved).
+   */
   async function handleImport(file: File | null, dryRun: boolean) {
     if (!file) {
       return;
@@ -375,9 +393,10 @@ export function QuestionsPage() {
     }
   }
 
+  // 3-tier approve scopes vs author-facing create/browse copy.
   const roleDescription = isApprover
-    ? "PortalAdmin: review the approval queue, manage lifecycle, and curate the shared bank."
-    : "Create and submit questions (PendingReview). Edit or delete your own PendingReview or Rejected items. Browse Approved questions for quizzes.";
+    ? "Approve in your scope: Campus Admin → campus, School Admin → school (all campuses), Portal Admin → public. Lifecycle (activate/archive) remains PortalAdmin-only."
+    : "Create and submit questions (PendingReview). Edit or delete your own PendingReview or Rejected items. Browse Approved questions visible in your school/campus (or Public).";
 
   const activeCategoryFilters = [
     subjectId !== "",
@@ -469,61 +488,56 @@ export function QuestionsPage() {
       </section>
 
       <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-brand-50/40 p-5 shadow-sm sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => setCategoryExpanded((open) => !open)}
-            aria-expanded={categoryExpanded}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left"
-          >
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Question category
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Subject, Class, and Difficulty
-                {activeCategoryFilters > 0
-                  ? ` · ${activeCategoryFilters} filter(s) on`
-                  : null}
-              </p>
-            </div>
-            <span
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
-              aria-hidden="true"
-            >
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className={`h-4 w-4 transition-transform ${
-                  categoryExpanded ? "rotate-180" : ""
-                }`}
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </span>
-          </button>
+        <div className="flex w-full items-center gap-2">
+          <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Question category
+            {activeCategoryFilters > 0
+              ? ` · ${activeCategoryFilters} filter(s)`
+              : null}
+          </p>
           {(approvalLens !== "all" ||
             activeCategoryFilters > 0 ||
             search.trim()) && (
             <button
               type="button"
               onClick={clearAllFilters}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Clear all filters
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setCategoryExpanded((open) => !open)}
+            aria-expanded={categoryExpanded}
+            aria-label={
+              categoryExpanded
+                ? "Collapse question category"
+                : "Expand question category"
+            }
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`h-4 w-4 transition-transform ${
+                categoryExpanded ? "rotate-180" : ""
+              }`}
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
         </div>
 
         {categoryExpanded ? (
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
             <QuestionCategoryColumn
               title="Subject"
-              subtitle="All subjects in catalog"
               accent="teal"
               items={categoryColumns.subjects}
               selectedId={subjectId}
@@ -533,7 +547,6 @@ export function QuestionsPage() {
             />
             <QuestionCategoryColumn
               title="Class"
-              subtitle="All classes in catalog"
               accent="indigo"
               items={categoryColumns.classes}
               selectedId={classId}
@@ -543,7 +556,6 @@ export function QuestionsPage() {
             />
             <QuestionCategoryColumn
               title="Difficulty"
-              subtitle="Easy · Medium · Hard"
               accent="amber"
               items={categoryColumns.difficulties}
               selectedId={difficultyId}
@@ -668,6 +680,9 @@ export function QuestionsPage() {
                     Status
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Visibility
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Marks
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-slate-600">
@@ -717,6 +732,11 @@ export function QuestionsPage() {
                           question.isActive,
                         )}
                       />
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {question.visibility && question.visibility !== "None"
+                        ? question.visibility
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 tabular-nums text-slate-700">
                       {question.marks}

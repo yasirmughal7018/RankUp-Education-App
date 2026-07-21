@@ -380,7 +380,11 @@ public sealed class QuizManageService : IQuizManageService
                 sourceQuestion.Hint,
                 sourceQuestion.Explanation);
 
-            question.MarkFullyApproved(scope.UserId.ToString(), questionStatusId);
+            question.SetOrgScope(copy.SchoolId, copy.SchoolCampusId);
+            question.MarkFullyApproved(
+                scope.UserId.ToString(),
+                questionStatusId,
+                QuestionVisibilityLevels.Campus);
 
             await _questions.AddQuestionAsync(question, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

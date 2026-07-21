@@ -8,8 +8,17 @@ using RankUpEducation.Domain.Questions;
 
 namespace RankUpEducation.Application.Questions;
 
+/// <summary>
+/// Question-bank application service: create (PendingReview + org stamp), list with visibility,
+/// approve/reject (3-tier visibility), and PortalAdmin-only activate/deactivate/archive.
+/// </summary>
 public interface IQuestionService
 {
+    /// <summary>
+    /// Lists questions. PortalAdmin sees all; others see own + Approved within org visibility.
+    /// <paramref name="pendingApprovalOnly"/> scopes approver queues by campus/school.
+    /// <paramref name="eligibleForQuizOnly"/> returns active Approved rows visible to the caller.
+    /// </summary>
     Task<QuestionListResponse> ListAsync(
         bool? isActive,
         short? subjectId,
@@ -18,40 +27,62 @@ public interface IQuestionService
         bool eligibleForQuizOnly,
         CancellationToken cancellationToken);
 
+    /// <summary>Approver queue: PendingReview in the caller's org (or all for PortalAdmin).</summary>
     Task<QuestionListResponse> ListPendingApprovalAsync(CancellationToken cancellationToken);
 
+    /// <summary>Detail by id; enforces owner / pending-queue / approved-visibility access.</summary>
     Task<QuestionDetailResponse> GetByIdAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Creates a question as PendingReview (inactive), stamps SchoolId/CampusId from creator,
+    /// then stores options or accepted answers.
+    /// </summary>
     Task<QuestionDetailResponse> CreateAsync(CreateQuestionRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Updates content/answers. Owners may edit PendingReview/Rejected only; does not auto-resubmit.
+    /// </summary>
     Task<QuestionDetailResponse> UpdateAsync(
         long questionId,
         UpdateQuestionRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Owner (or PortalAdmin) resubmits Rejected/PendingReview; clears prior approval/visibility.</summary>
     Task<QuestionDetailResponse> SubmitForReviewAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Approves PendingReview and sets visibility by role:
+    /// CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
+    /// May backfill missing SchoolId/CampusId from the approver when the creator had none.
+    /// </summary>
     Task<QuestionApprovalResponse> ApproveAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>Rejects PendingReview with a required reason; clears approval and visibility.</summary>
     Task<QuestionApprovalResponse> RejectAsync(
         long questionId,
         RejectQuestionRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>PortalAdmin-only: activate an Approved question for quiz use.</summary>
     Task<QuestionActiveStateResponse> ActivateAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>PortalAdmin-only: deactivate an Approved question (status stays Approved).</summary>
     Task<QuestionActiveStateResponse> DeactivateAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>PortalAdmin-only: archive and deactivate.</summary>
     Task<QuestionActiveStateResponse> ArchiveAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>Deletes when not linked to quizzes; owners limited to PendingReview/Rejected.</summary>
     Task<DeleteQuestionResponse> DeleteAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>Bulk create via Excel rows (always PendingReview); dryRun validates without saving.</summary>
     Task<ImportQuestionsResponse> ImportAsync(
         IReadOnlyList<QuestionExcelImportRow> rows,
         bool dryRun,
         CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuestionService"/>
 public sealed class QuestionService : IQuestionService
 {
     public const int MinRejectionReasonLength = 10;
@@ -76,6 +107,7 @@ public sealed class QuestionService : IQuestionService
         _guard = new QuizManageGuard(quizzes, lookups);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionListResponse> ListAsync(
         bool? isActive,
         short? subjectId,
@@ -86,19 +118,37 @@ public sealed class QuestionService : IQuestionService
     {
         var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
 
-        // PortalAdmin: all. Others: own rows OR Approved (bank visibility).
+        // PortalAdmin: all rows. Others: own + Approved within visibility scope.
+        // Quiz picker: Approved + active + visible in caller's org (or Public).
+        QuestionListVisibilityScope? visibilityScope = null;
         long? createdByUserId = null;
-        var includeAllApproved = !scope.IsPortalAdmin;
-        if (!scope.IsPortalAdmin && !eligibleForQuizOnly)
+
+        if (!scope.IsPortalAdmin)
         {
-            createdByUserId = scope.UserId;
+            visibilityScope = new QuestionListVisibilityScope(
+                scope.UserId,
+                scope.SchoolId,
+                scope.CampusId,
+                scope.IsSchoolAdmin);
+
+            if (pendingApprovalOnly)
+            {
+                // Approver queues for School/Campus admins are org-scoped.
+                if (!scope.CanApprove)
+                {
+                    throw new ForbiddenAppException(
+                        "Only Portal Admin, School Admin, or Campus Admin can list pending approvals.");
+                }
+            }
         }
 
-        if (eligibleForQuizOnly)
+        if (eligibleForQuizOnly && !scope.IsPortalAdmin)
         {
-            // Quiz picker: shared Approved bank for all manage roles.
-            createdByUserId = null;
-            includeAllApproved = false;
+            visibilityScope = new QuestionListVisibilityScope(
+                scope.UserId,
+                scope.SchoolId,
+                scope.CampusId,
+                scope.IsSchoolAdmin);
         }
 
         var items = await _questions.ListQuestionsAsync(
@@ -108,15 +158,24 @@ public sealed class QuestionService : IQuestionService
             classId,
             pendingApprovalOnly,
             eligibleForQuizOnly,
-            includeAllApproved,
+            visibilityScope,
             cancellationToken);
 
         return new QuestionListResponse(items.Select(QuestionMapping.ToSummaryResponse).ToArray());
     }
 
+    /// <inheritdoc />
     public async Task<QuestionListResponse> ListPendingApprovalAsync(CancellationToken cancellationToken)
     {
-        QuestionScopeResolver.RequireApprovalScope(_currentUser);
+        var scope = QuestionScopeResolver.RequireApprovalScope(_currentUser);
+        QuestionListVisibilityScope? visibilityScope = scope.IsPortalAdmin
+            ? null
+            : new QuestionListVisibilityScope(
+                scope.UserId,
+                scope.SchoolId,
+                scope.CampusId,
+                scope.IsSchoolAdmin);
+
         var items = await _questions.ListQuestionsAsync(
             createdByUserId: null,
             isActive: null,
@@ -124,12 +183,13 @@ public sealed class QuestionService : IQuestionService
             classId: null,
             pendingApprovalOnly: true,
             eligibleForQuizOnly: false,
-            includeAllApprovedForOwnerScope: false,
+            visibilityScope,
             cancellationToken);
 
         return new QuestionListResponse(items.Select(QuestionMapping.ToSummaryResponse).ToArray());
     }
 
+    /// <inheritdoc />
     public async Task<QuestionDetailResponse> GetByIdAsync(long questionId, CancellationToken cancellationToken)
     {
         var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
@@ -138,6 +198,7 @@ public sealed class QuestionService : IQuestionService
         return QuestionMapping.ToDetailResponse(detail);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionDetailResponse> CreateAsync(
         CreateQuestionRequest request,
         CancellationToken cancellationToken)
@@ -174,6 +235,9 @@ public sealed class QuestionService : IQuestionService
             request.Hint,
             request.Explanation);
 
+        // Stamp creator org so Campus/School admins can approve in scope.
+        question.SetOrgScope(scope.SchoolId, scope.CampusId);
+
         // Ensure PendingReview + inactive even if entity defaults change.
         question.SubmitForApproval(statusId);
 
@@ -190,6 +254,7 @@ public sealed class QuestionService : IQuestionService
         return QuestionMapping.ToDetailResponse(detail);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionDetailResponse> UpdateAsync(
         long questionId,
         UpdateQuestionRequest request,
@@ -228,6 +293,7 @@ public sealed class QuestionService : IQuestionService
         return QuestionMapping.ToDetailResponse(detail);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionDetailResponse> SubmitForReviewAsync(
         long questionId,
         CancellationToken cancellationToken)
@@ -254,27 +320,46 @@ public sealed class QuestionService : IQuestionService
         return QuestionMapping.ToDetailResponse(detail);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionApprovalResponse> ApproveAsync(long questionId, CancellationToken cancellationToken)
     {
         var scope = QuestionScopeResolver.RequireApprovalScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
         await EnsurePendingReviewAsync(question, cancellationToken);
 
+        // Backfill missing org from approver when creator had no school/campus (e.g. PortalAdmin).
+        if (scope.IsCampusAdmin
+            && !question.CampusId.HasValue
+            && scope.CampusId.HasValue
+            && (!question.SchoolId.HasValue || question.SchoolId == scope.SchoolId))
+        {
+            question.SetOrgScope(scope.SchoolId ?? question.SchoolId, scope.CampusId);
+        }
+        else if (scope.IsSchoolAdmin && !question.SchoolId.HasValue && scope.SchoolId.HasValue)
+        {
+            question.SetOrgScope(scope.SchoolId, question.CampusId);
+        }
+
+        QuestionScopeResolver.EnsureCanApproveOrReject(question, scope);
+
         var approvedStatusId = await RequireApprovedStatusIdAsync(cancellationToken);
-        question.Approve(scope.UserId.ToString(), approvedStatusId);
+        // Visibility: CampusAdmin→Campus, SchoolAdmin→School, PortalAdmin→Public.
+        question.Approve(scope.UserId.ToString(), approvedStatusId, scope.ApprovalVisibilityLevel);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var statusName = await _lookups.GetLookupNameAsync(approvedStatusId, cancellationToken);
         return ToApprovalResponse(questionId, statusName, question);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionApprovalResponse> RejectAsync(
         long questionId,
         RejectQuestionRequest request,
         CancellationToken cancellationToken)
     {
-        QuestionScopeResolver.RequireApprovalScope(_currentUser);
+        var scope = QuestionScopeResolver.RequireApprovalScope(_currentUser);
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
+        QuestionScopeResolver.EnsureCanApproveOrReject(question, scope);
         await EnsurePendingReviewAsync(question, cancellationToken);
 
         var reason = request.Reason?.Trim() ?? string.Empty;
@@ -294,6 +379,7 @@ public sealed class QuestionService : IQuestionService
         return ToApprovalResponse(questionId, statusName, question);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionActiveStateResponse> ActivateAsync(long questionId, CancellationToken cancellationToken)
     {
         QuestionScopeResolver.RequireLifecycleScope(_currentUser);
@@ -307,6 +393,7 @@ public sealed class QuestionService : IQuestionService
         return new QuestionActiveStateResponse(questionId, question.IsActive, statusName);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionActiveStateResponse> DeactivateAsync(long questionId, CancellationToken cancellationToken)
     {
         QuestionScopeResolver.RequireLifecycleScope(_currentUser);
@@ -321,6 +408,7 @@ public sealed class QuestionService : IQuestionService
         return new QuestionActiveStateResponse(questionId, question.IsActive, statusName);
     }
 
+    /// <inheritdoc />
     public async Task<QuestionActiveStateResponse> ArchiveAsync(long questionId, CancellationToken cancellationToken)
     {
         QuestionScopeResolver.RequireLifecycleScope(_currentUser);
@@ -334,6 +422,7 @@ public sealed class QuestionService : IQuestionService
         return new QuestionActiveStateResponse(questionId, question.IsActive, statusName);
     }
 
+    /// <inheritdoc />
     public async Task<DeleteQuestionResponse> DeleteAsync(long questionId, CancellationToken cancellationToken)
     {
         var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
@@ -355,6 +444,7 @@ public sealed class QuestionService : IQuestionService
         return new DeleteQuestionResponse(questionId, Deleted: true, Deactivated: false);
     }
 
+    /// <inheritdoc />
     public async Task<ImportQuestionsResponse> ImportAsync(
         IReadOnlyList<QuestionExcelImportRow> rows,
         bool dryRun,
@@ -467,6 +557,7 @@ public sealed class QuestionService : IQuestionService
         return id;
     }
 
+    /// <summary>PortalAdmin any; owners only while PendingReview or Rejected.</summary>
     private async Task EnsureCanUpdateAsync(
         Question question,
         QuestionManageScope scope,
@@ -482,10 +573,11 @@ public sealed class QuestionService : IQuestionService
         if (!IsOwnerEditableStatus(statusName))
         {
             throw new BusinessRuleException(
-                "You can only update your own questions before Portal Admin approval (or after rejection).");
+                "You can only update your own questions before admin approval (or after rejection).");
         }
     }
 
+    /// <summary>PortalAdmin any; owners only while PendingReview or Rejected.</summary>
     private async Task EnsureCanDeleteAsync(
         Question question,
         QuestionManageScope scope,
@@ -505,6 +597,7 @@ public sealed class QuestionService : IQuestionService
         }
     }
 
+    /// <summary>Replaces choice options or fill accepted answers based on question type.</summary>
     private async Task ReplaceAnswersAsync(
         long questionId,
         string questionType,
@@ -542,6 +635,7 @@ public sealed class QuestionService : IQuestionService
         await ReplaceOptionsAsync(questionId, options, cancellationToken);
     }
 
+    /// <summary>Prefers AcceptedAnswers; falls back to Options for legacy Fill Excel imports.</summary>
     private static IReadOnlyList<QuestionAcceptedAnswerRequest> ResolveFillAcceptedAnswers(
         IReadOnlyList<QuestionOptionRequest> options,
         IReadOnlyList<QuestionAcceptedAnswerRequest>? acceptedAnswers)
@@ -619,8 +713,13 @@ public sealed class QuestionService : IQuestionService
             question.IsActive,
             question.ApprovedBy,
             question.IsAiApproved,
+            QuestionVisibilityLevels.ToName(question.VisibilityLevel),
             question.RejectionReason);
 
+    /// <summary>
+    /// Access: PortalAdmin any; owner any own row; approvers PendingReview in org;
+    /// others only Approved within Public/School/Campus visibility.
+    /// </summary>
     private static void EnsureCanView(QuestionDetailItem detail, QuestionManageScope scope)
     {
         if (scope.IsPortalAdmin)
@@ -633,7 +732,26 @@ public sealed class QuestionService : IQuestionService
             return;
         }
 
-        if (IsApprovedStatus(detail.StatusName))
+        // Approvers may open PendingReview items in their org queue.
+        if (scope.CanApprove
+            && IsPendingReviewStatus(detail.StatusName)
+            && (
+                (scope.IsSchoolAdmin
+                 && scope.SchoolId.HasValue
+                 && detail.SchoolId == scope.SchoolId)
+                || (scope.IsCampusAdmin
+                    && scope.CampusId.HasValue
+                    && detail.CampusId == scope.CampusId)))
+        {
+            return;
+        }
+
+        if (IsApprovedStatus(detail.StatusName)
+            && QuestionScopeResolver.CanViewApprovedVisibility(
+                detail.VisibilityLevel,
+                detail.SchoolId,
+                detail.CampusId,
+                scope))
         {
             return;
         }

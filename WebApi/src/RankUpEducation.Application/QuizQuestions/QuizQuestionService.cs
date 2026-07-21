@@ -110,8 +110,12 @@ public sealed class QuizQuestionService : IQuizQuestionService
             request.Hint,
             request.Explanation);
 
-        // Inline quiz questions are created ready for use (both approval flags).
-        question.MarkFullyApproved(scope.UserId.ToString(), questionStatusId);
+        // Inline quiz questions are created ready for use within the quiz campus.
+        question.SetOrgScope(quiz.SchoolId, quiz.SchoolCampusId);
+        question.MarkFullyApproved(
+            scope.UserId.ToString(),
+            questionStatusId,
+            QuestionVisibilityLevels.Campus);
 
         await _questions.AddQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

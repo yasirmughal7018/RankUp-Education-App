@@ -1,8 +1,13 @@
+/**
+ * React Query hooks for the question bank.
+ * Mutations invalidate the shared `questions` list and optional detail key.
+ */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as questionApi from "@/features/questions/data/questionApi";
 import type { QuestionFormValues } from "@/features/questions/domain/questionTypes";
 
+/** UI filter shape for the list query (empty string = no filter). */
 export interface QuestionListFilters {
   pendingOnly: boolean;
   activeFilter: "" | "true" | "false";
@@ -11,6 +16,7 @@ export interface QuestionListFilters {
   eligibleForQuizOnly?: boolean;
 }
 
+/** Map UI filters to API list params (omit unset fields). */
 function buildQuestionFilters(filters: QuestionListFilters) {
   return {
     pendingOnly: filters.pendingOnly,
@@ -24,6 +30,7 @@ function buildQuestionFilters(filters: QuestionListFilters) {
   };
 }
 
+/** Paginated/scoped question list; stale for 30s. */
 export function useQuestionsQuery(
   filters: QuestionListFilters,
   options?: { enabled?: boolean },
@@ -45,6 +52,7 @@ export function useQuestionsQuery(
   });
 }
 
+/** Single question detail by id. */
 export function useQuestionQuery(questionId: number) {
   return useQuery({
     queryKey: queryKeys.question(questionId),
@@ -53,6 +61,7 @@ export function useQuestionQuery(questionId: number) {
   });
 }
 
+/** Invalidate list (and optional detail) after workflow mutations. */
 function useInvalidateQuestions(questionId?: number) {
   const queryClient = useQueryClient();
 
@@ -77,6 +86,7 @@ export function useDeleteQuestionMutation() {
   });
 }
 
+/** Approve PendingReview → sets visibility by approver role (Campus/School/Public). */
 export function useApproveQuestionMutation(questionId: number) {
   const invalidate = useInvalidateQuestions(questionId);
 
@@ -86,6 +96,7 @@ export function useApproveQuestionMutation(questionId: number) {
   });
 }
 
+/** Reject with required reason text. */
 export function useRejectQuestionMutation(questionId: number) {
   const invalidate = useInvalidateQuestions(questionId);
 
@@ -96,6 +107,7 @@ export function useRejectQuestionMutation(questionId: number) {
   });
 }
 
+/** Re-submit Rejected → PendingReview. */
 export function useSubmitQuestionMutation(questionId: number) {
   const invalidate = useInvalidateQuestions(questionId);
 
@@ -105,6 +117,7 @@ export function useSubmitQuestionMutation(questionId: number) {
   });
 }
 
+/** PortalAdmin-only archive. */
 export function useArchiveQuestionMutation(questionId: number) {
   const invalidate = useInvalidateQuestions(questionId);
 
@@ -114,6 +127,7 @@ export function useArchiveQuestionMutation(questionId: number) {
   });
 }
 
+/** Excel import (dry-run or commit); always creates PendingReview on commit. */
 export function useImportQuestionsMutation() {
   const queryClient = useQueryClient();
 
@@ -126,6 +140,7 @@ export function useImportQuestionsMutation() {
   });
 }
 
+/** PortalAdmin-only activate (IsActive=true). */
 export function useActivateQuestionMutation(questionId: number) {
   const invalidate = useInvalidateQuestions(questionId);
 
@@ -135,6 +150,7 @@ export function useActivateQuestionMutation(questionId: number) {
   });
 }
 
+/** PortalAdmin-only deactivate (IsActive=false). */
 export function useDeactivateQuestionMutation(questionId: number) {
   const invalidate = useInvalidateQuestions(questionId);
 

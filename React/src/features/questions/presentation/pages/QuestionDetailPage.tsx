@@ -1,8 +1,15 @@
+/**
+ * Question detail: view content and run workflow actions.
+ *
+ * Approve (Campus→Campus / School→School / Portal→Public visibility), reject with reason,
+ * resubmit after reject, and PortalAdmin-only activate / deactivate / archive.
+ */
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import {
+  approvalVisibilityForRole,
   canApproveQuestions,
   canLifecycleQuestions,
   canMutateQuestion,
@@ -47,6 +54,7 @@ export function QuestionDetailPage() {
   const [rejectReason, setRejectReason] = useState("");
 
   const canApprove = user ? canApproveQuestions(user.role) : false;
+  // Activate / deactivate / archive — PortalAdmin only.
   const canLifecycle = user ? canLifecycleQuestions(user.role) : false;
   const isOwner =
     user != null &&
@@ -62,6 +70,7 @@ export function QuestionDetailPage() {
     archiveQuestion.isPending ||
     deleteQuestion.isPending;
 
+  /** Shared success / error banner wrapper for mutation buttons. */
   async function runAction(action: () => Promise<unknown>, success: string) {
     setActionError(null);
     setSuccessMessage(null);
@@ -112,6 +121,7 @@ export function QuestionDetailPage() {
       status: question.status,
     });
   const canDelete = canEdit;
+  // Owner or PortalAdmin may re-queue a Rejected item into PendingReview.
   const canSubmit =
     (canLifecycle || isOwner) && isRejected;
   const isQuizReady = isEligibleForQuizQuestion(question);
@@ -177,6 +187,9 @@ export function QuestionDetailPage() {
           <p>Time: {question.estimatedTimeSeconds}s</p>
           <p>Created by: {question.createdBy}</p>
           <p>Approved by: {question.approvedBy ?? "—"}</p>
+          <p>Visibility: {question.visibility ?? "None"}</p>
+          <p>School ID: {question.schoolId ?? "—"}</p>
+          <p>Campus ID: {question.campusId ?? "—"}</p>
         </div>
 
         {question.hint ? (
@@ -244,6 +257,7 @@ export function QuestionDetailPage() {
       </section>
 
       <section className="flex flex-wrap gap-2">
+        {/* Approvers only while PendingReview — visibility tier follows role. */}
         {canApprove && isPending ? (
           <>
             <button
@@ -252,12 +266,15 @@ export function QuestionDetailPage() {
               onClick={() =>
                 void runAction(
                   () => approveQuestion.mutateAsync(),
-                  "Question approved. It is now eligible for quizzes.",
+                  user
+                    ? `Question approved (${approvalVisibilityForRole(user.role)} visibility).`
+                    : "Question approved.",
                 )
               }
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
             >
               Approve
+              {user ? ` · ${approvalVisibilityForRole(user.role)}` : null}
             </button>
             <button
               type="button"

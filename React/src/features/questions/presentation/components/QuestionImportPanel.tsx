@@ -1,3 +1,7 @@
+/**
+ * Excel import panel: template download, dry-run validation, and commit.
+ * Imports always land as PendingReview (IsActive=false) — never Approved.
+ */
 import { useRef } from "react";
 import { getQuestionImportTemplateUrl } from "@/features/questions/data/questionApi";
 import { readStoredSession } from "@/core/auth/tokenStorage";
@@ -11,12 +15,14 @@ interface QuestionImportPanelProps {
   isPending: boolean;
   message: string | null;
   errors: ImportRowError[];
+  /** True after a clean dry-run so Confirm can commit the same file. */
   canConfirm: boolean;
   onDryRun: (file: File) => void;
   onImport: (file: File) => void;
   onConfirm: () => void;
 }
 
+/** Authenticated blob download of the blank import template. */
 async function downloadImportTemplate() {
   const token = readStoredSession()?.accessToken;
   const response = await fetch(getQuestionImportTemplateUrl(), {
@@ -96,6 +102,7 @@ export function QuestionImportPanel({
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0] ?? null;
+              // Reset so the same file can be re-selected after a failed dry-run.
               event.target.value = "";
               if (file) {
                 onDryRun(file);
