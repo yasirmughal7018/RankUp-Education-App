@@ -38,6 +38,7 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+/** Analytics hub: summaries, performance, rankings, and CSV export. */
 export function ReportsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<ReportTab>("summary");

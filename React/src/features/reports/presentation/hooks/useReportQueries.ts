@@ -1,7 +1,9 @@
+/** React Query hooks for analytics and rankings reports. */
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as reportApi from "@/features/reports/data/reportApi";
 
+/** Aggregate quiz metrics for a date range. */
 export function useQuizSummaryReportQuery(
   options?: { from?: string; to?: string },
   enabled = true,
@@ -16,6 +18,7 @@ export function useQuizSummaryReportQuery(
   });
 }
 
+/** Per-student performance for one quiz. */
 export function useQuizPerformanceReportQuery(quizId: number, enabled = true) {
   return useQuery({
     queryKey: queryKeys.reportQuizPerformance(quizId),
@@ -24,6 +27,7 @@ export function useQuizPerformanceReportQuery(quizId: number, enabled = true) {
   });
 }
 
+/** Leaderboard, optionally scoped to a quiz. */
 export function useRankingsReportQuery(quizId?: number | null, enabled = true) {
   return useQuery({
     queryKey: queryKeys.reportRankings(quizId),
@@ -32,6 +36,7 @@ export function useRankingsReportQuery(quizId?: number | null, enabled = true) {
   });
 }
 
+/** Quiz history for one student. */
 export function useStudentQuizHistoryReportQuery(
   studentId: number,
   enabled = true,

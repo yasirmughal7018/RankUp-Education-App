@@ -71,6 +71,7 @@ function OptionalLabel({
   );
 }
 
+/** Shared question form: type-specific fields, validation, and dual submit actions. */
 export function QuestionForm({
   initialValues,
   submitLabel,

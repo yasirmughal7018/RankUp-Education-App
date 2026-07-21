@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rankup_education/core/widgets/feature_placeholder_page.dart';
 
+/// Global search placeholder screen.
 class SearchPage extends StatelessWidget {
   const SearchPage({super.key});
 

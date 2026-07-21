@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+/// Secure storage for access and refresh tokens.
 final tokenStoreProvider = Provider<TokenStore>(
   (ref) => const SecureTokenStore(FlutterSecureStorage()),
 );
 
+/// Persists OAuth-style tokens between app launches.
 abstract class TokenStore {
   Future<String?> readAccessToken();
 
@@ -20,6 +22,7 @@ abstract class TokenStore {
   Future<void> clear();
 }
 
+/// [TokenStore] backed by platform secure storage.
 class SecureTokenStore implements TokenStore {
   const SecureTokenStore(this._storage);
 

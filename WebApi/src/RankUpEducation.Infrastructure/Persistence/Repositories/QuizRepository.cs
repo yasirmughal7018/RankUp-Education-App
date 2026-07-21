@@ -5,6 +5,9 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Quiz persistence: role-scoped lists, approval queue, creator detail, and lifecycle guard queries.
+/// </summary>
 public sealed class QuizRepository : IQuizRepository
 {
     private readonly RankUpDbContext _dbContext;

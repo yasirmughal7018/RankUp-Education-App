@@ -1,3 +1,6 @@
+/**
+ * Authentication HTTP client — login, tokens, profile, registration options.
+ */
 import {
   apiRequest,
   apiRequestForm,
@@ -32,6 +35,7 @@ export interface LoginStatusResponse {
   message: string;
 }
 
+/** Pre-login gate: approval state, password setup, lock, etc. */
 export async function getLoginStatus(
   username: string,
 ): Promise<LoginStatusResponse> {
@@ -42,6 +46,7 @@ export async function getLoginStatus(
   });
 }
 
+/** Authenticate and return a full session (tokens + user). */
 export async function login(request: LoginRequest): Promise<AuthSession> {
   const response = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
@@ -56,6 +61,7 @@ export async function login(request: LoginRequest): Promise<AuthSession> {
   };
 }
 
+/** Switch active role; returns new tokens and user snapshot. */
 export async function switchRole(role: string): Promise<AuthSession> {
   const response = await apiRequest<LoginResponse>("/auth/switch-role", {
     method: "POST",
@@ -80,6 +86,7 @@ export async function setInitialPassword(
   });
 }
 
+/** Exchange refresh token for a new access/refresh pair. */
 export async function refreshTokens(
   refreshToken: string,
 ): Promise<AuthTokensResponse> {
@@ -91,6 +98,7 @@ export async function refreshTokens(
   });
 }
 
+/** Revoke refresh token server-side (no-op when token missing). */
 export async function logout(refreshToken: string | null): Promise<void> {
   if (!refreshToken) {
     return;
@@ -103,6 +111,7 @@ export async function logout(refreshToken: string | null): Promise<void> {
   });
 }
 
+/** Fetch current user profile (validates stored access token). */
 export async function getCurrentUser(): Promise<CurrentUser> {
   return apiRequest<CurrentUser>("/auth/me");
 }
@@ -114,6 +123,7 @@ export interface UpdateProfileRequest {
   cnic?: string | null;
 }
 
+/** Update profile fields on the authenticated account. */
 export async function updateProfile(
   request: UpdateProfileRequest,
 ): Promise<CurrentUser> {
@@ -134,6 +144,7 @@ export interface RequestSchoolChangeResponse {
   message: string;
 }
 
+/** Submit a school/campus change request (may lock the account). */
 export async function requestSchoolChange(
   request: RequestSchoolChangeRequest,
 ): Promise<RequestSchoolChangeResponse> {
@@ -143,6 +154,7 @@ export async function requestSchoolChange(
   });
 }
 
+/** Upload profile avatar (multipart). */
 export async function uploadAvatar(file: File): Promise<CurrentUser> {
   const formData = new FormData();
   formData.append("file", file);
@@ -153,6 +165,7 @@ export interface DeactivateAccountRequest {
   currentPassword: string;
 }
 
+/** Self-service account deactivation (requires current password). */
 export async function deactivateAccount(
   request: DeactivateAccountRequest,
 ): Promise<void> {
@@ -201,6 +214,7 @@ export interface RegistrationCampusOption {
   isActive: boolean;
 }
 
+/** Schools available during public self-registration. */
 export async function listRegistrationSchools(): Promise<
   RegistrationSchoolOption[]
 > {
@@ -211,6 +225,7 @@ export async function listRegistrationSchools(): Promise<
   return response.items;
 }
 
+/** Campuses for a school on the registration form. */
 export async function listRegistrationCampuses(
   schoolId: number,
 ): Promise<RegistrationCampusOption[]> {
@@ -221,6 +236,7 @@ export async function listRegistrationCampuses(
   return response.items;
 }
 
+/** Request a password reset email/workflow for the username. */
 export async function requestPasswordReset(username: string): Promise<void> {
   await apiRequestVoid("/auth/password-reset/request", {
     method: "POST",
@@ -237,6 +253,7 @@ export async function clearPasswordForReset(username: string): Promise<void> {
   });
 }
 
+/** Public self-registration (Student, Parent, or Teacher). */
 export async function registerAccount(
   request: RegisterAccountRequest,
 ): Promise<RegisterAccountResponse> {
@@ -247,6 +264,7 @@ export async function registerAccount(
   });
 }
 
+/** Change password for the authenticated user. */
 export async function changePassword(
   request: ChangePasswordRequest,
 ): Promise<CurrentUser> {

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
 
+/// Maps [DioException] HTTP failures to typed [AppException] values for the UI.
 AppException mapDioException(DioException error) {
   final response = error.response;
   final statusCode = response?.statusCode;

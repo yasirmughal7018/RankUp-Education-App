@@ -19,6 +19,7 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+/** Live snapshot of in-progress attempts for one quiz. */
 export function QuizMonitoringPage() {
   const { quizId } = useParams();
   const numericQuizId = Number(quizId);

@@ -7,6 +7,7 @@ import 'package:rankup_education/features/admin/presentation/widgets/approve_reg
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
+/// Lists and approves pending account registration requests.
 class PendingRegistrationsPage extends ConsumerStatefulWidget {
   const PendingRegistrationsPage({super.key});
 

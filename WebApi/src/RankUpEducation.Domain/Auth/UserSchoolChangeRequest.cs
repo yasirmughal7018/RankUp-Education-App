@@ -2,6 +2,10 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Auth;
 
+/// <summary>
+/// Self-service school/campus transfer request (table: app_user_school_change_request).
+/// While pending, the requester's account is locked until an admin approves or rejects.
+/// </summary>
 public sealed class UserSchoolChangeRequest
 {
     private UserSchoolChangeRequest()
@@ -33,13 +37,16 @@ public sealed class UserSchoolChangeRequest
     public int? FromCampusId { get; private set; }
     public int? ToSchoolId { get; private set; }
     public int? ToCampusId { get; private set; }
+    /// <summary>Role the user held when submitting the request (drives approval rules).</summary>
     public UserRole RequesterRole { get; private set; }
     public SchoolChangeRequestStatus Status { get; private set; }
     public DateTimeOffset RequestedAt { get; private set; }
     public DateTimeOffset? ResolvedAt { get; private set; }
 
+    /// <summary>True while awaiting admin review.</summary>
     public bool IsPending => Status == SchoolChangeRequestStatus.Pending;
 
+    /// <summary>Creates a pending transfer when origin and destination differ.</summary>
     public static UserSchoolChangeRequest Create(
         long userId,
         int? fromSchoolId,
@@ -64,6 +71,7 @@ public sealed class UserSchoolChangeRequest
             requestedAt);
     }
 
+    /// <summary>Marks the request approved and records resolution time.</summary>
     public void Approve(DateTimeOffset resolvedAt)
     {
         if (!IsPending)
@@ -75,6 +83,7 @@ public sealed class UserSchoolChangeRequest
         ResolvedAt = resolvedAt;
     }
 
+    /// <summary>Marks the request rejected and records resolution time.</summary>
     public void Reject(DateTimeOffset resolvedAt)
     {
         if (!IsPending)
@@ -86,6 +95,7 @@ public sealed class UserSchoolChangeRequest
         ResolvedAt = resolvedAt;
     }
 
+    /// <summary>Silently closes a superseded pending request when the user submits a new one.</summary>
     public void Cancel(DateTimeOffset resolvedAt)
     {
         if (!IsPending)

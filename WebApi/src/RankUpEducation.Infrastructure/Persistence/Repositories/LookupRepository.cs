@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Abstractions;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <inheritdoc cref="RankUpEducation.Application.Common.Abstractions.ILookupRepository"/>
 public sealed class LookupRepository : ILookupRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -42,6 +43,7 @@ public sealed class LookupRepository : ILookupRepository
         short fallback,
         CancellationToken cancellationToken)
     {
+        // Prefer first synonym match when importing legacy display names.
         foreach (var name in names)
         {
             var id = await ResolveLookupIdAsync(type, name, 0, cancellationToken);

@@ -6,6 +6,7 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>Review list/detail queries, monitoring aggregates, and review entity persistence.</summary>
 public sealed class QuizReviewRepository : IQuizReviewRepository
 {
     private readonly RankUpDbContext _dbContext;

@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Riverpod provider for the in-memory offline sync queue.
 final syncQueueProvider = Provider<SyncQueue>((ref) {
   return SyncQueue();
 });
 
 enum SyncStatus { pending, syncing, synced, failed }
 
+/// Single queued write-behind operation awaiting replay.
 class SyncQueueItem {
   const SyncQueueItem({
     required this.localId,

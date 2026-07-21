@@ -3,6 +3,7 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Subjects;
 
+/// <summary>Curriculum subject offered by a school.</summary>
 public sealed class Subject : SoftDeleteEntity
 {
     private Subject()

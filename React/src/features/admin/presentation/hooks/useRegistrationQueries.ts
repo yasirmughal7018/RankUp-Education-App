@@ -1,7 +1,9 @@
+/** React Query hooks for pending registration approvals. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as registrationApi from "@/features/admin/data/registrationApi";
 
+/** List accounts awaiting admin approval. */
 export function usePendingRegistrationsQuery() {
   return useQuery({
     queryKey: queryKeys.pendingRegistrations(),
@@ -9,6 +11,7 @@ export function usePendingRegistrationsQuery() {
   });
 }
 
+/** Approve a registration request. */
 export function useApproveRegistrationMutation() {
   const queryClient = useQueryClient();
 
@@ -23,6 +26,7 @@ export function useApproveRegistrationMutation() {
   });
 }
 
+/** Reject a registration request. */
 export function useRejectRegistrationMutation() {
   const queryClient = useQueryClient();
 

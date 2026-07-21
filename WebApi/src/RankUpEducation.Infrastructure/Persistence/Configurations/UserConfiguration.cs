@@ -4,6 +4,7 @@ using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
+/// <summary>Maps <see cref="User"/> to app_users and related collections.</summary>
 public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)

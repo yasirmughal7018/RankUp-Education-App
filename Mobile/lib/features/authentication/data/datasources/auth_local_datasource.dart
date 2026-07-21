@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:rankup_education/features/authentication/data/models/app_user_model.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 
+/// Persists the cached signed-in user in secure storage.
 class AuthLocalDataSource {
   const AuthLocalDataSource(this._storage);
 

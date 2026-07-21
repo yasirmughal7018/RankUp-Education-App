@@ -10,6 +10,7 @@ final quizRepositoryProvider = Provider<QuizRepository>((ref) {
   return ApiQuizRepository(QuizRemoteDataSource(ref.watch(dioProvider)));
 });
 
+/// State for the student/teacher quiz hub screen.
 final quizzesControllerProvider =
     StateNotifierProvider<QuizzesController, QuizzesState>((ref) {
   return QuizzesController(ref.watch(quizRepositoryProvider));

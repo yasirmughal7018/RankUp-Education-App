@@ -13,6 +13,7 @@ const _schoolChangeRoles = {
   UserRole.campusAdmin,
 };
 
+/// Signed-in user profile, role switch, logout, and school change.
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 

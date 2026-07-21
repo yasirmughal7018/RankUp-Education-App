@@ -2,6 +2,7 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
 
+/// <summary>Snapshot of a bank question as presented in a specific attempt (order may differ from quiz definition).</summary>
 public sealed class QuizAttemptQuestion : BaseEntity
 {
     private QuizAttemptQuestion()
@@ -20,6 +21,7 @@ public sealed class QuizAttemptQuestion : BaseEntity
     public short DisplayOrder { get; private set; }
     public long? QuizReviewId { get; private set; }
 
+    /// <summary>Associates per-question teacher/parent/AI feedback with this attempt row.</summary>
     public void LinkReview(long quizReviewId)
     {
         QuizReviewId = quizReviewId;

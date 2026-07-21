@@ -45,6 +45,7 @@ function canAllowRetry(assignment: {
   );
 }
 
+/** Quiz manage hub: questions, assignments, publish/archive, and lifecycle actions. */
 export function QuizManageDetailPage() {
   const { quizId } = useParams();
   const navigate = useNavigate();

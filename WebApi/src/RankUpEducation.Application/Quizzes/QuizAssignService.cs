@@ -8,14 +8,22 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>
+/// Assigns published quizzes to students (one, selected, group, grade, or all linked children),
+/// cancels future assignments, and grants retries after review.
+/// </summary>
 public interface IQuizAssignService
 {
+    /// <summary>Creates per-student assignments and moves quiz lifecycle to Assigned.</summary>
     Task<AssignQuizResponse> AssignAsync(long quizId, AssignQuizRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Lists all assignments for a quiz owned by the caller.</summary>
     Task<QuizAssignmentListResponse> ListAssignmentsAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Removes upcoming assignments and sets lifecycle to Cancelled.</summary>
     Task<CancelQuizResponse> CancelAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Grants extra attempts after review is done and all allowed attempts were used.</summary>
     Task<AllowRetryResponse> AllowRetryAsync(
         long quizId,
         long assignmentId,
@@ -23,6 +31,7 @@ public interface IQuizAssignService
         CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuizAssignService"/>
 public sealed class QuizAssignService : IQuizAssignService
 {
     private readonly IQuizRepository _quizzes;

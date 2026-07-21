@@ -11,6 +11,7 @@ import {
   useRejectQuizMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
+/** Admin queue to approve or reject teacher quizzes pending school review. */
 export function AdminQuizApprovalsPage() {
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     usePendingQuizApprovalsQuery();

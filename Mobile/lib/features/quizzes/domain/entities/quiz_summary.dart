@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 
+/// Lightweight quiz card data shown in list and filter views.
 class QuizSummary {
   const QuizSummary({
     required this.id,

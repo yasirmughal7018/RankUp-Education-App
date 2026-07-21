@@ -103,10 +103,12 @@ export interface QuizAttemptResult {
 
 export const STUDENT_DEVICE_ID = "rankup-web";
 
+/** True only for Student role. */
 export function canTakeStudentQuizzes(role: string): boolean {
   return role === "Student";
 }
 
+/** Question requires free-text answer. */
 export function isTextQuestionType(questionType: string): boolean {
   const normalized = questionType.toLowerCase();
   return (
@@ -118,6 +120,7 @@ export function isTextQuestionType(questionType: string): boolean {
   );
 }
 
+/** Student has an unfinished attempt. */
 export function hasInProgressAttempt(quiz: QuizDetail): boolean {
   const result = quiz.resultStatus.toLowerCase();
   return result.includes("in progress") || result.includes("inprogress");

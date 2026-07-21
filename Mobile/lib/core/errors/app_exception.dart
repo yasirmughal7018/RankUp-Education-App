@@ -1,3 +1,4 @@
+/// Base type for user-facing application errors.
 sealed class AppException implements Exception {
   const AppException(this.message);
 
@@ -7,18 +8,22 @@ sealed class AppException implements Exception {
   String toString() => message;
 }
 
+/// Connectivity or transport failure talking to the API.
 class NetworkException extends AppException {
   const NetworkException(super.message);
 }
 
+/// Missing, expired, or invalid credentials.
 class AuthenticationException extends AppException {
   const AuthenticationException(super.message);
 }
 
+/// Authenticated user lacks permission for the requested action.
 class AuthorizationException extends AppException {
   const AuthorizationException(super.message);
 }
 
+/// Request rejected due to invalid input or business rules.
 class ValidationException extends AppException {
   const ValidationException(super.message, this.errors);
 
@@ -57,6 +62,7 @@ String resolveValidationMessage(String message, List<String> errors) {
   return 'Something went wrong. Please try again.';
 }
 
+/// Unclassified server or client failure.
 class UnknownAppException extends AppException {
   const UnknownAppException(super.message);
 }

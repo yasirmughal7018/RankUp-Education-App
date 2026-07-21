@@ -2,6 +2,7 @@ namespace RankUpEducation.Contracts.Quizzes;
 
 public sealed record PendingReviewListResponse(IReadOnlyList<PendingReviewItemResponse> Items);
 
+/// <summary>Submitted attempt awaiting teacher/parent review.</summary>
 public sealed record PendingReviewItemResponse(
     long QuizId,
     string QuizTitle,
@@ -13,6 +14,7 @@ public sealed record PendingReviewItemResponse(
     short TotalMarks,
     short ObtainedMarks);
 
+/// <summary>Full review workspace for marking subjective answers.</summary>
 public sealed record AttemptReviewResponse(
     long AttemptId,
     long QuizId,
@@ -28,6 +30,7 @@ public sealed record AttemptReviewResponse(
     DateTimeOffset SubmittedAt,
     IReadOnlyList<AttemptReviewQuestionResponse> Questions);
 
+/// <summary>One question on the review screen with marks and feedback.</summary>
 public sealed record AttemptReviewQuestionResponse(
     long QuestionId,
     string QuestionText,
@@ -41,6 +44,7 @@ public sealed record AttemptReviewQuestionResponse(
     bool RequiresReview,
     IReadOnlyList<long>? SelectedOptionIds = null);
 
+/// <summary>Manual mark and optional feedback for one question during review.</summary>
 public sealed record MarkAttemptAnswerRequest(
     long QuestionId,
     short AwardedMarks,
@@ -49,6 +53,7 @@ public sealed record MarkAttemptAnswerRequest(
 public sealed record MarkAttemptAnswersRequest(
     IReadOnlyList<MarkAttemptAnswerRequest> Answers);
 
+/// <summary>Final reviewed score released to the student.</summary>
 public sealed record FinalizeReviewResponse(
     long AttemptId,
     long QuizId,

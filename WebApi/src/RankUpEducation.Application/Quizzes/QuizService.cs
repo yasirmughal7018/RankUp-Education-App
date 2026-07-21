@@ -9,39 +9,50 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>
+/// Student-facing quiz service: role-scoped listing, attempt lifecycle (start/save/submit),
+/// auto-scoring, and masked results while subjective review is pending.
+/// </summary>
 public interface IQuizService
 {
+    /// <summary>Lists quizzes visible to the caller (assignments for students, campus scope for teachers, etc.).</summary>
     Task<QuizListResponse> ListAsync(
         string? search,
         string? subject,
         string? grade,
         CancellationToken cancellationToken);
 
+    /// <summary>Returns quiz metadata and attempt rules; students see assignment-scoped detail only.</summary>
     Task<QuizDetailResponse> GetDetailAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Starts or resumes an in-progress attempt within the assignment window and attempt limit.</summary>
     Task<StartQuizAttemptResponse> StartAttemptAsync(
         long quizId,
         StartQuizAttemptRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Persists draft answers for an in-progress attempt without scoring or submitting.</summary>
     Task<SaveQuizAttemptAnswersResponse> SaveAttemptAnswersAsync(
         long quizId,
         long attemptId,
         SaveQuizAttemptAnswersRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Scores objective answers, flags subjective items for review, and finalizes submission.</summary>
     Task<QuizAttemptResultResponse> SubmitAttemptAsync(
         long quizId,
         long attemptId,
         SubmitQuizAttemptRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Returns attempt results; masks scores when review is required but not yet finalized.</summary>
     Task<QuizAttemptResultResponse> GetAttemptResultAsync(
         long quizId,
         long attemptId,
         CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuizService"/>
 public sealed class QuizService : IQuizService
 {
     private const string AttemptStatusType = "QuizAttemptStatus";
@@ -153,6 +164,7 @@ public sealed class QuizService : IQuizService
 
         if (role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin or UserRole.Parent)
         {
+            // Non-student viewers without creator detail fall back to list summary fields.
             var list = await ListAsync(null, null, null, cancellationToken);
             var summary = list.Items.FirstOrDefault(item => item.Id == quizId)
                 ?? throw new NotFoundAppException("Quiz was not found.");
@@ -315,6 +327,7 @@ public sealed class QuizService : IQuizService
         var savedCount = 0;
 
         foreach (var submitted in answers
+            // Last answer wins when the client sends duplicates for the same question.
             .GroupBy(answer => answer.QuestionId)
             .Select(group => group.Last()))
         {
@@ -504,6 +517,7 @@ public sealed class QuizService : IQuizService
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
         var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
+        // Hide auto-score from student until teacher finalizes when quiz requires review and subjective answers exist.
         var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false } && hasSubjectiveAnswers;
 
         return QuizMapping.ToAttemptResult(

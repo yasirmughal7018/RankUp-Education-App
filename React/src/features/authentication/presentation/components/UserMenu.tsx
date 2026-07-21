@@ -17,6 +17,7 @@ interface UserMenuProps {
   compact?: boolean;
 }
 
+/** Header dropdown: profile link, role switch, and sign out. */
 export function UserMenu({ compact = false }: UserMenuProps) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);

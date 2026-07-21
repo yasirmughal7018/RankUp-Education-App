@@ -9,32 +9,41 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.QuizQuestions;
 
+/// <summary>
+/// Manages questions on a quiz: inline create, bank attach, update, and remove with total recalculation.
+/// </summary>
 public interface IQuizQuestionService
 {
+    /// <summary>Lists questions on a quiz including inactive links (manage view).</summary>
     Task<QuizQuestionListResponse> ListForQuizAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Creates a campus-scoped approved question and links it to the quiz.</summary>
     Task<ManageQuizResponse> AddToQuizAsync(
         long quizId,
         AddQuizQuestionRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Attaches an existing approved bank question matching quiz class/subject.</summary>
     Task<ManageQuizResponse> AttachBankQuestionAsync(
         long quizId,
         AttachBankQuestionRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Updates an inline question owned by the caller; bank-only links cannot edit source text.</summary>
     Task<ManageQuizResponse> UpdateOnQuizAsync(
         long quizId,
         long questionId,
         UpdateQuizQuestionRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Removes the quiz link and deactivates inline questions created by the caller.</summary>
     Task<ManageQuizResponse> RemoveFromQuizAsync(
         long quizId,
         long questionId,
         CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuizQuestionService"/>
 public sealed class QuizQuestionService : IQuizQuestionService
 {
     private readonly IQuizRepository _quizzes;

@@ -3,6 +3,10 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
 
+/// <summary>
+/// Quiz aggregate scoped to a school campus. Created in Draft; teachers publish into pending approval,
+/// admins/parents may publish directly. Lifecycle progresses Draft → Published → Assigned → Archived.
+/// </summary>
 public sealed class Quiz : SoftDeleteEntity
 {
     private Quiz()
@@ -13,6 +17,7 @@ public sealed class Quiz : SoftDeleteEntity
         Instructions = string.Empty;
     }
 
+    /// <summary>Creates a quiz with zero questions; totals are set when questions are attached.</summary>
     public Quiz(
         int schoolId,
         int schoolCampusId,
@@ -70,6 +75,7 @@ public sealed class Quiz : SoftDeleteEntity
     public DateOnly? ModifiedDate { get; private set; }
     public bool IsReviewRequired { get; private set; } = true;
 
+    /// <summary>Updates editable metadata while the quiz remains in an editable lifecycle state.</summary>
     public void UpdateDetails(
         string quizTitle,
         string description,
@@ -99,6 +105,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Recalculates aggregate question count and marks after bank attach or inline add/remove.</summary>
     public void SetQuestionTotals(short totalQuestions, short totalMarks)
     {
         TotalQuestions = totalQuestions;
@@ -106,12 +113,14 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Moves lifecycle (e.g. Published → Assigned after assignment, or Cancelled).</summary>
     public void SetLifecycleStatus(short lifecycleStatusId)
     {
         LifecycleStatusId = lifecycleStatusId;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Parent/admin publish: sets lifecycle to Published and stamps approval in one step.</summary>
     public void Publish(short lifecycleStatusId, short approvalStatusId, string? approvedBy)
     {
         if (TotalQuestions <= 0)
@@ -125,6 +134,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Teacher publish: moves to Published lifecycle while approval remains pending.</summary>
     public void SubmitForApproval(short lifecycleStatusId)
     {
         if (TotalQuestions <= 0)
@@ -136,6 +146,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>School admin approves a teacher quiz awaiting review.</summary>
     public void Approve(short approvalStatusId, string approvedBy)
     {
         ApprovalStatusId = approvalStatusId;
@@ -143,6 +154,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>School admin rejects a pending teacher quiz; clears prior approver stamp.</summary>
     public void Reject(short approvalStatusId)
     {
         ApprovalStatusId = approvalStatusId;
@@ -150,6 +162,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Soft-deletes a draft quiz; only allowed when no assignments exist.</summary>
     public void MarkDeleted(DateTimeOffset deletedAt, long? deletedBy)
     {
         SoftDelete(deletedAt, deletedBy);
@@ -157,6 +170,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Retires a published/assigned quiz; makes it inactive and read-only.</summary>
     public void Archive(short lifecycleStatusId)
     {
         LifecycleStatusId = lifecycleStatusId;

@@ -42,6 +42,7 @@ function ForbiddenScreen() {
   );
 }
 
+/** PortalAdmin-only page to list and manage school admin accounts. */
 export function DirectorySchoolAdminsPage() {
   const { user } = useAuth();
   const isPortalAdmin = user?.role === "PortalAdmin";

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rankup_education/core/widgets/feature_placeholder_page.dart';
 
+/// Help and support placeholder screen.
 class SupportPage extends StatelessWidget {
   const SupportPage({super.key});
 

@@ -1,5 +1,6 @@
 namespace RankUpEducation.Application.Common.Exceptions;
 
+/// <summary>Request validation failed; surfaces field-level errors as HTTP 400.</summary>
 public sealed class ValidationAppException : AppException
 {
     public ValidationAppException(IReadOnlyList<string> errors)
@@ -8,6 +9,7 @@ public sealed class ValidationAppException : AppException
         Errors = errors;
     }
 
+    /// <summary>Individual validation messages returned to the client.</summary>
     public IReadOnlyList<string> Errors { get; }
 
     private static string ResolveMessage(IReadOnlyList<string> errors)

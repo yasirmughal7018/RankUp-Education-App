@@ -16,6 +16,7 @@ import 'package:rankup_education/features/quizzes/presentation/providers/quiz_pr
 
 enum _QuizView { list, details, attempt, submitted, review, history }
 
+/// Multi-step student quiz hub: list, attempt, submit, and review.
 class QuizzesPage extends ConsumerStatefulWidget {
   const QuizzesPage({super.key});
 

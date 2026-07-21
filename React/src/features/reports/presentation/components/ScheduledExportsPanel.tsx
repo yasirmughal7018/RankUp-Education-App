@@ -40,6 +40,7 @@ function writePreference(preference: ScheduledExportPreference) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(preference));
 }
 
+/** Local-storage scheduled export preferences (client-side only). */
 export function ScheduledExportsPanel() {
   const [reportType, setReportType] =
     useState<ScheduledReportType>("quiz-summary");

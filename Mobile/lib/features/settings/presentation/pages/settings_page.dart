@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// App preferences and notification toggles.
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 

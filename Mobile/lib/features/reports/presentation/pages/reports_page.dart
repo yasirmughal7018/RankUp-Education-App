@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Progress and performance reports preview screen.
 class ReportsPage extends StatelessWidget {
   const ReportsPage({super.key});
 

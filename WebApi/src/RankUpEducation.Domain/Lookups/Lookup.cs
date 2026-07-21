@@ -2,6 +2,7 @@ using RankUpEducation.Common.Utilities;
 
 namespace RankUpEducation.Domain.Lookups;
 
+/// <summary>Reference data row (status, type, grade label, etc.) keyed by <see cref="Type"/> and <see cref="Id"/>.</summary>
 public sealed class Lookup
 {
     private Lookup()

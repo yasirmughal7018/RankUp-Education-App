@@ -1,3 +1,4 @@
+/** Student quiz-taking HTTP client — start, draft, submit, results. */
 import { apiRequest } from "@/core/api/apiClient";
 import type {
   QuizAttemptResult,
@@ -9,10 +10,12 @@ import type {
 } from "@/features/student/domain/studentQuizTypes";
 import { STUDENT_DEVICE_ID } from "@/features/student/domain/studentQuizTypes";
 
+/** Quiz overview before starting an attempt. */
 export async function getQuizDetail(quizId: number): Promise<QuizDetail> {
   return apiRequest<QuizDetail>(`/quizzes/${quizId}`);
 }
 
+/** Start or resume attempt (sends web device id). */
 export async function startQuizAttempt(quizId: number): Promise<StartQuizAttempt> {
   return apiRequest<StartQuizAttempt>(`/quizzes/${quizId}/attempts`, {
     method: "POST",
@@ -20,6 +23,7 @@ export async function startQuizAttempt(quizId: number): Promise<StartQuizAttempt
   });
 }
 
+/** Autosave answers and elapsed time. */
 export async function saveQuizAttemptDraft(
   quizId: number,
   attemptId: number,
@@ -37,6 +41,7 @@ export async function saveQuizAttemptDraft(
   );
 }
 
+/** Submit attempt for auto/manual grading. */
 export async function submitQuizAttempt(
   quizId: number,
   attemptId: number,
@@ -52,6 +57,7 @@ export async function submitQuizAttempt(
   );
 }
 
+/** Fetch graded result for an attempt. */
 export async function getQuizAttemptResult(
   quizId: number,
   attemptId: number,

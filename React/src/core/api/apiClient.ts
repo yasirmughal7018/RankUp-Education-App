@@ -1,3 +1,6 @@
+/**
+ * Shared HTTP client — JSON envelope parsing, auth headers, token refresh.
+ */
 import { environment } from "@/app/environment";
 import type { ApiError, ApiResponse } from "@/core/api/types";
 
@@ -14,6 +17,7 @@ type AuthHandlers = {
 
 let authHandlers: AuthHandlers | null = null;
 
+/** Wire token read/refresh handlers used by all authenticated requests. */
 export function configureApiAuth(handlers: AuthHandlers): void {
   authHandlers = handlers;
 }
@@ -115,6 +119,7 @@ async function executeRequest(
   });
 }
 
+/** JSON API call with bearer auth and automatic 401 token refresh. */
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
@@ -140,6 +145,7 @@ export async function apiRequest<T>(
   return parseResponse<T>(response);
 }
 
+/** Same as apiRequest but ignores the response body. */
 export async function apiRequestVoid(
   path: string,
   options: RequestOptions = {},

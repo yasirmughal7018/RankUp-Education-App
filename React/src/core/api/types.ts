@@ -68,10 +68,12 @@ export const ADMIN_ROLES: UserRole[] = [
   "CampusAdmin",
 ];
 
+/** True when the role can access admin/directory pages. */
 export function isAdminRole(role: UserRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
+/** Human-readable dashboard title for the active role. */
 export function getDashboardLabel(role: UserRole): string {
   switch (role) {
     case "PortalAdmin":
@@ -91,6 +93,7 @@ export function getDashboardLabel(role: UserRole): string {
   }
 }
 
+/** Display label for admin roles (e.g. PortalAdmin → Portal Admin). */
 export function getRoleLabel(role: UserRole): string {
   switch (role) {
     case "PortalAdmin":
@@ -104,6 +107,7 @@ export function getRoleLabel(role: UserRole): string {
   }
 }
 
+/** Default landing route after login for each role. */
 export function dashboardPathForRole(role: UserRole): string {
   if (isAdminRole(role)) {
     return "/admin";

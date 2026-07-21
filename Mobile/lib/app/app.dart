@@ -4,6 +4,7 @@ import 'package:rankup_education/app/localization.dart';
 import 'package:rankup_education/app/router.dart';
 import 'package:rankup_education/app/theme.dart';
 
+/// Root widget wiring theme, localization, and app routing.
 class RankUpEducationApp extends ConsumerWidget {
   const RankUpEducationApp({super.key});
 

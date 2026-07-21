@@ -26,6 +26,7 @@ import { AccountStatusBadge } from "@/features/directory/presentation/components
 
 const PAGE_SIZE = 50;
 
+/** Paginated teacher directory with school/campus filters and CRUD actions. */
 export function DirectoryTeachersPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);

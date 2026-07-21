@@ -4,6 +4,7 @@ using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
+/// <summary>Maps <see cref="UserApproval"/> to app_user_approval (registration review queue).</summary>
 public sealed class UserApprovalConfiguration : IEntityTypeConfiguration<UserApproval>
 {
     public void Configure(EntityTypeBuilder<UserApproval> builder)

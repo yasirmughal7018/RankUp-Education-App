@@ -11,6 +11,7 @@ function AuthLoadingScreen() {
   );
 }
 
+/** Requires authentication; redirects guests to login. */
 export function ProtectedRoute() {
   const { isAuthenticated, isBootstrapping } = useAuth();
   const location = useLocation();
@@ -26,6 +27,7 @@ export function ProtectedRoute() {
   return <Outlet />;
 }
 
+/** Login/register pages only; redirects authenticated users away. */
 export function GuestRoute() {
   const { isAuthenticated, isBootstrapping } = useAuth();
   const location = useLocation();

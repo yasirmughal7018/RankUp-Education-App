@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+/// Lightweight in-app string catalog for English and Urdu.
 class AppLocalizations {
   AppLocalizations(this.locale);
 
@@ -49,6 +50,7 @@ class AppLocalizations {
     },
   };
 
+  /// Resolves a localized label, falling back to English then the raw key.
   String text(String key) {
     return _values[locale.languageCode]?[key] ?? _values['en']![key] ?? key;
   }

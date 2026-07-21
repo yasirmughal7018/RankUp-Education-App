@@ -3,6 +3,7 @@ import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.d
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
+/// Live API implementation of [QuizRepository].
 class ApiQuizRepository implements QuizRepository {
   const ApiQuizRepository(this._remoteDataSource);
 

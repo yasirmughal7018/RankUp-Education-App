@@ -1,6 +1,7 @@
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 
+/// Contract for sign-in, registration, and session lifecycle operations.
 abstract class AuthRepository {
   Future<AuthSession> login({
     required String identifier,

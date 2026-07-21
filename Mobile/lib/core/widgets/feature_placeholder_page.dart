@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Scaffold placeholder shown for features not yet implemented in mobile.
 class FeaturePlaceholderPage extends StatelessWidget {
   const FeaturePlaceholderPage({
     required this.title,

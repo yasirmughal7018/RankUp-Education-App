@@ -6,6 +6,7 @@ import * as quizApi from "@/features/quizzes/data/quizApi";
 import { createEmptyQuizForm } from "@/features/quizzes/domain/quizTypes";
 import { QuizForm } from "@/features/quizzes/presentation/components/QuizForm";
 
+/** New quiz draft page wrapping the shared quiz metadata form. */
 export function QuizCreatePage() {
   const navigate = useNavigate();
   const { user } = useAuth();

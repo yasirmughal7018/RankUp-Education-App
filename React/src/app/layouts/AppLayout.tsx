@@ -39,6 +39,7 @@ const AUTH_PAGES_WITHOUT_MENU = new Set([
   "/forgot-password",
 ]);
 
+/** Shell layout: header nav, notifications, and outlet. */
 export function AppLayout() {
   const { isAuthenticated, user, isBootstrapping } = useAuth();
   const location = useLocation();

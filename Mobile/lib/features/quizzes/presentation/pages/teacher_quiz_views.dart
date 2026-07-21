@@ -4,6 +4,7 @@ import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.da
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 
+/// Teacher-facing quiz list with search and status filters.
 class TeacherQuizListView extends StatelessWidget {
   const TeacherQuizListView({
     required this.state,
@@ -85,6 +86,7 @@ class TeacherQuizListView extends StatelessWidget {
   }
 }
 
+/// Teacher read-only quiz detail panel.
 class TeacherQuizDetailsView extends StatelessWidget {
   const TeacherQuizDetailsView({
     required this.quiz,

@@ -8,6 +8,7 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>EF Core implementation of <see cref="IUserRepository"/>.</summary>
 public sealed class UserRepository : IUserRepository
 {
     private readonly RankUpDbContext _dbContext;

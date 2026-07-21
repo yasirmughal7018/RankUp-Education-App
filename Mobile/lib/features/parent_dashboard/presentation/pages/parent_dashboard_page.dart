@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rankup_education/core/widgets/stat_card.dart';
 
+/// Parent home with child progress summaries and navigation tiles.
 class ParentDashboardPage extends StatelessWidget {
   const ParentDashboardPage({super.key});
 

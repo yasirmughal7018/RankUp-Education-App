@@ -46,6 +46,7 @@ function hrefForCategory(category: string): string {
   return "/admin/registrations";
 }
 
+/** Admin notification dropdown with password-reset actions. */
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);

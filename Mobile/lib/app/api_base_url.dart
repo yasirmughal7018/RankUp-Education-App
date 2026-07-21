@@ -27,6 +27,7 @@ String resolveApiBaseUrl(String fromDartDefine) {
 /// Special alias to the host machine from the Android emulator.
 const hostLoopbackAddress = '10.0.2.2';
 
+/// True when the configured URL uses localhost on Android (unreachable from emulator).
 bool usesHostUnreachableLocalhost(String apiBaseUrl) {
   if (kIsWeb || !Platform.isAndroid) {
     return false;

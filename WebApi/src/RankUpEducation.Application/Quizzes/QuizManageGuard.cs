@@ -8,6 +8,10 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>
+/// Centralized edit/delete guards: ownership via <see cref="QuizScopeResolver"/>, lifecycle checks,
+/// and lookup resolution for quiz manage flows.
+/// </summary>
 internal sealed class QuizManageGuard
 {
     private readonly IQuizRepository _quizzes;
@@ -257,6 +261,7 @@ internal sealed class QuizManageGuard
 
         if (await _quizzes.HasStartedAssignmentsAsync(quiz.Id, DateTimeOffset.UtcNow, cancellationToken))
         {
+            // Block edits once any assignment window has opened or attempts exist.
             throw new BusinessRuleException("Quiz cannot be edited after an assignment has started.");
         }
     }

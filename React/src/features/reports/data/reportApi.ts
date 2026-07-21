@@ -1,3 +1,4 @@
+/** Reports HTTP client — summaries, performance, rankings, history. */
 import { apiRequest } from "@/core/api/apiClient";
 import type {
   QuizPerformanceReport,
@@ -18,6 +19,7 @@ function toQuery(params: Record<string, string | number | null | undefined>) {
   return query ? `?${query}` : "";
 }
 
+/** Aggregate quiz metrics for optional date range. */
 export async function getQuizSummaryReport(options?: {
   from?: string;
   to?: string;
@@ -30,6 +32,7 @@ export async function getQuizSummaryReport(options?: {
   );
 }
 
+/** Per-student stats for one quiz. */
 export async function getQuizPerformanceReport(
   quizId: number,
 ): Promise<QuizPerformanceReport> {
@@ -38,6 +41,7 @@ export async function getQuizPerformanceReport(
   );
 }
 
+/** Leaderboard, optionally filtered by quiz. */
 export async function getRankingsReport(
   quizId?: number | null,
 ): Promise<RankingReport> {
@@ -46,6 +50,7 @@ export async function getRankingsReport(
   );
 }
 
+/** All quiz attempts for one student. */
 export async function getStudentQuizHistory(
   studentId: number,
 ): Promise<StudentQuizHistory> {

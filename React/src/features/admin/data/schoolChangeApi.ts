@@ -1,3 +1,4 @@
+/** Admin school/campus change request HTTP client. */
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 
 export interface PendingSchoolChangeItem {
@@ -28,6 +29,7 @@ export interface ApproveSchoolChangeResult {
   message: string;
 }
 
+/** Pending school/campus move requests. */
 export async function listPendingSchoolChanges(
   take = 50,
 ): Promise<PendingSchoolChangeItem[]> {
@@ -36,6 +38,7 @@ export async function listPendingSchoolChanges(
   );
 }
 
+/** Approve change (multi-approver workflow). */
 export async function approveSchoolChange(
   requestId: number,
 ): Promise<ApproveSchoolChangeResult> {
@@ -45,6 +48,7 @@ export async function approveSchoolChange(
   );
 }
 
+/** Reject a school change request. */
 export async function rejectSchoolChange(requestId: number): Promise<void> {
   await apiRequestVoid(`/auth/school-changes/${requestId}/reject`, {
     method: "POST",

@@ -4,6 +4,7 @@ import 'package:rankup_education/core/api/api_response.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
 import 'package:rankup_education/features/product_stubs/data/product_stub_models.dart';
 
+/// Shared REST client for stub product endpoints (attendance, rewards, etc.).
 class ProductStubRemoteDataSource {
   const ProductStubRemoteDataSource(this._dio);
 

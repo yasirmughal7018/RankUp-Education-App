@@ -5,6 +5,7 @@ namespace RankUpEducation.Domain.Auth;
 /// <summary>Which role combinations are allowed on one account.</summary>
 public static class UserRoleRules
 {
+    /// <summary>Returns whether the role may be added given existing assignments.</summary>
     public static bool CanAddRole(IReadOnlyCollection<UserRole> existingRoles, UserRole roleToAdd)
     {
         if (existingRoles.Contains(roleToAdd))
@@ -31,6 +32,7 @@ public static class UserRoleRules
             or UserRole.Parent;
     }
 
+    /// <summary>Throws when the role combination would violate account rules.</summary>
     public static void EnsureCanAddRole(IReadOnlyCollection<UserRole> existingRoles, UserRole roleToAdd)
     {
         if (CanAddRole(existingRoles, roleToAdd))

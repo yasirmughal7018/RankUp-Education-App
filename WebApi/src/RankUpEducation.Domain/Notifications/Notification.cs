@@ -3,6 +3,7 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Notifications;
 
+/// <summary>In-app notification delivered to a single user.</summary>
 public sealed class Notification : AuditableEntity
 {
     private Notification()
@@ -27,6 +28,7 @@ public sealed class Notification : AuditableEntity
     public string Category { get; private set; }
     public bool IsRead { get; private set; }
 
+    /// <summary>Marks the notification as read for inbox display and unread counts.</summary>
     public void MarkRead()
     {
         IsRead = true;

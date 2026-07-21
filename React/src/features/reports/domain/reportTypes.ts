@@ -67,6 +67,7 @@ export const REPORT_VIEWER_ROLES: ReportViewerRole[] = [
   "Teacher",
 ];
 
+/** True for PortalAdmin, SchoolAdmin, and Teacher. */
 export function canViewReports(role: string): boolean {
   return REPORT_VIEWER_ROLES.includes(role as ReportViewerRole);
 }

@@ -6,6 +6,7 @@ import 'package:rankup_education/features/quizzes/data/models/quiz_attempt_model
 import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
+/// REST client for quiz list, attempt, and grading endpoints.
 class QuizRemoteDataSource {
   const QuizRemoteDataSource(this._dio);
 

@@ -8,6 +8,7 @@ import 'package:rankup_education/features/product_stubs/data/product_stub_models
 import 'package:rankup_education/features/product_stubs/presentation/providers/product_stub_providers.dart';
 import 'package:rankup_education/features/product_stubs/presentation/widgets/async_product_page.dart';
 
+/// Admin notification inbox backed by product stub API data.
 class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});
 

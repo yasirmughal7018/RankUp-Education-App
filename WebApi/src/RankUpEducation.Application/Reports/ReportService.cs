@@ -5,6 +5,7 @@ using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Reports;
 
+/// <inheritdoc cref="IReportService"/>
 public sealed class ReportService : IReportService
 {
     private readonly IReportRepository _reports;
@@ -119,6 +120,7 @@ public sealed class ReportService : IReportService
         }
     }
 
+    /// <summary>Teachers see only their own quizzes; school admins see the whole school.</summary>
     private (int? SchoolId, int? CampusId, long? CreatorUserId) ResolveReportScope()
     {
         var role = ParseRole();

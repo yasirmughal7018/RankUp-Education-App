@@ -10,6 +10,7 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <inheritdoc cref="RankUpEducation.Application.Directory.IDirectoryRepository"/>
 public sealed class DirectoryRepository : IDirectoryRepository
 {
     private readonly RankUpDbContext _dbContext;

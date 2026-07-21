@@ -5,6 +5,7 @@ import 'package:rankup_education/features/student_dashboard/data/models/student_
 import 'package:rankup_education/features/student_dashboard/presentation/providers/student_dashboard_provider.dart';
 import 'package:rankup_education/features/student_dashboard/presentation/widgets/student_dashboard_widgets.dart';
 
+/// Student home dashboard with learning stats and quick actions.
 class StudentDashboardPage extends ConsumerStatefulWidget {
   const StudentDashboardPage({super.key});
 

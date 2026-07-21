@@ -3,6 +3,7 @@ import 'package:rankup_education/app/api_base_url.dart';
 
 enum EnvironmentName { development, test, staging, production }
 
+/// Runtime configuration derived from compile-time `--dart-define` values.
 class AppEnvironment {
   const AppEnvironment({
     required this.name,
@@ -12,6 +13,7 @@ class AppEnvironment {
     required this.enableMockRepositories,
   });
 
+  /// Builds environment settings from `APP_ENV`, `API_BASE_URL`, and related defines.
   factory AppEnvironment.fromDartDefines() {
     const env = String.fromEnvironment('APP_ENV', defaultValue: 'development');
     const apiFromDefine = String.fromEnvironment('API_BASE_URL');

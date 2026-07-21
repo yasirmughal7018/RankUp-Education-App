@@ -1,3 +1,4 @@
+/// In-app notification item from stub API.
 class NotificationItem {
   const NotificationItem({
     required this.id,
@@ -28,6 +29,7 @@ class NotificationItem {
   final DateTime createdAt;
 }
 
+/// Single attendance mark for the signed-in student.
 class AttendanceRecord {
   const AttendanceRecord({
     required this.id,
@@ -57,6 +59,7 @@ class AttendanceRecord {
   final String? notes;
 }
 
+/// Message inbox thread summary.
 class MessageThread {
   const MessageThread({
     required this.id,
@@ -83,6 +86,7 @@ class MessageThread {
   final DateTime? lastMessageAt;
 }
 
+/// Points balance plus earned reward items.
 class RewardSummary {
   const RewardSummary({
     required this.totalPoints,
@@ -104,6 +108,7 @@ class RewardSummary {
   final List<RewardItem> items;
 }
 
+/// Individual reward or badge entry.
 class RewardItem {
   const RewardItem({
     required this.id,
@@ -130,6 +135,7 @@ class RewardItem {
   final DateTime? earnedAt;
 }
 
+/// Competition listing item.
 class CompetitionItem {
   const CompetitionItem({
     required this.id,
@@ -156,6 +162,7 @@ class CompetitionItem {
   final DateTime? endsAt;
 }
 
+/// Worksheet assignment summary.
 class WorksheetItem {
   const WorksheetItem({
     required this.id,

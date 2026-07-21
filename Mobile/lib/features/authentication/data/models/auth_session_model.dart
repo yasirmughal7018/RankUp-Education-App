@@ -3,6 +3,7 @@ import 'package:rankup_education/features/authentication/data/models/auth_tokens
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
+/// JSON-serializable login session including nested user and token payloads.
 class AuthSessionModel extends AuthSession {
   const AuthSessionModel({
     required super.user,

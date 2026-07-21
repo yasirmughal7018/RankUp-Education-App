@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// AI study assistant chat preview screen.
 class AiAssistantPage extends StatelessWidget {
   const AiAssistantPage({super.key});
 

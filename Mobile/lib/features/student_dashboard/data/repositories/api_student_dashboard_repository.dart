@@ -3,6 +3,7 @@ import 'package:rankup_education/features/student_dashboard/data/datasources/stu
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
 import 'package:rankup_education/features/student_dashboard/domain/repositories/student_dashboard_repository.dart';
 
+/// Live API implementation of [StudentDashboardRepository].
 class ApiStudentDashboardRepository implements StudentDashboardRepository {
   const ApiStudentDashboardRepository(
     this._remoteDataSource,

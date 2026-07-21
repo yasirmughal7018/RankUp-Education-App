@@ -6,6 +6,7 @@ using RankUpEducation.Contracts.Directory;
 
 namespace RankUpEducation.Api.Controllers;
 
+/// <summary>REST endpoints for schools, campuses, and directory user management.</summary>
 [ApiController]
 [Authorize]
 [Route("api/directory")]
@@ -13,11 +14,13 @@ public sealed class DirectoryController : ControllerBase
 {
     private readonly IDirectoryService _directoryService;
 
+    /// <summary>Creates the directory controller.</summary>
     public DirectoryController(IDirectoryService directoryService)
     {
         _directoryService = directoryService;
     }
 
+    /// <summary>Returns directory dashboard counts for the current admin role.</summary>
     [HttpGet("summary")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectorySummaryResponse>>> GetSummaryAsync(
@@ -27,6 +30,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectorySummaryResponse>.Ok(response));
     }
 
+    /// <summary>Lists schools visible to the current administrator.</summary>
     [HttpGet("schools")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<SchoolListResponse>>> ListSchoolsAsync(
@@ -36,6 +40,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<SchoolListResponse>.Ok(response));
     }
 
+    /// <summary>Creates a new school.</summary>
     [HttpPost("schools")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<SchoolResponse>>> CreateSchoolAsync(
@@ -46,6 +51,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<SchoolResponse>.Ok(response, "School created."));
     }
 
+    /// <summary>Updates an existing school.</summary>
     [HttpPut("schools/{schoolId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<SchoolResponse>>> UpdateSchoolAsync(
@@ -57,6 +63,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<SchoolResponse>.Ok(response, "School updated."));
     }
 
+    /// <summary>Deactivates a school.</summary>
     [HttpPost("schools/{schoolId:long}/deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateSchoolAsync(
@@ -67,6 +74,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "School deactivated."));
     }
 
+    /// <summary>Reactivates a school.</summary>
     [HttpPost("schools/{schoolId:long}/activate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateSchoolAsync(
@@ -77,6 +85,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "School activated."));
     }
 
+    /// <summary>Lists campuses for a school.</summary>
     [HttpGet("schools/{schoolId:long}/campuses")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<CampusListResponse>>> ListCampusesAsync(
@@ -87,6 +96,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<CampusListResponse>.Ok(response));
     }
 
+    /// <summary>Creates a campus under a school.</summary>
     [HttpPost("schools/{schoolId:long}/campuses")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<CampusResponse>>> CreateCampusAsync(
@@ -98,6 +108,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<CampusResponse>.Ok(response, "Campus created."));
     }
 
+    /// <summary>Updates an existing campus.</summary>
     [HttpPut("campuses/{campusId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<CampusResponse>>> UpdateCampusAsync(
@@ -109,6 +120,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<CampusResponse>.Ok(response, "Campus updated."));
     }
 
+    /// <summary>Deactivates a campus.</summary>
     [HttpPost("campuses/{campusId:long}/deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateCampusAsync(
@@ -119,6 +131,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Campus deactivated."));
     }
 
+    /// <summary>Reactivates a campus.</summary>
     [HttpPost("campuses/{campusId:long}/activate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateCampusAsync(
@@ -129,6 +142,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Campus activated."));
     }
 
+    /// <summary>Lists students with optional school, campus, grade, and search filters.</summary>
     [HttpGet("students")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin,Teacher")]
     public async Task<ActionResult<ApiResponse<DirectoryStudentListResponse>>> ListStudentsAsync(
@@ -151,6 +165,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryStudentListResponse>.Ok(response));
     }
 
+    /// <summary>Provisions a new student in the directory.</summary>
     [HttpPost("students")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryStudentResponse>>> CreateStudentAsync(
@@ -161,6 +176,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryStudentResponse>.Ok(response, "Student created."));
     }
 
+    /// <summary>Updates an existing student.</summary>
     [HttpPut("students/{studentId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryStudentResponse>>> UpdateStudentAsync(
@@ -172,6 +188,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryStudentResponse>.Ok(response, "Student updated."));
     }
 
+    /// <summary>Activates a student account.</summary>
     [HttpPost("students/{studentId:long}/activate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateStudentAsync(
@@ -182,6 +199,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Student activated."));
     }
 
+    /// <summary>Deactivates a student account.</summary>
     [HttpPost("students/{studentId:long}/deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateStudentAsync(
@@ -192,6 +210,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Student deactivated."));
     }
 
+    /// <summary>Deactivates multiple students in one request.</summary>
     [HttpPost("students/bulk-deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateStudentsAsync(
@@ -202,6 +221,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<BulkActionResponse>.Ok(response, "Students deactivated."));
     }
 
+    /// <summary>Lists teachers with optional school, campus, and search filters.</summary>
     [HttpGet("teachers")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherListResponse>>> ListTeachersAsync(
@@ -222,6 +242,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryTeacherListResponse>.Ok(response));
     }
 
+    /// <summary>Provisions a new teacher in the directory.</summary>
     [HttpPost("teachers")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> CreateTeacherAsync(
@@ -232,6 +253,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(response, "Teacher created."));
     }
 
+    /// <summary>Updates an existing teacher.</summary>
     [HttpPut("teachers/{teacherId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> UpdateTeacherAsync(
@@ -243,6 +265,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(response, "Teacher updated."));
     }
 
+    /// <summary>Activates a teacher account.</summary>
     [HttpPost("teachers/{teacherId:long}/activate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateTeacherAsync(
@@ -253,6 +276,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Teacher activated."));
     }
 
+    /// <summary>Deactivates a teacher account.</summary>
     [HttpPost("teachers/{teacherId:long}/deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateTeacherAsync(
@@ -263,6 +287,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Teacher deactivated."));
     }
 
+    /// <summary>Deactivates multiple teachers in one request.</summary>
     [HttpPost("teachers/bulk-deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateTeachersAsync(
@@ -273,6 +298,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<BulkActionResponse>.Ok(response, "Teachers deactivated."));
     }
 
+    /// <summary>Lists parents with optional search filter.</summary>
     [HttpGet("parents")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentListResponse>>> ListParentsAsync(
@@ -285,6 +311,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryParentListResponse>.Ok(response));
     }
 
+    /// <summary>Provisions a new parent in the directory.</summary>
     [HttpPost("parents")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> CreateParentAsync(
@@ -295,6 +322,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryParentResponse>.Ok(response, "Parent created."));
     }
 
+    /// <summary>Updates an existing parent.</summary>
     [HttpPut("parents/{parentId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> UpdateParentAsync(
@@ -306,6 +334,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryParentResponse>.Ok(response, "Parent updated."));
     }
 
+    /// <summary>Activates a parent account.</summary>
     [HttpPost("parents/{parentId:long}/activate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateParentAsync(
@@ -316,6 +345,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Parent activated."));
     }
 
+    /// <summary>Deactivates a parent account.</summary>
     [HttpPost("parents/{parentId:long}/deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateParentAsync(
@@ -326,6 +356,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Parent deactivated."));
     }
 
+    /// <summary>Deactivates multiple parents in one request.</summary>
     [HttpPost("parents/bulk-deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateParentsAsync(
@@ -336,6 +367,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<BulkActionResponse>.Ok(response, "Parents deactivated."));
     }
 
+    /// <summary>Links a parent to a student.</summary>
     [HttpPost("parents/{parentId:long}/students")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<LinkParentStudentResponse>>> LinkParentStudentAsync(
@@ -347,6 +379,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<LinkParentStudentResponse>.Ok(response, "Parent linked to student."));
     }
 
+    /// <summary>Removes a parent-student link.</summary>
     [HttpDelete("parents/{parentId:long}/students/{studentId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> UnlinkParentStudentAsync(
@@ -358,6 +391,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Parent-student link removed."));
     }
 
+    /// <summary>Lists school admins (portal admin only).</summary>
     [HttpGet("school-admins")]
     [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectorySchoolAdminListResponse>>> ListSchoolAdminsAsync(
@@ -376,6 +410,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectorySchoolAdminListResponse>.Ok(response));
     }
 
+    /// <summary>Provisions a new school admin.</summary>
     [HttpPost("school-admins")]
     [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectorySchoolAdminResponse>>> CreateSchoolAdminAsync(
@@ -388,6 +423,7 @@ public sealed class DirectoryController : ControllerBase
             "School admin created. They must set a password on first login."));
     }
 
+    /// <summary>Updates an existing school admin.</summary>
     [HttpPut("school-admins/{userId:long}")]
     [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectorySchoolAdminResponse>>> UpdateSchoolAdminAsync(
@@ -399,6 +435,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectorySchoolAdminResponse>.Ok(response, "School admin updated."));
     }
 
+    /// <summary>Activates a school admin account.</summary>
     [HttpPost("school-admins/{userId:long}/activate")]
     [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateSchoolAdminAsync(
@@ -409,6 +446,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "School admin activated."));
     }
 
+    /// <summary>Deactivates a school admin account.</summary>
     [HttpPost("school-admins/{userId:long}/deactivate")]
     [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateSchoolAdminAsync(
@@ -419,6 +457,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "School admin deactivated."));
     }
 
+    /// <summary>Lists campus admins for portal or school admins.</summary>
     [HttpGet("campus-admins")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryCampusAdminListResponse>>> ListCampusAdminsAsync(
@@ -439,6 +478,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryCampusAdminListResponse>.Ok(response));
     }
 
+    /// <summary>Provisions a new campus admin.</summary>
     [HttpPost("campus-admins")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryCampusAdminResponse>>> CreateCampusAdminAsync(
@@ -451,6 +491,7 @@ public sealed class DirectoryController : ControllerBase
             "Campus admin created. They must set a password on first login."));
     }
 
+    /// <summary>Updates an existing campus admin.</summary>
     [HttpPut("campus-admins/{userId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryCampusAdminResponse>>> UpdateCampusAdminAsync(
@@ -462,6 +503,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<DirectoryCampusAdminResponse>.Ok(response, "Campus admin updated."));
     }
 
+    /// <summary>Activates a campus admin account.</summary>
     [HttpPost("campus-admins/{userId:long}/activate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateCampusAdminAsync(
@@ -472,6 +514,7 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Campus admin activated."));
     }
 
+    /// <summary>Deactivates a campus admin account.</summary>
     [HttpPost("campus-admins/{userId:long}/deactivate")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateCampusAdminAsync(

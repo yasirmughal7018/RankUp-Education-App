@@ -17,6 +17,7 @@ function formatRequestedAt(value: string): string {
   }).format(date);
 }
 
+/** Admin page to approve or reject pending school/campus change requests. */
 export function PendingSchoolChangesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();

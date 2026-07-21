@@ -1,6 +1,7 @@
 import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 
+/// JSON models for quiz attempt request/response payloads.
 class QuizDetailModel extends QuizDetail {
   const QuizDetailModel({
     required super.id,
@@ -72,6 +73,7 @@ class QuizDetailModel extends QuizDetail {
   }
 }
 
+/// JSON model for [QuizQuestion].
 class QuizQuestionModel extends QuizQuestion {
   const QuizQuestionModel({
     required super.id,
@@ -102,6 +104,7 @@ class QuizQuestionModel extends QuizQuestion {
   }
 }
 
+/// JSON model for [QuizOption].
 class QuizOptionModel extends QuizOption {
   const QuizOptionModel({
     required super.id,
@@ -118,6 +121,7 @@ class QuizOptionModel extends QuizOption {
   }
 }
 
+/// JSON model for [SavedQuizAnswer].
 class SavedQuizAnswerModel extends SavedQuizAnswer {
   const SavedQuizAnswerModel({
     required super.questionId,
@@ -147,6 +151,7 @@ class SavedQuizAnswerModel extends SavedQuizAnswer {
   }
 }
 
+/// JSON model for [QuizAttemptSession].
 class QuizAttemptSessionModel extends QuizAttemptSession {
   const QuizAttemptSessionModel({
     required super.attemptId,
@@ -185,6 +190,7 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
   }
 }
 
+/// JSON model for [QuizAttemptResult].
 class QuizAttemptResultModel extends QuizAttemptResult {
   const QuizAttemptResultModel({
     required super.attemptId,
@@ -223,6 +229,7 @@ class QuizAttemptResultModel extends QuizAttemptResult {
   }
 }
 
+/// JSON model for [QuizResultQuestion].
 class QuizResultQuestionModel extends QuizResultQuestion {
   const QuizResultQuestionModel({
     required super.id,

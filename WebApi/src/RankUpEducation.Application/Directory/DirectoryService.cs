@@ -10,6 +10,9 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Application.Directory;
 
+/// <summary>
+/// Orchestrates school directory CRUD and user provisioning with role-based school/campus scoping.
+/// </summary>
 public sealed class DirectoryService : IDirectoryService
 {
     private readonly IDirectoryRepository _directory;

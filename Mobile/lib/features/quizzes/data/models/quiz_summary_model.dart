@@ -1,6 +1,7 @@
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 
+/// JSON model for [QuizSummary].
 class QuizSummaryModel extends QuizSummary {
   const QuizSummaryModel({
     required super.id,

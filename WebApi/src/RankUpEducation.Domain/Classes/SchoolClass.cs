@@ -3,6 +3,7 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Classes;
 
+/// <summary>Named class or section within a school, optionally scoped to a campus.</summary>
 public sealed class SchoolClass : SoftDeleteEntity
 {
     private SchoolClass()

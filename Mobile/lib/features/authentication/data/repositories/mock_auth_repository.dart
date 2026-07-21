@@ -5,6 +5,7 @@ import 'package:rankup_education/features/authentication/domain/entities/auth_se
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
+/// Offline demo auth repository for development builds with mocks enabled.
 class MockAuthRepository implements AuthRepository {
   MockAuthRepository(this._tokenStore);
 

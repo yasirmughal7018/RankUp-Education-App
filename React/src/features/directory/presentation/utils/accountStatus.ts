@@ -9,6 +9,7 @@ const LABELS: Record<DirectoryAccountStatus, string> = {
   Rejected: "Rejected",
 };
 
+/** Coerce API status string; fallback from isActive. */
 export function normalizeDirectoryAccountStatus(
   value: string | undefined | null,
   isActive: boolean,
@@ -26,12 +27,14 @@ export function normalizeDirectoryAccountStatus(
   return isActive ? "Active" : "Deactivated";
 }
 
+/** Display label for directory account status. */
 export function directoryAccountStatusLabel(
   code: DirectoryAccountStatus,
 ): string {
   return LABELS[code];
 }
 
+/** Tailwind classes for status badge. */
 export function directoryAccountStatusClass(
   code: DirectoryAccountStatus | "Inactive",
 ): string {

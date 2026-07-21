@@ -5,6 +5,7 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>Resolved caller context for quiz manage, assign, and review operations.</summary>
 public sealed record QuizManageScope(
     UserRole Role,
     long UserId,
@@ -12,11 +13,17 @@ public sealed record QuizManageScope(
     int? SchoolId,
     int? CampusId)
 {
+    /// <summary>Parent profile id used for linked-student scope checks.</summary>
     public long ParentId => ProfileId;
 }
 
+/// <summary>
+/// Resolves role-scoped manage/approval context and enforces quiz ownership plus school/campus boundaries.
+/// Teachers are limited to their campus; parents operate without school ids but via linked children.
+/// </summary>
 public static class QuizScopeResolver
 {
+    /// <summary>Requires Parent or Teacher role; stamps school/campus for teachers.</summary>
     public static QuizManageScope RequireManageScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
@@ -43,6 +50,7 @@ public static class QuizScopeResolver
         return new QuizManageScope(role, userId, profileId, null, null);
     }
 
+    /// <summary>Requires SchoolAdmin or PortalAdmin for quiz approval/rejection endpoints.</summary>
     public static QuizManageScope RequireApprovalScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
@@ -57,6 +65,7 @@ public static class QuizScopeResolver
         return new QuizManageScope(role, userId, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
+    /// <summary>Verifies creator ownership and, for teachers, matching school/campus on the quiz row.</summary>
     public static void EnsureOwnsQuiz(Quiz quiz, QuizManageScope scope)
     {
         if (!IsQuizOwner(quiz, scope))
@@ -73,9 +82,13 @@ public static class QuizScopeResolver
         }
     }
 
+    /// <summary>True when <see cref="Quiz.CreatedByName"/> matches the caller's user id.</summary>
     public static bool IsQuizOwner(Quiz quiz, QuizManageScope scope)
         => string.Equals(quiz.CreatedByName, scope.UserId.ToString(), StringComparison.Ordinal);
 
+    /// <summary>
+    /// Parents may only target linked children; teachers may only target students in their campus.
+    /// </summary>
     public static async Task EnsureCanAccessStudentAsync(
         IStudentScopeRepository studentScope,
         QuizManageScope scope,

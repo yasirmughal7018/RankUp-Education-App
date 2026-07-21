@@ -19,6 +19,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+/** Cross-quiz assignment board filtered by student (parents see linked children). */
 export function AssignmentBoardPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();

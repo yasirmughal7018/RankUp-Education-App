@@ -5,6 +5,7 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>Quiz question links, bank attach, totals recalculation, and copy helpers.</summary>
 public sealed class QuizQuestionRepository : IQuizQuestionRepository
 {
     private readonly RankUpDbContext _dbContext;

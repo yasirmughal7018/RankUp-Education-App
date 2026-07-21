@@ -4,6 +4,7 @@ using RankUpEducation.Domain.Notifications;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <inheritdoc cref="RankUpEducation.Application.Common.Abstractions.INotificationRepository"/>
 public sealed class NotificationRepository : INotificationRepository
 {
     private readonly RankUpDbContext _dbContext;

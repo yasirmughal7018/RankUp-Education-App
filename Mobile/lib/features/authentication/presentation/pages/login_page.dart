@@ -6,6 +6,7 @@ import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/widgets/field_label.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
+/// Multi-step sign-in, registration, and password setup screen.
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key, this.initialLockedMessage});
 

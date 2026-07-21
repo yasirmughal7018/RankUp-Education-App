@@ -3,6 +3,9 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
 
+/// <summary>
+/// One student run against a quiz. Tracks in-progress drafts through submission and post-review rescoring.
+/// </summary>
 public sealed class QuizAttempt : BaseEntity
 {
     private QuizAttempt()
@@ -32,6 +35,7 @@ public sealed class QuizAttempt : BaseEntity
     public short ObtainedMarks { get; private set; }
     public short Percentage { get; private set; }
 
+    /// <summary>Computes percentage from obtained/total marks on submit or review.</summary>
     public void Submit(short obtainedMarks, short totalMarks, short timeSpentSeconds)
     {
         ObtainedMarks = obtainedMarks;
@@ -40,6 +44,7 @@ public sealed class QuizAttempt : BaseEntity
         SubmittedDate = DateTimeOffset.UtcNow;
     }
 
+    /// <summary>Marks attempt in-progress and resets submission timestamp for a fresh start.</summary>
     public void Begin(short inProgressStatusId)
     {
         StatusId = inProgressStatusId;
@@ -52,12 +57,14 @@ public sealed class QuizAttempt : BaseEntity
         TimeSpentSeconds = timeSpentSeconds;
     }
 
+    /// <summary>Finalizes auto-scored submission; subjective items may still await teacher review.</summary>
     public void MarkSubmitted(short submittedStatusId, short obtainedMarks, short totalMarks, short timeSpentSeconds)
     {
         StatusId = submittedStatusId;
         Submit(obtainedMarks, totalMarks, timeSpentSeconds);
     }
 
+    /// <summary>Replaces attempt score after teacher/parent review of subjective answers.</summary>
     public void ApplyReviewedScore(short obtainedMarks, short totalMarks, short reviewedStatusId)
     {
         StatusId = reviewedStatusId;

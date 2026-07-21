@@ -1,5 +1,6 @@
 namespace RankUpEducation.Domain.Auth;
 
+/// <summary>Lifecycle state of a school/campus change request.</summary>
 public enum SchoolChangeRequestStatus : short
 {
     Pending = 0,

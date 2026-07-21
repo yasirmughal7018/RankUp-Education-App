@@ -11,6 +11,10 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Application.Auth;
 
+/// <summary>
+/// Authentication and account lifecycle: login, registration approval, role switching,
+/// school-change requests, password management, profile/avatar updates.
+/// </summary>
 public sealed class AuthService : IAuthService
 {
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
@@ -53,6 +57,7 @@ public sealed class AuthService : IAuthService
         _unitOfWork = unitOfWork;
     }
 
+    /// <inheritdoc />
     public async Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken)
     {
         ValidateLogin(request);
@@ -105,6 +110,7 @@ public sealed class AuthService : IAuthService
             sessionUser.ToCurrentUserResponse(activeRole));
     }
 
+    /// <inheritdoc />
     public async Task<LoginResponse> SwitchRoleAsync(
         SwitchRoleRequest request,
         CancellationToken cancellationToken)
@@ -139,6 +145,7 @@ public sealed class AuthService : IAuthService
             sessionUser.ToCurrentUserResponse(targetRole));
     }
 
+    /// <inheritdoc />
     public async Task<LoginStatusResponse> GetLoginStatusAsync(
         LoginStatusRequest request,
         CancellationToken cancellationToken)
@@ -198,6 +205,7 @@ public sealed class AuthService : IAuthService
             "Enter your password to sign in.");
     }
 
+    /// <inheritdoc />
     public async Task SetInitialPasswordAsync(
         SetInitialPasswordRequest request,
         CancellationToken cancellationToken)
@@ -240,6 +248,7 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<RegisterAccountResponse> RegisterAccountAsync(
         RegisterAccountRequest request,
         CancellationToken cancellationToken)
@@ -333,6 +342,7 @@ public sealed class AuthService : IAuthService
         return new RegisterAccountResponse(user.Id, user.Username, user.FullName, user.Role.ToString());
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<PendingRegistrationResponse>> ListPendingRegistrationsAsync(
         int take,
         CancellationToken cancellationToken)
@@ -403,6 +413,7 @@ public sealed class AuthService : IAuthService
         return responses;
     }
 
+    /// <inheritdoc />
     public async Task<ApproveRegistrationResponse> ApproveRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)
@@ -495,6 +506,7 @@ public sealed class AuthService : IAuthService
                 "Registration approved by Portal Admin. The user can set their initial password and sign in.");
     }
 
+    /// <inheritdoc />
     public async Task RejectRegistrationAsync(long userId, CancellationToken cancellationToken)
     {
         EnsureRegistrationReviewer();
@@ -539,6 +551,7 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<AuthTokensResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken)
     {
         ValidateRefreshToken(request);
@@ -570,6 +583,7 @@ public sealed class AuthService : IAuthService
         return new AuthTokensResponse(_tokenService.CreateAccessToken(sessionUser, activeRole), refreshToken);
     }
 
+    /// <inheritdoc />
     public async Task RequestPasswordResetAsync(PasswordResetRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Username))
@@ -620,6 +634,7 @@ public sealed class AuthService : IAuthService
             cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task ClearPasswordForResetAsync(
         PasswordResetRequest request,
         CancellationToken cancellationToken)
@@ -654,6 +669,7 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken)
     {
         var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
@@ -664,6 +680,7 @@ public sealed class AuthService : IAuthService
         return await ToCurrentUserResponseAsync(user, activeRole, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> UpdateProfileAsync(
         UpdateProfileRequest request,
         CancellationToken cancellationToken)
@@ -728,6 +745,7 @@ public sealed class AuthService : IAuthService
         return await ToCurrentUserResponseAsync(user, activeRole, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<RequestSchoolChangeResponse> RequestSchoolChangeAsync(
         RequestSchoolChangeRequest request,
         CancellationToken cancellationToken)
@@ -773,6 +791,7 @@ public sealed class AuthService : IAuthService
             LockedPendingSchoolChangeMessage);
     }
 
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> UploadAvatarAsync(
         Stream content,
         string fileName,
@@ -810,6 +829,7 @@ public sealed class AuthService : IAuthService
         return await ToCurrentUserResponseAsync(user, activeRole, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task DeactivateAccountAsync(
         DeactivateAccountRequest request,
         CancellationToken cancellationToken)
@@ -848,6 +868,7 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<PendingSchoolChangeResponse>> ListPendingSchoolChangesAsync(
         int take,
         CancellationToken cancellationToken)
@@ -932,6 +953,7 @@ public sealed class AuthService : IAuthService
         return responses;
     }
 
+    /// <inheritdoc />
     public async Task<ApproveSchoolChangeResponse> ApproveSchoolChangeAsync(
         long requestId,
         CancellationToken cancellationToken)
@@ -1013,6 +1035,7 @@ public sealed class AuthService : IAuthService
             Message: "School/campus change approved and applied. The account is unlocked.");
     }
 
+    /// <inheritdoc />
     public async Task RejectSchoolChangeAsync(
         long requestId,
         CancellationToken cancellationToken)
@@ -1063,6 +1086,7 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> ChangePasswordAsync(
         ChangePasswordRequest request,
         CancellationToken cancellationToken)
@@ -1122,6 +1146,7 @@ public sealed class AuthService : IAuthService
         return user.ToCurrentUserResponse(ResolveActiveRoleFromClaims());
     }
 
+    /// <inheritdoc />
     public async Task LogoutAsync(RefreshTokenRequest? request, CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.RefreshToken))

@@ -9,6 +9,7 @@ import 'package:rankup_education/features/authentication/data/models/auth_tokens
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 
+/// REST client for `/auth/*` endpoints.
 class AuthRemoteDataSource {
   const AuthRemoteDataSource(this._dio);
 

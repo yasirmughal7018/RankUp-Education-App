@@ -43,6 +43,7 @@ function ForbiddenScreen() {
   );
 }
 
+/** PortalAdmin/SchoolAdmin page to list and manage campus admin accounts. */
 export function DirectoryCampusAdminsPage() {
   const { user } = useAuth();
   const isPortalAdmin = user?.role === "PortalAdmin";

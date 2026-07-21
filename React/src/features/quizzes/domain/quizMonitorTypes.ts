@@ -75,6 +75,7 @@ export interface AttemptReview {
   questions: AttemptReviewQuestion[];
 }
 
+/** Fallback to student id when name missing. */
 export function displayStudentName(
   studentName: string | null | undefined,
   studentId: number,
@@ -89,10 +90,12 @@ export interface MarkAttemptAnswerInput {
   feedback?: string | null;
 }
 
+/** Humanize snake_case monitor status. */
 export function formatMonitorStatus(status: string): string {
   return status.replace(/_/g, " ");
 }
 
+/** Badge color tone from monitor status string. */
 export function getMonitorStatusTone(
   status: string,
 ): "default" | "success" | "warning" | "danger" {

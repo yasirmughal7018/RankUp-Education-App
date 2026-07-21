@@ -8,27 +8,36 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>
+/// Teacher/parent review of submitted attempts: list pending, mark subjective answers,
+/// and finalize to release masked student results.
+/// </summary>
 public interface IQuizReviewService
 {
+    /// <summary>Lists submitted attempts awaiting review for quizzes owned by the caller.</summary>
     Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken);
 
+    /// <summary>Returns attempt answers, auto-scores, and existing feedback for manual review.</summary>
     Task<AttemptReviewResponse> GetReviewDetailAsync(
         long quizId,
         long attemptId,
         CancellationToken cancellationToken);
 
+    /// <summary>Adjusts awarded marks and records teacher/parent feedback per question.</summary>
     Task<AttemptReviewResponse> MarkAnswersAsync(
         long quizId,
         long attemptId,
         MarkAttemptAnswersRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Recalculates attempt score and marks assignment review complete.</summary>
     Task<FinalizeReviewResponse> FinalizeAsync(
         long quizId,
         long attemptId,
         CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuizReviewService"/>
 public sealed class QuizReviewService : IQuizReviewService
 {
     private readonly IQuizRepository _quizzes;

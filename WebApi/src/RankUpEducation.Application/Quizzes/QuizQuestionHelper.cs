@@ -1,12 +1,15 @@
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>Classifies question type names for scoring, option handling, and review routing.</summary>
 public static class QuizQuestionHelper
 {
+    /// <summary>Free-text / short-answer items requiring manual or AI review.</summary>
     public static bool IsDescriptiveType(string questionTypeName)
     {
         return MatchesAny(questionTypeName, QuizLookupNames.DescriptiveQuestionTypeNames);
     }
 
+    /// <summary>Fill-in-the-blank items scored against accepted answers or correct option text.</summary>
     public static bool IsFillBlankType(string questionTypeName)
     {
         if (string.IsNullOrWhiteSpace(questionTypeName))
@@ -23,6 +26,7 @@ public static class QuizQuestionHelper
         return MatchesAny(questionTypeName, QuizLookupNames.FillBlankQuestionTypeNames);
     }
 
+    /// <summary>True/false or equivalent two-option types.</summary>
     public static bool IsTrueFalseType(string questionTypeName)
     {
         if (string.IsNullOrWhiteSpace(questionTypeName))
@@ -39,6 +43,7 @@ public static class QuizQuestionHelper
         return MatchesAny(questionTypeName, QuizLookupNames.TrueFalseQuestionTypeNames);
     }
 
+    /// <summary>Single-select MCQ; excludes multi-select, T/F, fill-blank, and descriptive aliases.</summary>
     public static bool IsSingleChoiceType(string questionTypeName)
     {
         if (IsMultiSelectType(questionTypeName)
@@ -53,6 +58,7 @@ public static class QuizQuestionHelper
             || string.Equals(questionTypeName, "MCQ", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Single-select or true/false — both use one selected option id.</summary>
     public static bool IsMcqType(string questionTypeName)
         => IsSingleChoiceType(questionTypeName) || IsTrueFalseType(questionTypeName);
 
@@ -85,6 +91,7 @@ public static class QuizQuestionHelper
         return MatchesAny(questionTypeName, QuizLookupNames.MultiSelectQuestionTypeNames);
     }
 
+    /// <summary>Whether the type presents selectable options (excludes fill-blank and descriptive).</summary>
     public static bool UsesOptions(string questionTypeName)
         => IsSingleChoiceType(questionTypeName)
             || IsMultiSelectType(questionTypeName)

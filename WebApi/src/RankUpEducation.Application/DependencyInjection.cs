@@ -12,8 +12,10 @@ using RankUpEducation.Application.Reports;
 
 namespace RankUpEducation.Application;
 
+/// <summary>Registers application-layer services with the DI container.</summary>
 public static class DependencyInjection
 {
+    /// <summary>Adds RankUp application services as scoped dependencies.</summary>
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();

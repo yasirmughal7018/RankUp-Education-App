@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rankup_education/core/widgets/feature_placeholder_page.dart';
 
+/// Content sharing placeholder screen.
 class SharingPage extends StatelessWidget {
   const SharingPage({super.key});
 

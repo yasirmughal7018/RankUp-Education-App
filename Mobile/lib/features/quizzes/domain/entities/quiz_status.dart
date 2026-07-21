@@ -1,3 +1,4 @@
+/// Lifecycle state of a quiz assignment in the student list.
 enum QuizStatus { assigned, available, upcoming, completed }
 
 extension QuizStatusLabel on QuizStatus {

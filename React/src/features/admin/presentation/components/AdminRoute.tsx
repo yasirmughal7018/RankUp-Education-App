@@ -16,6 +16,7 @@ function ForbiddenScreen() {
   );
 }
 
+/** Restricts routes to PortalAdmin, SchoolAdmin, and CampusAdmin. */
 export function AdminRoute() {
   const { user } = useAuth();
 

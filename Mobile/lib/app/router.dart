@@ -24,6 +24,7 @@ import 'package:rankup_education/features/student_dashboard/presentation/pages/s
 import 'package:rankup_education/features/teacher_dashboard/presentation/pages/teacher_dashboard_page.dart';
 import 'package:rankup_education/features/worksheets/presentation/pages/worksheets_page.dart';
 
+/// Role-aware [GoRouter] with auth redirects and bottom navigation shell.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: '/',

@@ -13,6 +13,7 @@ import {
   getQuestionStatusTone,
 } from "@/features/questions/presentation/components/StatusBadge";
 
+/** Location state passed from batch create to the session review route. */
 export interface QuestionSessionReviewState {
   questions: QuestionDetail[];
   index: number;
@@ -30,6 +31,7 @@ function lookupName(
   return items?.find((item) => item.id === id)?.name ?? `${fallback} #${id}`;
 }
 
+/** Step through questions created in the current batch before returning to create. */
 export function QuestionSessionReviewPage() {
   const navigate = useNavigate();
   const location = useLocation();

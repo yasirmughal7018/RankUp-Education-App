@@ -5,17 +5,20 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Api.Middleware;
 
+/// <summary>Maps application and domain exceptions to consistent JSON error responses.</summary>
 public sealed class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
+    /// <summary>Creates the middleware.</summary>
     public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
     }
 
+    /// <summary>Runs the pipeline and converts unhandled exceptions to <see cref="ApiResponse{T}"/> failures.</summary>
     public async Task InvokeAsync(HttpContext context)
     {
         try

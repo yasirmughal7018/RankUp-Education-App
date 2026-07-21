@@ -54,6 +54,7 @@ function mapQuestionToInput(question: QuizQuestionItem): AddQuizQuestionInput {
   };
 }
 
+/** Modal to add an inline question or attach one from the question bank. */
 export function AddQuizQuestionDialog({
   isSubmitting,
   onClose,

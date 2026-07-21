@@ -8,6 +8,7 @@ import {
 } from "@/features/questions/presentation/components/StatusBadge";
 import { useQuizzesQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
+/** Teacher/parent quiz list with search and mine-only filter. */
 export function QuizzesPage() {
   const { user } = useAuth();
   const [search, setSearch] = useState("");

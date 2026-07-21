@@ -32,12 +32,14 @@ public sealed class UserSchoolChangeApproval
 
     public bool IsPending => IsApproved is null && ApprovedAt is null;
 
+    /// <summary>Creates a queue row for an admin who must review this school-change request.</summary>
     public static UserSchoolChangeApproval CreatePending(
         long requestId,
         long approverUserId,
         UserRole approverRole)
         => new(requestId, approverUserId, approverRole, approvedAt: null, isApproved: null);
 
+    /// <summary>Records this admin's approval on the request.</summary>
     public void MarkApproved(DateTimeOffset approvedAt)
     {
         if (!IsPending)
@@ -49,6 +51,7 @@ public sealed class UserSchoolChangeApproval
         ApprovedAt = approvedAt;
     }
 
+    /// <summary>Records this admin's rejection on the request.</summary>
     public void MarkRejected(DateTimeOffset rejectedAt)
     {
         if (!IsPending)
@@ -60,6 +63,7 @@ public sealed class UserSchoolChangeApproval
         ApprovedAt = rejectedAt;
     }
 
+    /// <summary>Force-records rejection without requiring a pending state.</summary>
     public void RecordRejected(DateTimeOffset rejectedAt)
     {
         IsApproved = false;

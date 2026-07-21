@@ -438,6 +438,7 @@ function mapCampusAdmin(item: DirectoryCampusAdmin): PreviewItem {
   };
 }
 
+/** Directory dashboard: summary cards, searchable tabs, and record preview drawer. */
 export function DirectoryOverviewPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

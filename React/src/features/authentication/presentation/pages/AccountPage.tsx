@@ -114,6 +114,7 @@ function Btn({
   );
 }
 
+/** Profile, school change, avatar, and account deactivation settings. */
 export function AccountPage() {
   const { user, updateUser, logout } = useAuth();
   const location = useLocation();

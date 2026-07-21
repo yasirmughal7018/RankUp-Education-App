@@ -6,6 +6,7 @@ interface CardProps {
   children?: ReactNode;
 }
 
+/** Simple titled card container for dashboard sections. */
 export function Card({ title, description, children }: CardProps) {
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

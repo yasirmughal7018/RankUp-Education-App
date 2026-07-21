@@ -1,5 +1,7 @@
+/// Application roles mapped from API role names.
 enum UserRole { student, parent, teacher, schoolAdmin, campusAdmin, portalAdmin }
 
+/// Parses API/legacy role strings into [UserRole], defaulting to student.
 UserRole parseUserRole(String value) {
   return switch (value.trim().toLowerCase()) {
     'student' => UserRole.student,
@@ -13,6 +15,7 @@ UserRole parseUserRole(String value) {
   };
 }
 
+/// Returns true for school, campus, or portal administrator roles.
 bool isAdminRole(UserRole role) {
   return role == UserRole.schoolAdmin ||
       role == UserRole.campusAdmin ||

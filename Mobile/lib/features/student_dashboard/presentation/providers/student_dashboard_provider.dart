@@ -7,6 +7,7 @@ import 'package:rankup_education/features/student_dashboard/domain/repositories/
 import 'package:rankup_education/features/student_dashboard/domain/usecases/get_student_dashboard_usecase.dart';
 import 'package:rankup_education/features/student_dashboard/presentation/controllers/student_dashboard_controller.dart';
 
+/// In-memory cache for last successful dashboard fetch.
 final studentDashboardLocalDataSourceProvider =
     Provider<StudentDashboardLocalDataSource>((ref) {
   return StudentDashboardLocalDataSource();
@@ -28,6 +29,7 @@ final getStudentDashboardUseCaseProvider =
   );
 });
 
+/// Controller for the student dashboard screen.
 final studentDashboardControllerProvider =
     StateNotifierProvider<StudentDashboardController, StudentDashboardState>(
         (ref) {

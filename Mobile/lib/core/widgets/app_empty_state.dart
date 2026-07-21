@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Centered icon, title, and message for empty list states.
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     required this.icon,

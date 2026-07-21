@@ -7,6 +7,7 @@ import {
 } from "@/core/api/types";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 
+/** Switch active role when the account has multiple roles. */
 export function RoleSwitcher() {
   const { user, switchRole, isSubmitting } = useAuth();
   const navigate = useNavigate();

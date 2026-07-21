@@ -4,6 +4,7 @@ using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>EF Core implementation of <see cref="ISchoolChangeRequestRepository"/>.</summary>
 public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestRepository
 {
     private readonly RankUpDbContext _dbContext;

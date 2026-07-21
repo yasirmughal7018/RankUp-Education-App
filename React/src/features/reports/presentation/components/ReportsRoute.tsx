@@ -15,6 +15,7 @@ function ForbiddenScreen() {
   );
 }
 
+/** Restricts routes to report viewer roles. */
 export function ReportsRoute() {
   const { user } = useAuth();
 

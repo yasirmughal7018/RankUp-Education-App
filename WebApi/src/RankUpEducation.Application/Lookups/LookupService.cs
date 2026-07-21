@@ -3,13 +3,17 @@ using RankUpEducation.Contracts.Lookups;
 
 namespace RankUpEducation.Application.Lookups;
 
+/// <summary>Read-only lookup catalog for dropdowns and client reference data.</summary>
 public interface ILookupService
 {
+    /// <summary>Lists active lookups, optionally filtered by type and parent id.</summary>
     Task<LookupListResponse> ListAsync(string? type, short? parentId, CancellationToken cancellationToken);
 
+    /// <summary>Lists distinct active lookup type names.</summary>
     Task<LookupTypesResponse> ListTypesAsync(CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="ILookupService"/>
 public sealed class LookupService : ILookupService
 {
     private readonly ILookupRepository _lookups;

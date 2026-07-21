@@ -7,6 +7,7 @@ import {
   useUpdateQuestionMutation,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
 
+/** Edit an existing question via the shared question form. */
 export function QuestionEditPage() {
   const { questionId } = useParams();
   const navigate = useNavigate();

@@ -13,6 +13,7 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Infrastructure.Persistence;
 
+/// <summary>EF Core database context for RankUp Education; also acts as the unit-of-work.</summary>
 public sealed class RankUpDbContext : DbContext, IUnitOfWork
 {
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -56,11 +57,13 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<QuizAttemptQuestion> QuizAttemptQuestions => Set<QuizAttemptQuestion>();
     public DbSet<QuizAttemptAnswer> QuizAttemptAnswers => Set<QuizAttemptAnswer>();
 
+    /// <summary>Applies entity configurations from this assembly.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(RankUpDbContext).Assembly);
     }
 
+    /// <summary>Stamps audit columns on auditable entities before save.</summary>
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditValues();

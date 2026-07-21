@@ -27,6 +27,7 @@ import { AccountStatusBadge } from "@/features/directory/presentation/components
 
 const PAGE_SIZE = 50;
 
+/** Paginated parent directory with student linking and account management. */
 export function DirectoryParentsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);

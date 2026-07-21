@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rankup_education/core/widgets/feature_placeholder_page.dart';
 
+/// Career guidance placeholder screen.
 class CareerGuidancePage extends StatelessWidget {
   const CareerGuidancePage({super.key});
 

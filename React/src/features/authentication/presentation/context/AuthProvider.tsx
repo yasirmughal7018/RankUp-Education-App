@@ -42,6 +42,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Provides auth state, login/logout, token refresh, and forced password change. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(nextSession);
   }, []);
 
+  // Deduplicate concurrent refresh calls (e.g. multiple 401s).
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current;
@@ -287,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Read auth context; throws when used outside AuthProvider. */
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
 

@@ -38,6 +38,7 @@ function parseGradeNumber(grade?: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/** Modal to assign a quiz to students, a group, or a grade with a schedule. */
 export function AssignQuizDialog({
   isSubmitting,
   defaultGrade,

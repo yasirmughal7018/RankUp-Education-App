@@ -26,6 +26,7 @@ import { AccountStatusBadge } from "@/features/directory/presentation/components
 
 const PAGE_SIZE = 50;
 
+/** Paginated student directory with filters, bulk actions, and create/edit dialog. */
 export function DirectoryStudentsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);

@@ -5,6 +5,7 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>Assignment CRUD, access windows, review state, and assignment board queries.</summary>
 public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
 {
     private readonly RankUpDbContext _dbContext;

@@ -146,14 +146,17 @@ export interface QuizAssignment {
 
 export const QUIZ_MANAGER_ROLES: UserRole[] = ["Teacher", "Parent"];
 
+/** True for Teacher and Parent roles. */
 export function canManageQuizzes(role: UserRole): boolean {
   return QUIZ_MANAGER_ROLES.includes(role);
 }
 
+/** Lifecycle status is draft (editable). */
 export function isDraftQuiz(status: string): boolean {
   return status.toLowerCase() === "draft";
 }
 
+/** Default values for the create-quiz form. */
 export function createEmptyQuizForm(): QuizFormValues {
   return {
     title: "",
@@ -172,6 +175,7 @@ export function createEmptyQuizForm(): QuizFormValues {
   };
 }
 
+/** Map API manage model to form state. */
 export function mapManageQuizToForm(quiz: ManageQuiz): QuizFormValues {
   return {
     title: quiz.title,
@@ -190,6 +194,7 @@ export function mapManageQuizToForm(quiz: ManageQuiz): QuizFormValues {
   };
 }
 
+/** Serialize form values for create/update API. */
 export function buildQuizPayload(values: QuizFormValues) {
   return {
     title: values.title.trim(),
@@ -208,6 +213,7 @@ export function buildQuizPayload(values: QuizFormValues) {
   };
 }
 
+/** Client-side validation; returns error message or null. */
 export function validateQuizForm(values: QuizFormValues): string | null {
   if (!values.title.trim()) {
     return "Title is required.";
@@ -228,6 +234,7 @@ export function validateQuizForm(values: QuizFormValues): string | null {
   return null;
 }
 
+/** Default inline question editor state. */
 export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
   return {
     questionText: "",
@@ -245,6 +252,7 @@ export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
   };
 }
 
+/** Map quiz question to editor input shape. */
 export function mapQuizQuestionToInput(
   question: QuizQuestionItem,
 ): AddQuizQuestionInput {
@@ -268,6 +276,7 @@ export function mapQuizQuestionToInput(
   };
 }
 
+/** Serialize question editor for API. */
 export function buildQuizQuestionPayload(input: AddQuizQuestionInput) {
   const questionType = normalizeQuestionType(input.questionType);
 

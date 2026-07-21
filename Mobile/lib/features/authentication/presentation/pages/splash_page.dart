@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
+/// Boot screen that restores a saved session before routing to login.
 class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 

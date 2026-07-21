@@ -4,6 +4,7 @@ using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
+/// <summary>Maps <see cref="UserSchoolChangeApproval"/> to app_user_school_change_approval.</summary>
 public sealed class UserSchoolChangeApprovalConfiguration
     : IEntityTypeConfiguration<UserSchoolChangeApproval>
 {

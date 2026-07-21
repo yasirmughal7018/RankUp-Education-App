@@ -103,6 +103,7 @@ function ReasonDialog({
   );
 }
 
+/** Admin page to approve or reject pending account registration requests. */
 export function PendingRegistrationsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();

@@ -1,3 +1,4 @@
+/** React Query hooks for quiz management, assignments, and attempt review. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as quizApi from "@/features/quizzes/data/quizApi";
@@ -10,6 +11,7 @@ import type {
 } from "@/features/quizzes/domain/quizTypes";
 import type { MarkAttemptAnswerInput } from "@/features/quizzes/domain/quizMonitorTypes";
 
+/** List quizzes with optional search. */
 export function useQuizzesQuery(search?: string) {
   return useQuery({
     queryKey: queryKeys.quizzes(search),
@@ -17,6 +19,7 @@ export function useQuizzesQuery(search?: string) {
   });
 }
 
+/** Admin queue of quizzes awaiting approval. */
 export function usePendingQuizApprovalsQuery() {
   return useQuery({
     queryKey: queryKeys.pendingQuizApprovals(),
@@ -24,6 +27,7 @@ export function usePendingQuizApprovalsQuery() {
   });
 }
 
+/** Single quiz detail for manage/edit pages. */
 export function useManageQuizQuery(quizId: number, enabled = true) {
   return useQuery({
     queryKey: queryKeys.manageQuiz(quizId),
@@ -32,6 +36,7 @@ export function useManageQuizQuery(quizId: number, enabled = true) {
   });
 }
 
+/** Assignments for one quiz. */
 export function useQuizAssignmentsQuery(quizId: number, enabled = true) {
   return useQuery({
     queryKey: queryKeys.quizAssignments(quizId),
@@ -40,6 +45,7 @@ export function useQuizAssignmentsQuery(quizId: number, enabled = true) {
   });
 }
 
+/** Cross-quiz assignment board. */
 export function useAssignmentBoardQuery(studentId?: number | null) {
   return useQuery({
     queryKey: queryKeys.assignmentBoard(studentId),
@@ -47,6 +53,7 @@ export function useAssignmentBoardQuery(studentId?: number | null) {
   });
 }
 
+/** Attempts awaiting manual grading. */
 export function usePendingReviewsQuery() {
   return useQuery({
     queryKey: queryKeys.pendingReviews(),
@@ -54,6 +61,7 @@ export function usePendingReviewsQuery() {
   });
 }
 
+/** Live monitoring snapshot for a quiz. */
 export function useQuizMonitoringQuery(quizId: number) {
   return useQuery({
     queryKey: queryKeys.quizMonitoring(quizId),
@@ -62,6 +70,7 @@ export function useQuizMonitoringQuery(quizId: number) {
   });
 }
 
+/** Attempt detail for the review page. */
 export function useAttemptReviewQuery(quizId: number, attemptId: number) {
   return useQuery({
     queryKey: queryKeys.attemptReview(quizId, attemptId),
@@ -82,6 +91,7 @@ function useInvalidateQuizDetail(quizId: number) {
   };
 }
 
+/** Publish a draft quiz. */
 export function usePublishQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -91,6 +101,7 @@ export function usePublishQuizMutation(quizId: number) {
   });
 }
 
+/** Delete a quiz. */
 export function useDeleteQuizMutation(quizId: number) {
   const queryClient = useQueryClient();
 
@@ -102,6 +113,7 @@ export function useDeleteQuizMutation(quizId: number) {
   });
 }
 
+/** Clone quiz as new draft. */
 export function useDuplicateQuizMutation(quizId: number) {
   const queryClient = useQueryClient();
 
@@ -113,6 +125,7 @@ export function useDuplicateQuizMutation(quizId: number) {
   });
 }
 
+/** Archive a published quiz. */
 export function useArchiveQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -122,6 +135,7 @@ export function useArchiveQuizMutation(quizId: number) {
   });
 }
 
+/** Remove a question from the quiz. */
 export function useRemoveQuizQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -132,6 +146,7 @@ export function useRemoveQuizQuestionMutation(quizId: number) {
   });
 }
 
+/** Add inline question to quiz. */
 export function useAddQuizQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -142,6 +157,7 @@ export function useAddQuizQuestionMutation(quizId: number) {
   });
 }
 
+/** Update inline quiz question. */
 export function useUpdateQuizQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -157,6 +173,7 @@ export function useUpdateQuizQuestionMutation(quizId: number) {
   });
 }
 
+/** Attach bank question to quiz. */
 export function useAttachBankQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -167,6 +184,7 @@ export function useAttachBankQuestionMutation(quizId: number) {
   });
 }
 
+/** Assign quiz to students/group/grade. */
 export function useAssignQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
   const queryClient = useQueryClient();
@@ -182,6 +200,7 @@ export function useAssignQuizMutation(quizId: number) {
   });
 }
 
+/** Cancel all assignments. */
 export function useCancelQuizAssignmentsMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
   const queryClient = useQueryClient();
@@ -197,6 +216,7 @@ export function useCancelQuizAssignmentsMutation(quizId: number) {
   });
 }
 
+/** Grant extra attempts on assignment. */
 export function useAllowRetryMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
   const queryClient = useQueryClient();
@@ -221,6 +241,7 @@ export function useAllowRetryMutation(quizId: number) {
   });
 }
 
+/** Update quiz metadata. */
 export function useUpdateQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -230,6 +251,7 @@ export function useUpdateQuizMutation(quizId: number) {
   });
 }
 
+/** Admin approve pending quiz. */
 export function useApproveQuizMutation() {
   const queryClient = useQueryClient();
 
@@ -244,6 +266,7 @@ export function useApproveQuizMutation() {
   });
 }
 
+/** Admin reject pending quiz. */
 export function useRejectQuizMutation() {
   const queryClient = useQueryClient();
 
@@ -259,6 +282,7 @@ export function useRejectQuizMutation() {
   });
 }
 
+/** Save manual grading marks. */
 export function useMarkAttemptAnswersMutation(quizId: number, attemptId: number) {
   const queryClient = useQueryClient();
 
@@ -280,6 +304,7 @@ export function useMarkAttemptAnswersMutation(quizId: number, attemptId: number)
   });
 }
 
+/** Finalize review and release results. */
 export function useFinalizeAttemptReviewMutation(quizId: number, attemptId: number) {
   const queryClient = useQueryClient();
 
@@ -302,6 +327,7 @@ export function useFinalizeAttemptReviewMutation(quizId: number, attemptId: numb
   });
 }
 
+/** Manual cache invalidation helpers. */
 export function useInvalidateQuizQueries() {
   const queryClient = useQueryClient();
 

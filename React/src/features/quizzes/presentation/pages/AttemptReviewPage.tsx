@@ -22,6 +22,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+/** Manual grading page: mark answers and finalize attempt review. */
 export function AttemptReviewPage() {
   const { quizId, attemptId } = useParams();
   const navigate = useNavigate();

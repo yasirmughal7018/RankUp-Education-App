@@ -5,6 +5,7 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>Attempt lifecycle, answer persistence, and scored attempt detail projections.</summary>
 public sealed class QuizAttemptRepository : IQuizAttemptRepository
 {
     private readonly RankUpDbContext _dbContext;

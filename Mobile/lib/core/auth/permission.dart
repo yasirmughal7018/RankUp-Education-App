@@ -1,3 +1,4 @@
+/// Named backend permission string checked against the signed-in user.
 class Permission {
   const Permission(this.value);
 

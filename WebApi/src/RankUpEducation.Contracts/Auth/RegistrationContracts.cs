@@ -1,5 +1,6 @@
 namespace RankUpEducation.Contracts.Auth;
 
+/// <summary>Self-registration payload for Student, Parent, or Teacher.</summary>
 public sealed record RegisterAccountRequest(
     string FullName,
     string MobileNumber,
@@ -11,18 +12,21 @@ public sealed record RegisterAccountRequest(
     int? CampusId = null,
     string? Cnic = null);
 
+/// <summary>Acknowledgement after a registration request is queued.</summary>
 public sealed record RegisterAccountResponse(
     long Id,
     string Username,
     string FullName,
     string Role);
 
+/// <summary>Admin shown on a pending registration or school-change queue row.</summary>
 public sealed record PendingApproverResponse(
     long UserId,
     string FullName,
     string Username,
     string Role);
 
+/// <summary>Pending self-registration visible to an admin reviewer.</summary>
 public sealed record PendingRegistrationResponse(
     long Id,
     string Username,
@@ -44,6 +48,7 @@ public sealed record PendingRegistrationResponse(
 /// <summary>Approve uses registration details as submitted. No password or field edits.</summary>
 public sealed record ApproveRegistrationRequest();
 
+/// <summary>Result of approving a registration (activation requires Portal Admin).</summary>
 public sealed record ApproveRegistrationResponse(
     long UserId,
     string Username,

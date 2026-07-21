@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 
+/// Selectable answer choice within a quiz question.
 class QuizOption {
   const QuizOption({
     required this.id,
@@ -12,6 +13,7 @@ class QuizOption {
   final String? imageUrl;
 }
 
+/// Single question payload for an in-progress or review attempt.
 class QuizQuestion {
   const QuizQuestion({
     required this.id,
@@ -37,6 +39,7 @@ class QuizQuestion {
       options.map((option) => option.text).toList(growable: false);
 }
 
+/// Full quiz metadata plus question list for attempt and review flows.
 class QuizDetail extends QuizSummary {
   const QuizDetail({
     required super.id,
@@ -106,6 +109,7 @@ class QuizDetail extends QuizSummary {
   final bool shuffleOptions;
 }
 
+/// Locally cached answer draft before submit or sync.
 class SavedQuizAnswer {
   const SavedQuizAnswer({
     required this.questionId,
@@ -120,6 +124,7 @@ class SavedQuizAnswer {
   final String? submittedText;
 }
 
+/// Server-issued attempt session with timing and draft answers.
 class QuizAttemptSession {
   const QuizAttemptSession({
     required this.attemptId,
@@ -142,6 +147,7 @@ class QuizAttemptSession {
   final List<SavedQuizAnswer> savedAnswers;
 }
 
+/// Per-question grading breakdown after submission.
 class QuizResultQuestion {
   const QuizResultQuestion({
     required this.id,
@@ -166,6 +172,7 @@ class QuizResultQuestion {
   final String? submittedText;
 }
 
+/// Final scored attempt returned after submit or result fetch.
 class QuizAttemptResult {
   const QuizAttemptResult({
     required this.attemptId,

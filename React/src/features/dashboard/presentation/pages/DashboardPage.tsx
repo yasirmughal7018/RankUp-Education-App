@@ -92,6 +92,7 @@ function quickLinksForRole(role: UserRole): Array<{ label: string; href: string 
   return [{ label: "Question bank", href: "/questions" }];
 }
 
+/** Role-based landing page with quick links and permissions. */
 export function DashboardPage() {
   const { user } = useAuth();
 

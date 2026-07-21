@@ -4,6 +4,7 @@ const _primarySeed = Color(0xFF2563EB);
 const _successSeed = Color(0xFF16A34A);
 const _warningSeed = Color(0xFFF59E0B);
 
+/// Material 3 light theme aligned with RankUp web branding.
 ThemeData buildLightTheme() {
   final colorScheme = ColorScheme.fromSeed(
     seedColor: _primarySeed,
@@ -14,6 +15,7 @@ ThemeData buildLightTheme() {
   return _buildTheme(colorScheme);
 }
 
+/// Material 3 dark theme aligned with RankUp web branding.
 ThemeData buildDarkTheme() {
   final colorScheme = ColorScheme.fromSeed(
     seedColor: _primarySeed,

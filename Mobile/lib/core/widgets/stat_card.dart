@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Compact dashboard metric card with icon, value, and optional subtitle.
 class StatCard extends StatelessWidget {
   const StatCard({
     required this.title,

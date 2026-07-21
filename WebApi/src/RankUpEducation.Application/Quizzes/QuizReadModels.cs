@@ -1,5 +1,6 @@
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>Repository projection and service-layer DTOs for quiz list, detail, attempt, assign, and review flows.</summary>
 public sealed record QuizListItem(
     long QuizId,
     long? AssignmentId,
@@ -25,6 +26,7 @@ public sealed record QuizListItem(
     DateTimeOffset? LastSubmittedAt,
     string? LifecycleStatusName = null);
 
+/// <summary>Quiz awaiting school-admin approval (teacher-created, non–parent-private).</summary>
 public sealed record PendingQuizApprovalItem(
     long QuizId,
     string Title,
@@ -38,6 +40,7 @@ public sealed record PendingQuizApprovalItem(
     short TotalQuestions,
     DateOnly ModifiedDate);
 
+/// <summary>Full quiz detail including shuffle/review flags and lifecycle ids for manage views.</summary>
 public sealed record QuizDetailItem(
     long QuizId,
     long? AssignmentId,
@@ -70,11 +73,13 @@ public sealed record QuizDetailItem(
     short LifecycleStatusId,
     string LifecycleStatusName);
 
+/// <summary>School and campus resolved from a linked student when a parent creates a quiz.</summary>
 public sealed record StudentSchoolContext(
     int SchoolId,
     int CampusId,
     short Grade);
 
+/// <summary>Assignment row with student display name and attempt count for manage UI.</summary>
 public sealed record QuizAssignmentListItem(
     long AssignmentId,
     long StudentId,
@@ -88,6 +93,7 @@ public sealed record QuizAssignmentListItem(
     bool IsReviewDone,
     int AttemptCount);
 
+/// <summary>Question attached to a quiz, including options and fill-blank accepted answers for scoring.</summary>
 public sealed record QuizQuestionItem(
     long QuestionId,
     string QuestionText,
@@ -117,6 +123,7 @@ public sealed record QuizQuestionOptionItem(
     string? OptionImageUrl,
     bool IsCorrect);
 
+/// <summary>Submitted attempt with per-question answers and aggregate score.</summary>
 public sealed record QuizAttemptDetailItem(
     long AttemptId,
     long QuizId,
@@ -146,6 +153,7 @@ public sealed record QuizAttemptQuestionItem(
     IReadOnlyList<QuizQuestionOptionItem> Options,
     IReadOnlyList<long> SelectedOptionIds);
 
+/// <summary>Assignment window and attempt quota checked before start/submit.</summary>
 public sealed record QuizAssignmentAccess(
     long AssignmentId,
     long QuizId,
@@ -155,6 +163,7 @@ public sealed record QuizAssignmentAccess(
     short AllowedAttempts,
     int ExistingAttemptCount);
 
+/// <summary>Cross-quiz assignment board row for monitor list.</summary>
 public sealed record QuizAssignmentBoardItem(
     long AssignmentId,
     long QuizId,
@@ -169,6 +178,7 @@ public sealed record QuizAssignmentBoardItem(
     string ResultStatusName,
     DateTimeOffset? LastSubmittedAt);
 
+/// <summary>Per-student progress row for quiz monitoring dashboard.</summary>
 public sealed record QuizMonitoringStudentItem(
     long StudentId,
     string StudentName,
@@ -180,6 +190,7 @@ public sealed record QuizMonitoringStudentItem(
     DateTimeOffset StartDateTime,
     DateTimeOffset EndDateTime);
 
+/// <summary>Submitted attempt awaiting teacher/parent review of subjective answers.</summary>
 public sealed record PendingReviewItem(
     long QuizId,
     string QuizTitle,
@@ -191,6 +202,7 @@ public sealed record PendingReviewItem(
     short TotalMarks,
     short ObtainedMarks);
 
+/// <summary>Full review workspace for one submitted attempt.</summary>
 public sealed record AttemptReviewDetailItem(
     long AttemptId,
     long QuizId,
@@ -222,6 +234,7 @@ public sealed record AttemptReviewQuestionItem(
     IReadOnlyList<long> SelectedOptionIds,
     bool HasHumanReviewFeedback = false);
 
+/// <summary>Source question snapshot used when duplicating a quiz (deep copy).</summary>
 public sealed record QuizQuestionCopyItem(
     long QuestionId,
     string QuestionText,
@@ -238,6 +251,7 @@ public sealed record QuizQuestionCopyItem(
     IReadOnlyList<QuizQuestionOptionItem> Options,
     IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
 
+/// <summary>Whether subjective review is required and completed for an assignment.</summary>
 public sealed record QuizAssignmentReviewState(
     long AssignmentId,
     bool IsReviewDone,

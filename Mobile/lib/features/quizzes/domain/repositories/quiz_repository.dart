@@ -1,6 +1,7 @@
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 
+/// Loads, starts, drafts, and submits student quiz attempts.
 abstract class QuizRepository {
   Future<List<QuizSummary>> getQuizzes({
     String? search,
@@ -35,6 +36,7 @@ abstract class QuizRepository {
   });
 }
 
+/// Answer payload sent when saving or submitting an attempt.
 class QuizAnswerSubmission {
   const QuizAnswerSubmission({
     required this.questionId,

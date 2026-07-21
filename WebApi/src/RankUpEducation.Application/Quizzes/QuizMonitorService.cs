@@ -4,15 +4,19 @@ using RankUpEducation.Contracts.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>Assignment board and per-quiz monitoring for quiz owners (teachers/parents).</summary>
 public interface IQuizMonitorService
 {
+    /// <summary>Lists assignments across owned quizzes with live monitor status.</summary>
     Task<QuizAssignmentBoardResponse> ListAssignmentsAsync(
         long? studentId,
         CancellationToken cancellationToken);
 
+    /// <summary>Returns per-student attempt/review progress for one quiz.</summary>
     Task<QuizMonitoringResponse> GetMonitoringAsync(long quizId, CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuizMonitorService"/>
 public sealed class QuizMonitorService : IQuizMonitorService
 {
     private readonly IQuizRepository _quizzes;

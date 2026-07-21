@@ -7,6 +7,7 @@ import {
   useUpdateQuizMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
+/** Edit quiz metadata for an existing draft or published quiz. */
 export function QuizEditPage() {
   const { quizId } = useParams();
   const navigate = useNavigate();

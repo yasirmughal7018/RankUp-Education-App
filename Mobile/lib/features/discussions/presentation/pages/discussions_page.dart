@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Discussion forums preview screen.
 class DiscussionsPage extends StatelessWidget {
   const DiscussionsPage({super.key});
 

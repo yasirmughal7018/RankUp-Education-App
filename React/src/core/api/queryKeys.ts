@@ -1,3 +1,4 @@
+/** Central React Query key factory for cache invalidation. */
 export const queryKeys = {
   lookups: (type?: string, parentId?: number | null) =>
     ["lookups", type ?? "all", parentId ?? null] as const,

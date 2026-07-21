@@ -27,6 +27,7 @@ const adminLinks = [
   },
 ];
 
+/** Admin landing page with links to registrations, questions, quizzes, and directory. */
 export function AdminOverviewPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">

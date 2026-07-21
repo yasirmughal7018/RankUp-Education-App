@@ -5,6 +5,7 @@ namespace RankUpEducation.Application.Auth;
 
 internal static class AuthMapping
 {
+    /// <summary>Maps a domain user to the API session profile for the active role.</summary>
     public static CurrentUserResponse ToCurrentUserResponse(
         this User user,
         UserRole? activeRole = null,

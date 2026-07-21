@@ -5,6 +5,7 @@ using RankUpEducation.Contracts.Reports;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <inheritdoc cref="RankUpEducation.Application.Reports.IReportRepository"/>
 public sealed class ReportRepository : IReportRepository
 {
     private readonly RankUpDbContext _dbContext;

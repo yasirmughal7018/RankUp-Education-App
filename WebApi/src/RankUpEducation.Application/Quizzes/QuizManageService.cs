@@ -9,32 +9,49 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>
+/// Quiz authoring and lifecycle: create/update/delete drafts, publish (teacher → pending approval,
+/// parent → direct publish), approve/reject, duplicate, and archive.
+/// </summary>
 public interface IQuizManageService
 {
+    /// <summary>Creates a draft quiz stamped with school/campus from teacher context or linked child.</summary>
     Task<ManageQuizResponse> CreateAsync(CreateQuizRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Updates quiz metadata while draft/published and no assignment window has started.</summary>
     Task<ManageQuizResponse> UpdateAsync(long quizId, UpdateQuizRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Soft-deletes a draft quiz with no assignments.</summary>
     Task DeleteAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Publishes the quiz. Teachers submit for approval; parents self-approve on publish.
+    /// </summary>
     Task<ManageQuizResponse> PublishAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Returns full manage view including attached questions for the quiz owner.</summary>
     Task<ManageQuizResponse> GetManageDetailAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Clones quiz and deep-copies inline questions into new campus-scoped bank rows.</summary>
     Task<DuplicateQuizResponse> DuplicateAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Archives a published/assigned quiz (drafts must be deleted instead).</summary>
     Task<ArchiveQuizResponse> ArchiveAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>School admin approves a teacher quiz pending approval.</summary>
     Task<ApproveQuizResponse> ApproveAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>School admin rejects a pending teacher quiz.</summary>
     Task<RejectQuizResponse> RejectAsync(
         long quizId,
         RejectQuizRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Lists teacher quizzes awaiting school approval (scoped by school for SchoolAdmin).</summary>
     Task<PendingQuizApprovalListResponse> ListPendingApprovalAsync(CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuizManageService"/>
 public sealed class QuizManageService : IQuizManageService
 {
     private readonly IQuizRepository _quizzes;
@@ -167,10 +184,12 @@ public sealed class QuizManageService : IQuizManageService
 
         if (scope.Role == UserRole.Teacher)
         {
+            // Teacher publish leaves approval pending for school admin review.
             quiz.SubmitForApproval(publishedStatusId);
         }
         else
         {
+            // Parent private quizzes skip the approval queue on publish.
             var approvedStatusId = await _guard.RequireLookupAsync(
                 QuizLookupNames.QuizApprovalStatus,
                 QuizLookupNames.ApprovedStatusNames,

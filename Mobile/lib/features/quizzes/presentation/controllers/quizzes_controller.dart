@@ -4,6 +4,7 @@ import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.da
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
+/// Quiz list, filter, attempt, and review UI state.
 class QuizzesState {
   const QuizzesState({
     this.allQuizzes = const [],
@@ -76,11 +77,13 @@ class QuizzesState {
   }
 }
 
+/// Orchestrates quiz loading, filtering, attempts, and submissions.
 class QuizzesController extends StateNotifier<QuizzesState> {
   QuizzesController(this._repository) : super(const QuizzesState());
 
   final QuizRepository _repository;
 
+  /// Loads quiz summaries and applies client-side filters.
   Future<void> load({
     String? search,
     String? quizType,

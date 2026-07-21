@@ -2,10 +2,12 @@ using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Common.Abstractions;
 
+/// <summary>Persistence for users, roles, registration approvals, refresh tokens, and role profiles.</summary>
 public interface IUserRepository
 {
     Task<User?> GetByIdAsync(long id, CancellationToken cancellationToken);
 
+    /// <summary>Loads the user with role-specific profile context for session mapping.</summary>
     Task<User?> GetByIdForRoleAsync(long id, UserRole activeRole, CancellationToken cancellationToken);
 
     Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken);
@@ -19,6 +21,7 @@ public interface IUserRepository
 
     Task<RefreshToken?> GetRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken);
 
+    /// <summary>True when a non-rejected row already uses the username.</summary>
     Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken);
 
     Task<bool> CnicExistsAsync(string cnic, CancellationToken cancellationToken);
@@ -27,6 +30,7 @@ public interface IUserRepository
 
     Task AddAsync(User user, CancellationToken cancellationToken);
 
+    /// <summary>Pending self-registrations scoped by the reviewer's school/campus when provided.</summary>
     Task<IReadOnlyList<User>> ListPendingRegistrationsAsync(
         int take,
         int? schoolIdFilter,
@@ -76,6 +80,7 @@ public interface IUserRepository
 
     Task<bool> HasParentProfileAsync(long userId, CancellationToken cancellationToken);
 
+    /// <summary>Creates the student profile when Portal Admin activates a registration.</summary>
     Task AddStudentProfileAsync(Domain.Students.Student student, CancellationToken cancellationToken);
 
     Task AddTeacherProfileAsync(Domain.Teachers.Teacher teacher, CancellationToken cancellationToken);
@@ -84,6 +89,7 @@ public interface IUserRepository
 
     Task DeleteAsync(User user, CancellationToken cancellationToken);
 
+    /// <summary>Revokes all active refresh tokens (logout all sessions, school-change lock, password clear).</summary>
     Task RevokeRefreshTokensForUserAsync(
         long userId,
         DateTimeOffset revokedAt,

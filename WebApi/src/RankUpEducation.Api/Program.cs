@@ -11,6 +11,7 @@ using RankUpEducation.Infrastructure;
 using RankUpEducation.Infrastructure.Authentication;
 using RankUpEducation.Infrastructure.Persistence;
 
+// RankUp Education API host: controllers, JWT auth, EF Core, and integration fallbacks.
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -74,6 +75,7 @@ builder.Services.AddApiIntegrationFallbacks();
 
 var app = builder.Build();
 
+// Ensure auth/support tables exist before serving traffic.
 using (var scope = app.Services.CreateScope())
 {
     var schemaInitializer = scope.ServiceProvider.GetRequiredService<IApiSupportSchemaInitializer>();

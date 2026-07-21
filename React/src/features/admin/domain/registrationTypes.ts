@@ -31,6 +31,7 @@ export type RegistrationActionRole = Extract<
   "Student" | "Teacher" | "Parent"
 >;
 
+/** Roles admins can approve (Student/Teacher/Parent). */
 export function isRegistrationActionRole(
   role: UserRole,
 ): role is RegistrationActionRole {

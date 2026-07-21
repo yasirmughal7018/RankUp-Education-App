@@ -6,6 +6,7 @@ import 'package:rankup_education/features/authentication/domain/entities/app_use
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
+/// Production auth repository backed by remote API and secure token storage.
 class ApiAuthRepository implements AuthRepository {
   ApiAuthRepository(
     this._remoteDataSource,

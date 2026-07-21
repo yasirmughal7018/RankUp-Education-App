@@ -3,6 +3,7 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Messaging;
 
+/// <summary>Conversation thread scoped to a school; messaging API is not yet fully implemented.</summary>
 public sealed class MessageThread : AuditableEntity
 {
     private MessageThread()

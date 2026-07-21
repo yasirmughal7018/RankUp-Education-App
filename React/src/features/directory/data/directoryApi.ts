@@ -1,3 +1,4 @@
+/** Directory HTTP client — schools, campuses, people CRUD and bulk actions. */
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 import {
   EMPTY_SCHOOL_STATUS_COUNTS,
@@ -97,6 +98,7 @@ function normalizeSchoolCounts(
   };
 }
 
+/** Hero counts and visible sections for directory overview. */
 export async function getDirectorySummary(): Promise<DirectorySummary> {
   const raw = await apiRequest<DirectorySummary>("/directory/summary");
   return {
@@ -112,6 +114,7 @@ export async function getDirectorySummary(): Promise<DirectorySummary> {
   };
 }
 
+/** All schools visible to the current admin. */
 export async function listSchools(): Promise<DirectorySchool[]> {
   const response = await apiRequest<{ items: DirectorySchool[] }>(
     "/directory/schools",
@@ -119,6 +122,7 @@ export async function listSchools(): Promise<DirectorySchool[]> {
   return response.items;
 }
 
+/** Create a new school. */
 export async function createSchool(
   input: UpsertSchoolInput,
 ): Promise<DirectorySchool> {
@@ -128,6 +132,7 @@ export async function createSchool(
   });
 }
 
+/** Update school metadata. */
 export async function updateSchool(
   schoolId: number,
   input: UpsertSchoolInput,
@@ -138,18 +143,21 @@ export async function updateSchool(
   });
 }
 
+/** Reactivate a deactivated school. */
 export async function activateSchool(schoolId: number): Promise<void> {
   await apiRequestVoid(`/directory/schools/${schoolId}/activate`, {
     method: "POST",
   });
 }
 
+/** Deactivate a school. */
 export async function deactivateSchool(schoolId: number): Promise<void> {
   await apiRequestVoid(`/directory/schools/${schoolId}/deactivate`, {
     method: "POST",
   });
 }
 
+/** Campuses belonging to a school. */
 export async function listCampuses(schoolId: number): Promise<DirectoryCampus[]> {
   const response = await apiRequest<{ items: DirectoryCampus[] }>(
     `/directory/schools/${schoolId}/campuses`,
@@ -157,6 +165,7 @@ export async function listCampuses(schoolId: number): Promise<DirectoryCampus[]>
   return response.items;
 }
 
+/** Add campus under a school. */
 export async function createCampus(
   schoolId: number,
   input: UpsertCampusInput,
@@ -170,6 +179,7 @@ export async function createCampus(
   );
 }
 
+/** Update campus metadata. */
 export async function updateCampus(
   campusId: number,
   input: UpsertCampusInput,
@@ -180,18 +190,21 @@ export async function updateCampus(
   });
 }
 
+/** Reactivate a campus. */
 export async function activateCampus(campusId: number): Promise<void> {
   await apiRequestVoid(`/directory/campuses/${campusId}/activate`, {
     method: "POST",
   });
 }
 
+/** Deactivate a campus. */
 export async function deactivateCampus(campusId: number): Promise<void> {
   await apiRequestVoid(`/directory/campuses/${campusId}/deactivate`, {
     method: "POST",
   });
 }
 
+/** Paginated student directory with filters. */
 export async function listStudents(
   filters: DirectoryStudentFilters = {},
 ): Promise<PagedDirectoryResult<DirectoryStudent>> {
@@ -207,6 +220,7 @@ export async function listStudents(
   );
 }
 
+/** Create student account and profile. */
 export async function createStudent(
   input: CreateDirectoryStudentInput,
 ): Promise<DirectoryStudent> {
@@ -216,6 +230,7 @@ export async function createStudent(
   });
 }
 
+/** Update student profile. */
 export async function updateStudent(
   studentId: number,
   input: UpdateDirectoryStudentInput,
@@ -226,18 +241,21 @@ export async function updateStudent(
   });
 }
 
+/** Reactivate student account. */
 export async function activateStudent(studentId: number): Promise<void> {
   await apiRequestVoid(`/directory/students/${studentId}/activate`, {
     method: "POST",
   });
 }
 
+/** Deactivate student account. */
 export async function deactivateStudent(studentId: number): Promise<void> {
   await apiRequestVoid(`/directory/students/${studentId}/deactivate`, {
     method: "POST",
   });
 }
 
+/** Deactivate many students at once. */
 export async function bulkDeactivateStudents(
   input: BulkDeactivateInput,
 ): Promise<BulkActionResult> {
@@ -247,6 +265,7 @@ export async function bulkDeactivateStudents(
   });
 }
 
+/** Paginated teacher directory with filters. */
 export async function listTeachers(
   filters: DirectoryTeacherFilters = {},
 ): Promise<PagedDirectoryResult<DirectoryTeacher>> {
@@ -261,6 +280,7 @@ export async function listTeachers(
   );
 }
 
+/** Create teacher account and profile. */
 export async function createTeacher(
   input: CreateDirectoryTeacherInput,
 ): Promise<DirectoryTeacher> {
@@ -270,6 +290,7 @@ export async function createTeacher(
   });
 }
 
+/** Update teacher profile. */
 export async function updateTeacher(
   teacherId: number,
   input: UpdateDirectoryTeacherInput,
@@ -280,18 +301,21 @@ export async function updateTeacher(
   });
 }
 
+/** Reactivate teacher account. */
 export async function activateTeacher(teacherId: number): Promise<void> {
   await apiRequestVoid(`/directory/teachers/${teacherId}/activate`, {
     method: "POST",
   });
 }
 
+/** Deactivate teacher account. */
 export async function deactivateTeacher(teacherId: number): Promise<void> {
   await apiRequestVoid(`/directory/teachers/${teacherId}/deactivate`, {
     method: "POST",
   });
 }
 
+/** Deactivate many teachers at once. */
 export async function bulkDeactivateTeachers(
   input: BulkDeactivateInput,
 ): Promise<BulkActionResult> {
@@ -301,6 +325,7 @@ export async function bulkDeactivateTeachers(
   });
 }
 
+/** Paginated parent directory. */
 export async function listParents(
   filters: DirectoryParentFilters = {},
 ): Promise<PagedDirectoryResult<DirectoryParent>> {
@@ -313,6 +338,7 @@ export async function listParents(
   );
 }
 
+/** Create parent account. */
 export async function createParent(
   input: CreateDirectoryParentInput,
 ): Promise<DirectoryParent> {
@@ -322,6 +348,7 @@ export async function createParent(
   });
 }
 
+/** Update parent profile. */
 export async function updateParent(
   parentId: number,
   input: UpdateDirectoryParentInput,
@@ -332,18 +359,21 @@ export async function updateParent(
   });
 }
 
+/** Reactivate parent account. */
 export async function activateParent(parentId: number): Promise<void> {
   await apiRequestVoid(`/directory/parents/${parentId}/activate`, {
     method: "POST",
   });
 }
 
+/** Deactivate parent account. */
 export async function deactivateParent(parentId: number): Promise<void> {
   await apiRequestVoid(`/directory/parents/${parentId}/deactivate`, {
     method: "POST",
   });
 }
 
+/** Deactivate many parents at once. */
 export async function bulkDeactivateParents(
   input: BulkDeactivateInput,
 ): Promise<BulkActionResult> {
@@ -353,6 +383,7 @@ export async function bulkDeactivateParents(
   });
 }
 
+/** Link parent to a student. */
 export async function linkParentStudent(
   parentId: number,
   input: LinkParentStudentInput,
@@ -366,6 +397,7 @@ export async function linkParentStudent(
   );
 }
 
+/** Remove parent-student link. */
 export async function unlinkParentStudent(
   parentId: number,
   studentId: number,
@@ -375,6 +407,7 @@ export async function unlinkParentStudent(
   });
 }
 
+/** Paginated school admin directory. */
 export async function listSchoolAdmins(
   filters: DirectorySchoolAdminFilters = {},
 ): Promise<PagedDirectoryResult<DirectorySchoolAdmin>> {
@@ -388,6 +421,7 @@ export async function listSchoolAdmins(
   );
 }
 
+/** Create school admin account. */
 export async function createSchoolAdmin(
   input: CreateDirectorySchoolAdminInput,
 ): Promise<DirectorySchoolAdmin> {
@@ -397,6 +431,7 @@ export async function createSchoolAdmin(
   });
 }
 
+/** Update school admin profile. */
 export async function updateSchoolAdmin(
   userId: number,
   input: UpdateDirectorySchoolAdminInput,
@@ -410,18 +445,21 @@ export async function updateSchoolAdmin(
   );
 }
 
+/** Reactivate school admin. */
 export async function activateSchoolAdmin(userId: number): Promise<void> {
   await apiRequestVoid(`/directory/school-admins/${userId}/activate`, {
     method: "POST",
   });
 }
 
+/** Deactivate school admin. */
 export async function deactivateSchoolAdmin(userId: number): Promise<void> {
   await apiRequestVoid(`/directory/school-admins/${userId}/deactivate`, {
     method: "POST",
   });
 }
 
+/** Paginated campus admin directory. */
 export async function listCampusAdmins(
   filters: DirectoryCampusAdminFilters = {},
 ): Promise<PagedDirectoryResult<DirectoryCampusAdmin>> {
@@ -436,6 +474,7 @@ export async function listCampusAdmins(
   );
 }
 
+/** Create campus admin account. */
 export async function createCampusAdmin(
   input: CreateDirectoryCampusAdminInput,
 ): Promise<DirectoryCampusAdmin> {
@@ -445,6 +484,7 @@ export async function createCampusAdmin(
   });
 }
 
+/** Update campus admin profile. */
 export async function updateCampusAdmin(
   userId: number,
   input: UpdateDirectoryCampusAdminInput,
@@ -458,12 +498,14 @@ export async function updateCampusAdmin(
   );
 }
 
+/** Reactivate campus admin. */
 export async function activateCampusAdmin(userId: number): Promise<void> {
   await apiRequestVoid(`/directory/campus-admins/${userId}/activate`, {
     method: "POST",
   });
 }
 
+/** Deactivate campus admin. */
 export async function deactivateCampusAdmin(userId: number): Promise<void> {
   await apiRequestVoid(`/directory/campus-admins/${userId}/deactivate`, {
     method: "POST",

@@ -3,6 +3,7 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Schools;
 
+/// <summary>Physical or logical campus belonging to a <see cref="School"/>.</summary>
 public sealed class Campus : SoftDeleteEntity
 {
     private Campus()
@@ -26,6 +27,7 @@ public sealed class Campus : SoftDeleteEntity
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
 
+    /// <summary>Updates campus name and address and refreshes <see cref="ModifiedDate"/>.</summary>
     public void Update(string name, string address)
     {
         Name = name.AsTrimmedString();
@@ -33,6 +35,7 @@ public sealed class Campus : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Activates or deactivates the campus and refreshes <see cref="ModifiedDate"/>.</summary>
     public void SetActive(bool isActive)
     {
         IsActive = isActive;

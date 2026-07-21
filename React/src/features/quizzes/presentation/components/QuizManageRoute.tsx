@@ -15,6 +15,7 @@ function ForbiddenScreen() {
   );
 }
 
+/** Restricts routes to Teacher and Parent quiz managers. */
 export function QuizManageRoute() {
   const { user } = useAuth();
 

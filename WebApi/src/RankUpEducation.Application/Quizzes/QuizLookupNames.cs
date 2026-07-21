@@ -1,5 +1,6 @@
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>Canonical lookup type names and alias groups used across quiz lifecycle, scoring, and question types.</summary>
 public static class QuizLookupNames
 {
     public const string QuizType = "QuizType";

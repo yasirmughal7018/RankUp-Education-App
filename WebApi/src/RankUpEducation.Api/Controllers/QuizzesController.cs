@@ -6,6 +6,9 @@ using RankUpEducation.Contracts.Quizzes;
 
 namespace RankUpEducation.Api.Controllers;
 
+/// <summary>
+/// Quiz API: student attempts, teacher/parent manage (create/publish/assign), review, approval, and monitoring.
+/// </summary>
 [ApiController]
 [Authorize]
 [Route("api/quizzes")]
@@ -45,6 +48,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizListResponse>.Ok(response));
     }
 
+    /// <summary>Cross-quiz assignment board for the authenticated quiz owner.</summary>
     [HttpGet("assignments")]
     public async Task<ActionResult<ApiResponse<QuizAssignmentBoardResponse>>> ListAllAssignmentsAsync(
         [FromQuery] long? studentId,
@@ -54,6 +58,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizAssignmentBoardResponse>.Ok(response));
     }
 
+    /// <summary>Lists submitted attempts awaiting subjective-answer review.</summary>
     [HttpGet("reviews/pending")]
     public async Task<ActionResult<ApiResponse<PendingReviewListResponse>>> ListPendingReviewsAsync(
         CancellationToken cancellationToken)
@@ -62,6 +67,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<PendingReviewListResponse>.Ok(response));
     }
 
+    /// <summary>School-admin queue of teacher quizzes pending approval.</summary>
     [HttpGet("pending-approval")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<PendingQuizApprovalListResponse>>> ListPendingApprovalAsync(
@@ -132,6 +138,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizAttemptResultResponse>.Ok(response));
     }
 
+    /// <summary>Creates a draft quiz (parent or teacher).</summary>
     [HttpPost]
     public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> CreateAsync(
         [FromBody] CreateQuizRequest request,
@@ -141,6 +148,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Quiz created."));
     }
 
+    /// <summary>Updates quiz metadata while editable.</summary>
     [HttpPut("{quizId:long}")]
     public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> UpdateAsync(
         long quizId,
@@ -151,6 +159,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Quiz updated."));
     }
 
+    /// <summary>Deletes a draft quiz with no assignments.</summary>
     [HttpDelete("{quizId:long}")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAsync(
         long quizId,
@@ -160,6 +169,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { quizId }, "Quiz deleted."));
     }
 
+    /// <summary>Owner manage view with attached questions.</summary>
     [HttpGet("{quizId:long}/manage")]
     public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> GetManageDetailAsync(
         long quizId,
@@ -169,6 +179,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response));
     }
 
+    /// <summary>Publishes quiz (teacher → pending approval; parent → approved).</summary>
     [HttpPost("{quizId:long}/publish")]
     public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> PublishAsync(
         long quizId,
@@ -178,6 +189,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Quiz published."));
     }
 
+    /// <summary>Assigns quiz to students; moves lifecycle to Assigned.</summary>
     [HttpPost("{quizId:long}/assign")]
     public async Task<ActionResult<ApiResponse<AssignQuizResponse>>> AssignAsync(
         long quizId,
@@ -188,6 +200,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<AssignQuizResponse>.Ok(response, "Quiz assigned."));
     }
 
+    /// <summary>Lists assignments for one quiz.</summary>
     [HttpGet("{quizId:long}/assignments")]
     public async Task<ActionResult<ApiResponse<QuizAssignmentListResponse>>> ListAssignmentsAsync(
         long quizId,
@@ -197,6 +210,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizAssignmentListResponse>.Ok(response));
     }
 
+    /// <summary>Cancels upcoming assignments for a quiz.</summary>
     [HttpPost("{quizId:long}/cancel")]
     public async Task<ActionResult<ApiResponse<CancelQuizResponse>>> CancelAsync(
         long quizId,
@@ -206,6 +220,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<CancelQuizResponse>.Ok(response, "Quiz assignments cancelled."));
     }
 
+    /// <summary>Per-student attempt and review progress for one quiz.</summary>
     [HttpGet("{quizId:long}/monitoring")]
     public async Task<ActionResult<ApiResponse<QuizMonitoringResponse>>> GetMonitoringAsync(
         long quizId,
@@ -215,6 +230,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizMonitoringResponse>.Ok(response));
     }
 
+    /// <summary>Review workspace for a submitted attempt.</summary>
     [HttpGet("{quizId:long}/attempts/{attemptId:long}/review")]
     public async Task<ActionResult<ApiResponse<AttemptReviewResponse>>> GetAttemptReviewAsync(
         long quizId,
@@ -225,6 +241,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<AttemptReviewResponse>.Ok(response));
     }
 
+    /// <summary>Marks subjective answers and saves teacher/parent feedback.</summary>
     [HttpPut("{quizId:long}/attempts/{attemptId:long}/answers")]
     public async Task<ActionResult<ApiResponse<AttemptReviewResponse>>> MarkAttemptAnswersAsync(
         long quizId,
@@ -236,6 +253,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<AttemptReviewResponse>.Ok(response, "Attempt answers updated."));
     }
 
+    /// <summary>Finalizes review and releases student-visible results.</summary>
     [HttpPost("{quizId:long}/attempts/{attemptId:long}/finalize-review")]
     public async Task<ActionResult<ApiResponse<FinalizeReviewResponse>>> FinalizeReviewAsync(
         long quizId,
@@ -246,6 +264,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<FinalizeReviewResponse>.Ok(response, "Review finalized."));
     }
 
+    /// <summary>Deep-copies quiz and questions into a new draft.</summary>
     [HttpPost("{quizId:long}/duplicate")]
     public async Task<ActionResult<ApiResponse<DuplicateQuizResponse>>> DuplicateAsync(
         long quizId,
@@ -255,6 +274,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<DuplicateQuizResponse>.Ok(response, "Quiz duplicated."));
     }
 
+    /// <summary>Archives a published or assigned quiz.</summary>
     [HttpPost("{quizId:long}/archive")]
     public async Task<ActionResult<ApiResponse<ArchiveQuizResponse>>> ArchiveAsync(
         long quizId,
@@ -264,6 +284,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ArchiveQuizResponse>.Ok(response, "Quiz archived."));
     }
 
+    /// <summary>Grants additional attempts after review is finalized.</summary>
     [HttpPost("{quizId:long}/assignments/{assignmentId:long}/allow-retry")]
     public async Task<ActionResult<ApiResponse<AllowRetryResponse>>> AllowRetryAsync(
         long quizId,
@@ -275,6 +296,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<AllowRetryResponse>.Ok(response, "Retry allowed."));
     }
 
+    /// <summary>School admin approves a teacher quiz.</summary>
     [HttpPost("{quizId:long}/approve")]
     public async Task<ActionResult<ApiResponse<ApproveQuizResponse>>> ApproveAsync(
         long quizId,
@@ -284,6 +306,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ApproveQuizResponse>.Ok(response, "Quiz approved."));
     }
 
+    /// <summary>School admin rejects a pending teacher quiz.</summary>
     [HttpPost("{quizId:long}/reject")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<RejectQuizResponse>>> RejectAsync(

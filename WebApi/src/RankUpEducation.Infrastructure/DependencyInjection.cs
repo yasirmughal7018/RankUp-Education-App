@@ -11,8 +11,10 @@ using RankUpEducation.Infrastructure.Persistence.Repositories;
 
 namespace RankUpEducation.Infrastructure;
 
+/// <summary>Registers infrastructure services, repositories, and EF Core.</summary>
 public static class DependencyInjection
 {
+    /// <summary>Adds persistence, authentication helpers, and repository implementations.</summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)

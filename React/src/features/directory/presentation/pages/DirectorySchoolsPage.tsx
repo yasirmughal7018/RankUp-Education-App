@@ -23,6 +23,7 @@ import {
   useUpdateSchoolMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 
+/** Schools and campuses master list with create, edit, and activate/deactivate. */
 export function DirectorySchoolsPage() {
   const [selectedSchoolId, setSelectedSchoolId] = useState<number | null>(null);
   const [schoolDialog, setSchoolDialog] = useState<

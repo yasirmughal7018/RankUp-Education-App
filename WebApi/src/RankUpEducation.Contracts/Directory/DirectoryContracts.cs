@@ -23,8 +23,10 @@ public sealed record DirectoryStatusCounts(
     int Rejected,
     int Total);
 
+/// <summary>Active/inactive school counts for the directory summary.</summary>
 public sealed record DirectorySchoolStatusCounts(int Active, int Inactive, int Total);
 
+/// <summary>Directory dashboard payload with per-section counts and UI section keys.</summary>
 public sealed record DirectorySummaryResponse(
     DirectorySchoolStatusCounts Schools,
     DirectoryStatusCounts Students,
@@ -34,8 +36,10 @@ public sealed record DirectorySummaryResponse(
     DirectoryStatusCounts CampusAdmins,
     IReadOnlyList<string> VisibleSections);
 
+/// <summary>Non-paged list of schools.</summary>
 public sealed record SchoolListResponse(IReadOnlyList<SchoolResponse> Items);
 
+/// <summary>School row for directory and registration pickers.</summary>
 public sealed record SchoolResponse(
     long Id,
     string Name,
@@ -43,20 +47,26 @@ public sealed record SchoolResponse(
     bool IsActive,
     int CampusCount);
 
+/// <summary>Create or update school request body.</summary>
 public sealed record UpsertSchoolRequest(string Name, string Code, bool IsActive = true);
 
+/// <summary>Non-paged list of campuses.</summary>
 public sealed record CampusListResponse(IReadOnlyList<CampusResponse> Items);
 
+/// <summary>Campus row under a school.</summary>
 public sealed record CampusResponse(long Id, long SchoolId, string Name, string? Address, bool IsActive);
 
+/// <summary>Create or update campus request body.</summary>
 public sealed record UpsertCampusRequest(string Name, string? Address, bool IsActive = true);
 
+/// <summary>Paged student directory result.</summary>
 public sealed record DirectoryStudentListResponse(
     IReadOnlyList<DirectoryStudentResponse> Items,
     int PageNumber,
     int PageSize,
     int TotalCount);
 
+/// <summary>Approval decision recorded on a provisioned directory account.</summary>
 public sealed record DirectoryApprovalHistoryItem(
     long ApproverUserId,
     string ApproverName,
@@ -65,6 +75,7 @@ public sealed record DirectoryApprovalHistoryItem(
     string Decision,
     DateTimeOffset? DecidedAt);
 
+/// <summary>Student row in the school directory.</summary>
 public sealed record DirectoryStudentResponse(
     long StudentId,
     string FullName,
@@ -92,6 +103,7 @@ public sealed record DirectoryStudentResponse(
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
+/// <summary>Provision a student from the directory UI.</summary>
 public sealed record CreateDirectoryStudentRequest(
     string FullName,
     string Username,
@@ -102,6 +114,7 @@ public sealed record CreateDirectoryStudentRequest(
     string Section,
     string? MobileNumber = null);
 
+/// <summary>Update an existing student from the directory UI.</summary>
 public sealed record UpdateDirectoryStudentRequest(
     string FullName,
     int CampusId,
@@ -110,12 +123,14 @@ public sealed record UpdateDirectoryStudentRequest(
     string Section,
     string? MobileNumber = null);
 
+/// <summary>Paged teacher directory result.</summary>
 public sealed record DirectoryTeacherListResponse(
     IReadOnlyList<DirectoryTeacherResponse> Items,
     int PageNumber,
     int PageSize,
     int TotalCount);
 
+/// <summary>Teacher row in the school directory.</summary>
 public sealed record DirectoryTeacherResponse(
     long TeacherId,
     string FullName,
@@ -201,8 +216,10 @@ public sealed record LinkParentStudentResponse(
     string Relationship,
     bool IsActive);
 
+/// <summary>Bulk deactivate request listing entity ids.</summary>
 public sealed record BulkDeactivateRequest(IReadOnlyList<long> Ids);
 
+/// <summary>Count of entities affected by a bulk directory action.</summary>
 public sealed record BulkActionResponse(int AffectedCount);
 
 public sealed record DirectorySchoolAdminListResponse(

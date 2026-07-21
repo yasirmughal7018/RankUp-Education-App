@@ -51,6 +51,7 @@ import { StudentQuizDetailPage } from "@/features/student/presentation/pages/Stu
 import { StudentQuizResultPage } from "@/features/student/presentation/pages/StudentQuizResultPage";
 import { StudentQuizzesPage } from "@/features/student/presentation/pages/StudentQuizzesPage";
 
+/** Application route tree with role-based nested guards. */
 export function AppRouter() {
   return (
     <BrowserRouter>

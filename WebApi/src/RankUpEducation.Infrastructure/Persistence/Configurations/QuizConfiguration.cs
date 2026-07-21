@@ -4,6 +4,7 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
+/// <summary>EF Core mapping for <see cref="Quiz"/> including school/campus scope and lifecycle columns.</summary>
 public sealed class QuizConfiguration : IEntityTypeConfiguration<Quiz>
 {
     public void Configure(EntityTypeBuilder<Quiz> builder)
@@ -45,6 +46,7 @@ public sealed class QuizConfiguration : IEntityTypeConfiguration<Quiz>
     }
 }
 
+/// <summary>Student assignment window, attempt limit, and review-done flag.</summary>
 public sealed class QuizAssignmentConfiguration : IEntityTypeConfiguration<QuizAssignment>
 {
     public void Configure(EntityTypeBuilder<QuizAssignment> builder)
@@ -67,6 +69,7 @@ public sealed class QuizAssignmentConfiguration : IEntityTypeConfiguration<QuizA
     }
 }
 
+/// <summary>Quiz-to-question link with unique (quiz_id, question_id) for bank attach.</summary>
 public sealed class QuizQuestionConfiguration : IEntityTypeConfiguration<QuizQuestion>
 {
     public void Configure(EntityTypeBuilder<QuizQuestion> builder)
@@ -83,6 +86,7 @@ public sealed class QuizQuestionConfiguration : IEntityTypeConfiguration<QuizQue
     }
 }
 
+/// <summary>Review feedback row; DB check constraint enforces quiz XOR question target.</summary>
 public sealed class QuizReviewConfiguration : IEntityTypeConfiguration<QuizReview>
 {
     public void Configure(EntityTypeBuilder<QuizReview> builder)
@@ -105,6 +109,7 @@ public sealed class QuizReviewConfiguration : IEntityTypeConfiguration<QuizRevie
     }
 }
 
+/// <summary>Student attempt header with score aggregates and device binding.</summary>
 public sealed class QuizAttemptConfiguration : IEntityTypeConfiguration<QuizAttempt>
 {
     public void Configure(EntityTypeBuilder<QuizAttempt> builder)
@@ -128,6 +133,7 @@ public sealed class QuizAttemptConfiguration : IEntityTypeConfiguration<QuizAtte
     }
 }
 
+/// <summary>Per-attempt question snapshot preserving display order and optional review link.</summary>
 public sealed class QuizAttemptQuestionConfiguration : IEntityTypeConfiguration<QuizAttemptQuestion>
 {
     public void Configure(EntityTypeBuilder<QuizAttemptQuestion> builder)
@@ -143,6 +149,7 @@ public sealed class QuizAttemptQuestionConfiguration : IEntityTypeConfiguration<
     }
 }
 
+/// <summary>Selected option or free-text answer row for one attempt question.</summary>
 public sealed class QuizAttemptAnswerConfiguration : IEntityTypeConfiguration<QuizAttemptAnswer>
 {
     public void Configure(EntityTypeBuilder<QuizAttemptAnswer> builder)

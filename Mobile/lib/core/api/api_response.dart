@@ -1,3 +1,4 @@
+/// Standard envelope returned by RankUp REST endpoints.
 class ApiResponse<T> {
   const ApiResponse({
     required this.success,
@@ -6,6 +7,7 @@ class ApiResponse<T> {
     required this.errors,
   });
 
+  /// Parses the API envelope and maps the `data` field with [fromData].
   factory ApiResponse.fromJson(
     Map<String, dynamic> json,
     T Function(Object? json) fromData,
