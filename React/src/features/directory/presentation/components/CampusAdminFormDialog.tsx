@@ -55,7 +55,9 @@ export function CampusAdminFormDialog({
     campusAdmin?.mobileNumber ?? "",
   );
   const [cnic, setCnic] = useState(campusAdmin?.cnic ?? "");
-  const [emailAddress, setEmailAddress] = useState("");
+  const [emailAddress, setEmailAddress] = useState(
+    campusAdmin?.emailAddress ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;

@@ -41,7 +41,9 @@ export function SchoolAdminFormDialog({
     schoolAdmin?.mobileNumber ?? "",
   );
   const [cnic, setCnic] = useState(schoolAdmin?.cnic ?? "");
-  const [emailAddress, setEmailAddress] = useState("");
+  const [emailAddress, setEmailAddress] = useState(
+    schoolAdmin?.emailAddress ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

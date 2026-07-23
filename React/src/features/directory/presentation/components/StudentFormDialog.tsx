@@ -45,7 +45,7 @@ export function StudentFormDialog({
   const [rollNumber, setRollNumber] = useState(student?.rollNumber ?? "");
   const [grade, setGrade] = useState(student?.grade ? String(student.grade) : "");
   const [section, setSection] = useState(student?.section ?? "");
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [mobileNumber, setMobileNumber] = useState(student?.mobileNumber ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;

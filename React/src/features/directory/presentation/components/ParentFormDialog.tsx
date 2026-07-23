@@ -31,8 +31,8 @@ export function ParentFormDialog({
   const isEdit = parent != null;
   const [fullName, setFullName] = useState(parent?.fullName ?? "");
   const [username, setUsername] = useState(parent?.username ?? "");
-  const [cnic, setCnic] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [cnic, setCnic] = useState(parent?.cnic ?? "");
+  const [mobileNumber, setMobileNumber] = useState(parent?.mobileNumber ?? "");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

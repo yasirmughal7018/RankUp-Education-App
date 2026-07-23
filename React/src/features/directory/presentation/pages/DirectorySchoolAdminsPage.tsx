@@ -4,7 +4,6 @@ import type { ApiError } from "@/core/api/types";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
-  ActiveStatusFilter,
   CreateDirectorySchoolAdminInput,
   DirectorySchoolAdmin,
   UpdateDirectorySchoolAdminInput,
@@ -20,6 +19,11 @@ import {
   useUpdateSchoolAdminMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import {
+  DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS,
+  matchesDirectoryAccountStatusFilter,
+  type DirectoryAccountStatusFilter,
+} from "@/features/directory/presentation/utils/accountStatus";
 
 const PAGE_SIZE = 50;
 
@@ -52,7 +56,8 @@ export function DirectorySchoolAdminsPage() {
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
   const [schoolId, setSchoolId] = useState("");
-  const [activeFilter, setActiveFilter] = useState<ActiveStatusFilter>("all");
+  const [activeFilter, setActiveFilter] =
+    useState<DirectoryAccountStatusFilter>("all");
   const [pageNumber, setPageNumber] = useState(1);
   const [adminDialog, setAdminDialog] = useState<
     "create" | DirectorySchoolAdmin | null
@@ -86,11 +91,13 @@ export function DirectorySchoolAdminsPage() {
   const totalCount = data?.totalCount ?? 0;
 
   const visibleAdmins = useMemo(() => {
-    if (activeFilter === "all") {
-      return schoolAdmins;
-    }
-    const wantActive = activeFilter === "active";
-    return schoolAdmins.filter((admin) => admin.isActive === wantActive);
+    return schoolAdmins.filter((admin) =>
+      matchesDirectoryAccountStatusFilter(
+        admin.accountStatus,
+        admin.isActive,
+        activeFilter,
+      ),
+    );
   }, [schoolAdmins, activeFilter]);
 
   const busy =
@@ -232,13 +239,17 @@ export function DirectorySchoolAdminsPage() {
           <select
             value={activeFilter}
             onChange={(event) =>
-              setActiveFilter(event.target.value as ActiveStatusFilter)
+              setActiveFilter(
+                event.target.value as DirectoryAccountStatusFilter,
+              )
             }
             className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            {DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
       </section>

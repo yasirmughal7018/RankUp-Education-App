@@ -43,7 +43,7 @@ export function TeacherFormDialog({
     teacher?.campusId ? String(teacher.campusId) : "",
   );
   const [teacherCode, setTeacherCode] = useState(teacher?.teacherCode ?? "");
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [mobileNumber, setMobileNumber] = useState(teacher?.mobileNumber ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;

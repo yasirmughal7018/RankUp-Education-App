@@ -5,7 +5,6 @@ import { isAdminRole } from "@/core/api/types";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
-  ActiveStatusFilter,
   CreateDirectoryParentInput,
   DirectoryParent,
   UpdateDirectoryParentInput,
@@ -24,6 +23,11 @@ import {
   useUpdateParentMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import {
+  DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS,
+  matchesDirectoryAccountStatusFilter,
+  type DirectoryAccountStatusFilter,
+} from "@/features/directory/presentation/utils/accountStatus";
 
 const PAGE_SIZE = 50;
 
@@ -36,7 +40,8 @@ export function DirectoryParentsPage() {
 
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
-  const [activeFilter, setActiveFilter] = useState<ActiveStatusFilter>("all");
+  const [activeFilter, setActiveFilter] =
+    useState<DirectoryAccountStatusFilter>("all");
   const [pageNumber, setPageNumber] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [parentDialog, setParentDialog] = useState<
@@ -70,11 +75,13 @@ export function DirectoryParentsPage() {
   const totalCount = data?.totalCount ?? 0;
 
   const visibleParents = useMemo(() => {
-    if (activeFilter === "all") {
-      return parents;
-    }
-    const wantActive = activeFilter === "active";
-    return parents.filter((parent) => parent.isActive === wantActive);
+    return parents.filter((parent) =>
+      matchesDirectoryAccountStatusFilter(
+        parent.accountStatus,
+        parent.isActive,
+        activeFilter,
+      ),
+    );
   }, [parents, activeFilter]);
 
   useEffect(() => {
@@ -296,13 +303,15 @@ export function DirectoryParentsPage() {
         <select
           value={activeFilter}
           onChange={(event) =>
-            setActiveFilter(event.target.value as ActiveStatusFilter)
+            setActiveFilter(event.target.value as DirectoryAccountStatusFilter)
           }
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
         >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          {DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
         <button
           type="button"

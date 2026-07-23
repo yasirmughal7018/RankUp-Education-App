@@ -128,7 +128,7 @@ export async function createSchool(
 ): Promise<DirectorySchool> {
   return apiRequest<DirectorySchool>("/directory/schools", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -139,7 +139,7 @@ export async function updateSchool(
 ): Promise<DirectorySchool> {
   return apiRequest<DirectorySchool>(`/directory/schools/${schoolId}`, {
     method: "PUT",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -174,7 +174,7 @@ export async function createCampus(
     `/directory/schools/${schoolId}/campuses`,
     {
       method: "POST",
-      body: JSON.stringify(input),
+      body: input,
     },
   );
 }
@@ -186,7 +186,7 @@ export async function updateCampus(
 ): Promise<DirectoryCampus> {
   return apiRequest<DirectoryCampus>(`/directory/campuses/${campusId}`, {
     method: "PUT",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -226,7 +226,7 @@ export async function createStudent(
 ): Promise<DirectoryStudent> {
   return apiRequest<DirectoryStudent>("/directory/students", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -237,7 +237,7 @@ export async function updateStudent(
 ): Promise<DirectoryStudent> {
   return apiRequest<DirectoryStudent>(`/directory/students/${studentId}`, {
     method: "PUT",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -261,7 +261,7 @@ export async function bulkDeactivateStudents(
 ): Promise<BulkActionResult> {
   return apiRequest<BulkActionResult>("/directory/students/bulk-deactivate", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -286,7 +286,7 @@ export async function createTeacher(
 ): Promise<DirectoryTeacher> {
   return apiRequest<DirectoryTeacher>("/directory/teachers", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -297,7 +297,7 @@ export async function updateTeacher(
 ): Promise<DirectoryTeacher> {
   return apiRequest<DirectoryTeacher>(`/directory/teachers/${teacherId}`, {
     method: "PUT",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -321,7 +321,7 @@ export async function bulkDeactivateTeachers(
 ): Promise<BulkActionResult> {
   return apiRequest<BulkActionResult>("/directory/teachers/bulk-deactivate", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -344,7 +344,7 @@ export async function createParent(
 ): Promise<DirectoryParent> {
   return apiRequest<DirectoryParent>("/directory/parents", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -355,7 +355,7 @@ export async function updateParent(
 ): Promise<DirectoryParent> {
   return apiRequest<DirectoryParent>(`/directory/parents/${parentId}`, {
     method: "PUT",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -379,7 +379,7 @@ export async function bulkDeactivateParents(
 ): Promise<BulkActionResult> {
   return apiRequest<BulkActionResult>("/directory/parents/bulk-deactivate", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -392,7 +392,7 @@ export async function linkParentStudent(
     `/directory/parents/${parentId}/students`,
     {
       method: "POST",
-      body: JSON.stringify(input),
+      body: input,
     },
   );
 }
@@ -427,7 +427,7 @@ export async function createSchoolAdmin(
 ): Promise<DirectorySchoolAdmin> {
   return apiRequest<DirectorySchoolAdmin>("/directory/school-admins", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -440,7 +440,7 @@ export async function updateSchoolAdmin(
     `/directory/school-admins/${userId}`,
     {
       method: "PUT",
-      body: JSON.stringify(input),
+      body: input,
     },
   );
 }
@@ -480,7 +480,7 @@ export async function createCampusAdmin(
 ): Promise<DirectoryCampusAdmin> {
   return apiRequest<DirectoryCampusAdmin>("/directory/campus-admins", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -493,7 +493,7 @@ export async function updateCampusAdmin(
     `/directory/campus-admins/${userId}`,
     {
       method: "PUT",
-      body: JSON.stringify(input),
+      body: input,
     },
   );
 }
