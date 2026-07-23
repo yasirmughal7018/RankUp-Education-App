@@ -1,5 +1,6 @@
 import { RequiredMark } from "@/core/components/RequiredMark";
 import { useLookups } from "@/core/hooks/useLookups";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 interface LookupSelectProps {
   label: string;
@@ -14,8 +15,7 @@ interface LookupSelectProps {
   emptyLabel?: string;
 }
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 /** Lookup-backed select wired to useLookups. */
 export function LookupSelect({

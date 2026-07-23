@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { PageHeader } from "@/core/components/PageHeader";
+import { ChevronDown } from "lucide-react";
+import { AppPageHeader } from "@/components/ui/app-page-header";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { APPROVAL_STATUS_CHIP } from "@/lib/constants/approval-status";
 import type {
   DirectoryAccountAuditFields,
   DirectoryAccountStatus,
@@ -30,6 +34,7 @@ import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import {
   directoryAccountStatusClass,
   directoryAccountStatusLabel,
+  directoryReadyStatusClass,
   normalizeDirectoryAccountStatus,
 } from "@/features/directory/presentation/utils/accountStatus";
 
@@ -715,32 +720,17 @@ export function DirectoryOverviewPage() {
       : activeListQuery.isFetching;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-      <PageHeader
+    <div className="space-y-6">
+      <AppPageHeader
         title="School Directory"
-        description="A quick overview of schools, people, and admins you can access."
+        subtitle="Browse schools and people in your authorized scope. Counts and lists stay filtered by the API."
         action={
           showSchoolChanges ? (
-            <Link
-              to="/admin/directory/school-changes"
-              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-            >
-              <svg
-                viewBox="0 0 20 20"
-                className="h-4 w-4 shrink-0 opacity-90"
-                fill="currentColor"
-                aria-hidden
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M2.75 10a.75.75 0 01.75-.75h10.69l-2.72-2.72a.75.75 0 011.06-1.06l4 4a.75.75 0 010 1.06l-4 4a.75.75 0 11-1.06-1.06l2.72-2.72H3.5A.75.75 0 012.75 10z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span className="whitespace-nowrap">
+            <Button asChild className="w-full sm:w-auto">
+              <Link to="/admin/directory/school-changes">
                 School / campus changes
-              </span>
-            </Link>
+              </Link>
+            </Button>
           ) : undefined
         }
       />
@@ -760,7 +750,7 @@ export function DirectoryOverviewPage() {
 
       {!summaryLoading && !summaryError && summary ? (
         <>
-          <section className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
             {summaryCards.map((card) => {
               const people = card.people;
               const schools = card.schools;
@@ -783,44 +773,46 @@ export function DirectoryOverviewPage() {
               }
 
               return (
-                <div
+                <article
                   key={card.key}
-                  className={`flex h-full min-h-0 w-full flex-col justify-start self-stretch rounded-2xl border p-3 text-left shadow-sm transition sm:p-3.5 ${
+                  className={cn(
+                    "flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.04)] transition-all duration-200",
                     isSelected
-                      ? "border-brand-500 bg-brand-50/70 shadow-md ring-2 ring-brand-200"
-                      : "border-slate-200 bg-white hover:border-brand-300 hover:shadow-md"
-                  }`}
+                      ? "border-primary ring-2 ring-primary/20"
+                      : "border-border/80 hover:border-primary/35 hover:shadow-[0_8px_24px_rgba(37,99,235,0.1)]",
+                  )}
                 >
                   <button
                     type="button"
                     onClick={() => setActiveTab(card.key)}
                     aria-pressed={isSelected}
-                    className="w-full rounded-xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className="flex min-h-[7.5rem] flex-1 flex-col items-center justify-start p-4 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
-                    <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,3fr)] items-start gap-1.5 sm:gap-2">
-                      <div className="min-w-0 pr-0.5 text-left">
-                        <p
-                          className={`text-sm font-semibold leading-snug tracking-tight sm:text-[0.95rem] ${
-                            isSelected ? "text-brand-900" : "text-slate-900"
-                          }`}
-                          title={card.label}
-                        >
-                          {card.label}
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-                          {totalCount}{" "}
-                          <span className="font-medium text-slate-400">
-                            total
-                          </span>
-                        </p>
-                      </div>
-                      <div className="min-w-0 text-right">
-                        <p className="text-xl font-semibold tracking-tight text-emerald-700 sm:text-2xl">
-                          {activeCount}
-                        </p>
-                        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                    <p
+                      className={cn(
+                        "w-full text-sm font-semibold leading-snug",
+                        isSelected ? "text-primary" : "text-foreground",
+                      )}
+                    >
+                      {card.label}
+                    </p>
+
+                    <div className="mt-4 w-full space-y-2 text-sm">
+                      <div className="flex min-w-0 items-center justify-between gap-2">
+                        <span className="truncate whitespace-nowrap text-muted-foreground">
                           Active
-                        </p>
+                        </span>
+                        <span className="shrink-0 font-semibold tabular-nums text-[hsl(var(--success))]">
+                          {activeCount}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-center justify-between gap-2">
+                        <span className="truncate whitespace-nowrap text-muted-foreground">
+                          Total
+                        </span>
+                        <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                          {totalCount}
+                        </span>
                       </div>
                     </div>
                   </button>
@@ -834,81 +826,65 @@ export function DirectoryOverviewPage() {
                         ? `Hide ${card.label} status details`
                         : `Show ${card.label} status details`
                     }
-                    className="mt-3 flex w-full items-center gap-2 text-slate-400 transition hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className="flex min-h-10 items-center justify-center gap-1.5 border-t border-border/70 bg-muted/40 px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
-                    <span className="h-px flex-1 bg-slate-200" />
-                    <span
-                      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition ${
-                        isExpanded ? "rotate-180" : ""
-                      }`}
+                    <span>{isExpanded ? "Hide details" : "Details"}</span>
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 transition-transform duration-200",
+                        isExpanded && "rotate-180",
+                      )}
                       aria-hidden
-                    >
-                      <svg
-                        viewBox="0 0 20 20"
-                        className="h-3.5 w-3.5"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </span>
-                    <span className="h-px flex-1 bg-slate-200" />
+                    />
                   </button>
 
                   {isExpanded ? (
-                    card.kind === "schools" ? (
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
-                        <div className="rounded-xl bg-emerald-50 px-3 py-3 text-center sm:px-3.5 sm:py-3.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 sm:text-xs">
-                            Active
-                          </p>
-                          <p className="mt-1 text-2xl font-semibold tracking-tight text-emerald-800 sm:text-3xl">
-                            {schools?.active ?? 0}
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-slate-100 px-3 py-3 text-center sm:px-3.5 sm:py-3.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:text-xs">
-                            Inactive
-                          </p>
-                          <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-700 sm:text-3xl">
-                            {schools?.inactive ?? 0}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <ul className="mt-3 space-y-1.5">
-                        <StatusRow
-                          label="Pending approval"
-                          count={people?.pendingApproval ?? 0}
-                          tone="warn"
-                        />
-                        <StatusRow
-                          label="Approved (Inactive)"
-                          count={people?.needsPasswordSetup ?? 0}
-                          tone="info"
-                        />
-                        <StatusRow
-                          label="Locked"
-                          count={people?.locked ?? 0}
-                          tone="locked"
-                        />
-                        <StatusRow
-                          label="Deactivated"
-                          count={people?.deactivated ?? 0}
-                          tone="muted"
-                        />
-                        <StatusRow
-                          label="Rejected"
-                          count={people?.rejected ?? 0}
-                          tone="danger"
-                        />
-                      </ul>
-                    )
+                    <div className="border-t border-border/70 bg-muted/20 p-3">
+                      {card.kind === "schools" ? (
+                        <ul className="space-y-1.5">
+                          <StatusRow
+                            label="Active"
+                            count={schools?.active ?? 0}
+                            tone="active"
+                          />
+                          <StatusRow
+                            label="Inactive"
+                            count={schools?.inactive ?? 0}
+                            tone="muted"
+                          />
+                        </ul>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          <StatusRow
+                            label="Pending"
+                            count={people?.pendingApproval ?? 0}
+                            tone="warn"
+                          />
+                          <StatusRow
+                            label="Approved"
+                            count={people?.needsPasswordSetup ?? 0}
+                            tone="info"
+                          />
+                          <StatusRow
+                            label="Locked"
+                            count={people?.locked ?? 0}
+                            tone="locked"
+                          />
+                          <StatusRow
+                            label="Inactive"
+                            count={people?.deactivated ?? 0}
+                            tone="muted"
+                          />
+                          <StatusRow
+                            label="Rejected"
+                            count={people?.rejected ?? 0}
+                            tone="danger"
+                          />
+                        </ul>
+                      )}
+                    </div>
                   ) : null}
-                </div>
+                </article>
               );
             })}
           </section>
@@ -925,7 +901,7 @@ export function DirectoryOverviewPage() {
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
                     placeholder={TAB_META[activeTab].searchPlaceholder}
-                    className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    className="w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
                   />
                   <button
                     type="submit"
@@ -1050,36 +1026,39 @@ function StatusRow({
   count: number;
   tone: "active" | "warn" | "info" | "locked" | "muted" | "danger";
 }) {
-  const toneClass =
-    tone === "active"
-      ? "bg-emerald-50 text-emerald-800"
-      : tone === "warn"
-        ? "bg-amber-50 text-amber-900"
-        : tone === "info"
-          ? "bg-sky-50 text-sky-900"
-          : tone === "locked"
-            ? "bg-orange-50 text-orange-900"
-            : tone === "danger"
-              ? "bg-rose-50 text-rose-900"
-              : "bg-slate-100 text-slate-700";
+  const toneToStatus = {
+    active: "active",
+    warn: "pending",
+    info: "approved",
+    locked: "locked",
+    muted: "deactivated",
+    danger: "rejected",
+  } as const;
 
   return (
     <li
-      className={`flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 ${toneClass}`}
+      className={cn(
+        "flex min-w-0 items-center justify-between gap-2 rounded-xl border px-2.5 py-2",
+        APPROVAL_STATUS_CHIP[toneToStatus[tone]],
+      )}
     >
-      <span className="text-xs font-medium leading-snug">{label}</span>
-      <span className="text-sm font-semibold tabular-nums">{count}</span>
+      <span className="min-w-0 truncate whitespace-nowrap text-xs font-medium leading-none">
+        {label}
+      </span>
+      <span className="shrink-0 text-sm font-semibold tabular-nums leading-none">
+        {count}
+      </span>
     </li>
   );
 }
 
 function DirectoryLoadingSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
       {Array.from({ length: 6 }).map((_, index) => (
         <div
           key={index}
-          className="h-24 animate-pulse rounded-2xl border border-slate-200 bg-white sm:h-28"
+          className="h-[9.5rem] animate-pulse rounded-2xl border border-border bg-card"
         />
       ))}
     </div>
@@ -1345,8 +1324,10 @@ function resolveStatusStyleCode(
   }
   switch (value) {
     case "Approved (Inactive)":
+    case "Approved":
       return "ApprovedInactive";
     case "Pending approval":
+    case "Pending":
       return "PendingApproval";
     default:
       return null;
@@ -1361,20 +1342,27 @@ function DetailRows({ details }: { details: PreviewDetail[] }) {
         return (
           <div
             key={detail.label}
-            className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-3.5 py-3"
+            className="flex items-center justify-between gap-4 rounded-xl bg-muted/60 px-3.5 py-3"
           >
-            <dt className="shrink-0 text-slate-500">{detail.label}</dt>
+            <dt className="shrink-0 text-muted-foreground">{detail.label}</dt>
             <dd className="max-w-[65%] text-right break-words">
               {statusCode ? (
                 <span
-                  className={`rounded-md px-2 py-1 text-[11px] font-semibold ${directoryAccountStatusClass(
+                  className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${directoryAccountStatusClass(
                     statusCode,
                   )}`}
                 >
-                  {detail.value}
+                  {detail.value === "Approved" ||
+                  detail.value === "Approved (Inactive)"
+                    ? "Approved"
+                    : detail.value === "Pending approval"
+                      ? "Pending"
+                      : detail.value === "Deactivated"
+                        ? "Inactive"
+                        : detail.value}
                 </span>
               ) : (
-                <span className="font-medium text-slate-800">{detail.value}</span>
+                <span className="font-medium text-foreground">{detail.value}</span>
               )}
             </dd>
           </div>
@@ -1403,10 +1391,10 @@ function ApprovalHistorySection({
           {history.map((entry, index) => {
             const decisionClass =
               entry.decision === "Approved"
-                ? "bg-emerald-50 text-emerald-800"
+                ? APPROVAL_STATUS_CHIP.approved
                 : entry.decision === "Rejected"
-                  ? "bg-rose-50 text-rose-800"
-                  : "bg-amber-50 text-amber-900";
+                  ? APPROVAL_STATUS_CHIP.rejected
+                  : APPROVAL_STATUS_CHIP.pending;
             return (
               <li
                 key={`${entry.approverUserId}-${entry.decision}-${entry.decidedAt ?? index}`}
@@ -1425,7 +1413,7 @@ function ApprovalHistorySection({
                     </p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${decisionClass}`}
+                    className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${decisionClass}`}
                   >
                     {entry.decision}
                   </span>
@@ -1526,7 +1514,7 @@ function SchoolInspectSheet({
           </button>
         </div>
 
-        <div className="overflow-y-auto px-5 py-5">
+        <div className="overflow-y-auto px-5 py-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex items-center gap-3.5">
             <span className="relative inline-flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-bold tracking-wide text-brand-800 ring-2 ring-white shadow-sm">
               {schoolInitials}
@@ -1594,11 +1582,9 @@ function SchoolInspectSheet({
                         ) : null}
                       </span>
                       <span
-                        className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${
-                          campus.isActive
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
+                        className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${directoryReadyStatusClass(
+                          campus.isActive,
+                        )}`}
                       >
                         {campus.isActive ? "Active" : "Inactive"}
                       </span>

@@ -1,7 +1,16 @@
 import { Link } from "react-router-dom";
+import {
+  ClipboardList,
+  BookOpenCheck,
+  School,
+  GraduationCap,
+  Users,
+  ShieldCheck,
+  FileCheck2,
+  BarChart3,
+  ArrowRight,
+} from "lucide-react";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
-import { Card } from "@/core/components/Card";
-import { PageHeader } from "@/core/components/PageHeader";
 import {
   getDashboardLabel,
   isAdminRole,
@@ -10,6 +19,11 @@ import {
 import { canManageQuestions } from "@/features/questions/domain/questionTypes";
 import { canManageQuizzes } from "@/features/quizzes/domain/quizTypes";
 import { canTakeStudentQuizzes } from "@/features/student/domain/studentQuizTypes";
+import { AppPageHeader } from "@/components/ui/app-page-header";
+import { AppStatCard } from "@/components/ui/app-stat-card";
+import { AppCard } from "@/components/ui/app-card";
+import { AppSectionHeader } from "@/components/ui/app-section-header";
+import { Button } from "@/components/ui/button";
 
 const roleModules: Record<UserRole, string[]> = {
   PortalAdmin: [
@@ -48,48 +62,63 @@ const roleModules: Record<UserRole, string[]> = {
   ],
 };
 
-function quickLinksForRole(role: UserRole): Array<{ label: string; href: string }> {
+function quickLinksForRole(
+  role: UserRole,
+): Array<{ label: string; href: string; icon: typeof School; hint: string }> {
   if (role === "PortalAdmin" || role === "SchoolAdmin") {
     return [
-      { label: "Registrations", href: "/admin/registrations" },
-      { label: "Directory", href: "/admin/directory" },
-      { label: "Reports", href: "/reports" },
-      { label: "Question bank", href: "/questions" },
+      { label: "Registrations", href: "/admin/registrations", icon: ShieldCheck, hint: "Approve access" },
+      { label: "Directory", href: "/admin/directory", icon: School, hint: "People & schools" },
+      { label: "Reports", href: "/reports", icon: BarChart3, hint: "Performance" },
+      { label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Assessments" },
     ];
   }
-
   if (role === "CampusAdmin") {
     return [
-      { label: "Registrations", href: "/admin/registrations" },
-      { label: "Directory", href: "/admin/directory" },
-      { label: "Question bank", href: "/questions" },
+      { label: "Registrations", href: "/admin/registrations", icon: ShieldCheck, hint: "Approve access" },
+      { label: "Directory", href: "/admin/directory", icon: School, hint: "Campus people" },
+      { label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Assessments" },
     ];
   }
-
   if (role === "Teacher") {
     return [
-      { label: "Quizzes", href: "/quizzes" },
-      { label: "Question bank", href: "/questions" },
-      { label: "Assignments", href: "/quizzes/assignments" },
-      { label: "Pending reviews", href: "/quizzes/reviews/pending" },
-      { label: "Reports", href: "/reports" },
+      { label: "Quizzes", href: "/quizzes", icon: ClipboardList, hint: "Create & assign" },
+      { label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Build items" },
+      { label: "Assignments", href: "/quizzes/assignments", icon: Users, hint: "Class board" },
+      { label: "Reviews", href: "/quizzes/reviews/pending", icon: FileCheck2, hint: "Mark work" },
+      { label: "Reports", href: "/reports", icon: BarChart3, hint: "Insights" },
     ];
   }
-
   if (role === "Parent") {
     return [
-      { label: "Children", href: "/parent/children" },
-      { label: "Quizzes", href: "/quizzes" },
-      { label: "Question bank", href: "/questions" },
-      { label: "Assignments", href: "/quizzes/assignments" },
+      { label: "Children", href: "/parent/children", icon: GraduationCap, hint: "Linked students" },
+      { label: "Quiz dashboard", href: "/parent/quiz-dashboard", icon: ClipboardList, hint: "Progress" },
+      { label: "Assignments", href: "/quizzes/assignments", icon: Users, hint: "Follow work" },
     ];
   }
-
   if (role === "Student") {
-    return [{ label: "My quizzes", href: "/student/quizzes" }];
+    return [
+      { label: "Learning", href: "/student/dashboard", icon: GraduationCap, hint: "Today’s focus" },
+      { label: "My quizzes", href: "/student/quizzes", icon: ClipboardList, hint: "Assigned work" },
+    ];
   }
+  return [{ label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Browse" }];
+}
 
-  return [{ label: "Question bank", href: "/questions" }];
+function primaryAction(role: UserRole) {
+  if (isAdminRole(role)) {
+    return { href: "/admin/registrations", label: "Review registrations" };
+  }
+  if (canManageQuizzes(role)) {
+    return { href: "/quizzes", label: "Manage quizzes" };
+  }
+  if (canTakeStudentQuizzes(role)) {
+    return { href: "/student/dashboard", label: "Continue learning" };
+  }
+  if (canManageQuestions(role)) {
+    return { href: "/questions", label: "Open question bank" };
+  }
+  return null;
 }
 
 /** Role-based landing page with quick links and permissions. */
@@ -102,131 +131,108 @@ export function DashboardPage() {
 
   const modules = roleModules[user.role] ?? [];
   const quickLinks = quickLinksForRole(user.role);
+  const action = primaryAction(user.role);
+  const firstName = (user.fullName || user.name || user.username).split(" ")[0];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title={getDashboardLabel(user.role)}
-        description={`Welcome back, ${user.fullName || user.name}. Your role is resolved by the backend after login.`}
+    <div className="space-y-7">
+      <AppPageHeader
+        studentFacing={user.role === "Student"}
+        eyebrow="Your workspace"
+        title={`Welcome back, ${firstName}`}
+        subtitle={`${getDashboardLabel(user.role)} · things stay scoped to your school role so the right people see the right work.`}
         action={
-          isAdminRole(user.role) ? (
-            <Link
-              to="/admin/registrations"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              Registration approvals
-            </Link>
-          ) : canManageQuizzes(user.role) ? (
-            <Link
-              to="/quizzes"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              Manage quizzes
-            </Link>
-          ) : canTakeStudentQuizzes(user.role) ? (
-            <Link
-              to="/student/quizzes"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              My quizzes
-            </Link>
-          ) : canManageQuestions(user.role) ? (
-            <Link
-              to="/questions"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              Open question bank
-            </Link>
+          action ? (
+            <Button asChild size="lg" className="min-h-12 w-full sm:w-auto">
+              <Link to={action.href}>
+                {action.label}
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+            </Button>
           ) : undefined
         }
       />
 
-      <section className="mb-8 grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Signed in as
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-900">
-            {user.username}
-          </p>
-          <p className="mt-1 text-sm text-slate-600">{user.fullName}</p>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <AppStatCard
+          title="Signed in as"
+          value={user.username}
+          description={user.fullName || "Account"}
+          icon={Users}
+          colorVariant="primary"
+        />
+        <AppStatCard
+          title="Your role"
+          value={user.role}
+          description={
+            isAdminRole(user.role)
+              ? "Administration access"
+              : "Role-based access"
+          }
+          icon={ShieldCheck}
+          colorVariant="ai"
+        />
+        <AppStatCard
+          title="School scope"
+          value={`${user.schoolId ?? "—"} / ${user.campusId ?? "—"}`}
+          description="School ID / Campus ID"
+          icon={School}
+          colorVariant="neutral"
+        />
+      </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Role
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-900">
-            {user.role}
-          </p>
-          <p className="mt-1 text-sm text-slate-600">
-            {isAdminRole(user.role)
-              ? "Web administration access"
-              : "Role-based web access"}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Scope
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-900">
-            {user.schoolId ?? "—"} / {user.campusId ?? "—"}
-          </p>
-          <p className="mt-1 text-sm text-slate-600">
-            School ID / Campus ID
-          </p>
-        </div>
-      </section>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card
-          title="Available now"
-          description="Capabilities enabled for your role in the web app."
-        >
-          <ul className="space-y-2 text-sm text-slate-700">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AppCard>
+          <AppSectionHeader
+            title="Available for you"
+            description="What this role can do in RankUp."
+          />
+          <ul className="space-y-3">
             {modules.map((item) => (
-              <li key={item} className="flex items-start gap-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-brand-500" />
-                <span>{item}</span>
+              <li
+                key={item}
+                className="flex items-start gap-3 rounded-xl bg-muted/60 px-3 py-3 text-sm text-foreground"
+              >
+                <span
+                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary"
+                  aria-hidden
+                />
+                <span className="leading-6">{item}</span>
               </li>
             ))}
           </ul>
+        </AppCard>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {quickLinks.map((link) => (
-              <Link
-                key={link.href}
-                to={link.href}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </Card>
-
-        <Card
-          title="Permissions"
-          description="Claims returned by the API for this account."
-        >
-          {user.permissions.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {user.permissions.map((permission) => (
-                <span
-                  key={permission}
-                  className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700"
+        <AppCard>
+          <AppSectionHeader
+            title="Quick links"
+            description="Jump to the work you do most."
+          />
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {quickLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.href}
+                  to={link.href}
+                  className="group flex min-h-[4.25rem] items-center gap-3 rounded-2xl border border-border/80 bg-background/60 px-3 py-3 transition hover:border-primary/30 hover:bg-primary/5"
                 >
-                  {permission}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-600">
-              No explicit permissions were returned for this user.
-            </p>
-          )}
-        </Card>
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-foreground group-hover:text-primary">
+                      {link.label}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {link.hint}
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </AppCard>
       </div>
     </div>
   );

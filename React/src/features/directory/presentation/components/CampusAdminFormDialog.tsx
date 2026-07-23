@@ -9,6 +9,7 @@ import type {
   UpdateDirectoryCampusAdminInput,
 } from "@/features/directory/domain/directoryTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 type CampusAdminFormSubmit =
   | { mode: "create"; input: CreateDirectoryCampusAdminInput }
@@ -24,8 +25,7 @@ interface CampusAdminFormDialogProps {
   onSubmit: (payload: CampusAdminFormSubmit) => Promise<void>;
 }
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 /** Modal form to create or update a campus admin account. */
 export function CampusAdminFormDialog({

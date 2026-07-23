@@ -7,6 +7,7 @@ import {
   normalizeQuestionType,
 } from "@/features/questions/domain/questionTypes";
 import { RequiredMark } from "@/core/components/RequiredMark";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 interface QuestionOptionsEditorProps {
   questionType: string;
@@ -15,8 +16,7 @@ interface QuestionOptionsEditorProps {
   onChange: (options: QuestionOptionInput[]) => void;
 }
 
-const inputClassName =
-  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30";
+const inputClassName = FORM_FIELD_CLASS;
 
 /** Editable answer options for MCQ, true/false, and fill-in-the-blank types. */
 export function QuestionOptionsEditor({

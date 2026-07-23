@@ -306,7 +306,7 @@ export function QuestionDetailPage() {
               value={rejectReason}
               disabled={isSubmitting}
               onChange={(event) => setRejectReason(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
               placeholder="Explain why this question is being rejected (min 10 characters)..."
             />
             <div className="mt-3 flex flex-wrap gap-2">

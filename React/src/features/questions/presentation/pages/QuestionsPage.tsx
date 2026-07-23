@@ -26,7 +26,7 @@ import {
 } from "@/features/questions/domain/questionTypes";
 import type { ImportQuestionsResult } from "@/features/questions/data/questionApi";
 import {
-  getQuestionStatusTone,
+  getQuestionStatusKey,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import { QuestionBankStatTile } from "@/features/questions/presentation/components/QuestionBankStatTile";
@@ -429,8 +429,8 @@ export function QuestionsPage() {
         }
       />
 
-      <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-brand-50 via-white to-slate-50 p-5 shadow-sm sm:p-6">
-        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">
+      <section className="mb-6 overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
           Approval system
         </p>
 
@@ -438,49 +438,49 @@ export function QuestionsPage() {
           <QuestionBankStatTile
             label="Total"
             value={approvalStats.total}
-            accent="brand"
+            status="active"
             active={approvalLens === "all"}
             onClick={() => selectApprovalLens("all")}
           />
           <QuestionBankStatTile
             label="Active"
             value={approvalStats.active}
-            accent="brand"
+            status="active"
             active={approvalLens === "active"}
             onClick={() => selectApprovalLens("active")}
           />
           <QuestionBankStatTile
             label="Approved"
             value={approvalStats.approved}
-            accent="emerald"
+            status="approved"
             active={approvalLens === "approved"}
             onClick={() => selectApprovalLens("approved")}
           />
           <QuestionBankStatTile
             label="Inactive"
             value={approvalStats.inactive}
-            accent="slate"
+            status="deactivated"
             active={approvalLens === "inactive"}
             onClick={() => selectApprovalLens("inactive")}
           />
           <QuestionBankStatTile
-            label="PendingReviews"
+            label="Pending"
             value={approvalStats.pending}
-            accent="amber"
+            status="pending"
             active={approvalLens === "pending"}
             onClick={() => selectApprovalLens("pending")}
           />
           <QuestionBankStatTile
             label="Rejected"
             value={approvalStats.rejected}
-            accent="rose"
+            status="rejected"
             active={approvalLens === "rejected"}
             onClick={() => selectApprovalLens("rejected")}
           />
           <QuestionBankStatTile
             label="Archived"
             value={approvalStats.archived}
-            accent="slate"
+            status="deactivated"
             active={approvalLens === "archived"}
             onClick={() => selectApprovalLens("archived")}
           />
@@ -621,7 +621,7 @@ export function QuestionsPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Text, type, status, subject, class, difficulty, owner…"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
               />
             </label>
           </section>
@@ -727,7 +727,7 @@ export function QuestionsPage() {
                             ? question.status
                             : `${question.status} (inactive)`
                         }
-                        tone={getQuestionStatusTone(
+                        status={getQuestionStatusKey(
                           question.status,
                           question.isActive,
                         )}

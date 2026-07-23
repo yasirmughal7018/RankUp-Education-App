@@ -11,9 +11,9 @@ import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {

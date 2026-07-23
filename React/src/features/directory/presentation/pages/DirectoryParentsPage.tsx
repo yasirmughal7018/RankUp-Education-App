@@ -291,14 +291,14 @@ export function DirectoryParentsPage() {
             }
           }}
           placeholder="Search parents..."
-          className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="min-w-[220px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
         />
         <select
           value={activeFilter}
           onChange={(event) =>
             setActiveFilter(event.target.value as ActiveStatusFilter)
           }
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
         >
           <option value="all">All statuses</option>
           <option value="active">Active</option>

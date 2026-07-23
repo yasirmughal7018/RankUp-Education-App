@@ -8,9 +8,9 @@ import * as authApi from "@/features/authentication/data/authApi";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import { AvatarUploadDialog } from "@/features/authentication/presentation/components/AvatarUploadDialog";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
-const fieldClass =
-  "w-full rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20";
+const fieldClass = FORM_FIELD_CLASS;
 
 const SCHOOL_CHANGE_ROLES: UserRole[] = [
   "Teacher",

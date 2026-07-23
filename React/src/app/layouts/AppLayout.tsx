@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { environment } from "@/app/environment";
+import { useMemo } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { isAdminRole } from "@/core/api/types";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { UserMenu } from "@/features/authentication/presentation/components/UserMenu";
@@ -9,28 +8,9 @@ import { canManageQuestions } from "@/features/questions/domain/questionTypes";
 import { canManageQuizzes } from "@/features/quizzes/domain/quizTypes";
 import { canViewReports } from "@/features/reports/domain/reportTypes";
 import { canTakeStudentQuizzes } from "@/features/student/domain/studentQuizTypes";
-
-type NavItem = {
-  to: string;
-  label: string;
-  end?: boolean;
-};
-
-const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  [
-    "relative whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-    isActive
-      ? "bg-brand-50 text-brand-700"
-      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-  ].join(" ");
-
-const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
-  [
-    "block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-    isActive
-      ? "bg-brand-50 text-brand-700"
-      : "text-slate-700 hover:bg-slate-100",
-  ].join(" ");
+import { AppShell } from "@/components/layout/app-shell";
+import type { SidebarNavItem } from "@/components/layout/sidebar";
+import { Button } from "@/components/ui/button";
 
 const AUTH_PAGES_WITHOUT_MENU = new Set([
   "/login",
@@ -39,211 +19,113 @@ const AUTH_PAGES_WITHOUT_MENU = new Set([
   "/forgot-password",
 ]);
 
-/** Shell layout: header nav, notifications, and outlet. */
+/** Shell layout: AppShell chrome + outlet for all routes. */
 export function AppLayout() {
   const { isAuthenticated, user, isBootstrapping } = useAuth();
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const hideMenuBar = AUTH_PAGES_WITHOUT_MENU.has(location.pathname);
+  const hideChrome = AUTH_PAGES_WITHOUT_MENU.has(location.pathname);
 
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!menuOpen) {
-      return;
+  const navItems = useMemo(() => {
+    const items: SidebarNavItem[] = [{ to: "/", label: "Home", end: true }];
+    if (!isAuthenticated) {
+      return items;
     }
 
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [menuOpen]);
-
-  const navItems: NavItem[] = [];
-  if (isAuthenticated) {
-    navItems.push({ to: "/dashboard", label: "Dashboard" });
+    items.push({ to: "/dashboard", label: "Dashboard" });
     if (user && isAdminRole(user.role)) {
-      navItems.push({ to: "/admin", label: "Admin" });
+      items.push(
+        { to: "/admin", label: "Admin" },
+        { to: "/admin/directory", label: "Directory" },
+      );
     }
     if (user && canManageQuestions(user.role)) {
-      navItems.push({ to: "/questions", label: "Questions" });
+      items.push({ to: "/questions", label: "Questions" });
     }
     if (user && canManageQuizzes(user.role)) {
-      navItems.push(
+      items.push(
         { to: "/quizzes", label: "Quizzes", end: true },
         { to: "/quizzes/assignments", label: "Assignments" },
         { to: "/quizzes/reviews/pending", label: "Reviews" },
       );
     }
     if (user && canViewReports(user.role)) {
-      navItems.push({ to: "/reports", label: "Reports" });
+      items.push({ to: "/reports", label: "Reports" });
     }
     if (user?.role === "Parent") {
-      navItems.push({ to: "/parent/children", label: "Children" });
+      items.push(
+        { to: "/parent/children", label: "Children" },
+        { to: "/parent/quiz-dashboard", label: "Quiz dashboard" },
+      );
     }
     if (user && canTakeStudentQuizzes(user.role)) {
-      navItems.push({ to: "/student/quizzes", label: "My quizzes" });
+      items.push(
+        { to: "/student/dashboard", label: "Learning" },
+        { to: "/student/quizzes", label: "My quizzes" },
+      );
     }
-  }
+    return items;
+  }, [isAuthenticated, user]);
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      {hideMenuBar ? null : (
-        <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
-            <Link
-              to="/"
-              className="flex min-w-0 shrink-0 items-center gap-3 rounded-xl outline-none ring-brand-500 focus-visible:ring-2"
-            >
-              <img
-                src="/rankup-mark.svg?v=3"
-                alt=""
-                className="h-9 w-9 rounded-xl shadow-sm shadow-brand-600/25"
-              />
-              <p className="min-w-0 truncate text-sm font-semibold text-slate-900">
-                {environment.appName}
-              </p>
-            </Link>
+  const mobileNavItems = useMemo(() => {
+    if (!isAuthenticated || !user) {
+      return [
+        { to: "/", label: "Home", end: true },
+        { to: "/request-access", label: "Join" },
+      ];
+    }
+    const items: SidebarNavItem[] = [{ to: "/dashboard", label: "Home" }];
+    if (isAdminRole(user.role)) {
+      items.push({ to: "/admin/directory", label: "Directory" });
+    }
+    if (canManageQuestions(user.role) && !isAdminRole(user.role)) {
+      items.push({ to: "/questions", label: "Questions" });
+    }
+    if (canManageQuizzes(user.role)) {
+      items.push({ to: "/quizzes", label: "Quizzes", end: true });
+    }
+    if (user.role === "Parent") {
+      items.push(
+        { to: "/parent/children", label: "Children" },
+        { to: "/parent/quiz-dashboard", label: "Quizzes" },
+      );
+    }
+    if (canTakeStudentQuizzes(user.role)) {
+      items.push(
+        { to: "/student/dashboard", label: "Learn" },
+        { to: "/student/quizzes", label: "Quizzes" },
+      );
+    }
+    return items.slice(0, 5);
+  }, [isAuthenticated, user]);
 
-            <nav
-              className="ml-2 hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto lg:flex"
-              aria-label="Main"
-            >
-              <NavLink to="/" end className={navLinkClass}>
-                Home
-              </NavLink>
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={navLinkClass}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-
-            <div className="ml-auto flex items-center gap-2">
-              {isAuthenticated ? (
-                <>
-                  {user && isAdminRole(user.role) ? (
-                    <div className="hidden sm:block">
-                      <NotificationsBell />
-                    </div>
-                  ) : null}
-                  <div className="hidden border-l border-slate-200 pl-3 md:block">
-                    <UserMenu />
-                  </div>
-                  <div className="md:hidden">
-                    <UserMenu compact />
-                  </div>
-                </>
-              ) : !isBootstrapping ? (
-                <NavLink
-                  to="/login"
-                  className="hidden rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 sm:inline-flex"
-                >
-                  Login
-                </NavLink>
-              ) : null}
-
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50 lg:hidden"
-                aria-expanded={menuOpen}
-                aria-controls="mobile-nav"
-                aria-label={menuOpen ? "Close menu" : "Open menu"}
-                onClick={() => setMenuOpen((open) => !open)}
-              >
-                {menuOpen ? (
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden
-                  >
-                    <path
-                      strokeLinecap="round"
-                      d="M6 6l12 12M18 6L6 18"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden
-                  >
-                    <path
-                      strokeLinecap="round"
-                      d="M4 7h16M4 12h16M4 17h16"
-                    />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {menuOpen ? (
-            <div
-              id="mobile-nav"
-              className="border-t border-slate-200 bg-white lg:hidden"
-            >
-              <div className="mx-auto max-w-6xl space-y-4 px-4 py-4 sm:px-6">
-                <nav className="flex flex-col gap-0.5" aria-label="Mobile">
-                  <NavLink to="/" end className={mobileNavLinkClass}>
-                    Home
-                  </NavLink>
-                  {navItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={item.end}
-                      className={mobileNavLinkClass}
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-                  {!isAuthenticated && !isBootstrapping ? (
-                    <NavLink to="/login" className={mobileNavLinkClass}>
-                      Login
-                    </NavLink>
-                  ) : null}
-                </nav>
-
-                {isAuthenticated && user && isAdminRole(user.role) ? (
-                  <div className="border-t border-slate-100 pt-4 sm:hidden">
-                    <NotificationsBell />
-                  </div>
-                ) : null}
-              </div>
+  const trailing = (
+    <div className="flex items-center gap-2">
+      {isAuthenticated ? (
+        <>
+          {user && isAdminRole(user.role) ? (
+            <div className="hidden sm:block">
+              <NotificationsBell />
             </div>
           ) : null}
-        </header>
-      )}
-
-      <main className="flex-1">
-        <Outlet />
-      </main>
-
-      {hideMenuBar ? null : (
-        <footer className="border-t border-slate-200 bg-white">
-          <div className="mx-auto max-w-6xl px-4 py-4 text-center text-sm text-slate-500 sm:px-6">
-            © {new Date().getFullYear()} RankUp Education. All rights reserved.
-          </div>
-        </footer>
-      )}
+          <UserMenu />
+        </>
+      ) : !isBootstrapping ? (
+        <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <NavLink to="/login">Sign in</NavLink>
+        </Button>
+      ) : null}
     </div>
+  );
+
+  return (
+    <AppShell
+      hideChrome={hideChrome}
+      navItems={navItems}
+      mobileNavItems={mobileNavItems}
+      topbarTrailing={trailing}
+      role={user?.role}
+    >
+      <Outlet />
+    </AppShell>
   );
 }

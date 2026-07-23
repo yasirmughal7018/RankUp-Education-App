@@ -307,7 +307,7 @@ export function ReportsPage() {
               }
             }}
             placeholder="Optional quiz ID for rankings & performance"
-            className="min-w-[260px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="min-w-[260px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           />
           <button
             type="button"
@@ -343,7 +343,7 @@ export function ReportsPage() {
               type="date"
               value={fromInput}
               onChange={(event) => setFromInput(event.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
             />
           </div>
           <div>
@@ -358,7 +358,7 @@ export function ReportsPage() {
               type="date"
               value={toInput}
               onChange={(event) => setToInput(event.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
             />
           </div>
           <button
@@ -781,7 +781,7 @@ export function ReportsPage() {
                     ? `Student ID (yours: ${defaultHistoryHint})`
                     : "Student ID for quiz history"
                 }
-                className="min-w-[260px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="min-w-[260px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
               />
               <button
                 type="button"

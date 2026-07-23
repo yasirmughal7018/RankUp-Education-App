@@ -67,8 +67,8 @@ export function AuthSplitLayout({ variant, children }: AuthSplitLayoutProps) {
     <div
       className={
         isRequestAccess
-          ? "flex h-dvh overflow-hidden bg-slate-50"
-          : "flex min-h-screen bg-slate-50"
+          ? "flex h-dvh overflow-hidden bg-background"
+          : "flex min-h-screen bg-background"
       }
     >
       <aside className="relative hidden w-[46%] overflow-hidden lg:flex lg:flex-col">
@@ -159,14 +159,14 @@ export function AuthSplitLayout({ variant, children }: AuthSplitLayoutProps) {
       </aside>
 
       <div className="flex min-h-0 w-full flex-1 flex-col lg:w-[54%]">
-        <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
-          <Link to="/" className="inline-flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
+          <Link to="/" className="inline-flex min-h-11 items-center gap-2.5">
             <img
               src="/rankup-mark.svg?v=3"
               alt=""
               className="h-9 w-9 rounded-xl shadow-sm"
             />
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-foreground">
               {environment.appName}
             </span>
           </Link>

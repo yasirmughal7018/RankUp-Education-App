@@ -5,9 +5,9 @@ import { SearchableSelect } from "@/core/components/SearchableSelect";
 import * as authApi from "@/features/authentication/data/authApi";
 import type { RegisterAccountRequest } from "@/features/authentication/data/authApi";
 import { AuthSplitLayout } from "@/features/authentication/presentation/components/AuthSplitLayout";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 const USER_TYPES = ["Student", "Parent", "Teacher"] as const;
 

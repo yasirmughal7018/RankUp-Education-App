@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Surfaces */
+    --background: 210 40% 98%; /* #F8FAFC */
+    --foreground: 222 47% 11%; /* #0F172A */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brand */
+    --primary: 217 91% 53%; /* #2563EB */
+    --primary-foreground: 0 0% 100%;
+    --primary-dark: 224 76% 48%; /* #1D4ED8 */
+    --primary-light: 214 95% 93%; /* #DBEAFE */
+
+    --secondary: 160 84% 39%; /* #10B981 */
+    --secondary-foreground: 0 0% 100%;
+    --secondary-dark: 161 94% 30%; /* #059669 */
+    --secondary-light: 152 81% 91%; /* #D1FAE5 */
+
+    --muted: 210 40% 96%; /* #F1F5F9 */
+    --muted-foreground: 215 19% 40%; /* stronger readable muted */
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%; /* #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 0 93% 94%; /* #FEE2E2 */
+
+    --border: 214 32% 91%; /* #E2E8F0 */
+    --input: 214 32% 91%;
+    --ring: 217 91% 53%;
+
+    /* Semantic */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 152 81% 91%;
+
+    --warning: 38 92% 50%; /* #F59E0B */
+    --warning-foreground: 222 47% 11%;
+    --warning-light: 48 96% 89%; /* #FEF3C7 */
+
+    --ai: 258 90% 66%; /* #8B5CF6 */
+    --ai-foreground: 0 0% 100%;
+    --ai-light: 255 92% 95%; /* #EDE9FE */
+
+    --achievement: 38 92% 50%;
+    --achievement-foreground: 222 47% 11%;
+    --achievement-light: 48 96% 89%;
+
+    --surface: 0 0% 100%;
+    --surface-variant: 210 40% 96%;
+    --text-secondary: 215 19% 35%; /* #475569 */
+    --disabled: 214 20% 85%; /* #CBD5E1 */
+
+    --radius: 0.75rem;
+
+    /* Role accents (subtle overlays) */
+    --role-accent: var(--primary);
+    --role-accent-soft: var(--primary-light);
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    --background: 222 47% 5%; /* #020617 */
+    --foreground: 210 40% 98%; /* #F8FAFC */
+    --card: 222 47% 11%; /* #0F172A */
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 213 94% 68%; /* #60A5FA */
+    --primary-foreground: 222 47% 11%;
+    --primary-dark: 217 91% 60%;
+    --primary-light: 217 33% 22%;
+
+    --secondary: 158 64% 52%; /* #34D399 */
+    --secondary-foreground: 222 47% 11%;
+    --secondary-dark: 160 84% 39%;
+    --secondary-light: 160 40% 18%;
+
+    --muted: 217 33% 17%; /* #1E293B */
+    --muted-foreground: 215 20% 72%; /* clearer on dark surfaces */
+
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 91% 71%; /* #F87171 */
+    --destructive-foreground: 222 47% 11%;
+    --destructive-light: 0 50% 20%;
+
+    --border: 215 25% 27%; /* #334155 */
+    --input: 215 25% 27%;
+    --ring: 213 94% 68%;
+
+    --success: 158 64% 52%;
+    --success-foreground: 222 47% 11%;
+    --success-light: 160 40% 18%;
+
+    --warning: 43 96% 56%; /* #FBBF24 */
+    --warning-foreground: 222 47% 11%;
+    --warning-light: 40 40% 18%;
+
+    --ai: 258 89% 74%; /* #A78BFA */
+    --ai-foreground: 222 47% 11%;
+    --ai-light: 258 40% 22%;
+
+    --achievement: 43 96% 56%;
+    --achievement-foreground: 222 47% 11%;
+    --achievement-light: 40 40% 18%;
+
+    --surface: 222 47% 11%;
+    --surface-variant: 217 33% 17%;
+    --text-secondary: 214 32% 82%; /* #CBD5E1 */
+    --disabled: 215 20% 45%;
+  }
+
+  /*
+   * Avoid @apply with theme color names like border-border / bg-background here.
+   * Those can fail PostCSS in Vite when custom colors aren't resolved during @apply
+   * expansion, which leaves the app on a blank white screen.
+   */
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    min-height: 100vh;
+    /* Hex fallbacks if CSS variables fail to resolve */
+    background-color: #f8fafc;
+    background-color: hsl(var(--background));
+    color: #0f172a;
+    color: hsl(var(--foreground));
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(var(--background)),
+      0 0 0 4px hsl(var(--ring));
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: Poppins, Inter, system-ui, sans-serif;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Soft education atmosphere behind app chrome */
+  .app-atmosphere {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(
+        900px 420px at 12% -10%,
+        hsl(var(--primary) / 0.12),
+        transparent 60%
+      ),
+      radial-gradient(
+        700px 360px at 92% 0%,
+        hsl(var(--secondary) / 0.08),
+        transparent 55%
+      );
+  }
+
+  .dark .app-atmosphere {
+    background-image:
+      radial-gradient(
+        900px 420px at 10% -8%,
+        hsl(var(--primary) / 0.18),
+        transparent 58%
+      ),
+      radial-gradient(
+        720px 380px at 95% 4%,
+        hsl(var(--secondary) / 0.1),
+        transparent 55%
+      );
+  }
+}

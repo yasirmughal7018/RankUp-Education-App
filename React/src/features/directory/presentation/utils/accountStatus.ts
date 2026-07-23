@@ -1,13 +1,28 @@
 import type { DirectoryAccountStatus } from "@/features/directory/domain/directoryTypes";
+import {
+  APPROVAL_STATUS_CHIP,
+  type ApprovalStatusKey,
+} from "@/lib/constants/approval-status";
 
 const LABELS: Record<DirectoryAccountStatus, string> = {
   Active: "Active",
-  ApprovedInactive: "Approved (Inactive)",
-  PendingApproval: "Pending approval",
+  ApprovedInactive: "Approved",
+  PendingApproval: "Pending",
   Locked: "Locked",
-  Deactivated: "Deactivated",
+  Deactivated: "Inactive",
   Rejected: "Rejected",
 };
+
+const STATUS_KEY: Record<DirectoryAccountStatus | "Inactive", ApprovalStatusKey> =
+  {
+    Active: "active",
+    ApprovedInactive: "approved",
+    PendingApproval: "pending",
+    Locked: "locked",
+    Deactivated: "deactivated",
+    Rejected: "rejected",
+    Inactive: "deactivated",
+  };
 
 /** Coerce API status string; fallback from isActive. */
 export function normalizeDirectoryAccountStatus(
@@ -34,24 +49,16 @@ export function directoryAccountStatusLabel(
   return LABELS[code];
 }
 
-/** Tailwind classes for status badge. */
+/** Theme-token classes for status badge (light + dark). */
 export function directoryAccountStatusClass(
   code: DirectoryAccountStatus | "Inactive",
 ): string {
-  switch (code) {
-    case "Active":
-      return "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
-    case "ApprovedInactive":
-      return "bg-sky-50 text-sky-900 ring-1 ring-inset ring-sky-200/80";
-    case "PendingApproval":
-      return "bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-200/80";
-    case "Locked":
-      return "bg-orange-50 text-orange-900 ring-1 ring-inset ring-orange-200/80";
-    case "Rejected":
-      return "bg-rose-50 text-rose-900 ring-1 ring-inset ring-rose-200/80";
-    case "Inactive":
-    case "Deactivated":
-    default:
-      return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/80";
-  }
+  return APPROVAL_STATUS_CHIP[STATUS_KEY[code]];
+}
+
+/** School / campus Active|Inactive chip — same green Active as summary tiles. */
+export function directoryReadyStatusClass(isActive: boolean): string {
+  return isActive
+    ? APPROVAL_STATUS_CHIP.active
+    : APPROVAL_STATUS_CHIP.deactivated;
 }

@@ -3,6 +3,7 @@ import {
   type QuestionAcceptedAnswerInput,
 } from "@/features/questions/domain/questionTypes";
 import { RequiredMark } from "@/core/components/RequiredMark";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 interface QuestionAcceptedAnswersEditorProps {
   answers: QuestionAcceptedAnswerInput[];
@@ -10,8 +11,7 @@ interface QuestionAcceptedAnswersEditorProps {
   onChange: (answers: QuestionAcceptedAnswerInput[]) => void;
 }
 
-const inputClassName =
-  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30";
+const inputClassName = FORM_FIELD_CLASS;
 
 /** Editable accepted-answer list for short-answer and numeric question types. */
 export function QuestionAcceptedAnswersEditor({

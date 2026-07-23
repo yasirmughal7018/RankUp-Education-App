@@ -148,7 +148,7 @@ export function AdminQuizApprovalsPage() {
                               setRejectReason(event.target.value)
                             }
                             placeholder="Optional reason"
-                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+                            className="rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
                           />
                           <div className="flex justify-end gap-2">
                             <button

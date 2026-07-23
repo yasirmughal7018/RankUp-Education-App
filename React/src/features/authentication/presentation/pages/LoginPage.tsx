@@ -7,11 +7,11 @@ import * as authApi from "@/features/authentication/data/authApi";
 import type { LoginStatus } from "@/features/authentication/data/authApi";
 import { AuthSplitLayout } from "@/features/authentication/presentation/components/AuthSplitLayout";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 type LoginStep = "identifier" | "setPassword" | "password";
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 /** Multi-step login: status check, password setup, and sign-in. */
 export function LoginPage() {

@@ -22,6 +22,7 @@ import {
   useUpdateCampusMutation,
   useUpdateSchoolMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { directoryReadyStatusClass } from "@/features/directory/presentation/utils/accountStatus";
 
 /** Schools and campuses master list with create, edit, and activate/deactivate. */
 export function DirectorySchoolsPage() {
@@ -248,11 +249,9 @@ export function DirectorySchoolsPage() {
                       </p>
                     </div>
                     <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        school.isActive
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
+                      className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium ${directoryReadyStatusClass(
+                        school.isActive,
+                      )}`}
                     >
                       {school.isActive ? "Active" : "Inactive"}
                     </span>
@@ -329,11 +328,9 @@ export function DirectorySchoolsPage() {
                       </p>
                     </div>
                     <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        campus.isActive
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
+                      className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium ${directoryReadyStatusClass(
+                        campus.isActive,
+                      )}`}
                     >
                       {campus.isActive ? "Active" : "Inactive"}
                     </span>

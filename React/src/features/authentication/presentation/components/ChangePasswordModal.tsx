@@ -2,13 +2,13 @@ import { useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import * as authApi from "@/features/authentication/data/authApi";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 interface ChangePasswordModalProps {
   onSuccess: (user: Awaited<ReturnType<typeof authApi.changePassword>>) => void;
 }
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 /** Blocking modal when mustChangePassword is set on the session. */
 export function ChangePasswordModal({ onSuccess }: ChangePasswordModalProps) {

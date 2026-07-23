@@ -1,0 +1,225 @@
+/**
+ * RankUp Education semantic theme tokens.
+ * Prefer Tailwind classes bound to CSS variables over hard-coded hex in features.
+ */
+
+:root {
+  --rankup-primary: #2563eb;
+  --rankup-primary-dark: #1d4ed8;
+  --rankup-primary-light: #dbeafe;
+
+  --rankup-success: #10b981;
+  --rankup-success-dark: #059669;
+  --rankup-success-light: #d1fae5;
+
+  --rankup-achievement: #f59e0b;
+  --rankup-achievement-light: #fef3c7;
+
+  --rankup-ai: #8b5cf6;
+  --rankup-ai-light: #ede9fe;
+
+  --rankup-danger: #ef4444;
+  --rankup-danger-light: #fee2e2;
+
+  --rankup-bg: #f8fafc;
+  --rankup-surface: #ffffff;
+  --rankup-surface-variant: #f1f5f9;
+
+  --rankup-text: #0f172a;
+  --rankup-text-secondary: #475569;
+  --rankup-text-muted: #64748b;
+  --rankup-border: #e2e8f0;
+  --rankup-disabled: #cbd5e1;
+
+  /* Approval / account status chips (light) */
+  --status-pending-bg: #fef3c7;
+  --status-pending-text: #92400e;
+  --status-pending-border: #fcd34d;
+
+  --status-approved-bg: #d1fae5;
+  --status-approved-text: #065f46;
+  --status-approved-border: #34d399;
+
+  --status-locked-bg: #e0e7ff;
+  --status-locked-text: #3730a3;
+  --status-locked-border: #818cf8;
+
+  --status-deactivated-bg: #e5e7eb;
+  --status-deactivated-text: #374151;
+  --status-deactivated-border: #9ca3af;
+
+  --status-rejected-bg: #fee2e2;
+  --status-rejected-text: #991b1b;
+  --status-rejected-border: #f87171;
+
+  --status-active-bg: #d1fae5;
+  --status-active-text: #065f46;
+  --status-active-border: #34d399;
+}
+
+.dark {
+  --rankup-primary: #60a5fa;
+  --rankup-primary-dark: #3b82f6;
+  --rankup-primary-light: #1e3a5f;
+
+  --rankup-success: #34d399;
+  --rankup-success-dark: #10b981;
+  --rankup-success-light: #064e3b;
+
+  --rankup-achievement: #fbbf24;
+  --rankup-achievement-light: #78350f;
+
+  --rankup-ai: #a78bfa;
+  --rankup-ai-light: #4c1d95;
+
+  --rankup-danger: #f87171;
+  --rankup-danger-light: #7f1d1d;
+
+  --rankup-bg: #020617;
+  --rankup-surface: #0f172a;
+  --rankup-surface-variant: #1e293b;
+
+  --rankup-text: #f8fafc;
+  --rankup-text-secondary: #cbd5e1;
+  --rankup-text-muted: #94a3b8;
+  --rankup-border: #334155;
+  --rankup-disabled: #64748b;
+
+  /* Approval / account status chips (dark) */
+  --status-pending-bg: #451a03;
+  --status-pending-text: #fcd34d;
+  --status-pending-border: #b45309;
+
+  --status-approved-bg: #052e16;
+  --status-approved-text: #6ee7b7;
+  --status-approved-border: #059669;
+
+  --status-locked-bg: #1e1b4b;
+  --status-locked-text: #a5b4fc;
+  --status-locked-border: #6366f1;
+
+  --status-deactivated-bg: #1f2937;
+  --status-deactivated-text: #d1d5db;
+  --status-deactivated-border: #4b5563;
+
+  --status-rejected-bg: #450a0a;
+  --status-rejected-text: #fca5a5;
+  --status-rejected-border: #dc2626;
+
+  --status-active-bg: #052e16;
+  --status-active-text: #6ee7b7;
+  --status-active-border: #059669;
+}
+
+/** Role accent helpers — applied on AppShell data-role attribute. */
+[data-role="Student"] {
+  --role-accent: var(--primary);
+  --role-accent-soft: var(--secondary-light);
+}
+
+[data-role="Parent"] {
+  --role-accent: var(--primary);
+  --role-accent-soft: var(--achievement-light);
+}
+
+[data-role="Teacher"] {
+  --role-accent: var(--primary);
+  --role-accent-soft: var(--ai-light);
+}
+
+[data-role="PortalAdmin"],
+[data-role="SchoolAdmin"],
+[data-role="CampusAdmin"] {
+  --role-accent: var(--primary);
+  --role-accent-soft: var(--muted);
+}
+
+/**
+ * Bridge legacy slate/white utility classes into theme tokens in dark mode.
+ * Lets existing feature pages respect dark theme without a full rewrite.
+ */
+.dark .bg-white {
+  background-color: hsl(var(--card));
+}
+.dark .bg-slate-50,
+.dark .bg-slate-50\/80,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-100 {
+  background-color: hsl(var(--muted));
+}
+.dark .bg-slate-200 {
+  background-color: hsl(var(--border));
+}
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: hsl(var(--foreground));
+}
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: hsl(var(--text-secondary));
+}
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: hsl(var(--muted-foreground));
+}
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-200\/90,
+.dark .border-slate-300 {
+  border-color: hsl(var(--border));
+}
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-50\/80:hover,
+.dark .hover\:bg-slate-100:hover {
+  background-color: hsl(var(--muted));
+}
+.dark .focus\:bg-white:focus {
+  background-color: hsl(var(--background));
+}
+.dark .disabled\:bg-slate-100:disabled {
+  background-color: hsl(var(--muted));
+}
+
+/**
+ * Form controls: readable fill + text in dark mode even when markup still
+ * uses legacy slate borders without an explicit background.
+ */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+.dark select,
+.dark textarea {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--input));
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark input:disabled,
+.dark select:disabled,
+.dark textarea:disabled {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+.dark .bg-emerald-50 {
+  background-color: hsl(var(--success-light));
+}
+.dark .text-emerald-700 {
+  color: hsl(var(--success));
+}
+.dark .bg-amber-50 {
+  background-color: hsl(var(--warning-light));
+}
+.dark .text-amber-700,
+.dark .text-amber-800 {
+  color: hsl(var(--warning));
+}
+.dark .bg-red-50 {
+  background-color: hsl(var(--destructive-light));
+}
+.dark .text-red-600,
+.dark .text-red-700 {
+  color: hsl(var(--destructive));
+}

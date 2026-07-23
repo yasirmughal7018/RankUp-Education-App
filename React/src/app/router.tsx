@@ -28,6 +28,7 @@ import { ParentRoute } from "@/features/parent/presentation/components/ParentRou
 import { ParentChildHistoryPage } from "@/features/parent/presentation/pages/ParentChildHistoryPage";
 import { ParentChildResultPage } from "@/features/parent/presentation/pages/ParentChildResultPage";
 import { ParentChildrenPage } from "@/features/parent/presentation/pages/ParentChildrenPage";
+import { ParentQuizDashboardPage } from "@/features/parent/presentation/pages/ParentQuizDashboardPage";
 import { QuestionManageRoute } from "@/features/questions/presentation/components/QuestionManageRoute";
 import { QuestionCreatePage } from "@/features/questions/presentation/pages/QuestionCreatePage";
 import { QuestionSessionReviewPage } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
@@ -46,6 +47,7 @@ import { QuizzesPage } from "@/features/quizzes/presentation/pages/QuizzesPage";
 import { ReportsRoute } from "@/features/reports/presentation/components/ReportsRoute";
 import { ReportsPage } from "@/features/reports/presentation/pages/ReportsPage";
 import { StudentRoute } from "@/features/student/presentation/components/StudentRoute";
+import { StudentDashboardPage } from "@/features/student/presentation/pages/StudentDashboardPage";
 import { StudentQuizAttemptPage } from "@/features/student/presentation/pages/StudentQuizAttemptPage";
 import { StudentQuizDetailPage } from "@/features/student/presentation/pages/StudentQuizDetailPage";
 import { StudentQuizResultPage } from "@/features/student/presentation/pages/StudentQuizResultPage";
@@ -153,6 +155,10 @@ export function AppRouter() {
             <Route element={<ParentRoute />}>
               <Route path="parent/children" element={<ParentChildrenPage />} />
               <Route
+                path="parent/quiz-dashboard"
+                element={<ParentQuizDashboardPage />}
+              />
+              <Route
                 path="parent/children/:studentId/history"
                 element={<ParentChildHistoryPage />}
               />
@@ -163,6 +169,7 @@ export function AppRouter() {
             </Route>
 
             <Route element={<StudentRoute />}>
+              <Route path="student/dashboard" element={<StudentDashboardPage />} />
               <Route path="student/quizzes" element={<StudentQuizzesPage />} />
               <Route
                 path="student/quizzes/:quizId"

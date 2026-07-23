@@ -6,12 +6,14 @@ interface CardProps {
   children?: ReactNode;
 }
 
-/** Simple titled card container for dashboard sections. */
+/** Simple titled card — theme tokens so light/dark both work. */
 export function Card({ title, description, children }: CardProps) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+    <article className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">
+        {title}
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
       {children ? <div className="mt-4">{children}</div> : null}
     </article>
   );

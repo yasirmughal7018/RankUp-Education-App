@@ -229,7 +229,7 @@ export function DirectoryCampusAdminsPage() {
               }
             }}
             placeholder="Search campus admins..."
-            className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="min-w-[220px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           />
           <button
             type="button"
@@ -246,7 +246,7 @@ export function DirectoryCampusAdminsPage() {
               onChange={(event) => {
                 setSchoolId(event.target.value);
               }}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
             >
               <option value="">All schools</option>
               {schools.map((school) => (
@@ -263,7 +263,7 @@ export function DirectoryCampusAdminsPage() {
               setPageNumber(1);
             }}
             disabled={selectedSchoolId == null}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-70"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring disabled:opacity-70"
           >
             <option value="">All campuses</option>
             {campuses.map((campus) => (
@@ -277,7 +277,7 @@ export function DirectoryCampusAdminsPage() {
             onChange={(event) =>
               setActiveFilter(event.target.value as ActiveStatusFilter)
             }
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
             <option value="all">All statuses</option>
             <option value="active">Active</option>

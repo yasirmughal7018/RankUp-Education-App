@@ -253,7 +253,7 @@ export function DirectoryStudentsPage() {
               }
             }}
             placeholder="Search students..."
-            className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="min-w-[220px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           />
           <button
             type="button"
@@ -267,7 +267,7 @@ export function DirectoryStudentsPage() {
           <select
             value={schoolId}
             onChange={(event) => setSchoolId(event.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
             <option value="">All schools</option>
             {schools.map((school) => (
@@ -283,7 +283,7 @@ export function DirectoryStudentsPage() {
               setPageNumber(1);
             }}
             disabled={!selectedSchoolId}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-60"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring disabled:opacity-60"
           >
             <option value="">All campuses</option>
             {campuses.map((campus) => (
@@ -301,14 +301,14 @@ export function DirectoryStudentsPage() {
               setPageNumber(1);
             }}
             placeholder="Grade"
-            className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-24 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           />
           <select
             value={activeFilter}
             onChange={(event) =>
               setActiveFilter(event.target.value as ActiveStatusFilter)
             }
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
             <option value="all">All statuses</option>
             <option value="active">Active</option>

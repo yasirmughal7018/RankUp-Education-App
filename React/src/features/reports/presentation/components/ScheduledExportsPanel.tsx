@@ -114,7 +114,7 @@ export function ScheduledExportsPanel() {
             onChange={(event) =>
               setReportType(event.target.value as ScheduledReportType)
             }
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
             {REPORT_TYPE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -137,7 +137,7 @@ export function ScheduledExportsPanel() {
             onChange={(event) =>
               setFrequency(event.target.value as ScheduledFrequency)
             }
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
@@ -158,7 +158,7 @@ export function ScheduledExportsPanel() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@school.edu"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           />
         </div>
 
@@ -173,7 +173,7 @@ export function ScheduledExportsPanel() {
             <button
               type="button"
               onClick={clearPreference}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             >
               Clear
             </button>
