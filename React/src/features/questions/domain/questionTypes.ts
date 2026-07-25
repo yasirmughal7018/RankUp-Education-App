@@ -97,7 +97,7 @@ export interface QuestionDetail {
 /** One entry in a question's approval trail. */
 export interface QuestionApprovalHistoryEntry {
   approvalId: number;
-  /** Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived. */
+  /** Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived | Unarchived | Modified. */
   action: string;
   actorUserId: number;
   actorName: string;

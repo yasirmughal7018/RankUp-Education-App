@@ -37,4 +37,7 @@ public enum ApprovalAction : short
 
     /// <summary>Archived row restored to its prior workflow status.</summary>
     Unarchived = 10,
+
+    /// <summary>Question content or answers were edited.</summary>
+    Modified = 11,
 }

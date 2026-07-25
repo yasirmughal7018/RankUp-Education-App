@@ -452,7 +452,7 @@ const html = `<!doctype html>
     "Legacy status names Pending, UnderReview, Active, Published, and Declined remain readable for migrated data; new writes use canonical names/IDs.",
     "IsAiApproved is a legacy compatibility field, not a second approval gate.",
     "Delete remains blocked while a question is linked to a quiz; guided unlink-then-delete is optional.",
-    "Workflow trail: every Create/Submit/Endorse/Publish/Reject/Activate/Deactivate/Archive appends a row to the generic app_approval table (entity_type 2) with actor, role, reason, and timestamp; the detail page shows it as Approval history. Pre-existing questions are seeded with Created + Endorsed/Published rows; old rejections are not attributed (rejector was never stored).",
+    "Workflow trail: every Create / Submit / Endorse / Publish / Reject / Modify / Activate / Deactivate / Archive / Unarchive appends a row to the generic app_approval table (entity_type 2) with actor, role, reason, and timestamp — for Teacher, CampusAdmin, SchoolAdmin, and PortalAdmin alike. The detail page shows it as Approval history. Pre-existing questions are seeded with Created + Endorsed/Published rows; old rejections are not attributed (rejector was never stored).",
     "External AI grading for Fill is future work; current AllowAiReview behavior is a review stub.",
   ])}
 

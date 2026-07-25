@@ -143,7 +143,7 @@ public sealed record QuestionApprovalEventItem(
 
     long ApprovalId,
 
-    /// <summary>Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived.</summary>
+    /// <summary>Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived | Unarchived | Modified.</summary>
     ApprovalAction Action,
 
     long ActorUserId,

@@ -324,6 +324,7 @@ public sealed class QuestionService : IQuestionService
             request.Options,
             request.AcceptedAnswers,
             cancellationToken);
+        await RecordTrailEventAsync(questionId, scope, ApprovalAction.Modified, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);

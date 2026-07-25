@@ -268,7 +268,7 @@ public sealed record QuestionApprovalHistoryItem(
 
     long ApprovalId,
 
-    /// <summary>Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived.</summary>
+    /// <summary>Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived | Unarchived | Modified.</summary>
 
     string Action,
 

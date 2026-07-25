@@ -288,6 +288,14 @@ public sealed class QuizQuestionService : IQuizQuestionService
         await ReplaceAnswersAsync(questionId, request.QuestionType, request.Options, cancellationToken);
         link.SetMarks(request.Marks);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
+        await _questions.AddApprovalEventAsync(
+            Approval.RecordQuestionEvent(
+                questionId,
+                scope.UserId,
+                scope.Role,
+                ApprovalAction.Modified,
+                DateTimeOffset.UtcNow),
+            cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await BuildManageResponseAsync(quizId, scope, cancellationToken);
