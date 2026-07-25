@@ -135,13 +135,9 @@ export function QuizManageDetailPage() {
         <PageHeader
           title="Quiz not found"
           description={error?.message ?? "Unable to load quiz."}
+          backTo="/quizzes"
+          backAriaLabel="Back to quizzes"
         />
-        <Link
-          to="/quizzes"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to quizzes
-        </Link>
       </div>
     );
   }
@@ -156,6 +152,8 @@ export function QuizManageDetailPage() {
       <PageHeader
         title={quiz.title}
         description={`${quiz.subject} · ${quiz.grade} · ${quiz.lifecycleStatus}`}
+        backTo="/quizzes"
+        backAriaLabel="Back to quizzes"
         action={
           <div className="flex gap-2">
             {!draft ? (

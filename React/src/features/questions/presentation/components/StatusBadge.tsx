@@ -66,6 +66,20 @@ export function getQuestionWorkflowStatusKey(status: string): ApprovalStatusKey 
   return "deactivated";
 }
 
+/**
+ * Single list badge theme key.
+ * Active (blue) only for Approved + IsActive; otherwise workflow colors.
+ */
+export function getQuestionListStatusKey(
+  status: string,
+  isActive: boolean,
+): ApprovalStatusKey {
+  if (isApprovedQuestionStatus(status) && isActive) {
+    return "active";
+  }
+  return getQuestionWorkflowStatusKey(status);
+}
+
 /** IsActive flag → theme key (Active=blue, Inactive=slate). */
 export function getQuestionActivityStatusKey(
   isActive: boolean,

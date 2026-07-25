@@ -146,6 +146,8 @@ public sealed record QuestionSummaryResponse(
 
     short Marks,
 
+    short EstimatedTimeSeconds,
+
     bool IsActive,
 
     string CreatedBy,

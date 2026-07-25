@@ -43,6 +43,7 @@ export interface QuestionSummary {
   subjectId: number;
   difficultyLevel: number;
   marks: number;
+  estimatedTimeSeconds?: number;
   isActive: boolean;
   createdBy: string;
   approvedBy: string | null;
@@ -299,10 +300,10 @@ export function isEligibleForQuizQuestion(question: {
   );
 }
 
-/** Canonical display label for bank QuestionStatus (never mixes IsActive). */
+/** Canonical workflow status label (never mixes IsActive). */
 export function displayQuestionStatusLabel(status: string): string {
   if (isPendingQuestionStatus(status) || isDraftQuestionStatus(status)) {
-    return "PendingReview";
+    return "Pending";
   }
   if (isApprovedQuestionStatus(status)) {
     return "Approved";
@@ -314,6 +315,21 @@ export function displayQuestionStatusLabel(status: string): string {
     return "Archived";
   }
   return status.trim() || "Unknown";
+}
+
+/**
+ * Single list/table status label.
+ * Active is shown only when Status=Approved and IsActive=true;
+ * Approved+inactive shows Approved; other statuses stay Pending/Rejected/Archived.
+ */
+export function displayQuestionListStatusLabel(
+  status: string,
+  isActive: boolean,
+): string {
+  if (isApprovedQuestionStatus(status) && isActive) {
+    return "Active";
+  }
+  return displayQuestionStatusLabel(status);
 }
 
 /** PortalAdmin may activate only Approved + inactive questions. */

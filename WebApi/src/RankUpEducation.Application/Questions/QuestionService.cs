@@ -246,6 +246,17 @@ public sealed class QuestionService : IQuestionService
 
         await _questions.AddQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (question.Id <= 0)
+        {
+            throw new InvalidOperationException(
+                "Question was inserted but no database identity was returned. Check questions.id GENERATED ALWAYS AS IDENTITY mapping.");
+        }
+
+        // Detach so ReplaceAnswersAsync does not reconcile against an empty Options collection
+        // on the same tracked parent (can delete newly added options / confuse change tracking).
+        _questions.DetachQuestion(question);
+
         await ReplaceAnswersAsync(
             question.Id,
             request.QuestionType,
@@ -680,13 +691,13 @@ public sealed class QuestionService : IQuestionService
 
     private async Task<Question> RequireQuestionEntityAsync(long questionId, CancellationToken cancellationToken)
         => await _questions.GetQuestionEntityForManageAsync(questionId, cancellationToken)
-            ?? throw new NotFoundAppException("Question was not found.");
+            ?? throw new NotFoundAppException($"Question #{questionId} was not found.");
 
     private async Task<QuestionDetailItem> RequireQuestionDetailAsync(
         long questionId,
         CancellationToken cancellationToken)
         => await _questions.GetQuestionDetailAsync(questionId, cancellationToken)
-            ?? throw new NotFoundAppException("Question was not found.");
+            ?? throw new NotFoundAppException($"Question #{questionId} was not found.");
 
     private async Task EnsurePendingReviewAsync(Question question, CancellationToken cancellationToken)
     {

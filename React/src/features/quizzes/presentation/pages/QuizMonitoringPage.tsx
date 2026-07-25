@@ -43,13 +43,12 @@ export function QuizMonitoringPage() {
   if (!monitoring) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <PageHeader title="Monitoring unavailable" description={error?.message} />
-        <Link
-          to={`/quizzes/${quizId}`}
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to quiz
-        </Link>
+        <PageHeader
+          title="Monitoring unavailable"
+          description={error?.message}
+          backTo={`/quizzes/${quizId}`}
+          backAriaLabel="Back to quiz"
+        />
       </div>
     );
   }
@@ -59,23 +58,17 @@ export function QuizMonitoringPage() {
       <PageHeader
         title={`Monitor: ${monitoring.quizTitle}`}
         description="Track student submissions, review progress, and attempt status."
+        backTo={`/quizzes/${monitoring.quizId}`}
+        backAriaLabel="Back to quiz"
         action={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Refresh
-            </button>
-            <Link
-              to={`/quizzes/${monitoring.quizId}`}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Back to quiz
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+          >
+            Refresh
+          </button>
         }
       />
 

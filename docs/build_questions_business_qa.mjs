@@ -25,32 +25,32 @@ const statuses = [
   [
     "110",
     "Draft",
-    "Legacy only",
-    "Retired from the product flow. Existing rows are migrated/read as PendingReview. Create and import never write Draft.",
+    "Always Inactive",
+    "Legacy only. Existing rows are migrated/read as PendingReview. Create and import never write Draft. Activity is never Active.",
   ],
   [
     "111",
     "PendingReview",
-    "Inactive",
-    "Waiting for scoped approval. Visibility=None. Owner may edit/delete; approver may approve or reject.",
+    "Always Inactive",
+    "Waiting for scoped approval. Visibility=None. Owner may edit/delete; approver may approve or reject. Activity is always Inactive.",
   ],
   [
     "112",
     "Approved",
-    "Active by default",
-    "Accepted into the bank. Visibility is Campus, School, or Public. Non-PortalAdmin owners can no longer edit/delete.",
+    "Active or Inactive",
+    "Accepted into the bank. Visibility is Campus, School, or Public. Only this status may be Active or Inactive. Default after approve is Active; PortalAdmin may deactivate a particular Approved question so the UI shows Activity=Inactive while Status stays Approved.",
   ],
   [
     "113",
     "Rejected",
-    "Inactive",
-    "Rejected with a required reason. Visibility=None. Owner may edit, explicitly resubmit, or delete.",
+    "Always Inactive",
+    "Rejected with a required reason. Visibility=None. Owner may edit, explicitly resubmit, or delete. Activity is always Inactive.",
   ],
   [
     "114",
     "Archived",
-    "Inactive",
-    "Retired by PortalAdmin and hidden from normal bank/quiz use.",
+    "Always Inactive",
+    "Retired by PortalAdmin and hidden from normal bank/quiz use. Activity is always Inactive.",
   ],
 ];
 
@@ -88,7 +88,7 @@ const lifecycle = [
   [
     "PortalAdmin deactivate / activate",
     "Approved (unchanged)",
-    "Only toggles IsActive. Deactivated is not a QuestionStatus.",
+    "Only Approved questions may be toggled. Deactivate sets IsActive=false (UI Activity=Inactive); activate sets IsActive=true. PendingReview, Rejected, and Archived stay Inactive and cannot be activated. Deactivated is not a QuestionStatus.",
   ],
   [
     "PortalAdmin archive",
@@ -188,8 +188,8 @@ const scenarios = [
   [
     "Q-06",
     "Approved deactivation",
-    "PortalAdmin deactivates an Approved question.",
-    "Status remains Approved; IsActive=false; question is unavailable for new quiz use.",
+    "PortalAdmin deactivates a particular Approved question.",
+    "Status remains Approved; Activity shows Inactive (IsActive=false); unavailable for new quiz use. Non-Approved statuses stay Inactive and cannot be activated.",
   ],
   [
     "Q-07",
@@ -220,6 +220,9 @@ const scenarios = [
 const checklist = [
   "Create and import always produce PendingReview, IsActive=false, Visibility=None.",
   "Draft is inactive/legacy and never appears as a create/import choice.",
+  "All non-Approved statuses (PendingReview, Rejected, Archived, legacy Draft) are always Inactive.",
+  "Only Approved can be Active or Inactive; approve defaults to Active.",
+  "PortalAdmin may deactivate a particular Approved question; UI shows Status=Approved and Activity=Inactive.",
   "Approve is allowed only from PendingReview and only within approver scope.",
   "CampusAdmin/SchoolAdmin/PortalAdmin approval produces Campus/School/Public visibility.",
   "Reject requires a reason and clears active/approval/visibility state.",
@@ -302,11 +305,11 @@ const html = `<!doctype html>
     </div>
   </header>
 
-  <div class="ok"><strong>Canonical model:</strong> QuestionStatus records workflow state. IsActive independently controls whether an Approved question is usable. Visibility controls where an Approved question may be seen and used.</div>
+  <div class="ok"><strong>Canonical model:</strong> QuestionStatus records workflow state. IsActive (Activity) applies meaningfully only to Approved questions: all other statuses are always Inactive. PortalAdmin may deactivate a particular Approved question so the UI shows Activity=Inactive while Status stays Approved. Visibility controls where an Approved question may be seen and used.</div>
 
   <h2>1. Canonical status meanings</h2>
-  ${htmlTable(["ID", "QuestionStatus", "Default activity", "Meaning"], statuses)}
-  <div class="note"><strong>Important:</strong> Active and Inactive are not QuestionStatus values. An Approved question can be active or inactive. Archived is a distinct status.</div>
+  ${htmlTable(["ID", "QuestionStatus", "Activity", "Meaning"], statuses)}
+  <div class="note"><strong>Important:</strong> Active and Inactive are not QuestionStatus values. PendingReview, Rejected, and Archived are always Inactive. Only Approved may be Active or Inactive. When PortalAdmin deactivates an Approved question, Status remains Approved and Activity shows Inactive. Archived is a distinct status, not the same as Inactive.</div>
 
   <h2>2. Lifecycle and transitions</h2>
   ${htmlTable(["Action", "Resulting status", "State changes"], lifecycle)}
@@ -316,7 +319,7 @@ const html = `<!doctype html>
     ["Concept", "Values", "Rule"],
     [
       ["QuestionStatus", "PendingReview / Approved / Rejected / Archived", "Workflow decision. Draft is legacy only."],
-      ["IsActive", "true / false", "Soft quiz-use switch. PortalAdmin may toggle only on Approved."],
+      ["IsActive (Activity)", "true / false", "Only Approved can be Active or Inactive. All other statuses are always Inactive. PortalAdmin may deactivate/activate a particular Approved question; UI shows Active (blue) or Inactive (slate) separately from Status=Approved (green)."],
       ["Visibility", "None / Campus / School / Public", "Set on approval from approver role; cleared on reject/resubmit."],
       ["ApprovedBy", "User ID or null", "Set on Approve; required for quiz eligibility."],
     ],
@@ -347,7 +350,7 @@ const html = `<!doctype html>
     "ApprovedBy is present.",
     "Visibility is Campus, School, or Public and the viewer is within that scope.",
   ])}
-  <p>Deactivating an Approved question keeps its status Approved but removes it from new quiz selection. Archiving changes status to Archived and also makes it inactive.</p>
+  <p>PortalAdmin can deactivate a particular Approved question: Status stays Approved, Activity shows Inactive, and the question is removed from new quiz selection. Non-Approved statuses cannot be activated. Archiving changes status to Archived and forces Inactive.</p>
 
   <h2>7. Question types</h2>
   ${htmlTable(["ID", "Type", "Availability", "Validation"], questionTypes)}
@@ -368,9 +371,9 @@ const html = `<!doctype html>
   <h2>10. UI presentation rules</h2>
   ${htmlList([
     "Question status filters are PendingReview, Approved, Rejected, and Archived.",
-    "Active/Inactive filters represent IsActive and must be visually separated from workflow status.",
+    "Active/Inactive filters represent IsActive. Meaningful Active/Inactive variation applies only to Approved questions; other statuses are always Inactive.",
     "Approved uses green; Active uses blue; Pending uses amber; Rejected uses red; Archived/Inactive use slate.",
-    "When both are needed, show two concepts separately: e.g. Status=Approved and Activity=Inactive.",
+    "When both are needed, show two concepts separately: e.g. Status=Approved and Activity=Inactive for a PortalAdmin-deactivated Approved question.",
     "Question-list rows navigate to detail; mutation and workflow actions live on the question detail page.",
   ])}
 
@@ -470,14 +473,14 @@ const docChildren = [
     run: { italics: true, color: "475569" },
   }),
   docParagraph(
-    "Canonical model: QuestionStatus records workflow state. IsActive independently controls whether an Approved question is usable. Visibility controls where it may be seen and used.",
+    "Canonical model: QuestionStatus records workflow state. IsActive (Activity) applies meaningfully only to Approved questions — all other statuses are always Inactive. PortalAdmin may deactivate a particular Approved question so the UI shows Activity=Inactive while Status stays Approved. Visibility controls where it may be seen and used.",
     { run: { bold: true, color: "166534" } },
   ),
 
   docHeading("1. Canonical status meanings"),
-  docTable(["ID", "QuestionStatus", "Default activity", "Meaning"], statuses),
+  docTable(["ID", "QuestionStatus", "Activity", "Meaning"], statuses),
   docParagraph(
-    "Important: Active and Inactive are not QuestionStatus values. An Approved question can be active or inactive. Archived is a distinct status.",
+    "Important: Active and Inactive are not QuestionStatus values. PendingReview, Rejected, and Archived are always Inactive. Only Approved may be Active or Inactive. When PortalAdmin deactivates an Approved question, Status remains Approved and Activity shows Inactive. Archived is a distinct status, not the same as Inactive.",
     { run: { bold: true, color: "92400E" } },
   ),
 
@@ -489,7 +492,7 @@ const docChildren = [
     ["Concept", "Values", "Rule"],
     [
       ["QuestionStatus", "PendingReview / Approved / Rejected / Archived", "Workflow decision. Draft is legacy only."],
-      ["IsActive", "true / false", "Soft quiz-use switch. PortalAdmin may toggle only on Approved."],
+      ["IsActive (Activity)", "true / false", "Only Approved can be Active or Inactive. All other statuses are always Inactive. PortalAdmin may deactivate/activate a particular Approved question; UI shows Active or Inactive separately from Status=Approved."],
       ["Visibility", "None / Campus / School / Public", "Set on approval from approver role; cleared on reject/resubmit."],
       ["ApprovedBy", "User ID or null", "Set on Approve; required for quiz eligibility."],
     ],
@@ -536,8 +539,9 @@ const docChildren = [
   docHeading("10. UI presentation rules"),
   ...[
     "Workflow Status and IsActive are separate concepts.",
+    "Only Approved can be Active or Inactive; other statuses are always Inactive.",
     "Approved=green; Active=blue; Pending=amber; Rejected=red; Archived/Inactive=slate.",
-    "Show status and activity separately when both matter.",
+    "Show Status=Approved and Activity=Inactive when PortalAdmin deactivates an Approved question.",
     "List rows open detail; actions live on the detail page.",
   ].map(docBullet),
 

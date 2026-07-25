@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as schoolChangeApi from "@/features/admin/data/schoolChangeApi";
@@ -67,14 +66,8 @@ export function PendingSchoolChangesPage() {
                 ? "Campus Admin can approve Teacher/Student requests into your campus."
                 : "Review pending school or campus change requests for your scope."
         }
-        action={
-          <Link
-            to="/admin/directory"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Back to directory
-          </Link>
-        }
+        backTo="/admin/directory"
+        backAriaLabel="Back to directory"
       />
 
       {isLoading ? (

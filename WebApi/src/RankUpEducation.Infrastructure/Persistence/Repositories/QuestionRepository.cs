@@ -24,6 +24,15 @@ public sealed class QuestionRepository : IQuestionRepository
         await _dbContext.Questions.AddAsync(question, cancellationToken);
     }
 
+    public void DetachQuestion(Question question)
+    {
+        var entry = _dbContext.Entry(question);
+        if (entry.State != EntityState.Detached)
+        {
+            entry.State = EntityState.Detached;
+        }
+    }
+
     public Task<Question?> GetQuestionEntityAsync(long questionId, CancellationToken cancellationToken)
     {
         return _dbContext.Questions.FirstOrDefaultAsync(
@@ -178,6 +187,7 @@ public sealed class QuestionRepository : IQuestionRepository
                 question.SubjectId,
                 question.DifficultyLevel,
                 question.Marks,
+                question.EstimatedTimeSeconds,
                 question.IsActive,
                 question.CreatedBy,
                 question.ApprovedBy,
@@ -224,6 +234,7 @@ public sealed class QuestionRepository : IQuestionRepository
                 row.SubjectId,
                 row.DifficultyLevel,
                 row.Marks,
+                row.EstimatedTimeSeconds,
                 row.IsActive,
                 row.CreatedBy,
                 row.ApprovedBy,

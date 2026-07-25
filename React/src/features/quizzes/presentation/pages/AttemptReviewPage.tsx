@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import type { MarkAttemptAnswerInput } from "@/features/quizzes/domain/quizMonitorTypes";
 import {
@@ -141,13 +141,9 @@ export function AttemptReviewPage() {
         <PageHeader
           title="Review not found"
           description={error?.message ?? "Unable to load attempt review."}
+          backTo="/quizzes/reviews/pending"
+          backAriaLabel="Back to pending reviews"
         />
-        <Link
-          to="/quizzes/reviews/pending"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to pending reviews
-        </Link>
       </div>
     );
   }
@@ -157,14 +153,8 @@ export function AttemptReviewPage() {
       <PageHeader
         title={`Review attempt #${review.attemptNumber}`}
         description={`${review.quizTitle} · ${review.studentName?.trim() || `Student ${review.studentId}`}`}
-        action={
-          <Link
-            to="/quizzes/reviews/pending"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Back to list
-          </Link>
-        }
+        backTo="/quizzes/reviews/pending"
+        backAriaLabel="Back to list"
       />
 
       {successMessage ? (

@@ -10,6 +10,12 @@ public interface IQuestionRepository
 {
     Task AddQuestionAsync(Question question, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Detach a tracked question so later option/answer replaces do not fight an empty
+    /// navigation collection on the same tracked instance.
+    /// </summary>
+    void DetachQuestion(Question question);
+
     /// <summary>Active-only entity load (legacy callers).</summary>
     Task<Question?> GetQuestionEntityAsync(long questionId, CancellationToken cancellationToken);
 

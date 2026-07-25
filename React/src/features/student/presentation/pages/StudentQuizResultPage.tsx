@@ -30,13 +30,9 @@ export function StudentQuizResultPage() {
         <PageHeader
           title="Result unavailable"
           description={error?.message ?? "Unable to load attempt result."}
+          backTo="/student/quizzes"
+          backAriaLabel="Back to quizzes"
         />
-        <Link
-          to="/student/quizzes"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to quizzes
-        </Link>
       </div>
     );
   }
@@ -46,6 +42,8 @@ export function StudentQuizResultPage() {
       <PageHeader
         title={result.quizTitle}
         description={`Attempt #${result.attemptNumber} · ${result.timeSpentSeconds}s spent`}
+        backTo={`/student/quizzes/${quizId}`}
+        backAriaLabel="Back to quiz"
         action={
           <Link
             to="/student/quizzes"
@@ -120,15 +118,6 @@ export function StudentQuizResultPage() {
             ) : null}
           </section>
         ))}
-      </div>
-
-      <div className="mt-8">
-        <Link
-          to={`/student/quizzes/${quizId}`}
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-        >
-          Back to quiz
-        </Link>
       </div>
     </div>
   );

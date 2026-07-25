@@ -30,6 +30,8 @@ export function QuizEditPage() {
         <PageHeader
           title="Unable to edit quiz"
           description={error?.message ?? "Quiz not found."}
+          backTo="/quizzes"
+          backAriaLabel="Back to quizzes"
         />
       </div>
     );
@@ -40,6 +42,8 @@ export function QuizEditPage() {
       <PageHeader
         title={`Edit quiz #${quizId}`}
         description="Update quiz settings before publishing or assigning."
+        backTo={`/quizzes/${quizId}`}
+        backAriaLabel="Back to quiz"
       />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

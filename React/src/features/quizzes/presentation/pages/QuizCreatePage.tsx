@@ -17,6 +17,8 @@ export function QuizCreatePage() {
       <PageHeader
         title="Create quiz"
         description="Start with quiz details. You can add questions after the quiz is created."
+        backTo="/quizzes"
+        backAriaLabel="Back to quizzes"
       />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -14,7 +14,10 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
     {
         builder.ToTable("questions");
         builder.HasKey(question => question.Id);
-        builder.Property(question => question.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        // Matches PostgreSQL: id BIGINT GENERATED ALWAYS AS IDENTITY
+        builder.Property(question => question.Id)
+            .HasColumnName("id")
+            .UseIdentityAlwaysColumn();
         builder.Property(question => question.QuestionText).HasColumnName("question_text").HasMaxLength(1000).IsRequired();
         builder.Property(question => question.QuestionTypeId).HasColumnName("question_type_id").IsRequired();
         builder.Property(question => question.ClassId).HasColumnName("class_id").IsRequired();
@@ -43,6 +46,16 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         // Speeds org-scoped list / pending-queue filters.
         builder.HasIndex(question => new { question.SchoolId, question.CampusId, question.VisibilityLevel })
             .HasDatabaseName("idx_questions_visibility_scope");
+
+        // Explicit relationships avoid EF confusing Options vs AcceptedAnswers (both use question_id).
+        builder.HasMany(question => question.Options)
+            .WithOne()
+            .HasForeignKey(option => option.QuestionId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(question => question.AcceptedAnswers)
+            .WithOne()
+            .HasForeignKey(answer => answer.QuestionId)
+            .OnDelete(DeleteBehavior.Cascade);
         builder.Navigation(question => question.Options).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(question => question.AcceptedAnswers).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
@@ -54,7 +67,9 @@ public sealed class QuestionOptionConfiguration : IEntityTypeConfiguration<Quest
     {
         builder.ToTable("question_options");
         builder.HasKey(option => option.Id);
-        builder.Property(option => option.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(option => option.Id)
+            .HasColumnName("id")
+            .UseIdentityAlwaysColumn();
         builder.Property(option => option.QuestionId).HasColumnName("question_id").IsRequired();
         builder.Property(option => option.OptionText).HasColumnName("option_text").HasMaxLength(1000).IsRequired();
         builder.Property(option => option.OptionImageUrl).HasColumnName("option_image_url").HasMaxLength(512);
@@ -70,7 +85,9 @@ public sealed class QuestionAcceptedAnswerConfiguration : IEntityTypeConfigurati
     {
         builder.ToTable("question_accepted_answers");
         builder.HasKey(answer => answer.Id);
-        builder.Property(answer => answer.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(answer => answer.Id)
+            .HasColumnName("id")
+            .UseIdentityAlwaysColumn();
         builder.Property(answer => answer.QuestionId).HasColumnName("question_id").IsRequired();
         builder.Property(answer => answer.AnswerText).HasColumnName("answer_text").HasMaxLength(1000).IsRequired();
         builder.Property(answer => answer.IsCaseSensitive).HasColumnName("is_case_sensitive").HasDefaultValue(false);

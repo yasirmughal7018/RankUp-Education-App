@@ -1,4 +1,4 @@
-﻿import { Link, useNavigate, useParams } from "react-router-dom";
+﻿import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import {
   getQuestionStatusTone,
@@ -99,13 +99,9 @@ export function StudentQuizDetailPage() {
         <PageHeader
           title="Quiz unavailable"
           description={error?.message ?? "Unable to load this quiz."}
+          backTo="/student/quizzes"
+          backAriaLabel="Back to quizzes"
         />
-        <Link
-          to="/student/quizzes"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to quizzes
-        </Link>
       </div>
     );
   }
@@ -123,14 +119,8 @@ export function StudentQuizDetailPage() {
       <PageHeader
         title={quiz.title}
         description={quiz.description || `${quiz.subject} · ${quiz.grade}`}
-        action={
-          <Link
-            to="/student/quizzes"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Back
-          </Link>
-        }
+        backTo="/student/quizzes"
+        backAriaLabel="Back to quizzes"
       />
 
       {startAttempt.error ? (

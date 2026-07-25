@@ -125,13 +125,9 @@ export function QuestionDetailPage() {
         <PageHeader
           title="Question not found"
           description={error?.message ?? "Unable to load question."}
+          backTo="/questions"
+          backAriaLabel="Back to question bank"
         />
-        <Link
-          to="/questions"
-          className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          Back to question bank
-        </Link>
       </div>
     );
   }
@@ -190,6 +186,8 @@ export function QuestionDetailPage() {
       <PageHeader
         title={`Question #${question.questionId}`}
         description={question.questionType}
+        backTo="/questions"
+        backAriaLabel="Back to question bank"
         action={
           canEdit ? (
             <Link

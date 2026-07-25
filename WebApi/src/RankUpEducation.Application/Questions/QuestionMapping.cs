@@ -38,6 +38,8 @@ internal static class QuestionMapping
 
             item.Marks,
 
+            item.EstimatedTimeSeconds,
+
             item.IsActive,
 
             item.CreatedBy,

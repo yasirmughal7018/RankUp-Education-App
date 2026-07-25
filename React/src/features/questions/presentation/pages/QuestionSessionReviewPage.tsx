@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useLookups } from "@/core/hooks/useLookups";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
@@ -97,13 +97,9 @@ export function QuestionSessionReviewPage() {
         <PageHeader
           title="Session review"
           description="No questions from this create session were found."
+          backTo="/questions/new"
+          backAriaLabel="Back to create"
         />
-        <Link
-          to="/questions/new"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to create
-        </Link>
       </div>
     );
   }
@@ -113,15 +109,8 @@ export function QuestionSessionReviewPage() {
       <PageHeader
         title="Session questions"
         description={`Review all questions saved in this create session (${index + 1} of ${questions.length}).`}
-        action={
-          <button
-            type="button"
-            onClick={goBackToCreate}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Back to create
-          </button>
-        }
+        onBack={goBackToCreate}
+        backAriaLabel="Back to create"
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">

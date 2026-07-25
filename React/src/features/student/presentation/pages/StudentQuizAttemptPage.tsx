@@ -438,13 +438,9 @@ export function StudentQuizAttemptPage() {
         <PageHeader
           title="Attempt not found"
           description="Start the quiz again from the quiz details page. In-progress attempts are restored from this browser session when available."
+          backTo={`/student/quizzes/${quizId}`}
+          backAriaLabel="Back to quiz"
         />
-        <Link
-          to={`/student/quizzes/${quizId}`}
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to quiz
-        </Link>
       </div>
     );
   }

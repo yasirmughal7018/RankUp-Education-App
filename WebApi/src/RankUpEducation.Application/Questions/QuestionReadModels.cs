@@ -26,6 +26,8 @@ public sealed record QuestionListItem(
 
     short Marks,
 
+    short EstimatedTimeSeconds,
+
     bool IsActive,
 
     string CreatedBy,

@@ -17,6 +17,7 @@ import {
 import { QuestionAcceptedAnswersEditor } from "@/features/questions/presentation/components/QuestionAcceptedAnswersEditor";
 import { QuestionOptionsEditor } from "@/features/questions/presentation/components/QuestionOptionsEditor";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import { cn } from "@/lib/utils";
 
 interface QuestionFormProps {
   initialValues: QuestionFormValues;
@@ -45,7 +46,7 @@ function RequiredLabel({
     <FieldLabel
       htmlFor={htmlFor}
       required
-      className="mb-1.5 flex items-center gap-1 text-sm font-semibold text-slate-800"
+      className="mb-1.5 flex items-center gap-1 text-sm font-semibold text-foreground"
     >
       {children}
     </FieldLabel>
@@ -63,7 +64,7 @@ function OptionalLabel({
     <FieldLabel
       htmlFor={htmlFor}
       optional
-      className="mb-1.5 block text-sm font-medium text-slate-600"
+      className="mb-1.5 block text-sm font-medium text-muted-foreground"
     >
       {children}
     </FieldLabel>
@@ -142,23 +143,23 @@ export function QuestionForm({
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
       {error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-2xl border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
           {error}
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
+      <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-indigo-950">
+            <h3 className="text-sm font-semibold text-foreground">
               Class · Subject · Topic
             </h3>
-            <p className="mt-1 text-xs text-indigo-700/80">
+            <p className="mt-1 text-xs text-muted-foreground">
               These stay the same while you add multiple questions for this set.
             </p>
           </div>
           {lockScope ? (
-            <span className="rounded-full bg-indigo-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+            <span className="rounded-full bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary-foreground">
               Sticky for this batch
             </span>
           ) : null}
@@ -242,19 +243,20 @@ export function QuestionForm({
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleTypeChange(type)}
-                className={`rounded-2xl border px-3 py-3 text-left transition ${
+                className={cn(
+                  "rounded-2xl border px-3 py-3 text-left transition",
                   selected
-                    ? "border-brand-500 bg-brand-50 shadow-sm ring-2 ring-brand-500/30"
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                }`}
+                    ? "border-primary bg-primary/10 shadow-sm ring-2 ring-primary/30"
+                    : "border-border bg-card hover:border-primary/40 hover:bg-muted/50",
+                )}
               >
-                <div className="text-xs font-bold uppercase tracking-wide text-brand-700">
+                <div className="text-xs font-bold uppercase tracking-wide text-primary">
                   {meta.shortLabel}
                 </div>
-                <div className="mt-1 text-sm font-semibold text-slate-900">
+                <div className="mt-1 text-sm font-semibold text-foreground">
                   {meta.label}
                 </div>
-                <p className="mt-1 text-[11px] leading-snug text-slate-500">
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
                   {meta.description}
                 </p>
               </button>
@@ -262,14 +264,14 @@ export function QuestionForm({
           })}
         </div>
         {normalizeQuestionType(values.questionType) === "Descriptive" ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="rounded-xl border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-xs text-[var(--status-pending-text)]">
             This question is Descriptive (not available for new creates). Choose
             a NOW type above to continue editing, or cancel.
           </p>
         ) : null}
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div>
           <RequiredLabel htmlFor="questionText">Question text</RequiredLabel>
           <textarea
@@ -367,12 +369,12 @@ export function QuestionForm({
         />
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-5">
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
         <button
           type="button"
           disabled={isSubmitting}
           onClick={onCancel}
-          className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+          className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted disabled:opacity-70"
         >
           Cancel
         </button>
@@ -382,7 +384,7 @@ export function QuestionForm({
             type="submit"
             disabled={isSubmitting}
             onClick={() => setSubmitMode("secondary")}
-            className="rounded-xl border border-brand-600 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-xl border border-primary bg-card px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting && submitMode === "secondary"
               ? "Saving..."
@@ -394,7 +396,7 @@ export function QuestionForm({
           type="submit"
           disabled={isSubmitting}
           onClick={() => setSubmitMode("primary")}
-          className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isSubmitting && submitMode === "primary" ? "Saving..." : submitLabel}
         </button>

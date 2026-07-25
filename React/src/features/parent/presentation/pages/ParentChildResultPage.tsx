@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useParentChildResultQuery } from "@/features/parent/presentation/hooks/useParentQueries";
 import {
@@ -31,13 +31,9 @@ export function ParentChildResultPage() {
         <PageHeader
           title="Result unavailable"
           description={error?.message ?? "Unable to load attempt result."}
+          backTo={historyPath}
+          backAriaLabel="Back to history"
         />
-        <Link
-          to={historyPath}
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to history
-        </Link>
       </div>
     );
   }
@@ -47,14 +43,8 @@ export function ParentChildResultPage() {
       <PageHeader
         title={result.quizTitle}
         description={`Attempt #${result.attemptNumber} · ${result.timeSpentSeconds}s spent`}
-        action={
-          <Link
-            to={historyPath}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Back to history
-          </Link>
-        }
+        backTo={historyPath}
+        backAriaLabel="Back to history"
       />
 
       <section className="mb-6 grid gap-4 md:grid-cols-3">

@@ -2,7 +2,7 @@
  * Edit an existing bank question.
  * Content updates do not change status — Rejected stays Rejected until Submit for review.
  */
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import {
@@ -39,13 +39,9 @@ export function QuestionEditPage() {
         <PageHeader
           title="Unable to edit question"
           description={error?.message ?? "Question not found."}
+          backTo="/questions"
+          backAriaLabel="Back to question bank"
         />
-        <Link
-          to="/questions"
-          className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          Back to question bank
-        </Link>
       </div>
     );
   }
@@ -65,13 +61,9 @@ export function QuestionEditPage() {
         <PageHeader
           title="Editing not allowed"
           description="You can only edit your own PendingReview or Rejected questions (PortalAdmin may edit any)."
+          backTo={`/questions/${question.questionId}`}
+          backAriaLabel="Back to question"
         />
-        <Link
-          to={`/questions/${question.questionId}`}
-          className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          Back to question
-        </Link>
       </div>
     );
   }
@@ -81,6 +73,8 @@ export function QuestionEditPage() {
       <PageHeader
         title={`Edit question #${questionId}`}
         description="Saves content only. Rejected questions stay Rejected until you submit for review."
+        backTo={`/questions/${questionId}`}
+        backAriaLabel="Back to question"
       />
 
       <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">

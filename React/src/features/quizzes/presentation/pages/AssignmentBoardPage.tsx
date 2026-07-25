@@ -56,23 +56,17 @@ export function AssignmentBoardPage() {
       <PageHeader
         title="Assignment board"
         description="Overview of all quiz assignments across your students."
+        backTo="/quizzes"
+        backAriaLabel="Back to quizzes"
         action={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Refresh
-            </button>
-            <Link
-              to="/quizzes"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Back to quizzes
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+          >
+            Refresh
+          </button>
         }
       />
 

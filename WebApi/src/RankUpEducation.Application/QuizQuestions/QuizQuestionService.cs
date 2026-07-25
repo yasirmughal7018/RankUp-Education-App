@@ -132,6 +132,14 @@ public sealed class QuizQuestionService : IQuizQuestionService
 
         await _questions.AddQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (question.Id <= 0)
+        {
+            throw new InvalidOperationException(
+                "Question was inserted but no database identity was returned.");
+        }
+
+        _questions.DetachQuestion(question);
         await ReplaceAnswersAsync(question.Id, request.QuestionType, request.Options, cancellationToken);
 
         var existingQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
