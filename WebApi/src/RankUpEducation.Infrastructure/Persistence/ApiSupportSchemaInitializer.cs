@@ -1201,9 +1201,14 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_user_parents
             DROP COLUMN IF EXISTS cnic;
 
-        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_cnic_unique
+        -- Soft-rejected registrations keep their row (rejected_at set) so the same
+        -- CNIC can re-request. A global unique index would block that, so drop any
+        -- unfiltered variant and rely on the filtered ix_app_users_cnic_active
+        -- (cnic IS NOT NULL AND rejected_at IS NULL) from RegistrationSupportSql.
+        DROP INDEX IF EXISTS ix_app_users_cnic_unique;
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_users_cnic_active
             ON public.app_users (cnic)
-            WHERE cnic IS NOT NULL;
+            WHERE cnic IS NOT NULL AND rejected_at IS NULL;
         """;
 
     private const string NotificationSupportSql = """

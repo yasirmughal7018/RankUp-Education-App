@@ -18,17 +18,20 @@ public sealed class DirectoryService : IDirectoryService
     private readonly IDirectoryRepository _directory;
     private readonly IUserRepository _users;
     private readonly ICurrentUserService _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUnitOfWork _unitOfWork;
 
     public DirectoryService(
         IDirectoryRepository directory,
         IUserRepository users,
         ICurrentUserService currentUser,
+        IDateTimeProvider dateTimeProvider,
         IUnitOfWork unitOfWork)
     {
         _directory = directory;
         _users = users;
         _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
         _unitOfWork = unitOfWork;
     }
 
@@ -454,12 +457,12 @@ public sealed class DirectoryService : IDirectoryService
             }
 
             var user = await _users.GetByIdAsync(studentId, cancellationToken);
-            if (IsSchoolAdmin() && (user is null || _currentUser.SchoolId != user.SchoolId))
+            if (user is null || !CanManageUserInCurrentScope(user))
             {
                 continue;
             }
 
-            await _directory.SetUserActiveAsync(studentId, false, cancellationToken);
+            await DeactivateDirectoryUserAsync(studentId, cancellationToken);
             affected++;
         }
 
@@ -641,12 +644,12 @@ public sealed class DirectoryService : IDirectoryService
             }
 
             var user = await _users.GetByIdAsync(teacherId, cancellationToken);
-            if (IsSchoolAdmin() && (user is null || _currentUser.SchoolId != user.SchoolId))
+            if (user is null || !CanManageUserInCurrentScope(user))
             {
                 continue;
             }
 
-            await _directory.SetUserActiveAsync(teacherId, false, cancellationToken);
+            await DeactivateDirectoryUserAsync(teacherId, cancellationToken);
             affected++;
         }
 
@@ -791,7 +794,7 @@ public sealed class DirectoryService : IDirectoryService
                 continue;
             }
 
-            await _directory.SetUserActiveAsync(parentId, false, cancellationToken);
+            await DeactivateDirectoryUserAsync(parentId, cancellationToken);
             affected++;
         }
 
@@ -849,6 +852,13 @@ public sealed class DirectoryService : IDirectoryService
         EnsureSchoolAccess(user.SchoolId);
         EnsureCampusAccess(user.CampusId);
         await _directory.SetUserActiveAsync(studentId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                studentId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -862,6 +872,13 @@ public sealed class DirectoryService : IDirectoryService
         EnsureSchoolAccess(user.SchoolId);
         EnsureCampusAccess(user.CampusId);
         await _directory.SetUserActiveAsync(teacherId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                teacherId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -874,6 +891,13 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         await _directory.SetUserActiveAsync(parentId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                parentId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -1259,6 +1283,13 @@ public sealed class DirectoryService : IDirectoryService
 
         EnsureSchoolAccess(user.SchoolId);
         await _directory.SetUserActiveAsync(userId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                userId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -1368,6 +1399,13 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         await _directory.SetUserActiveAsync(userId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                userId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -1613,6 +1651,41 @@ public sealed class DirectoryService : IDirectoryService
 
     private bool IsCampusAdmin()
         => ParseRole() == UserRole.CampusAdmin;
+
+    private bool CanManageUserInCurrentScope(User user)
+    {
+        var role = ParseRole();
+        if (role == UserRole.PortalAdmin)
+        {
+            return true;
+        }
+
+        var schoolId = _currentUser.SchoolId;
+        if (!schoolId.HasValue || user.SchoolId != schoolId)
+        {
+            return false;
+        }
+
+        if (role == UserRole.SchoolAdmin)
+        {
+            return true;
+        }
+
+        return role == UserRole.CampusAdmin
+            && _currentUser.CampusId.HasValue
+            && user.CampusId == _currentUser.CampusId;
+    }
+
+    private async Task DeactivateDirectoryUserAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        await _directory.SetUserActiveAsync(userId, false, cancellationToken);
+        await _users.RevokeRefreshTokensForUserAsync(
+            userId,
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
+    }
 
     private async Task<User?> FindExistingUserForAdditionalRoleAsync(
         string? mobileNumber,

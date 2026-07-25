@@ -37,13 +37,14 @@ export function RoleSwitcher() {
 
   return (
     <div className="flex w-full flex-col gap-1">
-      <label className="flex w-full flex-col gap-1.5 text-xs text-slate-600 sm:flex-row sm:items-center">
-        <span className="shrink-0 font-medium text-slate-500">Acting as</span>
+      <label className="flex w-full flex-col gap-1 text-xs text-slate-600">
+        <span className="font-semibold text-slate-500">Acting as</span>
         <select
           value={user.role}
           disabled={isSubmitting}
+          aria-label="Switch active role"
           onChange={(event) => void handleChange(event.target.value)}
-          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:min-w-[9rem]"
+          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {user.roles.map((role) => (
             <option key={role} value={role}>

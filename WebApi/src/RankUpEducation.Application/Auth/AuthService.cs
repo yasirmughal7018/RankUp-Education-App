@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Directory;
 using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Auth;
@@ -28,6 +29,7 @@ public sealed class AuthService : IAuthService
 
     private readonly IUserRepository _users;
     private readonly ISchoolChangeRequestRepository _schoolChanges;
+    private readonly IDirectoryRepository _directory;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -39,6 +41,7 @@ public sealed class AuthService : IAuthService
     public AuthService(
         IUserRepository users,
         ISchoolChangeRequestRepository schoolChanges,
+        IDirectoryRepository directory,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         IDateTimeProvider dateTimeProvider,
@@ -49,6 +52,7 @@ public sealed class AuthService : IAuthService
     {
         _users = users;
         _schoolChanges = schoolChanges;
+        _directory = directory;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _dateTimeProvider = dateTimeProvider;
@@ -288,6 +292,8 @@ public sealed class AuthService : IAuthService
         var campusId = role == UserRole.Parent || !schoolId.HasValue
             ? null
             : request.CampusId;
+        // Reject unknown / inactive destinations before queuing reviewers.
+        await EnsureActiveSchoolCampusDestinationAsync(schoolId, campusId, cancellationToken);
         var rollNumberTeacherCode = role == UserRole.Parent
             ? null
             : request.RollNumberTeacherCode;
@@ -1388,6 +1394,10 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
+        // Validate destination before locking the account — fake/inactive school or campus
+        // IDs would otherwise queue a change with no matching School/Campus reviewers.
+        await EnsureActiveSchoolCampusDestinationAsync(toSchoolId, toCampusId, cancellationToken);
+
         try
         {
             await _schoolChanges.CancelPendingForUserAsync(
@@ -1659,6 +1669,72 @@ public sealed class AuthService : IAuthService
         }
 
         return UserRole.Student;
+    }
+
+    /// <summary>
+    /// Ensures destination school/campus IDs refer to existing, active records and that
+    /// the campus belongs to the school. Prevents registration / school-change queues from
+    /// locking accounts against destinations that have no matching reviewers.
+    /// </summary>
+    private async Task EnsureActiveSchoolCampusDestinationAsync(
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        if (!schoolId.HasValue && !campusId.HasValue)
+        {
+            return;
+        }
+
+        if (campusId.HasValue && !schoolId.HasValue)
+        {
+            throw new ValidationAppException(["School is required when a campus is selected."]);
+        }
+
+        if (schoolId.HasValue)
+        {
+            if (schoolId.Value <= 0)
+            {
+                throw new ValidationAppException(["School is invalid."]);
+            }
+
+            var school = await _directory.GetSchoolAsync(schoolId.Value, cancellationToken);
+            if (school is null)
+            {
+                throw new ValidationAppException(["School was not found."]);
+            }
+
+            if (!school.IsActive)
+            {
+                throw new ValidationAppException(["School is inactive. Choose an active school."]);
+            }
+        }
+
+        if (!campusId.HasValue)
+        {
+            return;
+        }
+
+        if (campusId.Value <= 0)
+        {
+            throw new ValidationAppException(["Campus is invalid."]);
+        }
+
+        var campus = await _directory.GetCampusAsync(campusId.Value, cancellationToken);
+        if (campus is null)
+        {
+            throw new ValidationAppException(["Campus was not found."]);
+        }
+
+        if (campus.SchoolId != schoolId!.Value)
+        {
+            throw new ValidationAppException(["Campus must belong to the selected school."]);
+        }
+
+        if (!campus.IsActive)
+        {
+            throw new ValidationAppException(["Campus is inactive. Choose an active campus."]);
+        }
     }
 
     private static void ValidateLogin(LoginRequest request)
