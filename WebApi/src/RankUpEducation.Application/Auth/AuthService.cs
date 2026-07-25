@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Auth;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Parents;
@@ -307,7 +308,7 @@ public sealed class AuthService : IAuthService
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Approval queue lives only in app_user_approval:
+        // Approval queue lives only in app_approval:
         // no school → PortalAdmin;
         // school only → SchoolAdmin + PortalAdmin;
         // campus → CampusAdmin + SchoolAdmin + PortalAdmin.
@@ -319,7 +320,7 @@ public sealed class AuthService : IAuthService
         if (approverCandidates.Count > 0)
         {
             var approvalRows = approverCandidates
-                .Select(candidate => UserApproval.CreatePending(
+                .Select(candidate => Approval.CreatePending(
                     user.Id,
                     candidate.UserId,
                     candidate.Role))
@@ -437,7 +438,7 @@ public sealed class AuthService : IAuthService
             throw new ForbiddenAppException("Approver role was not found.");
         }
 
-        // Record this admin's approval in app_user_approval.
+        // Record this admin's approval in app_approval.
         var pendingApproval = await _users.GetPendingApprovalAsync(
             user.Id,
             approverId,
@@ -455,7 +456,7 @@ public sealed class AuthService : IAuthService
         else
         {
             // Legacy request without a queue row for this approver.
-            var approval = UserApproval.CreatePending(user.Id, approverId, approverRole);
+            var approval = Approval.CreatePending(user.Id, approverId, approverRole);
             approval.MarkApproved(_dateTimeProvider.UtcNow);
             await _users.AddApprovalAsync(approval, cancellationToken);
         }
@@ -542,7 +543,7 @@ public sealed class AuthService : IAuthService
         }
         else
         {
-            var rejection = UserApproval.CreatePending(user.Id, rejectorId, rejectorRole);
+            var rejection = Approval.CreatePending(user.Id, rejectorId, rejectorRole);
             rejection.MarkRejected(rejectedAt);
             await _users.AddApprovalAsync(rejection, cancellationToken);
         }

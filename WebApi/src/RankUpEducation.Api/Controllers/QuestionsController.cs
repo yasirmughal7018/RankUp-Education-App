@@ -169,6 +169,15 @@ public sealed class QuestionsController : ControllerBase
         return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question archived."));
     }
 
+    [HttpPost("{questionId:long}/unarchive")]
+    public async Task<ActionResult<ApiResponse<QuestionActiveStateResponse>>> UnarchiveAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.UnarchiveAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question unarchived."));
+    }
+
     [HttpDelete("{questionId:long}")]
     public async Task<ActionResult<ApiResponse<DeleteQuestionResponse>>> DeleteAsync(
         long questionId,

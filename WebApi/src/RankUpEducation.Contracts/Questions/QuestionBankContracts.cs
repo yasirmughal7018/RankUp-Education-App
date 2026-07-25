@@ -254,7 +254,37 @@ public sealed record QuestionDetailResponse(
 
     IReadOnlyList<QuestionOptionResponse> Options,
 
-    IReadOnlyList<QuestionAcceptedAnswerResponse> AcceptedAnswers);
+    IReadOnlyList<QuestionAcceptedAnswerResponse> AcceptedAnswers,
+
+    /// <summary>Workflow trail from app_approval, oldest first.</summary>
+
+    IReadOnlyList<QuestionApprovalHistoryItem> ApprovalHistory);
+
+
+
+/// <summary>One entry in a question's approval trail.</summary>
+
+public sealed record QuestionApprovalHistoryItem(
+
+    long ApprovalId,
+
+    /// <summary>Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived.</summary>
+
+    string Action,
+
+    long ActorUserId,
+
+    string ActorName,
+
+    /// <summary>PortalAdmin | SchoolAdmin | CampusAdmin | Teacher | Parent | Student.</summary>
+
+    string ActorRole,
+
+    /// <summary>Rejection reason, or null.</summary>
+
+    string? Reason,
+
+    DateTimeOffset OccurredAt);
 
 
 

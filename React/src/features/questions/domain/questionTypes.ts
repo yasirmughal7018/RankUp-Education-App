@@ -90,6 +90,20 @@ export interface QuestionDetail {
   options: QuestionOption[];
   acceptedAnswers: QuestionAcceptedAnswer[];
   rejectionReason?: string | null;
+  /** Workflow trail from app_approval, oldest first. */
+  approvalHistory?: QuestionApprovalHistoryEntry[];
+}
+
+/** One entry in a question's approval trail. */
+export interface QuestionApprovalHistoryEntry {
+  approvalId: number;
+  /** Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived. */
+  action: string;
+  actorUserId: number;
+  actorName: string;
+  actorRole: string;
+  reason: string | null;
+  occurredAt: string;
 }
 
 /** Client form model for create / edit. */
@@ -194,8 +208,8 @@ export function canManageQuestions(role: UserRole): boolean {
 }
 
 /**
- * Whether the role may approve / reject PendingReview items in their org scope.
- * CampusAdmin, SchoolAdmin, and PortalAdmin.
+ * Whether the role may endorse / reject / publish PendingReview items.
+ * CampusAdmin and SchoolAdmin endorse; PortalAdmin publishes.
  */
 export function canApproveQuestions(role: UserRole): boolean {
   return (
@@ -206,8 +220,9 @@ export function canApproveQuestions(role: UserRole): boolean {
 }
 
 /**
- * Visibility granted when this role approves a question.
- * CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
+ * Visibility stamped when this role endorses/publishes.
+ * CampusAdmin → Campus (endorsement), SchoolAdmin → School (endorsement),
+ * PortalAdmin → Public (publish).
  */
 export function approvalVisibilityForRole(role: UserRole): QuestionVisibility {
   switch (role) {
@@ -220,6 +235,11 @@ export function approvalVisibilityForRole(role: UserRole): QuestionVisibility {
     default:
       return "None";
   }
+}
+
+/** True when this role's approval publishes (Public + Active). */
+export function approvalPublishes(role: UserRole): boolean {
+  return role === "PortalAdmin";
 }
 
 /** Activate / deactivate / archive — PortalAdmin only. */
@@ -293,19 +313,33 @@ export function canMutateQuestion(args: {
 }
 
 /**
- * Quiz-bank attach eligibility: active + has approver + Approved status
- * (visibility scope is enforced by list/attach APIs).
+ * Quiz-bank attach eligibility: Published by PortalAdmin (Public + Active + Approved).
  */
 export function isEligibleForQuizQuestion(question: {
   isActive: boolean;
   approvedBy: string | null;
   status: string;
+  visibility?: string | null;
 }): boolean {
+  const visibility = (question.visibility ?? "").trim().toLowerCase();
   return (
     question.isActive &&
     Boolean(question.approvedBy?.trim()) &&
-    isApprovedQuestionStatus(question.status)
+    isApprovedQuestionStatus(question.status) &&
+    visibility === "public"
   );
+}
+
+/** True when Approved but not yet Public (Campus/School endorsement). */
+export function isEndorsedNotPublishedQuestion(question: {
+  status: string;
+  visibility?: string | null;
+}): boolean {
+  if (!isApprovedQuestionStatus(question.status)) {
+    return false;
+  }
+  const visibility = (question.visibility ?? "").trim().toLowerCase();
+  return visibility === "campus" || visibility === "school";
 }
 
 /** Canonical workflow status label (never mixes IsActive). */
@@ -340,28 +374,34 @@ export function displayQuestionListStatusLabel(
   return displayQuestionStatusLabel(status);
 }
 
-/** PortalAdmin may activate only Approved + inactive questions. */
+/** PortalAdmin may activate only Published (Public) + inactive questions. */
 export function canActivateQuestion(args: {
   role: UserRole;
   status: string;
   isActive: boolean;
+  visibility?: string | null;
 }): boolean {
+  const visibility = (args.visibility ?? "").trim().toLowerCase();
   return (
     canLifecycleQuestions(args.role) &&
     isApprovedQuestionStatus(args.status) &&
+    visibility === "public" &&
     !args.isActive
   );
 }
 
-/** PortalAdmin may deactivate only Approved + active questions. */
+/** PortalAdmin may deactivate only Published (Public) + active questions. */
 export function canDeactivateQuestion(args: {
   role: UserRole;
   status: string;
   isActive: boolean;
+  visibility?: string | null;
 }): boolean {
+  const visibility = (args.visibility ?? "").trim().toLowerCase();
   return (
     canLifecycleQuestions(args.role) &&
     isApprovedQuestionStatus(args.status) &&
+    visibility === "public" &&
     args.isActive
   );
 }
@@ -373,6 +413,16 @@ export function canArchiveQuestion(args: {
 }): boolean {
   return (
     canLifecycleQuestions(args.role) && !isArchivedQuestionStatus(args.status)
+  );
+}
+
+/** PortalAdmin may unarchive an archived question (restores prior Approved/Pending state). */
+export function canUnarchiveQuestion(args: {
+  role: UserRole;
+  status: string;
+}): boolean {
+  return (
+    canLifecycleQuestions(args.role) && isArchivedQuestionStatus(args.status)
   );
 }
 

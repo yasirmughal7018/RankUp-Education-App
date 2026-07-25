@@ -2,6 +2,7 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Questions;
@@ -384,6 +385,7 @@ public sealed class QuizManageService : IQuizManageService
                 sourceQuestion.DifficultyLevel,
                 questionStatusId,
                 scope.UserId,
+                scope.Role,
                 sourceQuestion.EstimatedTimeSeconds,
                 sourceQuestion.Marks);
 
@@ -407,6 +409,17 @@ public sealed class QuizManageService : IQuizManageService
 
             await _questions.AddQuestionAsync(question, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Trail: duplicated quiz questions are created + campus-endorsed in one step.
+            var trailNow = DateTimeOffset.UtcNow;
+            await _questions.AddApprovalEventAsync(
+                Approval.RecordQuestionEvent(
+                    question.Id, scope.UserId, scope.Role, ApprovalAction.Created, trailNow),
+                cancellationToken);
+            await _questions.AddApprovalEventAsync(
+                Approval.RecordQuestionEvent(
+                    question.Id, scope.UserId, scope.Role, ApprovalAction.Endorsed, trailNow),
+                cancellationToken);
 
             if (sourceQuestion.Options.Count > 0)
             {

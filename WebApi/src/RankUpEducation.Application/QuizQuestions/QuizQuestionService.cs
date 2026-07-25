@@ -4,6 +4,7 @@ using RankUpEducation.Application.Questions;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Contracts.Quizzes;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Questions;
 using RankUpEducation.Domain.Quizzes;
@@ -108,6 +109,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             quiz.DifficultyLevelId,
             questionStatusId,
             scope.UserId,
+            scope.Role,
             request.EstimatedTimeSeconds,
             request.Marks);
 
@@ -138,6 +140,17 @@ public sealed class QuizQuestionService : IQuizQuestionService
             throw new InvalidOperationException(
                 "Question was inserted but no database identity was returned.");
         }
+
+        // Trail: inline quiz questions are created + campus-endorsed in one step.
+        var trailNow = DateTimeOffset.UtcNow;
+        await _questions.AddApprovalEventAsync(
+            Approval.RecordQuestionEvent(
+                question.Id, scope.UserId, scope.Role, ApprovalAction.Created, trailNow),
+            cancellationToken);
+        await _questions.AddApprovalEventAsync(
+            Approval.RecordQuestionEvent(
+                question.Id, scope.UserId, scope.Role, ApprovalAction.Endorsed, trailNow),
+            cancellationToken);
 
         _questions.DetachQuestion(question);
         await ReplaceAnswersAsync(question.Id, request.QuestionType, request.Options, cancellationToken);
@@ -186,12 +199,14 @@ public sealed class QuizQuestionService : IQuizQuestionService
         if (!question.IsEligibleForQuiz)
         {
             throw new BusinessRuleException(
-                "Question must be approved (ApprovedBy set), active, and have Campus, School, or Public visibility before it can be added to a quiz.");
+                "Question must be published by Portal Admin (Public + Active) before it can be added to a quiz.");
         }
 
-        // Same Public / School / Campus org rules as the eligible-for-quiz bank list.
+        // Bank attach: only Public questions are visible/usable for quiz selection.
         var questionScope = QuestionScopeResolver.RequireManageScope(_currentUser);
-        if (!QuestionScopeResolver.CanViewApprovedVisibility(
+        if (!QuestionScopeResolver.CanViewQuestion(
+                question.CreatedBy,
+                question.CreatedByRole,
                 question.VisibilityLevel,
                 question.SchoolId,
                 question.CampusId,

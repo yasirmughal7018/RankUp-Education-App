@@ -1,23 +1,24 @@
 namespace RankUpEducation.Domain.Questions;
 
 /// <summary>
-/// Who can see/use an Approved question after bank approval.
-/// Set by approver role: CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
-/// Public → all managers; School → same school; Campus → same campus
-/// (SchoolAdmin also sees Campus-approved items in their school).
+/// Endorsement / publish markers after bank approval.
+/// CampusAdmin → Campus (endorsed, restricted), SchoolAdmin → School (endorsed, restricted),
+/// PortalAdmin → Public (published, broadly visible and quiz-usable).
+/// None / Campus / School share the same restricted audience (creator + upward admins);
+/// only Public widens the audience.
 /// </summary>
 public static class QuestionVisibilityLevels
 {
-    /// <summary>Not approved / rejected / pending — not visible in the bank for others.</summary>
+    /// <summary>Pending / rejected — restricted to creator + upward admins.</summary>
     public const short None = 0;
 
-    /// <summary>Visible to the same campus (and SchoolAdmin of that school).</summary>
+    /// <summary>CampusAdmin endorsement marker (still restricted; not quiz-usable).</summary>
     public const short Campus = 1;
 
-    /// <summary>Visible to all campuses in the owning school.</summary>
+    /// <summary>SchoolAdmin endorsement marker (still restricted; not quiz-usable).</summary>
     public const short School = 2;
 
-    /// <summary>Visible to everyone (portal-wide).</summary>
+    /// <summary>PortalAdmin publish — visible to all question-managing roles; quiz-usable when Active.</summary>
     public const short Public = 3;
 
     /// <summary>Maps stored short to API display name (None | Campus | School | Public).</summary>
@@ -29,7 +30,10 @@ public static class QuestionVisibilityLevels
         _ => "None"
     };
 
-    /// <summary>True when level is Campus, School, or Public (valid after Approve).</summary>
+    /// <summary>True when level is Campus, School, or Public (valid after Approve/endorse).</summary>
     public static bool IsValidApprovedLevel(short level)
         => level is Campus or School or Public;
+
+    /// <summary>True when PortalAdmin has published the question.</summary>
+    public static bool IsPublished(short level) => level == Public;
 }

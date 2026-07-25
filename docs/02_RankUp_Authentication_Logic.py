@@ -222,7 +222,7 @@ def build_doc():
         "Authenticated API calls use a Bearer JWT access token (~30 min). Refresh tokens last 30 days and are stored hashed.",
         "Two-step login: POST /api/auth/login-status (identifier) → set-initial-password or password login.",
         "Username priority: CNIC if provided, otherwise mobile. Login lookup: username → cnic → mobile_number.",
-        "Self-service registration: inactive app_users + app_user_roles + app_user_approval. Only PortalAdmin activates. User sets password via set-initial-password.",
+        "Self-service registration: inactive app_users + app_user_roles + app_approval. Only PortalAdmin activates. User sets password via set-initial-password.",
         "Reject is soft (rejected_at). Unique indexes ignore rejected rows so the person can re-request.",
         "Roles live in app_user_roles (multi-role where allowed). Session role on JWT and refresh_tokens.active_role. Student and PortalAdmin are exclusive; SchoolAdmin/CampusAdmin/Teacher/Parent may combine.",
         "School/campus change (Teacher/Student/CampusAdmin) locks the account until apply or reject. Parent cannot request school/campus change.",
@@ -276,7 +276,7 @@ def build_doc():
         ],
         [2800, 2200, 4360],
     )
-    add_bullet(doc, "Routing is written into app_user_approval at submit — not via admin_target.")
+    add_bullet(doc, "Routing is written into app_approval at submit — not via admin_target.")
 
     doc.add_heading("2.5 must_change_password", level=2)
     add_table(
@@ -450,14 +450,14 @@ def build_doc():
         "  → uniqueness among rejected_at IS NULL\n"
         "  → INSERT app_users (inactive, no password)\n"
         "  → INSERT app_user_roles\n"
-        "  → INSERT app_user_approval for eligible reviewers\n"
+        "  → INSERT app_approval for eligible reviewers\n"
         "  → notify admins (RegistrationRequest)",
     )
     for item in [
         "Domain pending: User.IsPendingRegistration.",
         "Admin list: GET /api/auth/registrations/pending (PortalAdmin/SchoolAdmin/CampusAdmin) with pendingApprovers.",
         "Login: login-status → PendingApproval.",
-        "Directory-created users: active + NeedsPasswordSetup; do not use app_user_approval.",
+        "Directory-created users: active + NeedsPasswordSetup; do not use app_approval.",
     ]:
         add_bullet(doc, item)
 
@@ -477,7 +477,7 @@ def build_doc():
 
     doc.add_heading("7.2 Soft-approve vs PortalAdmin activate", level=2)
     for item in [
-        "SchoolAdmin / CampusAdmin: mark their app_user_approval row only. Account stays PendingApproval until PortalAdmin.",
+        "SchoolAdmin / CampusAdmin: mark their app_approval row only. Account stays PendingApproval until PortalAdmin.",
         "PortalAdmin: create slim profile; ApprovePendingRegistration (active, no password, must_change=true). Other pending rows not required.",
         "Approve body is empty — no admin password payload.",
     ]:
@@ -552,7 +552,7 @@ def build_doc():
         ["Table", "Purpose"],
         [
             ["app_user_roles", "Multi-role assignments (source of truth)"],
-            ["app_user_approval", "Registration approval queue per reviewer"],
+            ["app_approval", "Registration approval queue per reviewer"],
             ["app_user_school_change_request", "Pending moves + lock"],
             ["app_user_school_change_approval", "Reviewer trail for school-change"],
         ],
@@ -743,7 +743,7 @@ def build_doc():
     doc.core_properties.title = "RankUp Education — Authentication & Login Logic"
     doc.core_properties.subject = (
         "Authentication, login-status, set-initial-password, multi-role, "
-        "app_user_approval, soft reject, school-change lock, JWT, client parity"
+        "app_approval, soft reject, school-change lock, JWT, client parity"
     )
     doc.save(OUTPUT)
     print(f"Wrote {OUTPUT}")

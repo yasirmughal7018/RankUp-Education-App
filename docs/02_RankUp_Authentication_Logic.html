@@ -164,7 +164,7 @@
     <li>Authenticated API calls use a <strong>Bearer JWT</strong> access token (~30 minutes). Refresh tokens last 30 days and are stored hashed.</li>
     <li>Clients use a <strong>two-step login</strong>: <code>POST /api/auth/login-status</code> (identifier) → then either set-initial-password or password login.</li>
     <li><strong>Username priority:</strong> CNIC if provided, otherwise mobile. Login lookup order: <code>username</code> → <code>cnic</code> → <code>mobile_number</code>.</li>
-    <li>Self-service registration creates an inactive <code>app_users</code> row + role in <code>app_user_roles</code> + pending rows in <code>app_user_approval</code>. <strong>Only PortalAdmin activates</strong>. User then sets password via <code>set-initial-password</code> (admin never sets the password on approve).</li>
+    <li>Self-service registration creates an inactive <code>app_users</code> row + role in <code>app_user_roles</code> + pending rows in <code>app_approval</code>. <strong>Only PortalAdmin activates</strong>. User then sets password via <code>set-initial-password</code> (admin never sets the password on approve).</li>
     <li>Reject is a <strong>soft reject</strong> (<code>rejected_at</code>); unique indexes ignore rejected rows so the person can re-request.</li>
     <li>Roles live in <code>app_user_roles</code> (multi-role where allowed). Session role is on the JWT and <code>refresh_tokens.active_role</code>. <strong>Student</strong> and <strong>PortalAdmin</strong> are exclusive (cannot combine with any other role). SchoolAdmin, CampusAdmin, Teacher, and Parent may combine.</li>
     <li>School/campus change (Teacher / Student / CampusAdmin) locks the account until an allowed admin applies or rejects the request. Parent cannot request school/campus change.</li>
@@ -205,7 +205,7 @@
     <tr><td>Student / Teacher — school only</td><td>School required for school path</td><td>SchoolAdmin (that school) + PortalAdmin</td></tr>
     <tr><td>Student / Teacher — school + campus</td><td>Campus selected</td><td>CampusAdmin (campus) + SchoolAdmin (school) + PortalAdmin</td></tr>
   </table>
-  <p>Routing is derived at submit time into <code>app_user_approval</code> — not via <code>admin_target</code>.</p>
+  <p>Routing is derived at submit time into <code>app_approval</code> — not via <code>admin_target</code>.</p>
 
   <h3>2.5 must_change_password</h3>
   <table>
@@ -355,7 +355,7 @@
   → uniqueness among rejected_at IS NULL
   → INSERT app_users (is_active=false, password_hash=null)
   → INSERT app_user_roles (requested role)
-  → INSERT app_user_approval rows for eligible reviewers
+  → INSERT app_approval rows for eligible reviewers
   → notify eligible admins (app_notifications, RegistrationRequest)</pre>
 
   <h3>6.2 Pending detection</h3>
@@ -363,7 +363,7 @@
     <li><strong>Domain:</strong> <code>User.IsPendingRegistration</code> (inactive + no password + not rejected).</li>
     <li><strong>Admin list:</strong> <code>GET /api/auth/registrations/pending</code> — PortalAdmin / SchoolAdmin / CampusAdmin; scoped by school/campus where applicable; response includes <code>pendingApprovers</code> and <code>currentUserHasApproved</code>.</li>
     <li><strong>Login:</strong> <code>login-status</code> → <code>PendingApproval</code>.</li>
-    <li>Directory-created users are active immediately with no password (<code>NeedsPasswordSetup</code>) and do <strong>not</strong> use <code>app_user_approval</code>.</li>
+    <li>Directory-created users are active immediately with no password (<code>NeedsPasswordSetup</code>) and do <strong>not</strong> use <code>app_approval</code>.</li>
   </ul>
 
   <!-- ========== 7 ========== -->
@@ -380,7 +380,7 @@
 
   <h3>7.2 Soft-approve vs PortalAdmin activate</h3>
   <ul>
-    <li><strong>SchoolAdmin / CampusAdmin:</strong> mark their <code>app_user_approval</code> row only. Account stays pending; login-status remains <code>PendingApproval</code> until PortalAdmin activates. UI shows “Approved — awaiting Portal Admin” when <code>currentUserHasApproved</code>.</li>
+    <li><strong>SchoolAdmin / CampusAdmin:</strong> mark their <code>app_approval</code> row only. Account stays pending; login-status remains <code>PendingApproval</code> until PortalAdmin activates. UI shows “Approved — awaiting Portal Admin” when <code>currentUserHasApproved</code>.</li>
     <li><strong>PortalAdmin:</strong> marks their row; creates slim role profile (student defaults: grade 1, section A); calls <code>ApprovePendingRegistration()</code> → <code>is_active=true</code>, password still null, <code>must_change_password=true</code>. Other pending approval rows are not required.</li>
     <li>Approve request body is empty — no admin password, no academic override payload.</li>
   </ul>
@@ -395,7 +395,7 @@
   <h3>7.4 Soft reject</h3>
   <ul>
     <li>Sets <code>rejected_at</code>; keeps user row and approval trail.</li>
-    <li>Rejector’s <code>app_user_approval</code> marked rejected.</li>
+    <li>Rejector’s <code>app_approval</code> marked rejected.</li>
     <li>login-status → <code>Rejected</code>. User may submit a <strong>new</strong> registration (new row).</li>
   </ul>
 
@@ -443,7 +443,7 @@
   <table>
     <tr><th>Table</th><th>Purpose</th></tr>
     <tr><td><code>app_user_roles</code></td><td>Multi-role assignments (source of truth for roles)</td></tr>
-    <tr><td><code>app_user_approval</code></td><td>Registration approval queue per reviewer</td></tr>
+    <tr><td><code>app_approval</code></td><td>Registration approval queue per reviewer</td></tr>
     <tr><td><code>app_user_school_change_request</code></td><td>Pending school/campus moves + lock</td></tr>
     <tr><td><code>app_user_school_change_approval</code></td><td>Reviewer trail for school-change</td></tr>
   </table>

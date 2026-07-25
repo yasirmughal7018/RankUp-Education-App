@@ -32,19 +32,19 @@ const statuses = [
     "111",
     "PendingReview",
     "Always Inactive",
-    "Waiting for scoped approval. Visibility=None. Owner may edit/delete; approver may approve or reject. Activity is always Inactive.",
+    "Waiting for approval. Visibility=None, IsActive=false. Visible only to the creator and that creator's CampusAdmin, SchoolAdmin, and PortalAdmin. Owner may edit/delete; an eligible higher-tier admin may approve or reject.",
   ],
   [
     "112",
     "Approved",
-    "Active or Inactive",
-    "Accepted into the bank. Visibility is Campus, School, or Public. Only this status may be Active or Inactive. Default after approve is Active; PortalAdmin may deactivate a particular Approved question so the UI shows Activity=Inactive while Status stays Approved.",
+    "Active only when Public",
+    "Accepted into the bank. PortalAdmin approval publishes it: Visibility=Public, IsActive=true, quiz-usable by everyone. A CampusAdmin/SchoolAdmin approval is an endorsement: Visibility=Campus/School but IsActive=false and the audience stays restricted (creator + that creator's CampusAdmin/SchoolAdmin + PortalAdmin); it is not quiz-usable until PortalAdmin publishes it.",
   ],
   [
     "113",
     "Rejected",
     "Always Inactive",
-    "Rejected with a required reason. Visibility=None. Owner may edit, explicitly resubmit, or delete. Activity is always Inactive.",
+    "Rejected with a required reason by an eligible higher-tier approver. Visibility=None. Owner may edit, explicitly resubmit, or delete. Activity is always Inactive.",
   ],
   [
     "114",
@@ -56,44 +56,54 @@ const statuses = [
 
 const lifecycle = [
   [
-    "Create / Excel import",
+    "Create / import by Teacher, Parent, CampusAdmin, SchoolAdmin",
     "PendingReview",
-    "IsActive=false; Visibility=None; owner and organisation are stamped from creator.",
+    "IsActive=false; Visibility=None; owner and organisation stamped from creator. Audience = creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin.",
   ],
   [
-    "Approve by CampusAdmin",
+    "Create by PortalAdmin",
     "Approved",
-    "Visibility=Campus; IsActive=true; only within the approver's campus scope.",
+    "Auto-published: Visibility=Public; IsActive=true; quiz-usable. No separate approval step.",
   ],
   [
-    "Approve by SchoolAdmin",
-    "Approved",
-    "Visibility=School; IsActive=true; usable across that school's campuses.",
+    "Endorse by CampusAdmin",
+    "Approved (endorsed, not published)",
+    "A Teacher/Parent question in the same campus only. Visibility=Campus; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish.",
   ],
   [
-    "Approve by PortalAdmin",
-    "Approved",
-    "Visibility=Public; IsActive=true; usable by all question-managing roles.",
+    "Endorse by SchoolAdmin",
+    "Approved (endorsed, not published)",
+    "A Teacher/Parent/CampusAdmin question in the same school. Visibility=School; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish.",
   ],
   [
-    "Reject by scoped approver",
+    "Publish by PortalAdmin",
+    "Approved (published)",
+    "Visibility=Public; IsActive=true; quiz-usable by all question-managing roles. Only PortalAdmin can publish.",
+  ],
+  [
+    "Reject by eligible approver",
     "Rejected",
-    "Reason required (UI minimum 10 characters); IsActive=false; approval and visibility cleared.",
+    "Reason required (UI minimum 10 characters); IsActive=false; endorsement and visibility cleared.",
   ],
   [
     "Owner resubmits Rejected",
     "PendingReview",
-    "Explicit Submit for review action; approval and visibility stay cleared.",
+    "Explicit Submit for review action; endorsement and visibility stay cleared.",
   ],
   [
     "PortalAdmin deactivate / activate",
     "Approved (unchanged)",
-    "Only Approved questions may be toggled. Deactivate sets IsActive=false (UI Activity=Inactive); activate sets IsActive=true. PendingReview, Rejected, and Archived stay Inactive and cannot be activated. Deactivated is not a QuestionStatus.",
+    "Applies to a Published (Public) question. Deactivate sets IsActive=false (UI Activity=Inactive); activate sets IsActive=true. Endorsed, PendingReview, Rejected, and Archived stay Inactive and cannot be activated.",
   ],
   [
     "PortalAdmin archive",
     "Archived",
-    "IsActive=false; removed from normal bank/quiz use.",
+    "IsActive=false; removed from normal bank/quiz use. Visibility and ApprovedBy are preserved for Unarchive.",
+  ],
+  [
+    "PortalAdmin unarchive",
+    "Approved or PendingReview",
+    "Restores an Archived question. Public → Approved + Active; Campus/School → Approved + Inactive; None → PendingReview + Inactive.",
   ],
 ];
 
@@ -101,7 +111,7 @@ const permissions = [
   ["Browse/manage bank", "Yes", "Yes", "Yes", "Yes", "Yes", "No"],
   ["Create", "Yes", "Yes", "Yes", "Yes", "Yes", "No"],
   [
-    "Edit/delete PendingReview or Rejected",
+    "Edit/delete own PendingReview or Rejected",
     "Any",
     "Own",
     "Own",
@@ -109,17 +119,35 @@ const permissions = [
     "Own",
     "No",
   ],
-  ["Edit/delete Approved", "Any", "No", "No", "No", "No", "No"],
+  ["Edit/delete Approved or endorsed", "Any", "No", "No", "No", "No", "No"],
   [
-    "Approve/reject PendingReview",
-    "Any scope",
-    "Own school",
-    "Own campus",
+    "Approve a Teacher / Parent question",
+    "Publish → Public",
+    "Endorse (own school)",
+    "Endorse (own campus)",
     "No",
     "No",
     "No",
   ],
-  ["Visibility produced by approval", "Public", "School", "Campus", "—", "—", "—"],
+  [
+    "Approve a CampusAdmin question",
+    "Publish → Public",
+    "Endorse (own school)",
+    "No (self / peer)",
+    "No",
+    "No",
+    "No",
+  ],
+  [
+    "Approve a SchoolAdmin question",
+    "Publish → Public",
+    "No",
+    "No",
+    "No",
+    "No",
+    "No",
+  ],
+  ["Publish (Public + Active)", "Yes", "No", "No", "No", "No", "No"],
   ["Activate/deactivate/archive", "Yes", "No", "No", "No", "No", "No"],
 ];
 
@@ -151,6 +179,7 @@ const apiTransitions = [
   ["POST /api/questions/{id}/activate", "Approved: IsActive=true"],
   ["POST /api/questions/{id}/deactivate", "Approved: IsActive=false"],
   ["POST /api/questions/{id}/archive", "→ Archived; IsActive=false"],
+  ["POST /api/questions/{id}/unarchive", "Archived → Approved/PendingReview (Public also Active)"],
   ["DELETE /api/questions/{id}", "Delete if permitted and not quiz-linked"],
 ];
 
@@ -158,59 +187,83 @@ const scenarios = [
   [
     "Q-01",
     "Create starts pending",
-    "Create as Teacher/Parent/CampusAdmin/SchoolAdmin/PortalAdmin.",
-    "Status=PendingReview, IsActive=false, Visibility=None; Draft is never created.",
+    "Create as Teacher/Parent/CampusAdmin/SchoolAdmin.",
+    "Status=PendingReview, IsActive=false, Visibility=None; audience = creator + creator's CampusAdmin/SchoolAdmin + PortalAdmin. Draft is never created.",
+  ],
+  [
+    "Q-01b",
+    "PortalAdmin create auto-publishes",
+    "PortalAdmin creates a question.",
+    "Status=Approved, Visibility=Public, IsActive=true immediately; no separate approval step.",
   ],
   [
     "Q-02",
-    "Campus approval",
-    "CampusAdmin approves an in-scope PendingReview question.",
-    "Approved + Campus visibility + active. Other campuses cannot use it.",
+    "Campus endorsement (not published)",
+    "CampusAdmin approves an in-campus Teacher/Parent question.",
+    "Status=Approved (endorsed), Visibility=Campus, IsActive=false; audience stays restricted; NOT quiz-usable; still awaits PortalAdmin to publish.",
   ],
   [
     "Q-03",
-    "School approval",
-    "SchoolAdmin approves an in-school PendingReview question.",
-    "Approved + School visibility + active across that school's campuses.",
+    "School endorsement (not published)",
+    "SchoolAdmin approves an in-school Teacher/Parent/CampusAdmin question.",
+    "Status=Approved (endorsed), Visibility=School, IsActive=false; audience stays restricted; NOT quiz-usable; still awaits PortalAdmin to publish.",
   ],
   [
     "Q-04",
-    "Portal approval",
-    "PortalAdmin approves PendingReview.",
-    "Approved + Public visibility + active.",
+    "Portal publish",
+    "PortalAdmin approves any pending or endorsed question.",
+    "Status=Approved, Visibility=Public, IsActive=true; visible to all question-managing roles; quiz-usable.",
   ],
   [
     "Q-05",
-    "Reject and resubmit",
-    "Approver rejects with reason; owner edits and submits for review.",
-    "Rejected stays Rejected during edit, then explicit submit returns it to PendingReview.",
+    "Approver hierarchy / no self-approval",
+    "CampusAdmin tries to approve their own or a peer campus's question; SchoolAdmin tries to approve their own question.",
+    "Forbidden. A CampusAdmin question needs SchoolAdmin or PortalAdmin; a SchoolAdmin question needs PortalAdmin. Approver must be a higher tier than the creator; no self or same-tier approval.",
   ],
   [
     "Q-06",
-    "Approved deactivation",
-    "PortalAdmin deactivates a particular Approved question.",
-    "Status remains Approved; Activity shows Inactive (IsActive=false); unavailable for new quiz use. Non-Approved statuses stay Inactive and cannot be activated.",
+    "Non-public isolation",
+    "Another teacher in the same campus, a user in another campus/school, or an unrelated admin opens the bank.",
+    "A PendingReview or endorsed (Campus/School) question is NOT visible to them. Only Public (PortalAdmin-published) questions appear.",
   ],
   [
     "Q-07",
-    "Archive",
-    "PortalAdmin archives a question.",
-    "Status=Archived; IsActive=false; hidden from normal bank/quiz use.",
+    "Reject and resubmit",
+    "Eligible approver rejects with reason; owner edits and submits for review.",
+    "Rejected stays Rejected during edit, then explicit submit returns it to PendingReview.",
   ],
   [
     "Q-08",
-    "Ownership lock",
-    "Non-PortalAdmin owner tries to edit/delete after approval.",
-    "Forbidden. PortalAdmin retains lifecycle and mutation control.",
+    "Published deactivation",
+    "PortalAdmin deactivates a Published (Public) question.",
+    "Status remains Approved; Activity shows Inactive (IsActive=false); unavailable for new quiz use. Endorsed and non-Approved statuses stay Inactive and cannot be activated.",
   ],
   [
     "Q-09",
-    "Excel import",
-    "Upload valid/invalid rows, run dry-run, then confirm.",
-    "Valid rows become PendingReview only; row errors are reported; import never approves.",
+    "Archive",
+    "PortalAdmin archives a question.",
+    "Status=Archived; IsActive=false; hidden from normal bank/quiz use. Visibility preserved.",
+  ],
+  [
+    "Q-09b",
+    "Unarchive",
+    "PortalAdmin unarchives a previously archived question.",
+    "Public restored as Approved + Active; Campus/School as Approved + Inactive; None as PendingReview.",
   ],
   [
     "Q-10",
+    "Ownership lock",
+    "Non-PortalAdmin owner tries to edit/delete after approval/endorsement.",
+    "Forbidden. PortalAdmin retains lifecycle and mutation control.",
+  ],
+  [
+    "Q-11",
+    "Excel import",
+    "Upload valid/invalid rows, run dry-run, then confirm.",
+    "Valid rows become PendingReview only; row errors are reported; import never approves or publishes.",
+  ],
+  [
+    "Q-12",
     "Fill answer privacy",
     "Student starts a quiz containing Fill in the Blanks.",
     "Accepted/model answers are not returned before submission.",
@@ -218,19 +271,21 @@ const scenarios = [
 ];
 
 const checklist = [
-  "Create and import always produce PendingReview, IsActive=false, Visibility=None.",
+  "Create and import (Teacher/Parent/CampusAdmin/SchoolAdmin) always produce PendingReview, IsActive=false, Visibility=None.",
+  "PortalAdmin-created questions are auto-published (Approved + Public + Active).",
   "Draft is inactive/legacy and never appears as a create/import choice.",
-  "All non-Approved statuses (PendingReview, Rejected, Archived, legacy Draft) are always Inactive.",
-  "Only Approved can be Active or Inactive; approve defaults to Active.",
-  "PortalAdmin may deactivate a particular Approved question; UI shows Status=Approved and Activity=Inactive.",
-  "Approve is allowed only from PendingReview and only within approver scope.",
-  "CampusAdmin/SchoolAdmin/PortalAdmin approval produces Campus/School/Public visibility.",
-  "Reject requires a reason and clears active/approval/visibility state.",
+  "A PendingReview or endorsed (Campus/School) question is visible ONLY to its creator plus that creator's CampusAdmin, SchoolAdmin, and PortalAdmin — never peers or other orgs.",
+  "Only PortalAdmin approval publishes a question (Approved + Public + Active + quiz-usable).",
+  "CampusAdmin/SchoolAdmin approval is an endorsement: Status=Approved but IsActive=false, audience stays restricted, and it is NOT quiz-usable until PortalAdmin publishes it.",
+  "Approver must be a higher tier than the creator; no self or same-tier approval (Teacher/Parent→Campus/School/Portal; CampusAdmin→School/Portal; SchoolAdmin→Portal only).",
+  "Only a Published (Public) Approved question can be Active or Inactive; approve defaults to Active only for PortalAdmin publish.",
+  "PortalAdmin may deactivate a Published question; UI shows Status=Approved and Activity=Inactive.",
+  "Reject requires a reason and clears active/endorsement/visibility state.",
   "Editing Rejected does not auto-submit; explicit Submit returns it to PendingReview.",
-  "Only PortalAdmin can activate, deactivate, archive, or mutate Approved questions.",
+  "Only PortalAdmin can publish, activate, deactivate, archive, or mutate approved/endorsed questions.",
   "Deactivate keeps QuestionStatus=Approved and only changes IsActive.",
   "Archived and inactive are not interchangeable: Archived is status; inactive is a flag.",
-  "Quiz eligibility requires Approved + IsActive + ApprovedBy + visible scope.",
+  "Quiz eligibility requires Approved + Public + IsActive + ApprovedBy (published by PortalAdmin).",
   "Question bank excludes Students; students receive questions only through quiz attempts.",
   "Single/Multi/True-False/Fill validation rules are enforced on create/update/import.",
   "Descriptive remains unavailable.",
@@ -297,19 +352,21 @@ const html = `<!doctype html>
 <main>
   <header>
     <h1>RankUp Education — Questions Business &amp; QA Guide</h1>
-    <p class="subtitle">Current implemented rules for question status, activity, visibility, permissions, import, and QA.</p>
+    <p class="subtitle">Intended rules for question status, activity, visibility, role-based approval hierarchy, import, and QA.</p>
     <div class="meta">
-      <span class="chip">Current codebase</span>
+      <span class="chip">Approval model v2</span>
       <span class="chip">25 Jul 2026</span>
-      <span class="chip">Status and IsActive documented separately</span>
+      <span class="chip">PortalAdmin-only publish</span>
     </div>
   </header>
 
-  <div class="ok"><strong>Canonical model:</strong> QuestionStatus records workflow state. IsActive (Activity) applies meaningfully only to Approved questions: all other statuses are always Inactive. PortalAdmin may deactivate a particular Approved question so the UI shows Activity=Inactive while Status stays Approved. Visibility controls where an Approved question may be seen and used.</div>
+  <div class="ok"><strong>Canonical model:</strong> A question is usable — Public, Active, and quiz-eligible — only after <strong>PortalAdmin</strong> approves (publishes) it. A CampusAdmin/SchoolAdmin approval is an <em>endorsement</em>: it records review progress but keeps the question Inactive and restricted to its creator plus that creator's own CampusAdmin, SchoolAdmin, and PortalAdmin. QuestionStatus records workflow state; IsActive is true only for a Published (Public) question; Visibility records how far a question has been endorsed.</div>
+
+  <div class="note"><strong>Spec status &amp; assumptions:</strong> This v2 model reflects the confirmed rules: (1) only PortalAdmin approval publishes/activates; (2) only Public questions are quiz-usable; (3) the approver must be a strictly higher tier than the creator (no self / same-tier approval), and any eligible higher tier may act independently. <strong>Assumption to confirm:</strong> a CampusAdmin/SchoolAdmin endorsement is recorded as Status=Approved with Visibility=Campus/School but IsActive=false and a restricted audience (it does not widen the audience to peers). Not yet implemented in code — awaiting your go-ahead.</div>
 
   <h2>1. Canonical status meanings</h2>
   ${htmlTable(["ID", "QuestionStatus", "Activity", "Meaning"], statuses)}
-  <div class="note"><strong>Important:</strong> Active and Inactive are not QuestionStatus values. PendingReview, Rejected, and Archived are always Inactive. Only Approved may be Active or Inactive. When PortalAdmin deactivates an Approved question, Status remains Approved and Activity shows Inactive. Archived is a distinct status, not the same as Inactive.</div>
+  <div class="note"><strong>Important:</strong> Active and Inactive are not QuestionStatus values. A question is Active only when a PortalAdmin has published it (Public). PendingReview, Rejected, Archived, and CampusAdmin/SchoolAdmin-endorsed questions are Inactive. When PortalAdmin deactivates a Published question, Status remains Approved and Activity shows Inactive. Archived is a distinct status, not the same as Inactive.</div>
 
   <h2>2. Lifecycle and transitions</h2>
   ${htmlTable(["Action", "Resulting status", "State changes"], lifecycle)}
@@ -319,9 +376,9 @@ const html = `<!doctype html>
     ["Concept", "Values", "Rule"],
     [
       ["QuestionStatus", "PendingReview / Approved / Rejected / Archived", "Workflow decision. Draft is legacy only."],
-      ["IsActive (Activity)", "true / false", "Only Approved can be Active or Inactive. All other statuses are always Inactive. PortalAdmin may deactivate/activate a particular Approved question; UI shows Active (blue) or Inactive (slate) separately from Status=Approved (green)."],
-      ["Visibility", "None / Campus / School / Public", "Set on approval from approver role; cleared on reject/resubmit."],
-      ["ApprovedBy", "User ID or null", "Set on Approve; required for quiz eligibility."],
+      ["IsActive (Activity)", "true / false", "true only for a Published (Public) Approved question. Endorsed (Campus/School) questions and all non-Approved statuses are Inactive. PortalAdmin may deactivate/activate a Published question; UI shows Active (blue) or Inactive (slate) separately from Status=Approved (green)."],
+      ["Visibility", "None / Campus / School / Public", "None/Campus/School are all restricted to the creator + that creator's CampusAdmin/SchoolAdmin + PortalAdmin. Only Public (set by PortalAdmin) is broadly visible. Campus/School mark how far a question has been endorsed, not a wider audience."],
+      ["ApprovedBy", "User ID or null", "Records the admin who last approved/endorsed. Quiz eligibility requires the publisher to be PortalAdmin (Public)."],
     ],
   )}
 
@@ -330,27 +387,29 @@ const html = `<!doctype html>
     ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Parent", "Student"],
     permissions,
   )}
+  <div class="note"><strong>Approval hierarchy:</strong> the approver must be a strictly higher tier than the creator — Teacher/Parent → CampusAdmin, SchoolAdmin, or PortalAdmin; CampusAdmin → SchoolAdmin or PortalAdmin; SchoolAdmin → PortalAdmin only. No self-approval and no same-tier approval. Any eligible higher tier may act independently (no forced sequential chain). PortalAdmin-created questions are auto-published.</div>
 
   <h2>5. Visibility rules</h2>
   ${htmlTable(
-    ["Approver", "Visibility", "Approved question audience"],
+    ["Visibility", "Set by", "Audience"],
     [
-      ["CampusAdmin", "Campus", "Question-managing roles in the same campus; SchoolAdmin of that school can also manage scope."],
-      ["SchoolAdmin", "School", "Question-managing roles across all campuses in the same school."],
-      ["PortalAdmin", "Public", "All question-managing roles."],
+      ["None (PendingReview)", "Create (Teacher/Parent/CampusAdmin/SchoolAdmin)", "Creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. No peers, no other campuses/schools."],
+      ["Campus (endorsed)", "CampusAdmin approval", "Same restricted audience as None — an endorsement marker only. Not broadened to campus peers; not quiz-usable."],
+      ["School (endorsed)", "SchoolAdmin approval", "Same restricted audience as None. Not broadened to school peers; not quiz-usable."],
+      ["Public (published)", "PortalAdmin approval", "All question-managing roles; quiz-usable everywhere."],
     ],
   )}
-  <p>Already-Approved questions are not promoted from Campus → School → Public in v1. Approval occurs from PendingReview only.</p>
+  <p>Only PortalAdmin publication (Public) widens the audience and activates the question. Campus/School are endorsement markers, not broader audiences. Approval occurs from PendingReview (or from an endorsed state, for PortalAdmin).</p>
 
   <h2>6. Quiz eligibility</h2>
   <p>A bank question is eligible for quiz use only when all are true:</p>
   ${htmlList([
     "QuestionStatus is Approved (legacy Approved aliases remain readable).",
+    "Visibility is Public — i.e. published by PortalAdmin.",
     "IsActive is true.",
-    "ApprovedBy is present.",
-    "Visibility is Campus, School, or Public and the viewer is within that scope.",
+    "ApprovedBy (the PortalAdmin publisher) is present.",
   ])}
-  <p>PortalAdmin can deactivate a particular Approved question: Status stays Approved, Activity shows Inactive, and the question is removed from new quiz selection. Non-Approved statuses cannot be activated. Archiving changes status to Archived and forces Inactive.</p>
+  <p>Endorsed (Campus/School) questions are NOT quiz-usable until PortalAdmin publishes them. PortalAdmin can deactivate a Published question: Status stays Approved, Activity shows Inactive, and it is removed from new quiz selection. Archiving changes status to Archived and forces Inactive.</p>
 
   <h2>7. Question types</h2>
   ${htmlTable(["ID", "Type", "Availability", "Validation"], questionTypes)}
@@ -393,7 +452,7 @@ const html = `<!doctype html>
     "Legacy status names Pending, UnderReview, Active, Published, and Declined remain readable for migrated data; new writes use canonical names/IDs.",
     "IsAiApproved is a legacy compatibility field, not a second approval gate.",
     "Delete remains blocked while a question is linked to a quiz; guided unlink-then-delete is optional.",
-    "A separate workflow audit log for Approve/Reject/Activate/Deactivate/Archive is optional and not part of the current status fields.",
+    "Workflow trail: every Create/Submit/Endorse/Publish/Reject/Activate/Deactivate/Archive appends a row to the generic app_approval table (entity_type 2) with actor, role, reason, and timestamp; the detail page shows it as Approval history. Pre-existing questions are seeded with Created + Endorsed/Published rows; old rejections are not attributed (rejector was never stored).",
     "External AI grading for Fill is future work; current AllowAiReview behavior is a review stub.",
   ])}
 
@@ -473,8 +532,12 @@ const docChildren = [
     run: { italics: true, color: "475569" },
   }),
   docParagraph(
-    "Canonical model: QuestionStatus records workflow state. IsActive (Activity) applies meaningfully only to Approved questions — all other statuses are always Inactive. PortalAdmin may deactivate a particular Approved question so the UI shows Activity=Inactive while Status stays Approved. Visibility controls where it may be seen and used.",
+    "Canonical model: A question is usable — Public, Active, and quiz-eligible — only after PortalAdmin approves (publishes) it. A CampusAdmin/SchoolAdmin approval is an endorsement that records review progress but keeps the question Inactive and restricted to its creator plus that creator's own CampusAdmin, SchoolAdmin, and PortalAdmin. QuestionStatus records workflow state; IsActive is true only for a Published (Public) question; Visibility records how far a question has been endorsed.",
     { run: { bold: true, color: "166534" } },
+  ),
+  docParagraph(
+    "Spec status & assumptions: v2 model reflects confirmed rules — (1) only PortalAdmin publishes/activates; (2) only Public questions are quiz-usable; (3) the approver must be a strictly higher tier than the creator (no self / same-tier approval), and any eligible higher tier may act independently. Assumption to confirm: a CampusAdmin/SchoolAdmin endorsement is recorded as Status=Approved with Visibility=Campus/School but IsActive=false and a restricted audience. Not yet implemented in code — awaiting go-ahead.",
+    { run: { bold: true, color: "92400E" } },
   ),
 
   docHeading("1. Canonical status meanings"),
@@ -492,9 +555,9 @@ const docChildren = [
     ["Concept", "Values", "Rule"],
     [
       ["QuestionStatus", "PendingReview / Approved / Rejected / Archived", "Workflow decision. Draft is legacy only."],
-      ["IsActive (Activity)", "true / false", "Only Approved can be Active or Inactive. All other statuses are always Inactive. PortalAdmin may deactivate/activate a particular Approved question; UI shows Active or Inactive separately from Status=Approved."],
-      ["Visibility", "None / Campus / School / Public", "Set on approval from approver role; cleared on reject/resubmit."],
-      ["ApprovedBy", "User ID or null", "Set on Approve; required for quiz eligibility."],
+      ["IsActive (Activity)", "true / false", "true only for a Published (Public) Approved question. Endorsed (Campus/School) and all non-Approved statuses are Inactive. PortalAdmin may deactivate/activate a Published question."],
+      ["Visibility", "None / Campus / School / Public", "None/Campus/School are restricted to the creator + that creator's CampusAdmin/SchoolAdmin + PortalAdmin. Only Public (PortalAdmin) is broadly visible. Campus/School mark endorsement progress, not a wider audience."],
+      ["ApprovedBy", "User ID or null", "Records the admin who last approved/endorsed. Quiz eligibility requires the publisher to be PortalAdmin (Public)."],
     ],
   ),
 
@@ -503,23 +566,28 @@ const docChildren = [
     ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Parent", "Student"],
     permissions,
   ),
+  docParagraph(
+    "Approval hierarchy: the approver must be a strictly higher tier than the creator — Teacher/Parent → CampusAdmin/SchoolAdmin/PortalAdmin; CampusAdmin → SchoolAdmin/PortalAdmin; SchoolAdmin → PortalAdmin only. No self or same-tier approval. Any eligible higher tier may act independently. PortalAdmin-created questions are auto-published.",
+    { run: { bold: true, color: "92400E" } },
+  ),
 
   docHeading("5. Visibility rules"),
   docTable(
-    ["Approver", "Visibility", "Approved question audience"],
+    ["Visibility", "Set by", "Audience"],
     [
-      ["CampusAdmin", "Campus", "Same campus (plus SchoolAdmin management scope)."],
-      ["SchoolAdmin", "School", "All campuses in the same school."],
-      ["PortalAdmin", "Public", "All question-managing roles."],
+      ["None (PendingReview)", "Create (Teacher/Parent/CampusAdmin/SchoolAdmin)", "Creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. No peers or other orgs."],
+      ["Campus (endorsed)", "CampusAdmin approval", "Same restricted audience as None; endorsement marker only; not quiz-usable."],
+      ["School (endorsed)", "SchoolAdmin approval", "Same restricted audience as None; endorsement marker only; not quiz-usable."],
+      ["Public (published)", "PortalAdmin approval", "All question-managing roles; quiz-usable."],
     ],
   ),
 
   docHeading("6. Quiz eligibility"),
   ...[
     "QuestionStatus is Approved (legacy aliases remain readable).",
+    "Visibility is Public — published by PortalAdmin.",
     "IsActive is true.",
-    "ApprovedBy is present.",
-    "Visibility is valid and the viewer is in scope.",
+    "ApprovedBy (the PortalAdmin publisher) is present.",
   ].map(docBullet),
 
   docHeading("7. Question types"),
@@ -560,7 +628,7 @@ const docChildren = [
     "Legacy status aliases remain readable; new writes use canonical names/IDs.",
     "IsAiApproved is a legacy field, not a second gate.",
     "Delete is blocked while quiz-linked; guided unlink is optional.",
-    "Workflow audit log is optional.",
+    "Workflow trail recorded in app_approval; shown as Approval history on question detail.",
     "External AI grading is future work.",
   ].map(docBullet),
 ];

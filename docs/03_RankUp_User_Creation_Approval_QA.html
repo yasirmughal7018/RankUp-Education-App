@@ -160,7 +160,7 @@
   <h2 id="overview">1. Overview &amp; account states</h2>
   <p>RankUp supports these user-creation and access paths:</p>
   <ol>
-    <li><strong>Self-service registration</strong> — Student / Parent / Teacher submit → approval queue in <code>app_user_approval</code> → School/Campus may soft-approve → <strong>only Portal Admin activates</strong> → user sets password → Login.</li>
+    <li><strong>Self-service registration</strong> — Student / Parent / Teacher submit → approval queue in <code>app_approval</code> → School/Campus may soft-approve → <strong>only Portal Admin activates</strong> → user sets password → Login.</li>
     <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / SchoolAdmin / CampusAdmin with <strong>no password</strong> → auto-approved → user sets password on first login.</li>
     <li><strong>Add role to existing account</strong> — Directory create matching an existing identity adds a second role (multi-role) when combination rules allow. <strong>Teacher</strong> matches on <strong>mobile only</strong>; <strong>Parent / SchoolAdmin / CampusAdmin</strong> match on mobile or CNIC.</li>
     <li><strong>School / campus change</strong> — Teacher / Student / CampusAdmin request a change from Profile (Web <code>/account</code> or Mobile Profile) → confirmation → account <strong>locks</strong> → destination admin applies or rejects on the <strong>Web</strong> queue (<code>/admin/directory/school-changes</code>; PortalAdmin any; SchoolAdmin for their school; CampusAdmin for Teacher/Student into their campus) → account <strong>unlocks</strong>. <strong>Parent cannot request</strong> school/campus change (parents are not school-scoped). Mobile does not implement the admin apply queue.</li>
@@ -186,7 +186,7 @@
     <li>Roles live only in <code>app_user_roles</code>. Columns <code>app_users.role</code> and <code>app_users.admin_target</code> are <strong>removed</strong>.</li>
     <li>Default login role = earliest role assignment in <code>app_user_roles</code> (by <code>created_at</code>).</li>
     <li>JWT <code>role</code> claim = <strong>active</strong> session role; <code>roles</code> = all assigned roles.</li>
-    <li>Registration routing: <code>app_user_approval</code>. School/campus change routing: <code>app_user_school_change_request</code> + <code>app_user_school_change_approval</code>.</li>
+    <li>Registration routing: <code>app_approval</code>. School/campus change routing: <code>app_user_school_change_request</code> + <code>app_user_school_change_approval</code>.</li>
     <li>Registration reject is a <strong>soft-reject</strong> (no hard delete). Unique indexes on username/CNIC ignore rows where <code>rejected_at IS NOT NULL</code>.</li>
   </ul>
 
@@ -245,7 +245,7 @@
   <ol>
     <li>Guest opens Request account access (Web or Mobile).</li>
     <li>Chooses Student / Parent / Teacher and submits.</li>
-    <li>API creates pending <code>app_users</code> row + role in <code>app_user_roles</code> + one pending row per eligible reviewer in <code>app_user_approval</code>.</li>
+    <li>API creates pending <code>app_users</code> row + role in <code>app_user_roles</code> + one pending row per eligible reviewer in <code>app_approval</code>.</li>
     <li>Eligible admins see the request on Registration approvals.</li>
     <li>SchoolAdmin / CampusAdmin may Approve → their queue row is marked; account stays pending.</li>
     <li>PortalAdmin Approves → account activates (<code>NeedsPasswordSetup</code>); role profile created.</li>
@@ -286,9 +286,9 @@
   </table>
   <ul>
     <li>Username on request: CNIC if provided, otherwise mobile. Must be unique among <strong>non-rejected</strong> rows (<code>rejected_at IS NULL</code>).</li>
-    <li><code>admin_target</code> is <strong>not used</strong>. Approval recipients are derived from school/campus and stored in <code>app_user_approval</code>.</li>
+    <li><code>admin_target</code> is <strong>not used</strong>. Approval recipients are derived from school/campus and stored in <code>app_approval</code>.</li>
   </ul>
-  <h3>Who is queued in <code>app_user_approval</code> (at submit time)</h3>
+  <h3>Who is queued in <code>app_approval</code> (at submit time)</h3>
   <table>
     <thead>
       <tr><th>Selection on request</th><th>Pending approver rows</th></tr>
@@ -333,7 +333,7 @@
     <tbody>
       <tr>
         <td><strong>PortalAdmin</strong></td>
-        <td>Marks their <code>app_user_approval</code> row; creates role profile; sets <code>is_active=true</code>, <code>must_change_password=true</code></td>
+        <td>Marks their <code>app_approval</code> row; creates role profile; sets <code>is_active=true</code>, <code>must_change_password=true</code></td>
         <td><strong>Yes</strong> — other pending rows are not required</td>
       </tr>
       <tr>
@@ -363,7 +363,7 @@
     </thead>
     <tbody>
       <tr><td><code>app_users</code></td><td>Row <strong>kept</strong>. Sets <code>rejected_at</code>; keeps <code>is_active=false</code>, <code>password_hash</code> NULL. Does <strong>not</strong> delete the user.</td></tr>
-      <tr><td>Rejector’s <code>app_user_approval</code></td><td><code>is_approved = false</code>, <code>approved_at</code> set. If no queue row existed, one is created then marked rejected.</td></tr>
+      <tr><td>Rejector’s <code>app_approval</code></td><td><code>is_approved = false</code>, <code>approved_at</code> set. If no queue row existed, one is created then marked rejected.</td></tr>
       <tr><td>Other admins’ pending rows</td><td><strong>Left as-is</strong>. They fall off the pending list because the user is rejected.</td></tr>
       <tr><td>login-status</td><td><code>Rejected</code> — “Your registration request was rejected. You may submit a new request.”</td></tr>
       <tr><td>Re-request</td><td>Allowed. Same CNIC/mobile creates a <strong>new</strong> <code>app_users</code> + new approval queue.</td></tr>
@@ -444,7 +444,7 @@
   </ul>
 
   <h2 id="directory">7. Directory (admin) create rules</h2>
-  <p>No password on create. Directory users are auto-approved and must set password on first login (<code>NeedsPasswordSetup</code>). Directory create does <em>not</em> use <code>app_user_approval</code>.</p>
+  <p>No password on create. Directory users are auto-approved and must set password on first login (<code>NeedsPasswordSetup</code>). Directory create does <em>not</em> use <code>app_approval</code>.</p>
 
   <h3>Directory overview (Web)</h3>
   <ul>
@@ -625,7 +625,7 @@
     <ol class="steps">
       <li>Open Request account access.</li>
       <li>Account type = Student. Fill full name, mobile, roll; optionally school + campus.</li>
-      <li>Submit request. Confirm <code>app_user_approval</code> rows match selection.</li>
+      <li>Submit request. Confirm <code>app_approval</code> rows match selection.</li>
       <li>As PortalAdmin, open Approvals → Approve.</li>
       <li>On login: enter mobile/CNIC → Needs password setup.</li>
       <li>Set password (≥6) → then Sign in.</li>
@@ -1098,7 +1098,7 @@
       <tr><td>1</td><td>Student requires roll; school/campus optional</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>2</td><td>Parent hides school/campus/roll</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>3</td><td>Teacher school/campus/code optional</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>4</td><td>Submit writes correct <code>app_user_approval</code> queue</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>4</td><td>Submit writes correct <code>app_approval</code> queue</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>5</td><td>Pending scope by school/campus (no admin_target)</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>6</td><td>SchoolAdmin / CampusAdmin registration approve does NOT activate</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>7</td><td>After local registration approve: awaiting Portal Admin</td><td>☐</td><td>☐</td><td></td></tr>
@@ -1143,7 +1143,7 @@
       <tr><th>Method</th><th>Path</th><th>Auth</th><th>Purpose</th></tr>
     </thead>
     <tbody>
-      <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Anonymous</td><td>Self-service registration; creates <code>app_user_approval</code> queue</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Anonymous</td><td>Self-service registration; creates <code>app_approval</code> queue</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools</code></td><td>Anonymous</td><td>Schools</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools/{id}/campuses</code></td><td>Anonymous</td><td>Campuses</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending registrations</td></tr>
@@ -1182,7 +1182,7 @@
     Password reset: request (Web+Mobile) + clear (Web) — QA-37 / QA-38.
     Self-deactivate Web-only — QA-39. Active-role school-change — QA-40.
     Directory badges: <code>ApprovedInactive</code> = NeedsPasswordSetup; <code>Active</code> = Ready.
-    Tables: <code>app_user_roles</code>, <code>app_user_approval</code>,
+    Tables: <code>app_user_roles</code>, <code>app_approval</code>,
     <code>app_user_school_change_request</code>, <code>app_user_school_change_approval</code>,
     <code>app_users.last_login_at</code>.
     Companion DOCX (if present): <code>docs/02_RankUp_User_Creation_Approval_QA.docx</code> — update manually or rebuild when a generator script is available.

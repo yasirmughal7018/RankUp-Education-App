@@ -65,7 +65,7 @@ export async function getQuestion(questionId: number): Promise<QuestionDetail> {
 }
 
 /**
- * Create a question. Default submitForReview=true → PendingReview (inactive until approved).
+ * Create a question. Non–PortalAdmin → PendingReview; PortalAdmin → auto-published Public.
  */
 export async function createQuestion(
   values: QuestionFormValues,
@@ -100,8 +100,8 @@ export async function submitQuestionForReview(
 }
 
 /**
- * Approve PendingReview. Server sets visibility by role:
- * CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
+ * Endorse (CampusAdmin/SchoolAdmin) or publish (PortalAdmin).
+ * Campus → Campus inactive; School → School inactive; Portal → Public active.
  */
 export async function approveQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/approve`, { method: "POST" });
@@ -130,6 +130,11 @@ export async function deactivateQuestion(questionId: number): Promise<void> {
 /** PortalAdmin-only: archive the question. */
 export async function archiveQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/archive`, { method: "POST" });
+}
+
+/** PortalAdmin-only: restore an archived question. */
+export async function unarchiveQuestion(questionId: number): Promise<void> {
+  await apiRequest(`/questions/${questionId}/unarchive`, { method: "POST" });
 }
 
 export async function deleteQuestion(questionId: number): Promise<void> {

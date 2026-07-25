@@ -18,15 +18,15 @@ public sealed record QuestionManageScope(
     public bool IsSchoolAdmin => Role == UserRole.SchoolAdmin;
     public bool IsCampusAdmin => Role == UserRole.CampusAdmin;
 
-    /// <summary>PortalAdmin, SchoolAdmin, and CampusAdmin may approve / reject in their scope.</summary>
+    /// <summary>PortalAdmin, SchoolAdmin, and CampusAdmin may endorse / reject in their hierarchy.</summary>
     public bool CanApprove =>
         Role is UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin;
 
-    /// <summary>Only PortalAdmin may activate / deactivate / archive.</summary>
+    /// <summary>Only PortalAdmin may activate / deactivate / archive / publish.</summary>
     public bool CanLifecycle => IsPortalAdmin;
 
     /// <summary>
-    /// Visibility stamped when this role approves:
+    /// Visibility stamped when this role endorses/publishes:
     /// CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
     /// </summary>
     public short ApprovalVisibilityLevel => Role switch
@@ -36,10 +36,14 @@ public sealed record QuestionManageScope(
         UserRole.CampusAdmin => QuestionVisibilityLevels.Campus,
         _ => QuestionVisibilityLevels.None
     };
+
+    /// <summary>True when this role's approval publishes (Public + Active).</summary>
+    public bool ApprovalPublishes => IsPortalAdmin;
 }
 
 /// <summary>
-/// Resolves manage / approve / lifecycle scopes and enforces org visibility for the question bank.
+/// Resolves manage / approve / lifecycle scopes and enforces creator-tier hierarchy
+/// plus restricted visibility for non-public questions.
 /// </summary>
 public static class QuestionScopeResolver
 {
@@ -63,7 +67,7 @@ public static class QuestionScopeResolver
         return new QuestionManageScope(role, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
-    /// <summary>Requires PortalAdmin, SchoolAdmin, or CampusAdmin for approve / reject.</summary>
+    /// <summary>Requires PortalAdmin, SchoolAdmin, or CampusAdmin for endorse / reject / publish.</summary>
     public static QuestionManageScope RequireApprovalScope(ICurrentUserService currentUser)
     {
         var scope = RequireManageScope(currentUser);
@@ -106,10 +110,32 @@ public static class QuestionScopeResolver
     }
 
     /// <summary>
-    /// Org check for approve/reject: CampusAdmin same campus, SchoolAdmin same school, PortalAdmin any.
+    /// Approval hierarchy + org check.
+    /// Approver must be a strictly higher tier than the creator (no self / same-tier).
+    /// Teacher/Parent → CampusAdmin / SchoolAdmin / PortalAdmin;
+    /// CampusAdmin → SchoolAdmin / PortalAdmin;
+    /// SchoolAdmin → PortalAdmin only.
+    /// Org: CampusAdmin same campus, SchoolAdmin same school, PortalAdmin any.
     /// </summary>
     public static void EnsureCanApproveOrReject(Question question, QuestionManageScope scope)
     {
+        if (!scope.CanApprove)
+        {
+            throw new ForbiddenAppException(
+                "Only Portal Admin, School Admin, or Campus Admin can approve or reject questions.");
+        }
+
+        // No self-approval except PortalAdmin (who may publish anything, including own pending).
+        if (!scope.IsPortalAdmin && IsOwner(question, scope))
+        {
+            throw new ForbiddenAppException("You cannot approve or reject your own question.");
+        }
+
+        if (!CanApproveCreatorTier(scope.Role, question.CreatedByRole))
+        {
+            throw new ForbiddenAppException(DescribeHierarchyDenial(scope.Role, question.CreatedByRole));
+        }
+
         if (scope.IsPortalAdmin)
         {
             return;
@@ -152,11 +178,16 @@ public static class QuestionScopeResolver
     }
 
     /// <summary>
-    /// Whether an Approved question is visible to the viewer based on visibility level + org.
-    /// Public → everyone. School → same school (all campuses). Campus → same campus.
-    /// SchoolAdmin also sees Campus-approved items in their school.
+    /// Restricted audience for non-Public questions:
+    /// creator always; PortalAdmin always;
+    /// Teacher/Parent creators → their CampusAdmin (same campus) + SchoolAdmin (same school);
+    /// CampusAdmin creators → SchoolAdmin (same school) only;
+    /// SchoolAdmin creators → PortalAdmin only.
+    /// Public questions are visible to every question-managing role.
     /// </summary>
-    public static bool CanViewApprovedVisibility(
+    public static bool CanViewQuestion(
+        long createdByUserId,
+        UserRole createdByRole,
         short visibilityLevel,
         int? questionSchoolId,
         int? questionCampusId,
@@ -167,38 +198,72 @@ public static class QuestionScopeResolver
             return true;
         }
 
-        if (visibilityLevel == QuestionVisibilityLevels.Public)
+        if (createdByUserId == scope.UserId)
         {
             return true;
         }
 
-        if (visibilityLevel == QuestionVisibilityLevels.School)
+        if (QuestionVisibilityLevels.IsPublished(visibilityLevel))
         {
-            return scope.SchoolId.HasValue
-                   && questionSchoolId.HasValue
-                   && scope.SchoolId == questionSchoolId;
+            return true;
         }
 
-        if (visibilityLevel == QuestionVisibilityLevels.Campus)
+        // Non-public: upward admins only, based on creator tier.
+        if (scope.IsSchoolAdmin
+            && scope.SchoolId.HasValue
+            && questionSchoolId == scope.SchoolId
+            && IsCreatorVisibleToSchoolAdmin(createdByRole))
         {
-            if (scope.CampusId.HasValue
-                && questionCampusId.HasValue
-                && scope.CampusId == questionCampusId)
-            {
-                return true;
-            }
+            return true;
+        }
 
-            // School Admin sees campus-approved questions across the school.
-            if (scope.IsSchoolAdmin
-                && scope.SchoolId.HasValue
-                && questionSchoolId.HasValue
-                && scope.SchoolId == questionSchoolId)
-            {
-                return true;
-            }
+        if (scope.IsCampusAdmin
+            && scope.CampusId.HasValue
+            && questionCampusId == scope.CampusId
+            && IsCreatorVisibleToCampusAdmin(createdByRole))
+        {
+            return true;
         }
 
         return false;
+    }
+
+    /// <summary>True when approver tier is strictly above creator tier (PortalAdmin always).</summary>
+    public static bool CanApproveCreatorTier(UserRole approverRole, UserRole creatorRole)
+        => ApprovalTier(approverRole) > ApprovalTier(creatorRole);
+
+    /// <summary>Creators CampusAdmin may still see in pending/restricted queues (Teacher/Parent only).</summary>
+    public static bool IsCreatorVisibleToCampusAdmin(UserRole createdByRole)
+        => createdByRole is UserRole.Teacher or UserRole.Parent;
+
+    /// <summary>Creators SchoolAdmin may still see in pending/restricted queues.</summary>
+    public static bool IsCreatorVisibleToSchoolAdmin(UserRole createdByRole)
+        => createdByRole is UserRole.Teacher or UserRole.Parent or UserRole.CampusAdmin;
+
+    /// <summary>0 Teacher/Parent, 1 CampusAdmin, 2 SchoolAdmin, 3 PortalAdmin.</summary>
+    public static int ApprovalTier(UserRole role) => role switch
+    {
+        UserRole.PortalAdmin => 3,
+        UserRole.SchoolAdmin => 2,
+        UserRole.CampusAdmin => 1,
+        _ => 0
+    };
+
+    private static string DescribeHierarchyDenial(UserRole approverRole, UserRole creatorRole)
+    {
+        if (approverRole == UserRole.CampusAdmin
+            && creatorRole is UserRole.CampusAdmin or UserRole.SchoolAdmin or UserRole.PortalAdmin)
+        {
+            return "Campus Admin can only approve questions created by Teachers or Parents in their campus.";
+        }
+
+        if (approverRole == UserRole.SchoolAdmin
+            && creatorRole is UserRole.SchoolAdmin or UserRole.PortalAdmin)
+        {
+            return "School Admin can only approve questions created by Teachers, Parents, or Campus Admins in their school.";
+        }
+
+        return "You do not have permission to approve or reject this question.";
     }
 
     private static UserRole ParseRole(string? role)

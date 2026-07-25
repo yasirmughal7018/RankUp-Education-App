@@ -1,9 +1,8 @@
 /**
  * Question detail: view content and run workflow actions.
  *
- * Approve (Campus→Campus / School→School / Portal→Public visibility), reject with reason,
- * resubmit after reject, and PortalAdmin-only activate / deactivate / archive.
- * Status and Activity are shown as separate badges per QA guide §10.
+ * CampusAdmin/SchoolAdmin endorse (Inactive + restricted); PortalAdmin publishes (Public + Active).
+ * PortalAdmin-only activate / deactivate / archive on Published questions.
  */
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -13,14 +12,17 @@ import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { useScopeNames } from "@/features/authentication/presentation/hooks/useScopeNames";
 import {
+  approvalPublishes,
   approvalVisibilityForRole,
   canActivateQuestion,
   canApproveQuestions,
   canArchiveQuestion,
   canDeactivateQuestion,
   canMutateQuestion,
+  canUnarchiveQuestion,
   displayQuestionStatusLabel,
   isEligibleForQuizQuestion,
+  isEndorsedNotPublishedQuestion,
   isPendingQuestionStatus,
   isRejectedQuestionStatus,
 } from "@/features/questions/domain/questionTypes";
@@ -38,6 +40,7 @@ import {
   useQuestionQuery,
   useRejectQuestionMutation,
   useSubmitQuestionMutation,
+  useUnarchiveQuestionMutation,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
 
 function lookupName(
@@ -49,6 +52,45 @@ function lookupName(
     return "—";
   }
   return items?.find((item) => item.id === id)?.name ?? `${fallback} #${id}`;
+}
+
+const HISTORY_ACTION_LABELS: Record<string, string> = {
+  Created: "Created",
+  SubmittedForReview: "Submitted for review",
+  Endorsed: "Endorsed",
+  Published: "Published",
+  Rejected: "Rejected",
+  Activated: "Activated",
+  Deactivated: "Deactivated",
+  Archived: "Archived",
+  Unarchived: "Unarchived",
+};
+
+function historyDotClass(action: string): string {
+  switch (action) {
+    case "Published":
+    case "Activated":
+      return "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)]";
+    case "Endorsed":
+    case "SubmittedForReview":
+      return "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)]";
+    case "Rejected":
+      return "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)]";
+    default:
+      return "border-border bg-muted";
+  }
+}
+
+/** "CampusAdmin" → "Campus Admin". */
+function humanizeRole(role: string): string {
+  return role.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+function formatHistoryDate(occurredAt: string): string {
+  const date = new Date(occurredAt);
+  return Number.isNaN(date.getTime())
+    ? occurredAt
+    : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function QuestionDetailPage() {
@@ -76,6 +118,7 @@ export function QuestionDetailPage() {
   const activateQuestion = useActivateQuestionMutation(numericQuestionId);
   const deactivateQuestion = useDeactivateQuestionMutation(numericQuestionId);
   const archiveQuestion = useArchiveQuestionMutation(numericQuestionId);
+  const unarchiveQuestion = useUnarchiveQuestionMutation(numericQuestionId);
   const deleteQuestion = useDeleteQuestionMutation();
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -96,6 +139,7 @@ export function QuestionDetailPage() {
     activateQuestion.isPending ||
     deactivateQuestion.isPending ||
     archiveQuestion.isPending ||
+    unarchiveQuestion.isPending ||
     deleteQuestion.isPending;
 
   async function runAction(action: () => Promise<unknown>, success: string) {
@@ -154,6 +198,7 @@ export function QuestionDetailPage() {
       role: user.role,
       status: question.status,
       isActive: question.isActive,
+      visibility: question.visibility,
     });
   const showDeactivate =
     user != null &&
@@ -161,6 +206,7 @@ export function QuestionDetailPage() {
       role: user.role,
       status: question.status,
       isActive: question.isActive,
+      visibility: question.visibility,
     });
   const showArchive =
     user != null &&
@@ -168,7 +214,27 @@ export function QuestionDetailPage() {
       role: user.role,
       status: question.status,
     });
+  const showUnarchive =
+    user != null &&
+    canUnarchiveQuestion({
+      role: user.role,
+      status: question.status,
+    });
   const isQuizReady = isEligibleForQuizQuestion(question);
+  const isEndorsed = isEndorsedNotPublishedQuestion(question);
+  const showApproveAction =
+    canApprove &&
+    (isPending || (user?.role === "PortalAdmin" && isEndorsed));
+  const approveActionLabel =
+    user && approvalPublishes(user.role) ? "Publish · Public" : user
+      ? `Endorse · ${approvalVisibilityForRole(user.role)}`
+      : "Approve";
+  const approveSuccessMessage =
+    user && approvalPublishes(user.role)
+      ? "Question published (Public + Active)."
+      : user
+        ? `Question endorsed (${approvalVisibilityForRole(user.role)} visibility, still inactive until PortalAdmin publishes).`
+        : "Question approved.";
 
   const className = lookupName(classes, question.classId, "Class");
   const subjectName = lookupName(subjects, question.subjectId, "Subject");
@@ -230,6 +296,9 @@ export function QuestionDetailPage() {
           />
           {isQuizReady ? (
             <StatusBadge label="Quiz ready" status="approved" />
+          ) : null}
+          {isEndorsed ? (
+            <StatusBadge label="Endorsed" status="pending" />
           ) : null}
         </div>
 
@@ -348,8 +417,42 @@ export function QuestionDetailPage() {
         ) : null}
       </section>
 
+      {(question.approvalHistory?.length ?? 0) > 0 ? (
+        <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="mb-4 text-sm font-semibold text-foreground">
+            Approval history
+          </h2>
+          <ol className="relative space-y-4 border-l border-border pl-5">
+            {question.approvalHistory!.map((entry) => (
+              <li key={entry.approvalId} className="relative">
+                <span
+                  aria-hidden
+                  className={`absolute -left-[1.6rem] top-1.5 h-3 w-3 rounded-full border-2 ${historyDotClass(entry.action)}`}
+                />
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                  <span className="font-medium text-foreground">
+                    {HISTORY_ACTION_LABELS[entry.action] ?? entry.action}
+                  </span>
+                  <span className="text-muted-foreground">
+                    by {entry.actorName} ({humanizeRole(entry.actorRole)})
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {formatHistoryDate(entry.occurredAt)}
+                </p>
+                {entry.reason ? (
+                  <p className="mt-1 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)]/60 px-3 py-2 text-xs text-[var(--status-rejected-text)]">
+                    {entry.reason}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
       <section className="flex flex-wrap gap-2">
-        {canApprove && isPending ? (
+        {showApproveAction ? (
           <>
             <button
               type="button"
@@ -357,16 +460,14 @@ export function QuestionDetailPage() {
               onClick={() =>
                 void runAction(
                   () => approveQuestion.mutateAsync(),
-                  user
-                    ? `Question approved (${approvalVisibilityForRole(user.role)} visibility).`
-                    : "Question approved.",
+                  approveSuccessMessage,
                 )
               }
               className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
             >
-              Approve
-              {user ? ` · ${approvalVisibilityForRole(user.role)}` : null}
+              {approveActionLabel}
             </button>
+            {isPending ? (
             <button
               type="button"
               disabled={isSubmitting}
@@ -380,6 +481,7 @@ export function QuestionDetailPage() {
             >
               Reject
             </button>
+            ) : null}
           </>
         ) : null}
 
@@ -494,6 +596,24 @@ export function QuestionDetailPage() {
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-70"
           >
             Archive
+          </button>
+        ) : null}
+
+        {showUnarchive ? (
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() =>
+              void runAction(
+                () => unarchiveQuestion.mutateAsync(),
+                question.visibility?.toLowerCase() === "public"
+                  ? "Question unarchived and activated (Public)."
+                  : "Question unarchived.",
+              )
+            }
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
+          >
+            Unarchive
           </button>
         ) : null}
 

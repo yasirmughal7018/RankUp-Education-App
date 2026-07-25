@@ -114,7 +114,7 @@ const doc = new Document({
         ),
 
         h2("2. Registration (unchanged core)"),
-        bullet("Student / Parent / Teacher self-request → app_user_approval queue."),
+        bullet("Student / Parent / Teacher self-request → app_approval queue."),
         bullet("SchoolAdmin / CampusAdmin soft-approve only; do NOT activate."),
         bullet("PortalAdmin alone activates → NeedsPasswordSetup → set password → login."),
         bullet("Soft-reject keeps row (rejected_at); same CNIC/mobile can re-request."),

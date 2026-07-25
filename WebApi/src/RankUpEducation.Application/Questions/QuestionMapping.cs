@@ -142,7 +142,23 @@ internal static class QuestionMapping
 
                 answer.AllowAiReview,
 
-                answer.AllowTeacherReview)).ToArray());
+                answer.AllowTeacherReview)).ToArray(),
+
+            item.ApprovalHistory.Select(entry => new QuestionApprovalHistoryItem(
+
+                entry.ApprovalId,
+
+                entry.Action.ToString(),
+
+                entry.ActorUserId,
+
+                entry.ActorName,
+
+                entry.ActorRole.ToString(),
+
+                entry.Reason,
+
+                entry.OccurredAt)).ToArray());
 
 
 

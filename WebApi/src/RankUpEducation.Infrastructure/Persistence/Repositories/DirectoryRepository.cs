@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Directory;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Schools;
@@ -1090,13 +1091,15 @@ public sealed class DirectoryRepository : IDirectoryRepository
         }
 
         var rows = await (
-            from approval in _dbContext.UserApprovals.AsNoTracking()
+            from approval in _dbContext.Approvals.AsNoTracking()
             join admin in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals admin.Id
-            where userIds.Contains(approval.UserId)
+            where approval.EntityType == ApprovalEntityType.User
+                && approval.UserId != null
+                && userIds.Contains(approval.UserId.Value)
             orderby approval.ApprovedAt descending, approval.Id descending
             select new
             {
-                approval.UserId,
+                UserId = approval.UserId.Value,
                 approval.ApprovedByUserId,
                 ApproverName = admin.FullName,
                 approval.ApprovedByRole,

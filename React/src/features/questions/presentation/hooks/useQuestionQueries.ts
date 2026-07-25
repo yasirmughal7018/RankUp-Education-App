@@ -127,6 +127,16 @@ export function useArchiveQuestionMutation(questionId: number) {
   });
 }
 
+/** PortalAdmin-only unarchive (restore from Archived). */
+export function useUnarchiveQuestionMutation(questionId: number) {
+  const invalidate = useInvalidateQuestions(questionId);
+
+  return useMutation({
+    mutationFn: () => questionApi.unarchiveQuestion(questionId),
+    onSuccess: invalidate,
+  });
+}
+
 /** Excel import (dry-run or commit); always creates PendingReview on commit. */
 export function useImportQuestionsMutation() {
   const queryClient = useQueryClient();

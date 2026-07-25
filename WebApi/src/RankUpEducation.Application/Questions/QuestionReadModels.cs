@@ -1,4 +1,6 @@
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Approvals;
+using RankUpEducation.Domain.Auth;
 
 
 
@@ -35,6 +37,9 @@ public sealed record QuestionListItem(
 
     /// <summary>Creator display name from app_users.</summary>
     string CreatedByName,
+
+    /// <summary>Role the creator acted as (approval hierarchy / restricted visibility).</summary>
+    UserRole CreatedByRole,
 
     /// <summary>Approver user id as string, or null.</summary>
     string? ApprovedBy,
@@ -98,6 +103,9 @@ public sealed record QuestionDetailItem(
     /// <summary>Creator display name from app_users.</summary>
     string CreatedByName,
 
+    /// <summary>Role the creator acted as (approval hierarchy / restricted visibility).</summary>
+    UserRole CreatedByRole,
+
     /// <summary>Approver user id as string, or null.</summary>
     string? ApprovedBy,
 
@@ -122,7 +130,31 @@ public sealed record QuestionDetailItem(
 
     IReadOnlyList<QuizQuestionOptionItem> Options,
 
-    IReadOnlyList<QuestionAcceptedAnswerItem> AcceptedAnswers);
+    IReadOnlyList<QuestionAcceptedAnswerItem> AcceptedAnswers,
+
+    /// <summary>Workflow trail from app_approval, oldest first.</summary>
+    IReadOnlyList<QuestionApprovalEventItem> ApprovalHistory);
+
+
+
+/// <summary>One question-bank workflow event projected from app_approval.</summary>
+
+public sealed record QuestionApprovalEventItem(
+
+    long ApprovalId,
+
+    /// <summary>Created | SubmittedForReview | Endorsed | Published | Rejected | Activated | Deactivated | Archived.</summary>
+    ApprovalAction Action,
+
+    long ActorUserId,
+
+    string ActorName,
+
+    UserRole ActorRole,
+
+    string? Reason,
+
+    DateTimeOffset OccurredAt);
 
 
 
@@ -154,9 +186,9 @@ public sealed record QuestionAcceptedAnswerItem(
 
 /// Org-aware bank visibility for non–PortalAdmin list queries.
 
-/// Null filter means no visibility restriction (PortalAdmin / raw pending queue).
+/// Null filter means no visibility restriction (PortalAdmin).
 
-/// Own rows always included; Approved rows filtered by Public / School / Campus (+ SchoolAdmin campus widen).
+/// Own + Public always included; non-Public rows only for upward admins matching creator tier.
 
 /// </summary>
 
@@ -168,5 +200,5 @@ public sealed record QuestionListVisibilityScope(
 
     int? CampusId,
 
-    bool IsSchoolAdmin);
+    UserRole Role);
 

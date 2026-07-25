@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Common.Utilities;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
@@ -255,27 +256,28 @@ public sealed class UserRepository : IUserRepository
             .ToList();
     }
 
-    public async Task AddApprovalAsync(UserApproval approval, CancellationToken cancellationToken)
+    public async Task AddApprovalAsync(Approval approval, CancellationToken cancellationToken)
     {
-        await _dbContext.UserApprovals.AddAsync(approval, cancellationToken);
+        await _dbContext.Approvals.AddAsync(approval, cancellationToken);
     }
 
     public async Task AddApprovalsAsync(
-        IEnumerable<UserApproval> approvals,
+        IEnumerable<Approval> approvals,
         CancellationToken cancellationToken)
     {
-        await _dbContext.UserApprovals.AddRangeAsync(approvals, cancellationToken);
+        await _dbContext.Approvals.AddRangeAsync(approvals, cancellationToken);
     }
 
-    public Task<UserApproval?> GetPendingApprovalAsync(
+    public Task<Approval?> GetPendingApprovalAsync(
         long userId,
         long approverUserId,
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+        return _dbContext.Approvals.FirstOrDefaultAsync(
             approval =>
-                approval.UserId == userId
+                approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
                 && approval.IsApproved == null
@@ -283,15 +285,16 @@ public sealed class UserRepository : IUserRepository
             cancellationToken);
     }
 
-    public Task<UserApproval?> GetApprovalAsync(
+    public Task<Approval?> GetApprovalAsync(
         long userId,
         long approverUserId,
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+        return _dbContext.Approvals.FirstOrDefaultAsync(
             approval =>
-                approval.UserId == userId
+                approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole,
             cancellationToken);
@@ -303,9 +306,10 @@ public sealed class UserRepository : IUserRepository
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserApprovals.AnyAsync(
+        return _dbContext.Approvals.AnyAsync(
             approval =>
-                approval.UserId == userId
+                approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
                 && approval.IsApproved == true,
@@ -317,9 +321,10 @@ public sealed class UserRepository : IUserRepository
         CancellationToken cancellationToken)
     {
         var pending = await (
-            from approval in _dbContext.UserApprovals.AsNoTracking()
+            from approval in _dbContext.Approvals.AsNoTracking()
             join admin in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals admin.Id
-            where approval.UserId == userId
+            where approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.IsApproved == null
                 && approval.ApprovedAt == null
             orderby approval.ApprovedByRole, admin.FullName
@@ -331,10 +336,11 @@ public sealed class UserRepository : IUserRepository
         ).ToListAsync(cancellationToken);
 
         // CampusAdmin approval covers SchoolAdmin — SchoolAdmin is no longer required.
-        var campusAdminAlreadyApproved = await _dbContext.UserApprovals.AsNoTracking()
+        var campusAdminAlreadyApproved = await _dbContext.Approvals.AsNoTracking()
             .AnyAsync(
                 approval =>
-                    approval.UserId == userId
+                    approval.EntityType == ApprovalEntityType.User
+                    && approval.UserId == userId
                     && approval.ApprovedByRole == UserRole.CampusAdmin
                     && approval.IsApproved == true,
                 cancellationToken);

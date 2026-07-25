@@ -1,3 +1,4 @@
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Common.Abstractions;
@@ -38,7 +39,7 @@ public interface IUserRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Eligible reviewers from school/campus scope (written into app_user_approval):
+    /// Eligible reviewers from school/campus scope (written into app_approval):
     /// no school → PortalAdmin;
     /// school only → SchoolAdmin + PortalAdmin;
     /// campus → CampusAdmin + SchoolAdmin + PortalAdmin.
@@ -52,17 +53,17 @@ public interface IUserRepository
         long userId,
         CancellationToken cancellationToken);
 
-    Task AddApprovalAsync(UserApproval approval, CancellationToken cancellationToken);
+    Task AddApprovalAsync(Approval approval, CancellationToken cancellationToken);
 
-    Task AddApprovalsAsync(IEnumerable<UserApproval> approvals, CancellationToken cancellationToken);
+    Task AddApprovalsAsync(IEnumerable<Approval> approvals, CancellationToken cancellationToken);
 
-    Task<UserApproval?> GetPendingApprovalAsync(
+    Task<Approval?> GetPendingApprovalAsync(
         long userId,
         long approverUserId,
         UserRole approverRole,
         CancellationToken cancellationToken);
 
-    Task<UserApproval?> GetApprovalAsync(
+    Task<Approval?> GetApprovalAsync(
         long userId,
         long approverUserId,
         UserRole approverRole,

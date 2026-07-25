@@ -1,4 +1,5 @@
 using RankUpEducation.Application.Questions;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Questions;
 
 namespace RankUpEducation.Application.Common.Abstractions;
@@ -38,6 +39,9 @@ public interface IQuestionRepository
         CancellationToken cancellationToken);
 
     Task<QuestionDetailItem?> GetQuestionDetailAsync(long questionId, CancellationToken cancellationToken);
+
+    /// <summary>Appends one workflow event to the question's app_approval trail.</summary>
+    Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken);
 
     Task<int> CountQuizLinksAsync(long questionId, CancellationToken cancellationToken);
 

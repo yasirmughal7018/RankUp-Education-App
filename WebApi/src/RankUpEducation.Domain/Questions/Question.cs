@@ -1,14 +1,15 @@
 using RankUpEducation.Common.Utilities;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Questions;
 
 /// <summary>
-/// Question-bank entity. Create stamps <see cref="SchoolId"/> / <see cref="CampusId"/> from the creator
-/// and enters PendingReview (inactive) until an admin approves.
-/// Approval sets <see cref="VisibilityLevel"/> by role:
-/// CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
-/// Activate / deactivate / archive are PortalAdmin-only (enforced in application layer).
+/// Question-bank entity. Create stamps org + <see cref="CreatedByRole"/> from the creator.
+/// Non–PortalAdmin create enters PendingReview (inactive) until a higher-tier admin endorses
+/// or PortalAdmin publishes. PortalAdmin create auto-publishes (Public + Active).
+/// CampusAdmin/SchoolAdmin approval is an endorsement (Approved + Campus/School, Inactive).
+/// Only PortalAdmin publish sets Public + Active (quiz-usable).
 /// </summary>
 public sealed class Question : BaseEntity
 {
@@ -20,7 +21,7 @@ public sealed class Question : BaseEntity
         QuestionText = string.Empty;
     }
 
-    /// <summary>Creates a bank question; callers should then <see cref="SetOrgScope"/> and <see cref="SubmitForApproval"/>.</summary>
+    /// <summary>Creates a bank question; callers then set org scope and submit or publish.</summary>
     public Question(
         string questionText,
         short questionTypeId,
@@ -30,6 +31,7 @@ public sealed class Question : BaseEntity
         short difficultyLevel,
         short statusId,
         long createdByUserId,
+        UserRole createdByRole,
         short estimatedTimeSeconds,
         short marks)
     {
@@ -41,6 +43,7 @@ public sealed class Question : BaseEntity
         DifficultyLevel = difficultyLevel;
         StatusId = statusId;
         CreatedBy = createdByUserId;
+        CreatedByRole = createdByRole;
         EstimatedTimeSeconds = estimatedTimeSeconds;
         Marks = marks;
     }
@@ -59,13 +62,14 @@ public sealed class Question : BaseEntity
     public short StatusId { get; private set; }
     /// <summary>Creator user id (<c>app_users.id</c>).</summary>
     public long CreatedBy { get; private set; }
-    /// <summary>Approver user id (<c>app_users.id</c>), null until approved.</summary>
+    /// <summary>Role the creator was acting as when the question was created (approval hierarchy).</summary>
+    public UserRole CreatedByRole { get; private set; }
+    /// <summary>Approver user id (<c>app_users.id</c>), null until endorsed/published.</summary>
     public long? ApprovedBy { get; private set; }
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     /// <summary>
-    /// Legacy quiz-eligibility marker. Approve sets this true so existing
-    /// quiz-attach SQL remains compatible. Prefer <see cref="IsEligibleForQuiz"/>.
+    /// Legacy quiz-eligibility marker. Prefer <see cref="IsEligibleForQuiz"/>.
     /// </summary>
     public bool IsAiApproved { get; private set; }
     public string? RejectionReason { get; private set; }
@@ -77,7 +81,7 @@ public sealed class Question : BaseEntity
     public int? CampusId { get; private set; }
 
     /// <summary>
-    /// Visibility after approval: None / Campus / School / Public.
+    /// Visibility after endorse/publish: None / Campus / School / Public.
     /// See <see cref="QuestionVisibilityLevels"/>.
     /// </summary>
     public short VisibilityLevel { get; private set; }
@@ -85,7 +89,7 @@ public sealed class Question : BaseEntity
     public IReadOnlyCollection<QuestionOption> Options => _options;
     public IReadOnlyCollection<QuestionAcceptedAnswer> AcceptedAnswers => _acceptedAnswers;
 
-    /// <summary>Stamps creator (or backfilled approver) org for Campus/School approval queues and visibility.</summary>
+    /// <summary>Stamps creator (or backfilled approver) org for Campus/School queues and visibility.</summary>
     public void SetOrgScope(int? schoolId, int? campusId)
     {
         SchoolId = schoolId;
@@ -119,14 +123,14 @@ public sealed class Question : BaseEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>Soft-hides an Approved question from quiz use while keeping Approved status.</summary>
+    /// <summary>Soft-hides a Published question from quiz use while keeping Approved status.</summary>
     public void Deactivate()
     {
         IsActive = false;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>Re-enables quiz use for an Approved question (PortalAdmin lifecycle).</summary>
+    /// <summary>Re-enables quiz use for a Published question (PortalAdmin lifecycle).</summary>
     public void Activate()
     {
         IsActive = true;
@@ -134,8 +138,8 @@ public sealed class Question : BaseEntity
     }
 
     /// <summary>
-    /// Submit (or resubmit) for admin review. Clears prior approval / rejection / visibility.
-    /// PendingReview is always inactive until Approve.
+    /// Submit (or resubmit) for admin review. Clears prior endorsement / rejection / visibility.
+    /// PendingReview is always inactive until PortalAdmin publishes.
     /// </summary>
     public void SubmitForApproval(short pendingReviewStatusId)
     {
@@ -149,11 +153,59 @@ public sealed class Question : BaseEntity
     }
 
     /// <summary>
-    /// Admin approval. Sets visibility by approver role:
-    /// CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
-    /// IsActive becomes true (only Approved is active by default).
+    /// Admin endorse or publish.
+    /// Campus/School visibility = endorsement (Inactive, restricted).
+    /// Public visibility = publish (Active, quiz-usable).
     /// </summary>
-    public void Approve(long approvedByUserId, short approvedStatusId, short visibilityLevel)
+    public void Approve(
+        long approvedByUserId,
+        short approvedStatusId,
+        short visibilityLevel,
+        bool publish)
+    {
+        if (!QuestionVisibilityLevels.IsValidApprovedLevel(visibilityLevel))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(visibilityLevel),
+                "Approved questions require Campus, School, or Public visibility.");
+        }
+
+        if (publish && visibilityLevel != QuestionVisibilityLevels.Public)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(visibilityLevel),
+                "Publish requires Public visibility.");
+        }
+
+        if (!publish && visibilityLevel == QuestionVisibilityLevels.Public)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(visibilityLevel),
+                "Public visibility requires publish=true.");
+        }
+
+        if (approvedByUserId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(approvedByUserId), "Approver user id is required.");
+        }
+
+        StatusId = approvedStatusId;
+        ApprovedBy = approvedByUserId;
+        IsAiApproved = true;
+        RejectionReason = null;
+        VisibilityLevel = visibilityLevel;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        IsActive = publish;
+    }
+
+    /// <summary>
+    /// Immediately usable approval (PortalAdmin publish or inline quiz-created questions).
+    /// Always sets IsActive=true. Bank endorsements must use <see cref="Approve"/> with publish=false.
+    /// </summary>
+    public void MarkFullyApproved(
+        long approvedByUserId,
+        short approvedStatusId,
+        short visibilityLevel = QuestionVisibilityLevels.Public)
     {
         if (!QuestionVisibilityLevels.IsValidApprovedLevel(visibilityLevel))
         {
@@ -172,31 +224,35 @@ public sealed class Question : BaseEntity
         IsAiApproved = true;
         RejectionReason = null;
         VisibilityLevel = visibilityLevel;
-        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
         IsActive = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>Kept for inline quiz-created questions and legacy callers.</summary>
-    public void MarkFullyApproved(
-        long approvedByUserId,
-        short approvedStatusId,
-        short visibilityLevel = QuestionVisibilityLevels.Public)
-        => Approve(approvedByUserId, approvedStatusId, visibilityLevel);
-
     /// <summary>
-    /// Soft quiz-use flags: active + ApprovedBy + Campus/School/Public visibility.
-    /// Callers must also verify Approved status and the viewer's org visibility scope.
+    /// Soft quiz-use flags: active + ApprovedBy + Public (PortalAdmin-published).
+    /// Callers must also verify Approved status.
     /// </summary>
     public bool IsEligibleForQuiz
         => IsActive
            && ApprovedBy.HasValue
-           && QuestionVisibilityLevels.IsValidApprovedLevel(VisibilityLevel);
+           && QuestionVisibilityLevels.IsPublished(VisibilityLevel);
 
     /// <summary>Moves to Archived and deactivates; PortalAdmin-only in application layer.</summary>
     public void Archive(short archivedStatusId)
     {
         StatusId = archivedStatusId;
         IsActive = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Restores an Archived question. Visibility is preserved from before archive:
+    /// Public → Approved + Active; Campus/School → Approved + Inactive; None → PendingReview + Inactive.
+    /// </summary>
+    public void Unarchive(short restoredStatusId)
+    {
+        StatusId = restoredStatusId;
+        IsActive = QuestionVisibilityLevels.IsPublished(VisibilityLevel);
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

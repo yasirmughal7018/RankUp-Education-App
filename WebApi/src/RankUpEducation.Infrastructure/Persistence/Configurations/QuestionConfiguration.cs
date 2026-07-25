@@ -32,6 +32,13 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(question => question.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(question => question.StatusId).HasColumnName("status_id").IsRequired();
         builder.Property(question => question.CreatedBy).HasColumnName("created_by").IsRequired();
+        builder.Property(question => question.CreatedByRole)
+            .HasColumnName("created_by_role")
+            .HasColumnType("smallint")
+            .HasConversion(
+                role => (short)role,
+                value => (UserRole)value)
+            .IsRequired();
         builder.Property(question => question.ApprovedBy).HasColumnName("approved_by");
         builder.Property(question => question.CreatedDate).HasColumnName("created_date");
         builder.Property(question => question.ModifiedDate).HasColumnName("modified_date");
@@ -40,13 +47,15 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         // Creator/approver org stamp for pending queues and School/Campus visibility.
         builder.Property(question => question.SchoolId).HasColumnName("school_id");
         builder.Property(question => question.CampusId).HasColumnName("campus_id");
-        // 0=None, 1=Campus, 2=School, 3=Public — set on Approve by role.
+        // 0=None, 1=Campus (endorsed), 2=School (endorsed), 3=Public (published).
         builder.Property(question => question.VisibilityLevel).HasColumnName("visibility_level").HasDefaultValue((short)0);
         builder.HasIndex(question => new { question.ClassId, question.SubjectId, question.TopicId })
             .HasDatabaseName("idx_questions_lookup_ids");
         // Speeds org-scoped list / pending-queue filters.
         builder.HasIndex(question => new { question.SchoolId, question.CampusId, question.VisibilityLevel })
             .HasDatabaseName("idx_questions_visibility_scope");
+        builder.HasIndex(question => question.CreatedByRole)
+            .HasDatabaseName("idx_questions_created_by_role");
         builder.HasIndex(question => question.CreatedBy)
             .HasDatabaseName("idx_questions_created_by");
         builder.HasIndex(question => question.ApprovedBy)
