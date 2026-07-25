@@ -205,8 +205,24 @@ export function QuestionSessionReviewPage() {
               ))}
             </ul>
           </div>
+        ) : (question.acceptedAnswers?.length ?? 0) > 0 ? (
+          <div>
+            <h3 className="mb-3 text-sm font-medium text-slate-900">
+              Accepted answers
+            </h3>
+            <ul className="space-y-2">
+              {question.acceptedAnswers.map((answer) => (
+                <li
+                  key={answer.acceptedAnswerId}
+                  className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700"
+                >
+                  {answer.answerText}
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
-          <p className="text-sm text-slate-500">Descriptive — no options.</p>
+          <p className="text-sm text-slate-500">No options or accepted answers.</p>
         )}
       </section>
 

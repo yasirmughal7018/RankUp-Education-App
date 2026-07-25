@@ -1,6 +1,14 @@
-import { useNavigate, useParams } from "react-router-dom";
+/**
+ * Edit an existing bank question.
+ * Content updates do not change status — Rejected stays Rejected until Submit for review.
+ */
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
-import { mapDetailToForm } from "@/features/questions/domain/questionTypes";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import {
+  canMutateQuestion,
+  mapDetailToForm,
+} from "@/features/questions/domain/questionTypes";
 import { QuestionForm } from "@/features/questions/presentation/components/QuestionForm";
 import {
   useQuestionQuery,
@@ -11,6 +19,7 @@ import {
 export function QuestionEditPage() {
   const { questionId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const numericQuestionId = Number(questionId);
 
   const { data: question, isLoading, error } = useQuestionQuery(numericQuestionId);
@@ -18,7 +27,7 @@ export function QuestionEditPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-10 text-sm text-slate-600 sm:px-6">
+      <div className="mx-auto max-w-4xl px-4 py-10 text-sm text-muted-foreground sm:px-6">
         Loading question...
       </div>
     );
@@ -31,6 +40,38 @@ export function QuestionEditPage() {
           title="Unable to edit question"
           description={error?.message ?? "Question not found."}
         />
+        <Link
+          to="/questions"
+          className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        >
+          Back to question bank
+        </Link>
+      </div>
+    );
+  }
+
+  const canEdit =
+    user != null &&
+    canMutateQuestion({
+      role: user.role,
+      userId: user.id,
+      createdBy: question.createdBy,
+      status: question.status,
+    });
+
+  if (!canEdit) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+        <PageHeader
+          title="Editing not allowed"
+          description="You can only edit your own PendingReview or Rejected questions (PortalAdmin may edit any)."
+        />
+        <Link
+          to={`/questions/${question.questionId}`}
+          className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        >
+          Back to question
+        </Link>
       </div>
     );
   }
@@ -39,10 +80,10 @@ export function QuestionEditPage() {
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <PageHeader
         title={`Edit question #${questionId}`}
-        description="Updates may send the question back for approval."
+        description="Saves content only. Rejected questions stay Rejected until you submit for review."
       />
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
         <QuestionForm
           key={questionId}
           initialValues={mapDetailToForm(question)}

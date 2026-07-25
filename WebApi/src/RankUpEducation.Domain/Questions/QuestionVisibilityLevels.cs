@@ -2,8 +2,9 @@ namespace RankUpEducation.Domain.Questions;
 
 /// <summary>
 /// Who can see/use an Approved question after bank approval.
-/// Campus &lt; School &lt; Public (higher levels include lower audiences).
 /// Set by approver role: CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
+/// Public → all managers; School → same school; Campus → same campus
+/// (SchoolAdmin also sees Campus-approved items in their school).
 /// </summary>
 public static class QuestionVisibilityLevels
 {

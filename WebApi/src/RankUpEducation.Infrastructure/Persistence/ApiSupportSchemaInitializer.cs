@@ -266,9 +266,9 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
           AND q.status_id <> 114
           AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 114 AND c.type = 'QuestionStatus');
 
-        -- IsActive tied to status: Approved may be active; all other statuses forced inactive.
+        -- Non-Approved statuses must stay inactive. Approved keeps its IsActive so
+        -- PortalAdmin deactivate (Approved + IsActive=false) survives API restarts.
         UPDATE public.questions SET is_active = FALSE WHERE status_id IN (110, 111, 113, 114);
-        UPDATE public.questions SET is_active = TRUE WHERE status_id = 112 AND is_active IS DISTINCT FROM TRUE;
 
         -- Keep Draft lookup row for ID stability but hide from normal use.
         UPDATE public.lookups SET is_active = FALSE, order_by = 99

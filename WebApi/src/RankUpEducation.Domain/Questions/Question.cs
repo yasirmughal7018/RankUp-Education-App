@@ -177,7 +177,10 @@ public sealed class Question : BaseEntity
         short visibilityLevel = QuestionVisibilityLevels.Public)
         => Approve(approvedBy, approvedStatusId, visibilityLevel);
 
-    /// <summary>Quiz bank eligibility: active + approved with a visibility level.</summary>
+    /// <summary>
+    /// Soft quiz-use flags: active + ApprovedBy + Campus/School/Public visibility.
+    /// Callers must also verify Approved status and the viewer's org visibility scope.
+    /// </summary>
     public bool IsEligibleForQuiz
         => IsActive
            && ApprovedBy.HasTrimmedText()

@@ -18,7 +18,7 @@ interface QuestionOptionsEditorProps {
 
 const inputClassName = FORM_FIELD_CLASS;
 
-/** Editable answer options for MCQ, true/false, and fill-in-the-blank types. */
+/** Editable answer options for MCQ / True-False; also accepted answers for Fill (quiz inline). */
 export function QuestionOptionsEditor({
   questionType,
   options,

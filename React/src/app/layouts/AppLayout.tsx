@@ -77,7 +77,7 @@ export function AppLayout() {
     if (isAdminRole(user.role)) {
       items.push({ to: "/admin/directory", label: "Directory" });
     }
-    if (canManageQuestions(user.role) && !isAdminRole(user.role)) {
+    if (canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });
     }
     if (canManageQuizzes(user.role)) {

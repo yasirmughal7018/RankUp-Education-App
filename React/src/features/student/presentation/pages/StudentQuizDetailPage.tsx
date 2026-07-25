@@ -54,13 +54,22 @@ export function StudentQuizDetailPage() {
 
       if (attempt.savedAnswers.length > 0) {
         const hydrated = Object.fromEntries(
-          attempt.savedAnswers.map((answer) => [
-            answer.questionId,
-            {
-              selectedOptionId: answer.selectedOptionId,
-              submittedText: answer.submittedText ?? "",
-            },
-          ]),
+          attempt.savedAnswers.map((answer) => {
+            const selectedOptionIds =
+              answer.selectedOptionIds && answer.selectedOptionIds.length > 0
+                ? answer.selectedOptionIds
+                : answer.selectedOptionId != null
+                  ? [answer.selectedOptionId]
+                  : [];
+            return [
+              answer.questionId,
+              {
+                selectedOptionId: selectedOptionIds[0] ?? null,
+                selectedOptionIds,
+                submittedText: answer.submittedText ?? "",
+              },
+            ];
+          }),
         );
         sessionStorage.setItem(
           `rankup-quiz-answers-${attempt.attemptId}`,

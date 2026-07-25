@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Questions;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Contracts.Quizzes;
@@ -23,7 +24,10 @@ public interface IQuizQuestionService
         AddQuizQuestionRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Attaches an existing approved bank question matching quiz class/subject.</summary>
+    /// <summary>
+    /// Attaches an existing Approved + active bank question that is visible in the caller's
+    /// org scope (Public / School / Campus) and matches quiz class/subject.
+    /// </summary>
     Task<ManageQuizResponse> AttachBankQuestionAsync(
         long quizId,
         AttachBankQuestionRequest request,
@@ -174,7 +178,19 @@ public sealed class QuizQuestionService : IQuizQuestionService
         if (!question.IsEligibleForQuiz)
         {
             throw new BusinessRuleException(
-                "Question must be PortalAdmin-approved (ApprovedBy set) and active before it can be added to a quiz.");
+                "Question must be approved (ApprovedBy set), active, and have Campus, School, or Public visibility before it can be added to a quiz.");
+        }
+
+        // Same Public / School / Campus org rules as the eligible-for-quiz bank list.
+        var questionScope = QuestionScopeResolver.RequireManageScope(_currentUser);
+        if (!QuestionScopeResolver.CanViewApprovedVisibility(
+                question.VisibilityLevel,
+                question.SchoolId,
+                question.CampusId,
+                questionScope))
+        {
+            throw new ForbiddenAppException(
+                "This question is outside your visibility scope and cannot be attached to the quiz.");
         }
 
         if (question.ClassId != quiz.ClassId || question.SubjectId != quiz.SubjectId)

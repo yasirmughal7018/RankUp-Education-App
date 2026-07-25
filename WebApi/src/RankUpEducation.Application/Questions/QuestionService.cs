@@ -47,7 +47,10 @@ public interface IQuestionService
         UpdateQuestionRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Owner (or PortalAdmin) resubmits Rejected/PendingReview; clears prior approval/visibility.</summary>
+    /// <summary>
+    /// Owner (or PortalAdmin) resubmits Rejected into PendingReview for scoped
+    /// CampusAdmin / SchoolAdmin / PortalAdmin approval; clears prior approval/visibility.
+    /// </summary>
     Task<QuestionDetailResponse> SubmitForReviewAsync(long questionId, CancellationToken cancellationToken);
 
     /// <summary>
@@ -699,7 +702,7 @@ public sealed class QuestionService : IQuestionService
         var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
         if (!IsApprovedStatus(statusName))
         {
-            throw new BusinessRuleException("Only approved questions can be activated.");
+            throw new BusinessRuleException("Only approved questions can be activated or deactivated.");
         }
     }
 

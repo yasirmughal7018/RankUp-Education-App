@@ -120,7 +120,7 @@ public sealed class QuestionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _questionService.SubmitForReviewAsync(questionId, cancellationToken);
-        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question submitted for Portal Admin review."));
+        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question submitted for review (PendingReview)."));
     }
 
     [HttpPost("{questionId:long}/approve")]

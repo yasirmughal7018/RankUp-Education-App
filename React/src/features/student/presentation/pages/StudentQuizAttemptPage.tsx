@@ -6,7 +6,7 @@ import type {
   StartQuizAttempt,
   SubmitQuizAnswer,
 } from "@/features/student/domain/studentQuizTypes";
-import { isTextQuestionType } from "@/features/student/domain/studentQuizTypes";
+import { isMultiSelectQuestionType, isTextQuestionType } from "@/features/student/domain/studentQuizTypes";
 import {
   useSaveQuizDraftMutation,
   useSubmitQuizAttemptMutation,
@@ -17,6 +17,7 @@ const inputClassName = FORM_FIELD_CLASS;
 
 type AnswerState = {
   selectedOptionId: number | null;
+  selectedOptionIds: number[];
   submittedText: string;
 };
 
@@ -73,24 +74,51 @@ function hydrateAnswers(
   stored: Record<number, AnswerState>,
 ): Record<number, AnswerState> {
   const fromSaved = Object.fromEntries(
-    (savedAnswers ?? []).map((answer) => [
-      answer.questionId,
-      {
-        selectedOptionId: answer.selectedOptionId,
-        submittedText: answer.submittedText ?? "",
-      },
-    ]),
+    (savedAnswers ?? []).map((answer) => {
+      const selectedOptionIds =
+        answer.selectedOptionIds && answer.selectedOptionIds.length > 0
+          ? answer.selectedOptionIds
+          : answer.selectedOptionId != null
+            ? [answer.selectedOptionId]
+            : [];
+      return [
+        answer.questionId,
+        {
+          selectedOptionId: selectedOptionIds[0] ?? null,
+          selectedOptionIds,
+          submittedText: answer.submittedText ?? "",
+        },
+      ];
+    }),
   );
 
   return Object.fromEntries(
-    questions.map((question) => [
-      question.id,
-      stored[question.id] ??
-        fromSaved[question.id] ?? {
-          selectedOptionId: null,
-          submittedText: "",
+    questions.map((question) => {
+      const existing = stored[question.id] ?? fromSaved[question.id];
+      if (!existing) {
+        return [
+          question.id,
+          {
+            selectedOptionId: null,
+            selectedOptionIds: [],
+            submittedText: "",
+          },
+        ];
+      }
+
+      const selectedOptionIds =
+        existing.selectedOptionIds ??
+        (existing.selectedOptionId != null ? [existing.selectedOptionId] : []);
+
+      return [
+        question.id,
+        {
+          selectedOptionId: selectedOptionIds[0] ?? null,
+          selectedOptionIds,
+          submittedText: existing.submittedText ?? "",
         },
-    ]),
+      ];
+    }),
   );
 }
 
@@ -107,8 +135,29 @@ function isAnswered(answer: AnswerState | undefined): boolean {
   }
 
   return (
-    answer.selectedOptionId != null || Boolean(answer.submittedText.trim())
+    (answer.selectedOptionIds?.length ?? 0) > 0 ||
+    answer.selectedOptionId != null ||
+    Boolean(answer.submittedText.trim())
   );
+}
+
+function toSubmitAnswer(
+  questionId: number,
+  answer: AnswerState | undefined,
+): SubmitQuizAnswer {
+  const selectedOptionIds = answer?.selectedOptionIds ?? [];
+  const selectedOptionId =
+    selectedOptionIds[0] ?? answer?.selectedOptionId ?? null;
+  const submittedText = answer?.submittedText?.trim()
+    ? answer.submittedText.trim()
+    : null;
+
+  return {
+    questionId,
+    selectedOptionId,
+    submittedText,
+    selectedOptionIds: selectedOptionIds.length > 0 ? selectedOptionIds : null,
+  };
 }
 
 export function StudentQuizAttemptPage() {
@@ -284,13 +333,9 @@ export function StudentQuizAttemptPage() {
       return;
     }
 
-    const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) => ({
-      questionId: question.id,
-      selectedOptionId: answers[question.id]?.selectedOptionId ?? null,
-      submittedText: answers[question.id]?.submittedText?.trim()
-        ? answers[question.id].submittedText.trim()
-        : null,
-    }));
+    const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) =>
+      toSubmitAnswer(question.id, answers[question.id]),
+    );
 
     const snapshot = JSON.stringify(payload);
     if (!force && snapshot === lastSavedSnapshotRef.current) {
@@ -347,13 +392,9 @@ export function StudentQuizAttemptPage() {
       return;
     }
 
-    const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) => ({
-      questionId: question.id,
-      selectedOptionId: answers[question.id]?.selectedOptionId ?? null,
-      submittedText: answers[question.id]?.submittedText?.trim()
-        ? answers[question.id].submittedText.trim()
-        : null,
-    }));
+    const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) =>
+      toSubmitAnswer(question.id, answers[question.id]),
+    );
 
     const timeSpentSeconds = Math.max(
       1,
@@ -503,6 +544,7 @@ export function StudentQuizAttemptPage() {
                   ...current,
                   [currentQuestion.id]: {
                     selectedOptionId: null,
+                    selectedOptionIds: [],
                     submittedText: event.target.value,
                   },
                 }))
@@ -512,38 +554,68 @@ export function StudentQuizAttemptPage() {
             />
           ) : (
             <div className="space-y-2">
-              {currentQuestion.options.map((option) => (
-                <label
-                  key={option.id}
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
-                >
-                  <input
-                    type="radio"
-                    name={`question-${currentQuestion.id}`}
-                    checked={currentAnswer?.selectedOptionId === option.id}
-                    onChange={() =>
-                      setAnswers((current) => ({
-                        ...current,
-                        [currentQuestion.id]: {
-                          selectedOptionId: option.id,
-                          submittedText: "",
-                        },
-                      }))
-                    }
-                    className="mt-1"
-                  />
-                  <span className="flex-1 text-sm text-slate-700">
-                    {option.text}
-                    {option.imageUrl ? (
-                      <img
-                        src={option.imageUrl}
-                        alt=""
-                        className="mt-2 max-h-40 rounded-lg border border-slate-200 object-contain"
-                      />
-                    ) : null}
-                  </span>
-                </label>
-              ))}
+              {currentQuestion.options.map((option) => {
+                const multiSelect = isMultiSelectQuestionType(
+                  currentQuestion.questionType,
+                );
+                const selectedIds = currentAnswer?.selectedOptionIds ?? [];
+                const checked = multiSelect
+                  ? selectedIds.includes(option.id)
+                  : currentAnswer?.selectedOptionId === option.id;
+
+                return (
+                  <label
+                    key={option.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                  >
+                    <input
+                      type={multiSelect ? "checkbox" : "radio"}
+                      name={`question-${currentQuestion.id}`}
+                      checked={checked}
+                      onChange={() =>
+                        setAnswers((current) => {
+                          if (multiSelect) {
+                            const existing =
+                              current[currentQuestion.id]?.selectedOptionIds ??
+                              [];
+                            const nextIds = existing.includes(option.id)
+                              ? existing.filter((id) => id !== option.id)
+                              : [...existing, option.id];
+                            return {
+                              ...current,
+                              [currentQuestion.id]: {
+                                selectedOptionId: nextIds[0] ?? null,
+                                selectedOptionIds: nextIds,
+                                submittedText: "",
+                              },
+                            };
+                          }
+
+                          return {
+                            ...current,
+                            [currentQuestion.id]: {
+                              selectedOptionId: option.id,
+                              selectedOptionIds: [option.id],
+                              submittedText: "",
+                            },
+                          };
+                        })
+                      }
+                      className="mt-1"
+                    />
+                    <span className="flex-1 text-sm text-slate-700">
+                      {option.text}
+                      {option.imageUrl ? (
+                        <img
+                          src={option.imageUrl}
+                          alt=""
+                          className="mt-2 max-h-40 rounded-lg border border-slate-200 object-contain"
+                        />
+                      ) : null}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           )}
 

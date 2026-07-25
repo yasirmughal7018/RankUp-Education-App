@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import {
-  QUESTION_TYPES,
+  QUESTION_TYPES_NOW,
   defaultOptionsForType,
+  isFillBlankType,
   normalizeQuestionType,
+  usesAcceptedAnswers,
   usesAnswerOptions,
   validateQuestionForm,
 } from "@/features/questions/domain/questionTypes";
@@ -35,6 +37,14 @@ interface AddQuizQuestionDialogProps {
 
 const inputClassName = FORM_FIELD_CLASS;
 
+/** Seed options for quiz inline create (Fill options become accepted answers on the API). */
+function optionsForQuizType(questionType: string): AddQuizQuestionInput["options"] {
+  if (isFillBlankType(questionType)) {
+    return [{ optionText: "", isCorrect: true }];
+  }
+  return defaultOptionsForType(questionType);
+}
+
 function mapQuestionToInput(question: QuizQuestionItem): AddQuizQuestionInput {
   const questionType = normalizeQuestionType(question.questionType);
   return {
@@ -48,9 +58,9 @@ function mapQuestionToInput(question: QuizQuestionItem): AddQuizQuestionInput {
       question.options.length > 0
         ? question.options.map((option) => ({
             optionText: option.optionText,
-            isCorrect: option.isCorrect,
+            isCorrect: option.isCorrect || isFillBlankType(questionType),
           }))
-        : defaultOptionsForType(questionType),
+        : optionsForQuizType(questionType),
   };
 }
 
@@ -122,7 +132,9 @@ export function AddQuizQuestionDialog({
     });
   }, [bankQuestions, bankSearch, excludedIds]);
 
-  const showOptions = usesAnswerOptions(values.questionType);
+  const showOptions =
+    usesAnswerOptions(values.questionType) ||
+    usesAcceptedAnswers(values.questionType);
   const showBankTab = !isEdit && Boolean(onAttachFromBank);
 
   useEffect(() => {
@@ -168,9 +180,24 @@ export function AddQuizQuestionDialog({
       return;
     }
 
+    const questionType = normalizeQuestionType(values.questionType);
+    const fillAnswers = isFillBlankType(questionType)
+      ? values.options
+          .filter((option) => option.optionText.trim())
+          .map((option) => ({
+            answerText: option.optionText.trim(),
+            isCaseSensitive: false,
+            allowPartialMatch: false,
+            minimumLength: 0,
+            maximumLength: 1000,
+            allowAiReview: false,
+            allowTeacherReview: false,
+          }))
+      : [];
+
     const validationError = validateQuestionForm({
       questionText: values.questionText,
-      questionType: values.questionType,
+      questionType,
       classId: classId && classId > 0 ? classId : 1,
       subjectId: subjectId && subjectId > 0 ? subjectId : 1,
       topicId: null,
@@ -179,8 +206,8 @@ export function AddQuizQuestionDialog({
       estimatedTimeSeconds: values.estimatedTimeSeconds,
       hint: values.hint,
       explanation: values.explanation,
-      options: values.options,
-      acceptedAnswers: [],
+      options: usesAnswerOptions(questionType) ? values.options : [],
+      acceptedAnswers: fillAnswers,
     });
     if (
       validationError &&
@@ -194,7 +221,15 @@ export function AddQuizQuestionDialog({
     try {
       await onSubmit({
         ...values,
-        questionType: normalizeQuestionType(values.questionType),
+        questionType,
+        options: isFillBlankType(questionType)
+          ? values.options
+              .filter((option) => option.optionText.trim())
+              .map((option) => ({
+                optionText: option.optionText.trim(),
+                isCorrect: true,
+              }))
+          : values.options,
       });
     } catch (caught) {
       const apiError = caught as ApiError;
@@ -226,7 +261,7 @@ export function AddQuizQuestionDialog({
           {isEdit
             ? "Update this question on the quiz."
             : mode === "bank"
-              ? "Attach a fully approved question (human + AI) from the question bank."
+              ? "Attach an Approved + Active question from the bank that is visible in your scope."
               : "Creates a new question and attaches it to this quiz."}
         </p>
 
@@ -273,7 +308,7 @@ export function AddQuizQuestionDialog({
                   htmlFor="bankSearch"
                   className="mb-1 block text-sm font-medium text-slate-700"
                 >
-                  Search fully approved questions
+                  Search eligible bank questions
                 </label>
                 <input
                   id="bankSearch"
@@ -284,9 +319,10 @@ export function AddQuizQuestionDialog({
                   placeholder="Search by text, type, or ID"
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Showing questions with both human and AI approval
+                  Showing Approved + Active questions with ApprovedBy and visibility
+                  in your scope
                   {classId || subjectId
-                    ? " filtered by this quiz class/subject."
+                    ? ", filtered by this quiz class/subject."
                     : "."}
                 </p>
               </div>
@@ -304,8 +340,9 @@ export function AddQuizQuestionDialog({
                   </div>
                 ) : filteredBankQuestions.length === 0 ? (
                   <div className="px-4 py-6 text-center text-sm text-slate-600">
-                    No matching fully approved questions found.
-                    Questions need both human and AI approval.
+                    No matching eligible questions found. Questions must be
+                    Approved, Active, have an approver, and be visible in your
+                    scope.
                   </div>
                 ) : (
                   <ul className="divide-y divide-slate-200">
@@ -396,12 +433,12 @@ export function AddQuizQuestionDialog({
                       setValues((current) => ({
                         ...current,
                         questionType: nextType,
-                        options: defaultOptionsForType(nextType),
+                        options: optionsForQuizType(nextType),
                       }));
                     }}
                     className={inputClassName}
                   >
-                    {QUESTION_TYPES.map((type) => (
+                    {QUESTION_TYPES_NOW.map((type) => (
                       <option key={type} value={type}>
                         {type}
                       </option>
@@ -464,11 +501,7 @@ export function AddQuizQuestionDialog({
                     }))
                   }
                 />
-              ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  Descriptive questions do not require predefined options.
-                </div>
-              )}
+              ) : null}
             </>
           )}
 

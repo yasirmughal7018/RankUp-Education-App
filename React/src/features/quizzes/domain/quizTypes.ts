@@ -1,6 +1,7 @@
 import type { UserRole } from "@/core/api/types";
 import {
   defaultOptionsForType,
+  isFillBlankType,
   normalizeQuestionType,
   usesAnswerOptions,
 } from "@/features/questions/domain/questionTypes";
@@ -257,6 +258,8 @@ export function mapQuizQuestionToInput(
   question: QuizQuestionItem,
 ): AddQuizQuestionInput {
   const questionType = normalizeQuestionType(question.questionType);
+  const canUseOptions =
+    usesAnswerOptions(questionType) || isFillBlankType(questionType);
 
   return {
     questionText: question.questionText,
@@ -265,13 +268,15 @@ export function mapQuizQuestionToInput(
     estimatedTimeSeconds: 60,
     hint: question.hint ?? "",
     explanation: "",
-    options: usesAnswerOptions(questionType)
+    options: canUseOptions
       ? question.options.length > 0
         ? question.options.map((option) => ({
             optionText: option.optionText,
-            isCorrect: option.isCorrect,
+            isCorrect: option.isCorrect || isFillBlankType(questionType),
           }))
-        : defaultOptionsForType(questionType)
+        : isFillBlankType(questionType)
+          ? [{ optionText: "", isCorrect: true }]
+          : defaultOptionsForType(questionType)
       : [],
   };
 }
@@ -279,6 +284,12 @@ export function mapQuizQuestionToInput(
 /** Serialize question editor for API. */
 export function buildQuizQuestionPayload(input: AddQuizQuestionInput) {
   const questionType = normalizeQuestionType(input.questionType);
+  const filledOptions = input.options
+    .filter((option) => option.optionText.trim())
+    .map((option) => ({
+      optionText: option.optionText.trim(),
+      isCorrect: isFillBlankType(questionType) ? true : option.isCorrect,
+    }));
 
   return {
     questionText: input.questionText.trim(),
@@ -287,13 +298,10 @@ export function buildQuizQuestionPayload(input: AddQuizQuestionInput) {
     estimatedTimeSeconds: input.estimatedTimeSeconds,
     hint: input.hint.trim() || null,
     explanation: input.explanation.trim() || null,
-    options: usesAnswerOptions(questionType)
-      ? input.options
-          .filter((option) => option.optionText.trim())
-          .map((option) => ({
-            optionText: option.optionText.trim(),
-            isCorrect: option.isCorrect,
-          }))
-      : [],
+    // Choice types send options; Fill sends accepted answers as options (API converts).
+    options:
+      usesAnswerOptions(questionType) || isFillBlankType(questionType)
+        ? filledOptions
+        : [],
   };
 }

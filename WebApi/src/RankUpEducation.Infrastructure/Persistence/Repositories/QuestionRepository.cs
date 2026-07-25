@@ -66,7 +66,8 @@ public sealed class QuestionRepository : IQuestionRepository
             query = query.Where(question => question.ClassId == classId.Value);
         }
 
-        // Quiz eligibility: active + has approver + non-None visibility (Approved).
+        // Soft quiz-use flags: active + ApprovedBy + visibility ≠ None.
+        // Approved status is applied after fetch (see approvedStatusIds filter below).
         if (eligibleForQuizOnly)
         {
             query = query.Where(question =>

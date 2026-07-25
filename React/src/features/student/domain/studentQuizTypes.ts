@@ -46,6 +46,7 @@ export interface SavedQuizAnswer {
   questionId: number;
   selectedOptionId: number | null;
   submittedText: string | null;
+  selectedOptionIds?: number[] | null;
 }
 
 export interface StartQuizAttempt {
@@ -63,6 +64,7 @@ export interface SubmitQuizAnswer {
   questionId: number;
   selectedOptionId: number | null;
   submittedText: string | null;
+  selectedOptionIds?: number[] | null;
 }
 
 export interface SaveQuizDraftInput {
@@ -108,15 +110,27 @@ export function canTakeStudentQuizzes(role: string): boolean {
   return role === "Student";
 }
 
-/** Question requires free-text answer. */
+/** Question requires free-text answer (Fill / Descriptive / essay-style). */
 export function isTextQuestionType(questionType: string): boolean {
-  const normalized = questionType.toLowerCase();
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
   return (
+    normalized.includes("fill") ||
+    normalized.includes("blank") ||
     normalized.includes("text") ||
     normalized.includes("short") ||
     normalized.includes("long") ||
     normalized.includes("essay") ||
     normalized.includes("descriptive")
+  );
+}
+
+/** Multiple Choice — students may select more than one option. */
+export function isMultiSelectQuestionType(questionType: string): boolean {
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
+  return (
+    normalized.includes("multiplechoice") ||
+    normalized.includes("multiselect") ||
+    normalized === "multiple"
   );
 }
 
