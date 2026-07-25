@@ -383,7 +383,7 @@ public sealed class QuizManageService : IQuizManageService
                 sourceQuestion.TopicId,
                 sourceQuestion.DifficultyLevel,
                 questionStatusId,
-                scope.UserId.ToString(),
+                scope.UserId,
                 sourceQuestion.EstimatedTimeSeconds,
                 sourceQuestion.Marks);
 
@@ -401,7 +401,7 @@ public sealed class QuizManageService : IQuizManageService
 
             question.SetOrgScope(copy.SchoolId, copy.SchoolCampusId);
             question.MarkFullyApproved(
-                scope.UserId.ToString(),
+                scope.UserId,
                 questionStatusId,
                 QuestionVisibilityLevels.Campus);
 

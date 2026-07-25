@@ -82,7 +82,6 @@ public sealed class QuestionRepository : IQuestionRepository
             query = query.Where(question =>
                 question.IsActive
                 && question.ApprovedBy != null
-                && question.ApprovedBy != ""
                 && question.VisibilityLevel != QuestionVisibilityLevels.None);
         }
 
@@ -126,13 +125,13 @@ public sealed class QuestionRepository : IQuestionRepository
                 .Select(lookup => lookup.Id)
                 .ToList();
 
-            var ownerKey = visibilityScope.UserId.ToString();
+            var ownerUserId = visibilityScope.UserId;
             var schoolId = visibilityScope.SchoolId;
             var campusId = visibilityScope.CampusId;
             var isSchoolAdmin = visibilityScope.IsSchoolAdmin;
 
             query = query.Where(question =>
-                question.CreatedBy == ownerKey
+                question.CreatedBy == ownerUserId
                 || (approvedStatusIdList.Contains(question.StatusId)
                     && (
                         question.VisibilityLevel == QuestionVisibilityLevels.Public
@@ -149,8 +148,8 @@ public sealed class QuestionRepository : IQuestionRepository
         }
         else if (createdByUserId.HasValue)
         {
-            var ownerKey = createdByUserId.Value.ToString();
-            query = query.Where(question => question.CreatedBy == ownerKey);
+            var ownerUserId = createdByUserId.Value;
+            query = query.Where(question => question.CreatedBy == ownerUserId);
         }
 
         // Quiz picker: same org visibility rules when scope is provided (PortalAdmin skips).
@@ -214,6 +213,17 @@ public sealed class QuestionRepository : IQuestionRepository
             .Where(lookup => lookupIds.Contains(lookup.Id))
             .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
 
+        var userIds = rows.Select(row => row.CreatedBy)
+            .Concat(rows.Where(row => row.ApprovedBy.HasValue).Select(row => row.ApprovedBy!.Value))
+            .Distinct()
+            .ToArray();
+
+        var userNames = userIds.Length == 0
+            ? new Dictionary<long, string>()
+            : await _dbContext.Users.AsNoTracking()
+                .Where(user => userIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+
         var approvedStatusIds = eligibleForQuizOnly
             ? lookupNames
                 .Where(pair =>
@@ -236,8 +246,12 @@ public sealed class QuestionRepository : IQuestionRepository
                 row.Marks,
                 row.EstimatedTimeSeconds,
                 row.IsActive,
-                row.CreatedBy,
-                row.ApprovedBy,
+                row.CreatedBy.ToString(),
+                userNames.GetValueOrDefault(row.CreatedBy, row.CreatedBy.ToString()),
+                row.ApprovedBy?.ToString(),
+                row.ApprovedBy is long approvedByUserId
+                    ? userNames.GetValueOrDefault(approvedByUserId, approvedByUserId.ToString())
+                    : null,
                 row.IsAiApproved,
                 row.SchoolId,
                 row.CampusId,
@@ -286,6 +300,16 @@ public sealed class QuestionRepository : IQuestionRepository
             .Where(lookup => lookupIds.Contains(lookup.Id))
             .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
 
+        var userIds = new List<long> { question.CreatedBy };
+        if (question.ApprovedBy.HasValue)
+        {
+            userIds.Add(question.ApprovedBy.Value);
+        }
+
+        var userNames = await _dbContext.Users.AsNoTracking()
+            .Where(user => userIds.Contains(user.Id))
+            .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+
         return new QuestionDetailItem(
             question.Id,
             question.QuestionText,
@@ -302,8 +326,12 @@ public sealed class QuestionRepository : IQuestionRepository
             question.Hint,
             question.Explanation,
             question.IsActive,
-            question.CreatedBy,
-            question.ApprovedBy,
+            question.CreatedBy.ToString(),
+            userNames.GetValueOrDefault(question.CreatedBy, question.CreatedBy.ToString()),
+            question.ApprovedBy?.ToString(),
+            question.ApprovedBy is long approvedByUserId
+                ? userNames.GetValueOrDefault(approvedByUserId, approvedByUserId.ToString())
+                : null,
             question.IsAiApproved,
             question.RejectionReason,
             question.SchoolId,

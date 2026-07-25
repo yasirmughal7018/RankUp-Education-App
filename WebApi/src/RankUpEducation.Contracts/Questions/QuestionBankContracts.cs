@@ -150,9 +150,17 @@ public sealed record QuestionSummaryResponse(
 
     bool IsActive,
 
+    /// <summary>Creator user id (ownership checks).</summary>
     string CreatedBy,
 
+    /// <summary>Creator display name.</summary>
+    string CreatedByName,
+
+    /// <summary>Approver user id, or null.</summary>
     string? ApprovedBy,
+
+    /// <summary>Approver display name, or null.</summary>
+    string? ApprovedByName,
 
     /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
 
@@ -210,9 +218,17 @@ public sealed record QuestionDetailResponse(
 
     bool IsActive,
 
+    /// <summary>Creator user id (ownership checks).</summary>
     string CreatedBy,
 
+    /// <summary>Creator display name.</summary>
+    string CreatedByName,
+
+    /// <summary>Approver user id, or null.</summary>
     string? ApprovedBy,
+
+    /// <summary>Approver display name, or null.</summary>
+    string? ApprovedByName,
 
     /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
 
@@ -253,6 +269,9 @@ public sealed record QuestionApprovalResponse(
     bool IsActive,
 
     string? ApprovedBy,
+
+    /// <summary>Approver display name, or null.</summary>
+    string? ApprovedByName,
 
     /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
 

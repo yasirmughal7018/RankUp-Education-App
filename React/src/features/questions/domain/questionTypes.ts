@@ -46,7 +46,11 @@ export interface QuestionSummary {
   estimatedTimeSeconds?: number;
   isActive: boolean;
   createdBy: string;
+  /** Display name for creator (from app_users). */
+  createdByName?: string;
   approvedBy: string | null;
+  /** Display name for approver (from app_users). */
+  approvedByName?: string | null;
   isAiApproved: boolean;
   schoolId?: number | null;
   campusId?: number | null;
@@ -72,7 +76,11 @@ export interface QuestionDetail {
   explanation: string | null;
   isActive: boolean;
   createdBy: string;
+  /** Display name for creator (from app_users). */
+  createdByName?: string;
   approvedBy: string | null;
+  /** Display name for approver (from app_users). */
+  approvedByName?: string | null;
   isAiApproved: boolean;
   schoolId?: number | null;
   campusId?: number | null;

@@ -279,7 +279,7 @@ export function QuestionsPage() {
           question.isActive,
         );
         const haystack =
-          `${question.questionText} ${question.questionType} ${statusName} ${question.createdBy} ${subjectName} ${className} ${difficultyName}`.toLowerCase();
+          `${question.questionText} ${question.questionType} ${statusName} ${question.createdBy} ${question.createdByName ?? ""} ${subjectName} ${className} ${difficultyName}`.toLowerCase();
         if (!haystack.includes(deferredSearch)) {
           return false;
         }

@@ -71,7 +71,7 @@ export function AppPageHeader({
             <p
               className={cn(
                 "mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary",
-                backControl && "sm:pl-12",
+                backControl && "pl-[2.875rem] sm:pl-12",
               )}
             >
               {eyebrow}
@@ -92,7 +92,7 @@ export function AppPageHeader({
             <p
               className={cn(
                 "mt-2 max-w-2xl text-base leading-7 text-muted-foreground text-balance",
-                backControl && "sm:pl-12",
+                backControl && "pl-[2.875rem] sm:pl-12",
               )}
             >
               {subtitle}

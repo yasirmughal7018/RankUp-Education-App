@@ -121,7 +121,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         SET school_id = u.school_id
         FROM public.app_users u
         WHERE q.school_id IS NULL
-          AND q.created_by ~ '^[0-9]+$'
+          AND q.created_by::text ~ '^[0-9]+$'
           AND u.id = q.created_by::bigint
           AND u.school_id IS NOT NULL;
 
@@ -129,7 +129,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         SET campus_id = u.campus_id
         FROM public.app_users u
         WHERE q.campus_id IS NULL
-          AND q.created_by ~ '^[0-9]+$'
+          AND q.created_by::text ~ '^[0-9]+$'
           AND u.id = q.created_by::bigint
           AND u.campus_id IS NOT NULL;
 
@@ -141,6 +141,73 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         CREATE INDEX IF NOT EXISTS idx_questions_visibility_scope
             ON public.questions (school_id, campus_id, visibility_level);
+
+        -- created_by / approved_by: convert varchar user-id strings → bigint FKs to app_users.
+        DO $question_user_fks$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'questions'
+                  AND column_name = 'created_by'
+                  AND data_type IN ('character varying', 'text', 'varchar')
+            ) THEN
+                -- Drop non-numeric / orphaned approver refs before type change.
+                UPDATE public.questions
+                SET approved_by = NULL
+                WHERE approved_by IS NOT NULL
+                  AND (
+                    approved_by !~ '^[0-9]+$'
+                    OR NOT EXISTS (
+                        SELECT 1 FROM public.app_users u WHERE u.id = approved_by::bigint
+                    )
+                );
+
+                -- Orphan creators block the FK; reassign to the earliest active user if needed.
+                UPDATE public.questions q
+                SET created_by = (
+                    SELECT u.id::text
+                    FROM public.app_users u
+                    WHERE u.is_active = TRUE
+                    ORDER BY u.id
+                    LIMIT 1
+                )
+                WHERE q.created_by !~ '^[0-9]+$'
+                   OR NOT EXISTS (
+                        SELECT 1 FROM public.app_users u WHERE u.id = q.created_by::bigint
+                   );
+
+                ALTER TABLE public.questions
+                    ALTER COLUMN created_by TYPE bigint USING created_by::bigint;
+
+                ALTER TABLE public.questions
+                    ALTER COLUMN approved_by TYPE bigint USING NULLIF(BTRIM(approved_by::text), '')::bigint;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'fk_questions_created_by_app_users'
+            ) THEN
+                ALTER TABLE public.questions
+                    ADD CONSTRAINT fk_questions_created_by_app_users
+                    FOREIGN KEY (created_by) REFERENCES public.app_users(id) ON DELETE RESTRICT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'fk_questions_approved_by_app_users'
+            ) THEN
+                ALTER TABLE public.questions
+                    ADD CONSTRAINT fk_questions_approved_by_app_users
+                    FOREIGN KEY (approved_by) REFERENCES public.app_users(id) ON DELETE RESTRICT;
+            END IF;
+        END
+        $question_user_fks$;
+
+        CREATE INDEX IF NOT EXISTS idx_questions_created_by
+            ON public.questions (created_by);
+
+        CREATE INDEX IF NOT EXISTS idx_questions_approved_by
+            ON public.questions (approved_by);
 
         ALTER TABLE public.question_accepted_answers
             ADD COLUMN IF NOT EXISTS allow_ai_review BOOLEAN NOT NULL DEFAULT FALSE;

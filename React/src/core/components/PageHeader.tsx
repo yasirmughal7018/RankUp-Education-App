@@ -66,7 +66,7 @@ export function PageHeader({
           <p
             className={cn(
               "mt-2 max-w-3xl text-sm leading-5 text-muted-foreground sm:text-base sm:leading-6",
-              backControl && "sm:pl-12",
+              backControl && "pl-[2.875rem] sm:pl-12",
             )}
           >
             {description}

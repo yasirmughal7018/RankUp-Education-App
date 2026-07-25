@@ -30,9 +30,17 @@ public sealed record QuestionListItem(
 
     bool IsActive,
 
+    /// <summary>Creator user id as string (ownership checks).</summary>
     string CreatedBy,
 
+    /// <summary>Creator display name from app_users.</summary>
+    string CreatedByName,
+
+    /// <summary>Approver user id as string, or null.</summary>
     string? ApprovedBy,
+
+    /// <summary>Approver display name from app_users, or null.</summary>
+    string? ApprovedByName,
 
     bool IsAiApproved,
 
@@ -84,9 +92,17 @@ public sealed record QuestionDetailItem(
 
     bool IsActive,
 
+    /// <summary>Creator user id as string (ownership checks).</summary>
     string CreatedBy,
 
+    /// <summary>Creator display name from app_users.</summary>
+    string CreatedByName,
+
+    /// <summary>Approver user id as string, or null.</summary>
     string? ApprovedBy,
+
+    /// <summary>Approver display name from app_users, or null.</summary>
+    string? ApprovedByName,
 
     bool IsAiApproved,
 

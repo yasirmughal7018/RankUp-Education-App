@@ -44,7 +44,11 @@ internal static class QuestionMapping
 
             item.CreatedBy,
 
+            item.CreatedByName,
+
             item.ApprovedBy,
+
+            item.ApprovedByName,
 
             item.IsAiApproved,
 
@@ -94,7 +98,11 @@ internal static class QuestionMapping
 
             item.CreatedBy,
 
+            item.CreatedByName,
+
             item.ApprovedBy,
+
+            item.ApprovedByName,
 
             item.IsAiApproved,
 

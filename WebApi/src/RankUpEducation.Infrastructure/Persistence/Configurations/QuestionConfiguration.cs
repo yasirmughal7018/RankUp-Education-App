@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Questions;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
@@ -30,8 +31,8 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(question => question.Marks).HasColumnName("marks").IsRequired();
         builder.Property(question => question.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(question => question.StatusId).HasColumnName("status_id").IsRequired();
-        builder.Property(question => question.CreatedBy).HasColumnName("created_by").HasMaxLength(100).IsRequired();
-        builder.Property(question => question.ApprovedBy).HasColumnName("approved_by").HasMaxLength(100);
+        builder.Property(question => question.CreatedBy).HasColumnName("created_by").IsRequired();
+        builder.Property(question => question.ApprovedBy).HasColumnName("approved_by");
         builder.Property(question => question.CreatedDate).HasColumnName("created_date");
         builder.Property(question => question.ModifiedDate).HasColumnName("modified_date");
         builder.Property(question => question.IsAiApproved).HasColumnName("is_ai_approved").HasDefaultValue(false);
@@ -46,6 +47,22 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         // Speeds org-scoped list / pending-queue filters.
         builder.HasIndex(question => new { question.SchoolId, question.CampusId, question.VisibilityLevel })
             .HasDatabaseName("idx_questions_visibility_scope");
+        builder.HasIndex(question => question.CreatedBy)
+            .HasDatabaseName("idx_questions_created_by");
+        builder.HasIndex(question => question.ApprovedBy)
+            .HasDatabaseName("idx_questions_approved_by");
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(question => question.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_questions_created_by_app_users");
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(question => question.ApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false)
+            .HasConstraintName("fk_questions_approved_by_app_users");
 
         // Explicit relationships avoid EF confusing Options vs AcceptedAnswers (both use question_id).
         builder.HasMany(question => question.Options)

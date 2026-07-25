@@ -92,9 +92,9 @@ public static class QuestionScopeResolver
         return new QuestionManageScope(role, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
-    /// <summary>True when question.CreatedBy matches the caller's user id string.</summary>
+    /// <summary>True when question.CreatedBy matches the caller's user id.</summary>
     public static bool IsOwner(Question question, QuestionManageScope scope)
-        => string.Equals(question.CreatedBy, scope.UserId.ToString(), StringComparison.Ordinal);
+        => question.CreatedBy == scope.UserId;
 
     /// <summary>Throws if the caller is not the question creator.</summary>
     public static void EnsureIsOwner(Question question, QuestionManageScope scope)

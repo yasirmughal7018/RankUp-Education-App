@@ -18,7 +18,6 @@ public sealed class Question : BaseEntity
     private Question()
     {
         QuestionText = string.Empty;
-        CreatedBy = string.Empty;
     }
 
     /// <summary>Creates a bank question; callers should then <see cref="SetOrgScope"/> and <see cref="SubmitForApproval"/>.</summary>
@@ -30,7 +29,7 @@ public sealed class Question : BaseEntity
         short? topicId,
         short difficultyLevel,
         short statusId,
-        string createdBy,
+        long createdByUserId,
         short estimatedTimeSeconds,
         short marks)
     {
@@ -41,7 +40,7 @@ public sealed class Question : BaseEntity
         TopicId = topicId;
         DifficultyLevel = difficultyLevel;
         StatusId = statusId;
-        CreatedBy = createdBy.AsTrimmedString();
+        CreatedBy = createdByUserId;
         EstimatedTimeSeconds = estimatedTimeSeconds;
         Marks = marks;
     }
@@ -58,8 +57,10 @@ public sealed class Question : BaseEntity
     public short Marks { get; private set; }
     public bool IsActive { get; private set; }
     public short StatusId { get; private set; }
-    public string CreatedBy { get; private set; }
-    public string? ApprovedBy { get; private set; }
+    /// <summary>Creator user id (<c>app_users.id</c>).</summary>
+    public long CreatedBy { get; private set; }
+    /// <summary>Approver user id (<c>app_users.id</c>), null until approved.</summary>
+    public long? ApprovedBy { get; private set; }
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     /// <summary>
@@ -152,7 +153,7 @@ public sealed class Question : BaseEntity
     /// CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public.
     /// IsActive becomes true (only Approved is active by default).
     /// </summary>
-    public void Approve(string approvedBy, short approvedStatusId, short visibilityLevel)
+    public void Approve(long approvedByUserId, short approvedStatusId, short visibilityLevel)
     {
         if (!QuestionVisibilityLevels.IsValidApprovedLevel(visibilityLevel))
         {
@@ -161,8 +162,13 @@ public sealed class Question : BaseEntity
                 "Approved questions require Campus, School, or Public visibility.");
         }
 
+        if (approvedByUserId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(approvedByUserId), "Approver user id is required.");
+        }
+
         StatusId = approvedStatusId;
-        ApprovedBy = approvedBy.AsTrimmedString();
+        ApprovedBy = approvedByUserId;
         IsAiApproved = true;
         RejectionReason = null;
         VisibilityLevel = visibilityLevel;
@@ -172,10 +178,10 @@ public sealed class Question : BaseEntity
 
     /// <summary>Kept for inline quiz-created questions and legacy callers.</summary>
     public void MarkFullyApproved(
-        string approvedBy,
+        long approvedByUserId,
         short approvedStatusId,
         short visibilityLevel = QuestionVisibilityLevels.Public)
-        => Approve(approvedBy, approvedStatusId, visibilityLevel);
+        => Approve(approvedByUserId, approvedStatusId, visibilityLevel);
 
     /// <summary>
     /// Soft quiz-use flags: active + ApprovedBy + Campus/School/Public visibility.
@@ -183,7 +189,7 @@ public sealed class Question : BaseEntity
     /// </summary>
     public bool IsEligibleForQuiz
         => IsActive
-           && ApprovedBy.HasTrimmedText()
+           && ApprovedBy.HasValue
            && QuestionVisibilityLevels.IsValidApprovedLevel(VisibilityLevel);
 
     /// <summary>Moves to Archived and deactivates; PortalAdmin-only in application layer.</summary>

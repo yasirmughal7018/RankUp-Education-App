@@ -222,7 +222,7 @@ public sealed class QuestionService : IQuestionService
             request.TopicId,
             difficultyLevelId,
             statusId,
-            scope.UserId.ToString(),
+            scope.UserId,
             request.EstimatedTimeSeconds,
             request.Marks);
 
@@ -358,11 +358,20 @@ public sealed class QuestionService : IQuestionService
 
         var approvedStatusId = await RequireApprovedStatusIdAsync(cancellationToken);
         // Visibility: CampusAdmin→Campus, SchoolAdmin→School, PortalAdmin→Public.
-        question.Approve(scope.UserId.ToString(), approvedStatusId, scope.ApprovalVisibilityLevel);
+        question.Approve(scope.UserId, approvedStatusId, scope.ApprovalVisibilityLevel);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var statusName = await _lookups.GetLookupNameAsync(approvedStatusId, cancellationToken);
-        return ToApprovalResponse(questionId, statusName, question);
+        var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
+        return new QuestionApprovalResponse(
+            questionId,
+            statusName,
+            question.IsActive,
+            detail.ApprovedBy,
+            detail.ApprovedByName,
+            question.IsAiApproved,
+            QuestionVisibilityLevels.ToName(question.VisibilityLevel),
+            question.RejectionReason);
     }
 
     /// <inheritdoc />
@@ -720,12 +729,14 @@ public sealed class QuestionService : IQuestionService
     private static QuestionApprovalResponse ToApprovalResponse(
         long questionId,
         string statusName,
-        Question question)
+        Question question,
+        string? approvedByName = null)
         => new(
             questionId,
             statusName,
             question.IsActive,
-            question.ApprovedBy,
+            question.ApprovedBy?.ToString(),
+            approvedByName,
             question.IsAiApproved,
             QuestionVisibilityLevels.ToName(question.VisibilityLevel),
             question.RejectionReason);

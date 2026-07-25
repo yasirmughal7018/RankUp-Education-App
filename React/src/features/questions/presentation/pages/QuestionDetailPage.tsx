@@ -174,17 +174,23 @@ export function QuestionDetailPage() {
   const subjectName = lookupName(subjects, question.subjectId, "Subject");
   const topicName = question.topicId
     ? lookupName(topics, question.topicId, "Topic")
-    : "—";
+    : null;
   const difficultyName = lookupName(
     difficulties,
     question.difficultyLevel,
     "Difficulty",
   );
 
+  const headingParts = [className, subjectName];
+  if (topicName && topicName !== "—") {
+    headingParts.push(topicName);
+  }
+  const pageTitle = headingParts.join(" - ");
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <PageHeader
-        title={`Question #${question.questionId}`}
+        title={pageTitle}
         description={question.questionType}
         backTo="/questions"
         backAriaLabel="Back to question bank"
@@ -227,14 +233,6 @@ export function QuestionDetailPage() {
           ) : null}
         </div>
 
-        <p className="text-base leading-7 text-foreground">{question.questionText}</p>
-
-        {question.rejectionReason ? (
-          <div className="rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
-            <strong>Rejection reason:</strong> {question.rejectionReason}
-          </div>
-        ) : null}
-
         <div className="grid gap-4 text-sm text-muted-foreground md:grid-cols-2">
           <p>
             <span className="text-foreground">Class:</span> {className}
@@ -243,7 +241,7 @@ export function QuestionDetailPage() {
             <span className="text-foreground">Subject:</span> {subjectName}
           </p>
           <p>
-            <span className="text-foreground">Topic:</span> {topicName}
+            <span className="text-foreground">Topic:</span> {topicName ?? "—"}
           </p>
           <p>
             <span className="text-foreground">Difficulty:</span> {difficultyName}
@@ -257,11 +255,13 @@ export function QuestionDetailPage() {
           </p>
           <p>
             <span className="text-foreground">Created by:</span>{" "}
-            {question.createdBy}
+            {question.createdByName?.trim() || question.createdBy}
           </p>
           <p>
             <span className="text-foreground">Approved by:</span>{" "}
-            {question.approvedBy ?? "—"}
+            {question.approvedByName?.trim() ||
+              question.approvedBy ||
+              "—"}
           </p>
           <p>
             <span className="text-foreground">Visibility:</span>{" "}
@@ -274,6 +274,14 @@ export function QuestionDetailPage() {
             <span className="text-foreground">Campus:</span> {campusName ?? "—"}
           </p>
         </div>
+
+        {question.rejectionReason ? (
+          <div className="rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
+            <strong>Rejection reason:</strong> {question.rejectionReason}
+          </div>
+        ) : null}
+
+        <p className="text-base leading-7 text-foreground">{question.questionText}</p>
 
         {question.hint ? (
           <div>
@@ -292,24 +300,23 @@ export function QuestionDetailPage() {
         ) : null}
 
         {question.options.length > 0 ? (
-          <div>
-            <h3 className="mb-3 text-sm font-medium text-foreground">Options</h3>
-            <ul className="space-y-2">
-              {question.options.map((option) => (
-                <li
-                  key={option.optionId}
-                  className="rounded-lg border border-border px-4 py-3 text-sm text-foreground"
-                >
-                  {option.optionText}
-                  {option.isCorrect ? (
-                    <span className="ml-2 text-xs font-medium text-[var(--status-approved-text)]">
-                      Correct
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <ul className="space-y-2">
+            {question.options.map((option) => (
+              <li
+                key={option.optionId}
+                className={
+                  option.isCorrect
+                    ? "flex items-center justify-between gap-3 rounded-lg border border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] px-4 py-3 text-sm text-[var(--status-approved-text)]"
+                    : "flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground"
+                }
+              >
+                <span className="min-w-0 flex-1">{option.optionText}</span>
+                {option.isCorrect ? (
+                  <StatusBadge label="Correct" status="approved" />
+                ) : null}
+              </li>
+            ))}
+          </ul>
         ) : null}
 
         {(question.acceptedAnswers?.length ?? 0) > 0 ? (

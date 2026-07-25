@@ -107,7 +107,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             quiz.TopicId,
             quiz.DifficultyLevelId,
             questionStatusId,
-            scope.UserId.ToString(),
+            scope.UserId,
             request.EstimatedTimeSeconds,
             request.Marks);
 
@@ -126,7 +126,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         // Inline quiz questions are created ready for use within the quiz campus.
         question.SetOrgScope(quiz.SchoolId, quiz.SchoolCampusId);
         question.MarkFullyApproved(
-            scope.UserId.ToString(),
+            scope.UserId,
             questionStatusId,
             QuestionVisibilityLevels.Campus);
 
@@ -252,7 +252,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         var question = await _questions.GetQuestionEntityForManageAsync(questionId, cancellationToken)
             ?? throw new NotFoundAppException("Question was not found.");
 
-        if (!string.Equals(question.CreatedBy, scope.UserId.ToString(), StringComparison.Ordinal))
+        if (question.CreatedBy != scope.UserId)
         {
             throw new ForbiddenAppException("You can only edit questions you created.");
         }
@@ -293,7 +293,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
 
         var question = await _questions.GetQuestionEntityForManageAsync(questionId, cancellationToken);
         if (question is not null &&
-            string.Equals(question.CreatedBy, scope.UserId.ToString(), StringComparison.Ordinal))
+            question.CreatedBy == scope.UserId)
         {
             question.Deactivate();
         }
