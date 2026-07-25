@@ -31,30 +31,31 @@
   --rankup-border: #e2e8f0;
   --rankup-disabled: #cbd5e1;
 
-  /* Approval / account status chips (light) */
+  /* Approval / account status chips (light)
+   * Pending=Amber · Approved=Green · Locked=Indigo · Deactivated=Slate · Rejected=Red · Active=Blue */
   --status-pending-bg: #fef3c7;
   --status-pending-text: #92400e;
-  --status-pending-border: #fcd34d;
+  --status-pending-border: #f59e0b;
 
-  --status-approved-bg: #d1fae5;
-  --status-approved-text: #065f46;
-  --status-approved-border: #34d399;
+  --status-approved-bg: #dcfce7;
+  --status-approved-text: #166534;
+  --status-approved-border: #22c55e;
 
   --status-locked-bg: #e0e7ff;
   --status-locked-text: #3730a3;
-  --status-locked-border: #818cf8;
+  --status-locked-border: #6366f1;
 
-  --status-deactivated-bg: #e5e7eb;
-  --status-deactivated-text: #374151;
-  --status-deactivated-border: #9ca3af;
+  --status-deactivated-bg: #f1f5f9;
+  --status-deactivated-text: #475569;
+  --status-deactivated-border: #94a3b8;
 
   --status-rejected-bg: #fee2e2;
   --status-rejected-text: #991b1b;
-  --status-rejected-border: #f87171;
+  --status-rejected-border: #ef4444;
 
-  --status-active-bg: #d1fae5;
-  --status-active-text: #065f46;
-  --status-active-border: #34d399;
+  --status-active-bg: #dbeafe;
+  --status-active-text: #1d4ed8;
+  --status-active-border: #3b82f6;
 }
 
 .dark {
@@ -85,30 +86,31 @@
   --rankup-border: #334155;
   --rankup-disabled: #64748b;
 
-  /* Approval / account status chips (dark) */
+  /* Approval / account status chips (dark)
+   * Pending=Amber · Approved=Green · Locked=Indigo · Deactivated=Slate · Rejected=Red · Active=Blue */
   --status-pending-bg: #451a03;
   --status-pending-text: #fcd34d;
-  --status-pending-border: #b45309;
+  --status-pending-border: #d97706;
 
   --status-approved-bg: #052e16;
-  --status-approved-text: #6ee7b7;
-  --status-approved-border: #059669;
+  --status-approved-text: #86efac;
+  --status-approved-border: #22c55e;
 
   --status-locked-bg: #1e1b4b;
   --status-locked-text: #a5b4fc;
   --status-locked-border: #6366f1;
 
-  --status-deactivated-bg: #1f2937;
-  --status-deactivated-text: #d1d5db;
-  --status-deactivated-border: #4b5563;
+  --status-deactivated-bg: #1e293b;
+  --status-deactivated-text: #cbd5e1;
+  --status-deactivated-border: #64748b;
 
   --status-rejected-bg: #450a0a;
   --status-rejected-text: #fca5a5;
-  --status-rejected-border: #dc2626;
+  --status-rejected-border: #ef4444;
 
-  --status-active-bg: #052e16;
-  --status-active-text: #6ee7b7;
-  --status-active-border: #059669;
+  --status-active-bg: #172554;
+  --status-active-text: #93c5fd;
+  --status-active-border: #3b82f6;
 }
 
 /** Role accent helpers — applied on AppShell data-role attribute. */

@@ -11,6 +11,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { useScopeNames } from "@/features/authentication/presentation/hooks/useScopeNames";
 import {
   getDashboardLabel,
   isAdminRole,
@@ -124,6 +125,10 @@ function primaryAction(role: UserRole) {
 /** Role-based landing page with quick links and permissions. */
 export function DashboardPage() {
   const { user } = useAuth();
+  const { schoolName, campusName } = useScopeNames(
+    user?.schoolId,
+    user?.campusId,
+  );
 
   if (!user) {
     return null;
@@ -174,8 +179,8 @@ export function DashboardPage() {
         />
         <AppStatCard
           title="School scope"
-          value={`${user.schoolId ?? "—"} / ${user.campusId ?? "—"}`}
-          description="School ID / Campus ID"
+          value={schoolName ?? (user.schoolId != null ? "Loading…" : "—")}
+          description={campusName ?? (user.campusId != null ? "Loading…" : "All campuses")}
           icon={School}
           colorVariant="neutral"
         />

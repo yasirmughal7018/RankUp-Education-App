@@ -110,7 +110,7 @@ export function directoryAccountStatusClass(
   return APPROVAL_STATUS_CHIP[STATUS_KEY[code]];
 }
 
-/** School / campus Active|Inactive chip — same green Active as summary tiles. */
+/** School / campus Active|Inactive chip — Active = blue, Inactive = slate. */
 export function directoryReadyStatusClass(isActive: boolean): string {
   return isActive
     ? APPROVAL_STATUS_CHIP.active

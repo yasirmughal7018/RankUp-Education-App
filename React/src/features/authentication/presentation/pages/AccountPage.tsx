@@ -405,11 +405,10 @@ export function AccountPage() {
   );
   const avatarUrl = resolvePublicUrl(profile.avatarUrl);
   const schoolLabel =
-    schools.find((s) => String(s.id) === String(profile.schoolId))?.name ??
-    (profile.schoolId != null ? `School ${profile.schoolId}` : null);
+    schools.find((s) => String(s.id) === String(profile.schoolId))?.name ?? null;
   const campusLabel =
     campuses.find((c) => String(c.id) === String(profile.campusId))?.name ??
-    (profile.campusId != null ? `Campus ${profile.campusId}` : null);
+    null;
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f3f6fb]">

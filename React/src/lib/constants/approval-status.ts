@@ -1,6 +1,11 @@
 /**
  * Approval / account status theme helpers.
  * Colors come from CSS variables in theme.css (--status-*-bg/text/border).
+ *
+ * Psychology rule:
+ * Pending = Amber · Approved = Green · Locked = Indigo ·
+ * Deactivated = Slate · Rejected = Red · Active = Blue
+ * (Approved and Active must not share green.)
  */
 
 export type ApprovalStatusKey =
@@ -11,20 +16,48 @@ export type ApprovalStatusKey =
   | "rejected"
   | "active";
 
+/** Labeled chip map (label + themed className). */
+export const approvalStatusColors = {
+  pendingApproval: {
+    label: "Pending Approval",
+    className:
+      "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]",
+  },
+  approved: {
+    label: "Approved",
+    className:
+      "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] text-[var(--status-approved-text)]",
+  },
+  locked: {
+    label: "Locked",
+    className:
+      "border-[var(--status-locked-border)] bg-[var(--status-locked-bg)] text-[var(--status-locked-text)]",
+  },
+  deactivated: {
+    label: "Deactivated",
+    className:
+      "border-[var(--status-deactivated-border)] bg-[var(--status-deactivated-bg)] text-[var(--status-deactivated-text)]",
+  },
+  rejected: {
+    label: "Rejected",
+    className:
+      "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] text-[var(--status-rejected-text)]",
+  },
+  active: {
+    label: "Active",
+    className:
+      "border-[var(--status-active-border)] bg-[var(--status-active-bg)] text-[var(--status-active-text)]",
+  },
+} as const;
+
 /** Filled chip / badge surfaces. */
 export const APPROVAL_STATUS_CHIP: Record<ApprovalStatusKey, string> = {
-  pending:
-    "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]",
-  approved:
-    "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] text-[var(--status-approved-text)]",
-  locked:
-    "border-[var(--status-locked-border)] bg-[var(--status-locked-bg)] text-[var(--status-locked-text)]",
-  deactivated:
-    "border-[var(--status-deactivated-border)] bg-[var(--status-deactivated-bg)] text-[var(--status-deactivated-text)]",
-  rejected:
-    "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] text-[var(--status-rejected-text)]",
-  active:
-    "border-[var(--status-active-border)] bg-[var(--status-active-bg)] text-[var(--status-active-text)]",
+  pending: approvalStatusColors.pendingApproval.className,
+  approved: approvalStatusColors.approved.className,
+  locked: approvalStatusColors.locked.className,
+  deactivated: approvalStatusColors.deactivated.className,
+  rejected: approvalStatusColors.rejected.className,
+  active: approvalStatusColors.active.className,
 };
 
 /** Selected approval-system tile. */

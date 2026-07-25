@@ -285,7 +285,7 @@ export function canMutateQuestion(args: {
 
 /**
  * Quiz-bank attach eligibility: active + has approver + Approved status
- * (typically after PortalAdmin public approval).
+ * (visibility scope is enforced by list/attach APIs).
  */
 export function isEligibleForQuizQuestion(question: {
   isActive: boolean;
@@ -296,6 +296,59 @@ export function isEligibleForQuizQuestion(question: {
     question.isActive &&
     Boolean(question.approvedBy?.trim()) &&
     isApprovedQuestionStatus(question.status)
+  );
+}
+
+/** Canonical display label for bank QuestionStatus (never mixes IsActive). */
+export function displayQuestionStatusLabel(status: string): string {
+  if (isPendingQuestionStatus(status) || isDraftQuestionStatus(status)) {
+    return "PendingReview";
+  }
+  if (isApprovedQuestionStatus(status)) {
+    return "Approved";
+  }
+  if (isRejectedQuestionStatus(status)) {
+    return "Rejected";
+  }
+  if (isArchivedQuestionStatus(status)) {
+    return "Archived";
+  }
+  return status.trim() || "Unknown";
+}
+
+/** PortalAdmin may activate only Approved + inactive questions. */
+export function canActivateQuestion(args: {
+  role: UserRole;
+  status: string;
+  isActive: boolean;
+}): boolean {
+  return (
+    canLifecycleQuestions(args.role) &&
+    isApprovedQuestionStatus(args.status) &&
+    !args.isActive
+  );
+}
+
+/** PortalAdmin may deactivate only Approved + active questions. */
+export function canDeactivateQuestion(args: {
+  role: UserRole;
+  status: string;
+  isActive: boolean;
+}): boolean {
+  return (
+    canLifecycleQuestions(args.role) &&
+    isApprovedQuestionStatus(args.status) &&
+    args.isActive
+  );
+}
+
+/** PortalAdmin may archive any non-archived question. */
+export function canArchiveQuestion(args: {
+  role: UserRole;
+  status: string;
+}): boolean {
+  return (
+    canLifecycleQuestions(args.role) && !isArchivedQuestionStatus(args.status)
   );
 }
 

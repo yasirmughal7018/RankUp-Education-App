@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:user-qa-docx": "node build_user_creation_qa_docx.mjs"
+    "build:user-qa-docx": "node build_user_creation_qa_docx.mjs",
+    "build:questions-qa": "node build_questions_business_qa.mjs"
   },
   "dependencies": {
     "docx": "^9.7.1"

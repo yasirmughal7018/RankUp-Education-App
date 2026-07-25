@@ -34,6 +34,7 @@ import { QuestionCreatePage } from "@/features/questions/presentation/pages/Ques
 import { QuestionSessionReviewPage } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
 import { QuestionDetailPage } from "@/features/questions/presentation/pages/QuestionDetailPage";
 import { QuestionEditPage } from "@/features/questions/presentation/pages/QuestionEditPage";
+import { QuestionImportPage } from "@/features/questions/presentation/pages/QuestionImportPage";
 import { QuestionsPage } from "@/features/questions/presentation/pages/QuestionsPage";
 import { QuizManageRoute } from "@/features/quizzes/presentation/components/QuizManageRoute";
 import { AssignmentBoardPage } from "@/features/quizzes/presentation/pages/AssignmentBoardPage";
@@ -123,6 +124,7 @@ export function AppRouter() {
 
             <Route element={<QuestionManageRoute />}>
               <Route path="questions" element={<QuestionsPage />} />
+              <Route path="questions/import" element={<QuestionImportPage />} />
               <Route path="questions/new" element={<QuestionCreatePage />} />
               <Route
                 path="questions/new/review"

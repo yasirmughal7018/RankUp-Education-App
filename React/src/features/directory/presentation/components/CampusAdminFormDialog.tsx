@@ -276,7 +276,7 @@ export function CampusAdminFormDialog({
                   : ([
                       {
                         id: campusAdmin.campusId,
-                        name: campusAdmin.campusName || `Campus ${campusAdmin.campusId}`,
+                        name: campusAdmin.campusName || "Current campus",
                       },
                     ] as Pick<DirectoryCampus, "id" | "name">[])
                 : campuses

@@ -11,6 +11,7 @@ import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import * as questionApi from "@/features/questions/data/questionApi";
 import {
   createEmptyQuestionForm,
+  displayQuestionStatusLabel,
   normalizeQuestionType,
   resetQuestionContent,
   type QuestionDetail,
@@ -19,7 +20,8 @@ import {
 import { QuestionForm } from "@/features/questions/presentation/components/QuestionForm";
 import {
   StatusBadge,
-  getQuestionStatusTone,
+  getQuestionActivityStatusKey,
+  getQuestionWorkflowStatusKey,
 } from "@/features/questions/presentation/components/StatusBadge";
 import type { QuestionSessionReviewState } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
 
@@ -216,11 +218,12 @@ export function QuestionCreatePage() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
-                      label={reviewing.status}
-                      tone={getQuestionStatusTone(
-                        reviewing.status,
-                        reviewing.isActive,
-                      )}
+                      label={displayQuestionStatusLabel(reviewing.status)}
+                      status={getQuestionWorkflowStatusKey(reviewing.status)}
+                    />
+                    <StatusBadge
+                      label={reviewing.isActive ? "Active" : "Inactive"}
+                      status={getQuestionActivityStatusKey(reviewing.isActive)}
                     />
                     <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
                       {normalizeQuestionType(reviewing.questionType)}

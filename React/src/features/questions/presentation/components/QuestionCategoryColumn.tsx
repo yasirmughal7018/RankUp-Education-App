@@ -1,7 +1,9 @@
 /**
- * Filter column for Subject / Class / Difficulty on the question bank dashboard.
- * Relative bar width is normalized to the max count in the column.
+ * Category overview column (Subject / Class / Difficulty).
+ * Shows every lookup with question counts and relative bars for a full picture.
  */
+import { cn } from "@/lib/utils";
+
 interface CategoryCountItem {
   id: number;
   label: string;
@@ -10,7 +12,7 @@ interface CategoryCountItem {
 
 interface QuestionCategoryColumnProps {
   title: string;
-  accent: "teal" | "indigo" | "amber";
+  accent: "primary" | "approved" | "pending";
   items: CategoryCountItem[];
   selectedId: number | "";
   loading?: boolean;
@@ -19,32 +21,33 @@ interface QuestionCategoryColumnProps {
 }
 
 const accentStyles = {
-  teal: {
-    shell: "from-teal-50/90 via-white to-white border-teal-100",
-    bar: "bg-teal-500",
-    barTrack: "bg-teal-100",
+  primary: {
+    bar: "bg-primary",
+    barTrack: "bg-primary/15",
     active:
-      "border-teal-400 bg-teal-50 text-teal-950 shadow-sm ring-1 ring-teal-200",
-    badge: "bg-teal-600 text-white",
-    badgeIdle: "bg-teal-50 text-teal-800",
+      "border-primary/40 bg-primary/10 text-foreground shadow-sm ring-1 ring-primary/25",
+    badge: "bg-primary text-primary-foreground",
+    badgeIdle: "bg-primary/10 text-primary",
   },
-  indigo: {
-    shell: "from-indigo-50/90 via-white to-white border-indigo-100",
-    bar: "bg-indigo-500",
-    barTrack: "bg-indigo-100",
+  approved: {
+    bar: "bg-[var(--status-approved-border)]",
+    barTrack: "bg-[var(--status-approved-bg)]",
     active:
-      "border-indigo-400 bg-indigo-50 text-indigo-950 shadow-sm ring-1 ring-indigo-200",
-    badge: "bg-indigo-600 text-white",
-    badgeIdle: "bg-indigo-50 text-indigo-800",
+      "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] text-[var(--status-approved-text)] shadow-sm ring-1 ring-[var(--status-approved-border)]",
+    badge:
+      "bg-[var(--status-approved-border)] text-white dark:text-[var(--status-approved-bg)]",
+    badgeIdle:
+      "bg-[var(--status-approved-bg)] text-[var(--status-approved-text)]",
   },
-  amber: {
-    shell: "from-amber-50/90 via-white to-white border-amber-100",
-    bar: "bg-amber-500",
-    barTrack: "bg-amber-100",
+  pending: {
+    bar: "bg-[var(--status-pending-border)]",
+    barTrack: "bg-[var(--status-pending-bg)]",
     active:
-      "border-amber-400 bg-amber-50 text-amber-950 shadow-sm ring-1 ring-amber-200",
-    badge: "bg-amber-600 text-white",
-    badgeIdle: "bg-amber-50 text-amber-900",
+      "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)] shadow-sm ring-1 ring-[var(--status-pending-border)]",
+    badge:
+      "bg-[var(--status-pending-border)] text-white dark:text-[var(--status-pending-bg)]",
+    badgeIdle:
+      "bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]",
   },
 } as const;
 
@@ -58,54 +61,58 @@ export function QuestionCategoryColumn({
   onSelect,
 }: QuestionCategoryColumnProps) {
   const styles = accentStyles[accent];
-  // Floor at 1 so empty columns still render a tiny bar without divide-by-zero.
   const maxCount = Math.max(1, ...items.map((item) => item.count));
+  const totalQuestions = items.reduce((sum, item) => sum + item.count, 0);
+  const withQuestions = items.filter((item) => item.count > 0).length;
 
   return (
-    <div
-      className={`flex h-full flex-col overflow-hidden rounded-3xl border bg-gradient-to-b p-4 shadow-sm ${styles.shell}`}
-    >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        <div className="flex shrink-0 items-center gap-2">
-          {selectedId !== "" ? (
-            <button
-              type="button"
-              onClick={() => onSelect("")}
-              className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50"
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+      <div className="mb-3 space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <div className="flex shrink-0 items-center gap-2">
+            {selectedId !== "" ? (
+              <button
+                type="button"
+                onClick={() => onSelect("")}
+                className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                Clear
+              </button>
+            ) : null}
+            <span
+              className="inline-flex items-center justify-center rounded-full border border-border bg-muted/60 px-2.5 py-1 text-xs font-semibold tabular-nums text-foreground"
+              title={`${items.length} ${title.toLowerCase()} · ${totalQuestions} questions`}
             >
-              Clear
-            </button>
-          ) : null}
-          <span
-            className="inline-flex min-w-8 items-center justify-center rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold tabular-nums text-slate-700 ring-1 ring-slate-200/80"
-            title={`${items.length} ${title.toLowerCase()}${items.length === 1 ? "" : "s"}`}
-          >
-            {items.length}
-          </span>
+              {totalQuestions}
+            </span>
+          </div>
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          {items.length} listed · {withQuestions} in use · {totalQuestions}{" "}
+          question{totalQuestions === 1 ? "" : "s"}
+        </p>
       </div>
 
       {loading ? (
         <div className="space-y-2">
-          {[0, 1, 2].map((index) => (
+          {[0, 1, 2, 3].map((index) => (
             <div
               key={index}
-              className="h-14 animate-pulse rounded-2xl bg-slate-100/80"
+              className="h-14 animate-pulse rounded-xl bg-muted/70"
             />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-8 text-center">
-          <p className="text-sm text-slate-500">{emptyLabel}</p>
+        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
+          <p className="text-sm text-muted-foreground">{emptyLabel}</p>
         </div>
       ) : (
-        <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
+        <ul className="max-h-72 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
           {items.map((item) => {
             const active = selectedId === item.id;
-            // Relative bar; minimum 4% so zero-count items stay visible.
             const widthPct = Math.max(
-              4,
+              item.count > 0 ? 8 : 0,
               Math.round((item.count / maxCount) * 100),
             );
             return (
@@ -114,29 +121,37 @@ export function QuestionCategoryColumn({
                   type="button"
                   onClick={() => onSelect(active ? "" : item.id)}
                   aria-pressed={active}
-                  className={`w-full rounded-2xl border px-3 py-2.5 text-left transition ${
+                  className={cn(
+                    "w-full rounded-xl border px-3 py-2.5 text-left transition",
                     active
                       ? styles.active
-                      : "border-slate-100 bg-white/80 text-slate-800 hover:border-slate-200 hover:bg-white"
-                  }`}
+                      : "border-border/70 bg-background text-foreground hover:border-border hover:bg-muted/50",
+                  )}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate text-sm font-medium">
                       {item.label}
                     </span>
                     <span
-                      className={`inline-flex min-w-7 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
-                        active ? styles.badge : styles.badgeIdle
-                      }`}
+                      className={cn(
+                        "inline-flex min-w-7 items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+                        active ? styles.badge : styles.badgeIdle,
+                      )}
                     >
                       {item.count}
                     </span>
                   </div>
                   <div
-                    className={`mt-2 h-1.5 overflow-hidden rounded-full ${styles.barTrack}`}
+                    className={cn(
+                      "mt-2 h-1.5 overflow-hidden rounded-full",
+                      styles.barTrack,
+                    )}
                   >
                     <div
-                      className={`h-full rounded-full transition-all ${styles.bar}`}
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        styles.bar,
+                      )}
                       style={{ width: `${widthPct}%` }}
                     />
                   </div>

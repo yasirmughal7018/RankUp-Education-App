@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+
 interface DirectoryPaginationProps {
   pageNumber: number;
   pageSize: number;
@@ -6,6 +8,7 @@ interface DirectoryPaginationProps {
   disabled?: boolean;
 }
 
+/** Theme-aware pager for directory lists. */
 export function DirectoryPagination({
   pageNumber,
   pageSize,
@@ -18,30 +21,36 @@ export function DirectoryPagination({
   const to = Math.min(pageNumber * pageSize, totalCount);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-sm text-slate-600">
+    <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-5">
       <p>
-        Showing {from}–{to} of {totalCount}
+        Showing{" "}
+        <span className="font-medium text-foreground">
+          {from}–{to}
+        </span>{" "}
+        of <span className="font-medium text-foreground">{totalCount}</span>
       </p>
       <div className="flex items-center gap-2">
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onPageChange(pageNumber - 1)}
           disabled={disabled || pageNumber <= 1}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Previous
-        </button>
-        <span className="text-xs text-slate-500">
+        </Button>
+        <span className="min-w-[5.5rem] text-center text-xs">
           Page {pageNumber} of {totalPages}
         </span>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onPageChange(pageNumber + 1)}
           disabled={disabled || pageNumber >= totalPages}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Next
-        </button>
+        </Button>
       </div>
     </div>
   );

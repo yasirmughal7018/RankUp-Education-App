@@ -1,8 +1,6 @@
 /**
- * Question bank dashboard: approval-lens stats, category filters, list + Excel import.
- *
- * Client-side filters over one unfiltered list fetch. Approvers (Campus/School/Portal Admin)
- * see review CTAs; lifecycle messaging notes PortalAdmin-only activate/archive.
+ * Question bank dashboard: workflow status and activity filters (kept separate),
+ * category overview, and navigate-only list. Excel import: /questions/import.
  */
 import {
   startTransition,
@@ -10,85 +8,103 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Link } from "react-router-dom";
-import { PageHeader } from "@/core/components/PageHeader";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ChevronDown,
+  FileSpreadsheet,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useLookups } from "@/core/hooks/useLookups";
-import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import {
-  canApproveQuestions,
-  canMutateQuestion,
+  displayQuestionStatusLabel,
   isApprovedQuestionStatus,
   isArchivedQuestionStatus,
+  isDraftQuestionStatus,
   isPendingQuestionStatus,
   isRejectedQuestionStatus,
   type QuestionSummary,
 } from "@/features/questions/domain/questionTypes";
-import type { ImportQuestionsResult } from "@/features/questions/data/questionApi";
 import {
-  getQuestionStatusKey,
+  getQuestionActivityStatusKey,
+  getQuestionWorkflowStatusKey,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import { QuestionBankStatTile } from "@/features/questions/presentation/components/QuestionBankStatTile";
 import { QuestionCategoryColumn } from "@/features/questions/presentation/components/QuestionCategoryColumn";
-import { QuestionImportPanel } from "@/features/questions/presentation/components/QuestionImportPanel";
-import {
-  useDeleteQuestionMutation,
-  useImportQuestionsMutation,
-  useQuestionsQuery,
-} from "@/features/questions/presentation/hooks/useQuestionQueries";
+import { useQuestionsQuery } from "@/features/questions/presentation/hooks/useQuestionQueries";
+import { AppCard } from "@/components/ui/app-card";
+import { AppEmptyState } from "@/components/ui/app-empty-state";
+import { AppErrorState } from "@/components/ui/app-error-state";
+import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
+import { AppPageHeader } from "@/components/ui/app-page-header";
+import { AppSearchInput } from "@/components/ui/app-search-input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-/** Client-side status / activity filter driven by the stat tiles. */
-type ApprovalLens =
+/** Workflow QuestionStatus filter — never mixes IsActive. */
+type StatusFilter =
   | "all"
-  | "active"
   | "pending"
   | "approved"
   | "rejected"
-  | "archived"
-  | "inactive";
+  | "archived";
 
-type QuestionsPageTab = "bank" | "import";
+/** IsActive filter — visually separate from Status. */
+type ActivityFilter = "all" | "active" | "inactive";
 
-const PAGE_TABS: Array<{ id: QuestionsPageTab; label: string }> = [
-  { id: "import", label: "Excel import" },
-  { id: "bank", label: "Questions" },
-];
-
-function truncateText(value: string, maxLength = 96): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return `${value.slice(0, maxLength)}…`;
-}
-
-function buildImportSuccessMessage(result: ImportQuestionsResult): string {
-  return `Imported ${result.createdCount} question(s) as PendingReview. ${result.errorCount} row error(s).`;
-}
-
-/** Match a question against the selected approval-lens tile. */
-function matchesApprovalLens(
+function matchesStatusFilter(
   question: QuestionSummary,
-  lens: ApprovalLens,
+  filter: StatusFilter,
 ): boolean {
-  switch (lens) {
+  switch (filter) {
     case "all":
       return true;
-    case "active":
-      return question.isActive;
     case "pending":
-      return isPendingQuestionStatus(question.status);
+      return (
+        isPendingQuestionStatus(question.status) ||
+        isDraftQuestionStatus(question.status)
+      );
     case "approved":
       return isApprovedQuestionStatus(question.status);
     case "rejected":
       return isRejectedQuestionStatus(question.status);
     case "archived":
       return isArchivedQuestionStatus(question.status);
+    default:
+      return true;
+  }
+}
+
+function matchesActivityFilter(
+  question: QuestionSummary,
+  filter: ActivityFilter,
+): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "active":
+      return question.isActive;
     case "inactive":
       return !question.isActive;
     default:
       return true;
+  }
+}
+
+function statusFilterLabel(filter: StatusFilter): string {
+  switch (filter) {
+    case "pending":
+      return "PendingReview";
+    case "approved":
+      return "Approved";
+    case "rejected":
+      return "Rejected";
+    case "archived":
+      return "Archived";
+    default:
+      return "all";
   }
 }
 
@@ -109,27 +125,17 @@ function countById(
 }
 
 export function QuestionsPage() {
-  const { user } = useAuth();
-  const isApprover = Boolean(user && canApproveQuestions(user.role));
+  const navigate = useNavigate();
 
-  const [approvalLens, setApprovalLens] = useState<ApprovalLens>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [subjectId, setSubjectId] = useState<number | "">("");
   const [classId, setClassId] = useState<number | "">("");
   const [difficultyId, setDifficultyId] = useState<number | "">("");
   const [categoryExpanded, setCategoryExpanded] = useState(true);
-  const [pageTab, setPageTab] = useState<QuestionsPageTab>("bank");
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [importErrors, setImportErrors] = useState<
-    Array<{ rowNumber: number; message: string }>
-  >([]);
-  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
-  const [lastDryRunOk, setLastDryRunOk] = useState(false);
-
-  // One list fetch — dashboard counts + filters are client-side for snappy UX.
   const { data: questions = [], isLoading, error, refetch, isFetching } =
     useQuestionsQuery({
       pendingOnly: false,
@@ -141,9 +147,6 @@ export function QuestionsPage() {
   const subjectsQuery = useLookups(LOOKUP_TYPES.SUBJECT);
   const classesQuery = useLookups(LOOKUP_TYPES.CLASS);
   const difficultiesQuery = useLookups(LOOKUP_TYPES.DIFFICULTY);
-
-  const deleteQuestion = useDeleteQuestionMutation();
-  const importQuestions = useImportQuestionsMutation();
 
   const lookupNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -159,8 +162,7 @@ export function QuestionsPage() {
     return map;
   }, [subjectsQuery.data, classesQuery.data, difficultiesQuery.data]);
 
-  // Status + isActive tallies for the approval-system tiles (independent of table filters).
-  const approvalStats = useMemo(() => {
+  const bankStats = useMemo(() => {
     let active = 0;
     let pending = 0;
     let approved = 0;
@@ -174,7 +176,10 @@ export function QuestionsPage() {
       } else {
         inactive += 1;
       }
-      if (isPendingQuestionStatus(question.status)) {
+      if (
+        isPendingQuestionStatus(question.status) ||
+        isDraftQuestionStatus(question.status)
+      ) {
         pending += 1;
       } else if (isApprovedQuestionStatus(question.status)) {
         approved += 1;
@@ -196,18 +201,31 @@ export function QuestionsPage() {
     };
   }, [questions]);
 
-  // Merge lookup catalogs with live question counts; orphan IDs still appear.
+  /** Questions in the current status + activity filters — category counts follow. */
+  const lensQuestions = useMemo(
+    () =>
+      questions.filter(
+        (q) =>
+          matchesStatusFilter(q, statusFilter) &&
+          matchesActivityFilter(q, activityFilter),
+      ),
+    [questions, statusFilter, activityFilter],
+  );
+
   const categoryColumns = useMemo(() => {
-    const subjectCounts = countById(questions, (q) => q.subjectId);
-    const classCounts = countById(questions, (q) => q.classId);
-    const difficultyCounts = countById(questions, (q) => q.difficultyLevel);
+    const subjectCounts = countById(lensQuestions, (q) => q.subjectId);
+    const classCounts = countById(lensQuestions, (q) => q.classId);
+    const difficultyCounts = countById(lensQuestions, (q) => q.difficultyLevel);
 
     const mergeLookupCounts = (
       lookups: Array<{ id: number; name: string }> | undefined,
       counts: Map<number, number>,
       sortMode: "labelAsc" | "countDesc" = "countDesc",
     ) => {
-      const items = new Map<number, { id: number; label: string; count: number }>();
+      const items = new Map<
+        number,
+        { id: number; label: string; count: number }
+      >();
 
       for (const lookup of lookups ?? []) {
         items.set(lookup.id, {
@@ -217,20 +235,20 @@ export function QuestionsPage() {
         });
       }
 
-      // Include any question IDs not present in the lookup catalog.
       for (const [id, count] of counts.entries()) {
         if (!items.has(id)) {
           items.set(id, {
             id,
-            label: lookupNameById.get(id) ?? `Lookup #${id}`,
+            label: lookupNameById.get(id) ?? "Unknown",
             count,
           });
         }
       }
 
-      // Subject/class: A–Z; difficulty defaults to count-desc then label.
       return [...items.values()].sort((a, b) => {
         if (sortMode === "labelAsc") {
+          if (a.count === 0 && b.count > 0) return 1;
+          if (b.count === 0 && a.count > 0) return -1;
           return a.label.localeCompare(b.label, undefined, {
             numeric: true,
             sensitivity: "base",
@@ -246,19 +264,15 @@ export function QuestionsPage() {
       difficulties: mergeLookupCounts(difficultiesQuery.data, difficultyCounts),
     };
   }, [
-    questions,
+    lensQuestions,
     lookupNameById,
     subjectsQuery.data,
     classesQuery.data,
     difficultiesQuery.data,
   ]);
 
-  // Approval lens → category chips → deferred text search.
   const tableRows = useMemo(() => {
-    return questions.filter((question) => {
-      if (!matchesApprovalLens(question, approvalLens)) {
-        return false;
-      }
+    return lensQuestions.filter((question) => {
       if (subjectId !== "" && question.subjectId !== subjectId) {
         return false;
       }
@@ -273,8 +287,10 @@ export function QuestionsPage() {
         const className = lookupNameById.get(question.classId) ?? "";
         const difficultyName =
           lookupNameById.get(question.difficultyLevel) ?? "";
+        const statusName = displayQuestionStatusLabel(question.status);
+        const activityName = question.isActive ? "Active" : "Inactive";
         const haystack =
-          `${question.questionText} ${question.questionType} ${question.status} #${question.questionId} ${question.createdBy} ${subjectName} ${className} ${difficultyName}`.toLowerCase();
+          `${question.questionText} ${question.questionType} ${statusName} ${activityName} ${question.createdBy} ${subjectName} ${className} ${difficultyName}`.toLowerCase();
         if (!haystack.includes(deferredSearch)) {
           return false;
         }
@@ -282,8 +298,7 @@ export function QuestionsPage() {
       return true;
     });
   }, [
-    questions,
-    approvalLens,
+    lensQuestions,
     subjectId,
     classId,
     difficultyId,
@@ -291,29 +306,22 @@ export function QuestionsPage() {
     lookupNameById,
   ]);
 
-  function canMutateRow(question: QuestionSummary): boolean {
-    if (!user) {
-      return false;
-    }
-
-    return canMutateQuestion({
-      role: user.role,
-      userId: user.id,
-      createdBy: question.createdBy,
-      status: question.status,
+  function selectStatusFilter(next: StatusFilter) {
+    startTransition(() => {
+      setStatusFilter((current) => (current === next ? "all" : next));
     });
   }
 
-  /** Toggle lens; clicking the active tile resets to "all". */
-  function selectApprovalLens(next: ApprovalLens) {
+  function selectActivityFilter(next: ActivityFilter) {
     startTransition(() => {
-      setApprovalLens((current) => (current === next ? "all" : next));
+      setActivityFilter((current) => (current === next ? "all" : next));
     });
   }
 
   function clearAllFilters() {
     startTransition(() => {
-      setApprovalLens("all");
+      setStatusFilter("all");
+      setActivityFilter("all");
       setSubjectId("");
       setClassId("");
       setDifficultyId("");
@@ -321,82 +329,13 @@ export function QuestionsPage() {
     });
   }
 
-  /**
-   * Excel import: dry-run validates rows and enables Confirm when clean;
-   * real import always creates PendingReview (never Approved).
-   */
-  async function handleImport(file: File | null, dryRun: boolean) {
-    if (!file) {
-      return;
-    }
-
-    setActionError(null);
-    setImportMessage(null);
-    setImportErrors([]);
-    setPendingImportFile(file);
-    setLastDryRunOk(false);
-
-    try {
-      const result = await importQuestions.mutateAsync({ file, dryRun });
-      setImportErrors(result.errors);
-
-      if (dryRun) {
-        setImportMessage(
-          result.errorCount === 0
-            ? `Dry run OK — ${file.name} is ready to import (no row errors).`
-            : `Dry run found ${result.errorCount} row error(s). Fix the file or import anyway to skip bad rows.`,
-        );
-        setLastDryRunOk(result.errorCount === 0);
-        if (result.errors.length > 0) {
-          setActionError(
-            result.errors
-              .map((item) => `Row ${item.rowNumber}: ${item.message}`)
-              .join("\n"),
-          );
-        }
-        return;
-      }
-
-      setImportMessage(buildImportSuccessMessage(result));
-      setLastDryRunOk(false);
-      setPendingImportFile(null);
-      if (result.errors.length > 0) {
-        setActionError(
-          result.errors
-            .map((item) => `Row ${item.rowNumber}: ${item.message}`)
-            .join("\n"),
-        );
-      }
-    } catch (caught) {
-      const apiError = caught as { message?: string };
-      setActionError(apiError.message || "Unable to import questions.");
-      setLastDryRunOk(false);
-    }
-  }
-
-  async function handleDelete(question: QuestionSummary) {
-    const confirmed = window.confirm(
-      `Delete question #${question.questionId}? This cannot be undone.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setActionError(null);
-
-    try {
-      await deleteQuestion.mutateAsync(question.questionId);
-    } catch (caught) {
-      const apiError = caught as { message?: string };
-      setActionError(apiError.message || "Unable to delete question.");
-    }
-  }
-
-  // 3-tier approve scopes vs author-facing create/browse copy.
-  const roleDescription = isApprover
-    ? "Approve in your scope: Campus Admin → campus, School Admin → school (all campuses), Portal Admin → public. Lifecycle (activate/archive) remains PortalAdmin-only."
-    : "Create and submit questions (PendingReview). Edit or delete your own PendingReview or Rejected items. Browse Approved questions visible in your school/campus (or Public).";
+  const hasFilters =
+    statusFilter !== "all" ||
+    activityFilter !== "all" ||
+    subjectId !== "" ||
+    classId !== "" ||
+    difficultyId !== "" ||
+    Boolean(search.trim());
 
   const activeCategoryFilters = [
     subjectId !== "",
@@ -404,389 +343,348 @@ export function QuestionsPage() {
     difficultyId !== "",
   ].filter(Boolean).length;
 
+  const lensSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (statusFilter !== "all") {
+      parts.push(statusFilterLabel(statusFilter));
+    }
+    if (activityFilter !== "all") {
+      parts.push(activityFilter === "active" ? "Active" : "Inactive");
+    }
+    return parts.length > 0 ? parts.join(" · ") : "all questions";
+  }, [statusFilter, activityFilter]);
+
+  function categoryLabel(question: QuestionSummary) {
+    return {
+      subject: lookupNameById.get(question.subjectId) ?? "Unknown subject",
+      className: lookupNameById.get(question.classId) ?? "Unknown class",
+      difficulty: lookupNameById.get(question.difficultyLevel) ?? "Unknown",
+    };
+  }
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-6 sm:py-8 lg:py-10">
+      <AppPageHeader
         title="Questions"
-        description={roleDescription}
+        className="mb-0"
         action={
-          <div className="flex flex-wrap gap-2">
-            <button
+          <div className="flex items-center gap-2">
+            <Button
               type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
               onClick={() => void refetch()}
-              disabled={isFetching || deleteQuestion.isPending}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+              disabled={isFetching}
+              aria-label="Refresh questions"
+              title="Refresh"
             >
-              {isFetching ? "Refreshing…" : "Refresh"}
-            </button>
-            <Link
-              to="/questions/new"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+              <RefreshCw
+                className={cn("h-4 w-4", isFetching && "animate-spin")}
+              />
+            </Button>
+            <Button
+              asChild
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 whitespace-nowrap"
             >
-              New question
-            </Link>
+              <Link to="/questions/import">
+                <FileSpreadsheet className="h-4 w-4" />
+                Import
+              </Link>
+            </Button>
+            <Button asChild type="button" size="sm" className="h-9 whitespace-nowrap">
+              <Link to="/questions/new">
+                <Plus className="h-4 w-4" />
+                New question
+              </Link>
+            </Button>
           </div>
         }
       />
 
-      <section className="mb-6 overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
-        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-          Approval system
-        </p>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      {/* Workflow status filters — separate from IsActive */}
+      <AppCard padded className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            Status
+          </p>
+          {hasFilters ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-muted-foreground"
+              onClick={clearAllFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-2.5">
           <QuestionBankStatTile
             label="Total"
-            value={approvalStats.total}
+            value={bankStats.total}
             status="active"
-            active={approvalLens === "all"}
-            onClick={() => selectApprovalLens("all")}
+            active={statusFilter === "all" && activityFilter === "all"}
+            onClick={() => {
+              startTransition(() => {
+                setStatusFilter("all");
+                setActivityFilter("all");
+              });
+            }}
           />
           <QuestionBankStatTile
-            label="Active"
-            value={approvalStats.active}
-            status="active"
-            active={approvalLens === "active"}
-            onClick={() => selectApprovalLens("active")}
+            label="PendingReview"
+            value={bankStats.pending}
+            status="pending"
+            active={statusFilter === "pending"}
+            onClick={() => selectStatusFilter("pending")}
           />
           <QuestionBankStatTile
             label="Approved"
-            value={approvalStats.approved}
+            value={bankStats.approved}
             status="approved"
-            active={approvalLens === "approved"}
-            onClick={() => selectApprovalLens("approved")}
-          />
-          <QuestionBankStatTile
-            label="Inactive"
-            value={approvalStats.inactive}
-            status="deactivated"
-            active={approvalLens === "inactive"}
-            onClick={() => selectApprovalLens("inactive")}
-          />
-          <QuestionBankStatTile
-            label="Pending"
-            value={approvalStats.pending}
-            status="pending"
-            active={approvalLens === "pending"}
-            onClick={() => selectApprovalLens("pending")}
+            active={statusFilter === "approved"}
+            onClick={() => selectStatusFilter("approved")}
           />
           <QuestionBankStatTile
             label="Rejected"
-            value={approvalStats.rejected}
+            value={bankStats.rejected}
             status="rejected"
-            active={approvalLens === "rejected"}
-            onClick={() => selectApprovalLens("rejected")}
+            active={statusFilter === "rejected"}
+            onClick={() => selectStatusFilter("rejected")}
           />
           <QuestionBankStatTile
             label="Archived"
-            value={approvalStats.archived}
+            value={bankStats.archived}
             status="deactivated"
-            active={approvalLens === "archived"}
-            onClick={() => selectApprovalLens("archived")}
+            active={statusFilter === "archived"}
+            onClick={() => selectStatusFilter("archived")}
           />
         </div>
-      </section>
 
-      <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-brand-50/40 p-5 shadow-sm sm:p-6">
-        <div className="flex w-full items-center gap-2">
-          <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            Question category
-            {activeCategoryFilters > 0
-              ? ` · ${activeCategoryFilters} filter(s)`
-              : null}
+        <div className="space-y-3 border-t border-border pt-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Activity
           </p>
-          {(approvalLens !== "all" ||
-            activeCategoryFilters > 0 ||
-            search.trim()) && (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Clear all filters
-            </button>
-          )}
-          <button
+          <div className="grid grid-cols-2 gap-2 sm:max-w-md sm:gap-2.5">
+            <QuestionBankStatTile
+              label="Active"
+              value={bankStats.active}
+              status="active"
+              active={activityFilter === "active"}
+              onClick={() => selectActivityFilter("active")}
+            />
+            <QuestionBankStatTile
+              label="Inactive"
+              value={bankStats.inactive}
+              status="deactivated"
+              active={activityFilter === "inactive"}
+              onClick={() => selectActivityFilter("inactive")}
+            />
+          </div>
+        </div>
+      </AppCard>
+
+      {/* Category overview — full picture with counts */}
+      <AppCard padded className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Subjects · Classes · Difficulties
+              {activeCategoryFilters > 0
+                ? ` · ${activeCategoryFilters} selected`
+                : null}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Showing counts for {lensSummary}. Tap a row to filter the list.
+            </p>
+          </div>
+          <AppSearchInput
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search questions…"
+            containerClassName="w-full sm:max-w-xs"
+          />
+          <Button
             type="button"
-            onClick={() => setCategoryExpanded((open) => !open)}
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0 self-end sm:self-auto"
+            onClick={() => setCategoryExpanded((expanded) => !expanded)}
             aria-expanded={categoryExpanded}
+            aria-controls="question-category-overview"
             aria-label={
               categoryExpanded
-                ? "Collapse question category"
-                : "Expand question category"
+                ? "Hide category overview"
+                : "Show category overview"
             }
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+            title={
+              categoryExpanded
+                ? "Hide category overview"
+                : "Show category overview"
+            }
           >
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className={`h-4 w-4 transition-transform ${
-                categoryExpanded ? "rotate-180" : ""
-              }`}
-              aria-hidden="true"
-            >
-              <path
-                fillRule="evenodd"
-                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform duration-200",
+                categoryExpanded && "rotate-180",
+              )}
+            />
+          </Button>
         </div>
 
         {categoryExpanded ? (
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <div
+            id="question-category-overview"
+            className="grid gap-3 lg:grid-cols-3 lg:gap-4"
+          >
             <QuestionCategoryColumn
-              title="Subject"
-              accent="teal"
+              title="Subjects"
+              accent="primary"
               items={categoryColumns.subjects}
               selectedId={subjectId}
               loading={subjectsQuery.isLoading}
-              emptyLabel="No subjects configured in lookups yet."
+              emptyLabel="No subjects configured yet."
               onSelect={(id) => startTransition(() => setSubjectId(id))}
             />
             <QuestionCategoryColumn
-              title="Class"
-              accent="indigo"
+              title="Classes"
+              accent="approved"
               items={categoryColumns.classes}
               selectedId={classId}
               loading={classesQuery.isLoading}
-              emptyLabel="No classes configured in lookups yet."
+              emptyLabel="No classes configured yet."
               onSelect={(id) => startTransition(() => setClassId(id))}
             />
             <QuestionCategoryColumn
-              title="Difficulty"
-              accent="amber"
+              title="Difficulties"
+              accent="pending"
               items={categoryColumns.difficulties}
               selectedId={difficultyId}
               loading={difficultiesQuery.isLoading}
-              emptyLabel="No difficulty levels configured in lookups yet."
+              emptyLabel="No difficulty levels configured yet."
               onSelect={(id) => startTransition(() => setDifficultyId(id))}
             />
           </div>
         ) : null}
-      </section>
+      </AppCard>
 
-      <div
-        role="tablist"
-        aria-label="Question bank sections"
-        className="mb-6 flex flex-wrap gap-2 border-b border-slate-200 pb-3"
-      >
-        {PAGE_TABS.map((tab) => {
-          const isActive = pageTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setPageTab(tab.id)}
-              className={
-                isActive
-                  ? "rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-                  : "rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              }
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {error ? (
+        <AppErrorState
+          message={error.message}
+          onRetry={() => void refetch()}
+        />
+      ) : null}
 
-      {pageTab === "import" ? (
-        <div role="tabpanel" aria-label="Excel import" className="mb-6">
-          <QuestionImportPanel
-            isPending={importQuestions.isPending}
-            message={importMessage}
-            errors={importErrors}
-            canConfirm={Boolean(pendingImportFile && lastDryRunOk)}
-            onDryRun={(file) => void handleImport(file, true)}
-            onImport={(file) => void handleImport(file, false)}
-            onConfirm={() => {
-              if (pendingImportFile) {
-                void handleImport(pendingImportFile, false);
-              }
-            }}
-          />
-        </div>
-      ) : (
-        <div role="tabpanel" aria-label="Question bank">
-          <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                Search
+      {/* Question list — navigate only; actions live on detail */}
+      <AppCard padded={false} className="overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+          <p className="text-sm font-medium text-foreground">
+            {tableRows.length} question{tableRows.length === 1 ? "" : "s"}
+            {statusFilter !== "all" || activityFilter !== "all" ? (
+              <span className="ml-2 font-normal text-muted-foreground">
+                · {lensSummary}
               </span>
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Text, type, status, subject, class, difficulty, owner…"
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
-              />
-            </label>
-          </section>
+            ) : null}
+          </p>
+        </div>
 
-          {error || actionError ? (
-            <div className="mb-4 whitespace-pre-wrap rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error?.message ?? actionError}
-            </div>
-          ) : null}
-
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <p className="text-sm font-medium text-slate-700">
-                Bank list
-                <span className="ml-2 font-normal text-slate-500">
-                  {tableRows.length} shown
-                  {approvalLens !== "all" ? ` · ${approvalLens}` : null}
-                </span>
+        {isLoading ? (
+          <div className="p-4 sm:p-5">
+            <AppLoadingSkeleton variant="table" count={5} />
+          </div>
+        ) : tableRows.length === 0 ? (
+          <div className="p-4 sm:p-5">
+            <AppEmptyState
+              title="No questions match these filters"
+              description="Clear filters or create a new question to get started."
+              actionLabel="New question"
+              onAction={() => navigate("/questions/new")}
+            />
+          </div>
+        ) : (
+          <div>
+            <div className="hidden border-b border-border bg-muted/40 px-4 py-2.5 sm:grid sm:grid-cols-6 sm:gap-3 sm:px-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Subject
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Class
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Difficulty
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Type
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Status · Activity
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Marks · Visibility
               </p>
             </div>
 
-        {isLoading ? (
-          <div className="px-6 py-12 text-center text-sm text-slate-600">
-            Loading questions…
-          </div>
-        ) : tableRows.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium text-slate-800">
-              No questions match these filters
-            </p>
-            <p className="mt-2 text-sm text-slate-500">
-              Clear filters or create a new question to get started.
-            </p>
-            <Link
-              to="/questions/new"
-              className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              New question
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Question
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Category
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Type
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Visibility
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Marks
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {tableRows.map((question) => (
-                  <tr key={question.questionId} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/questions/${question.questionId}`}
-                        className="font-medium text-brand-700 hover:text-brand-800"
+            <ul className="divide-y divide-border">
+              {tableRows.map((question) => {
+                const cat = categoryLabel(question);
+                const visibility =
+                  question.visibility && question.visibility !== "None"
+                    ? question.visibility
+                    : "—";
+
+                return (
+                  <li key={question.questionId}>
+                    <Link
+                      to={`/questions/${question.questionId}`}
+                      className="block px-4 py-3.5 transition hover:bg-muted/30 sm:px-5"
+                    >
+                      <p
+                        className="truncate text-sm font-semibold text-foreground"
+                        title={question.questionText}
                       >
-                        {truncateText(question.questionText)}
-                      </Link>
-                      <p className="mt-1 text-xs text-slate-500">
-                        #{question.questionId} · {question.createdBy}
+                        {question.questionText}
                       </p>
-                    </td>
-                    <td className="px-4 py-3 text-xs leading-5 text-slate-600">
-                      <div>
-                        {lookupNameById.get(question.subjectId) ??
-                          `Subject #${question.subjectId}`}
+
+                      <div className="mt-2 grid grid-cols-2 items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-6">
+                        <p className="min-w-0 truncate font-medium text-foreground">
+                          {cat.subject}
+                        </p>
+                        <p className="min-w-0 truncate">{cat.className}</p>
+                        <p className="min-w-0 truncate">{cat.difficulty}</p>
+                        <p className="min-w-0 truncate">
+                          {question.questionType}
+                        </p>
+                        <div className="flex min-w-0 flex-wrap gap-1">
+                          <StatusBadge
+                            label={displayQuestionStatusLabel(question.status)}
+                            status={getQuestionWorkflowStatusKey(
+                              question.status,
+                            )}
+                          />
+                          <StatusBadge
+                            label={question.isActive ? "Active" : "Inactive"}
+                            status={getQuestionActivityStatusKey(
+                              question.isActive,
+                            )}
+                          />
+                        </div>
+                        <p className="min-w-0 truncate tabular-nums">
+                          {question.marks} · {visibility}
+                        </p>
                       </div>
-                      <div className="text-slate-500">
-                        {lookupNameById.get(question.classId) ??
-                          `Class #${question.classId}`}
-                        {" · "}
-                        {lookupNameById.get(question.difficultyLevel) ??
-                          `Diff #${question.difficultyLevel}`}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {question.questionType}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        label={
-                          question.isActive
-                            ? question.status
-                            : `${question.status} (inactive)`
-                        }
-                        status={getQuestionStatusKey(
-                          question.status,
-                          question.isActive,
-                        )}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {question.visibility && question.visibility !== "None"
-                        ? question.visibility
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums text-slate-700">
-                      {question.marks}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <Link
-                          to={`/questions/${question.questionId}`}
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                          View
-                        </Link>
-                        {canMutateRow(question) ? (
-                          <>
-                            <Link
-                              to={`/questions/${question.questionId}/edit`}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
-                              Edit
-                            </Link>
-                            <button
-                              type="button"
-                              disabled={deleteQuestion.isPending}
-                              onClick={() => void handleDelete(question)}
-                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        ) : null}
-                        {isApprover &&
-                        isPendingQuestionStatus(question.status) ? (
-                          <Link
-                            to={`/questions/${question.questionId}`}
-                            className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-600"
-                          >
-                            Review
-                          </Link>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
-          </div>
-        </div>
-      )}
+      </AppCard>
     </div>
   );
 }

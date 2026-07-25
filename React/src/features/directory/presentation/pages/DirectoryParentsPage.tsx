@@ -1,14 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
+import { Link2, Pencil, Unlink, UserCheck, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
-import { PageHeader } from "@/core/components/PageHeader";
+import { AppSearchInput } from "@/components/ui/app-search-input";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
   CreateDirectoryParentInput,
   DirectoryParent,
   UpdateDirectoryParentInput,
 } from "@/features/directory/domain/directoryTypes";
+import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import {
+  DirectoryBulkBar,
+  DirectoryEntityCard,
+  DirectoryFilterPanel,
+  DirectoryFlash,
+  DirectoryIconAction,
+  DirectoryListPanel,
+  DirectoryMobileList,
+  DirectoryPageShell,
+  DirectoryTable,
+  DirectoryTableHead,
+  DirectoryTd,
+  DirectoryTh,
+  directorySelectClassName,
+} from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
 import { ParentFormDialog } from "@/features/directory/presentation/components/ParentFormDialog";
@@ -22,14 +40,29 @@ import {
   useUnlinkParentStudentMutation,
   useUpdateParentMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
-import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
 import {
   DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS,
   matchesDirectoryAccountStatusFilter,
   type DirectoryAccountStatusFilter,
 } from "@/features/directory/presentation/utils/accountStatus";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
+
+function formatLinkedStudents(parent: DirectoryParent): string {
+  const count = parent.linkedStudentCount;
+  const names = parent.linkedStudentNames?.filter(Boolean) ?? [];
+
+  if (count === 0) {
+    return "No linked students";
+  }
+
+  if (names.length > 0) {
+    return `${count} linked · ${names.join(", ")}`;
+  }
+
+  return `${count} linked student${count === 1 ? "" : "s"}`;
+}
 
 /** Paginated parent directory with student linking and account management. */
 export function DirectoryParentsPage() {
@@ -74,15 +107,17 @@ export function DirectoryParentsPage() {
   const parents = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
-  const visibleParents = useMemo(() => {
-    return parents.filter((parent) =>
-      matchesDirectoryAccountStatusFilter(
-        parent.accountStatus,
-        parent.isActive,
-        activeFilter,
+  const visibleParents = useMemo(
+    () =>
+      parents.filter((parent) =>
+        matchesDirectoryAccountStatusFilter(
+          parent.accountStatus,
+          parent.isActive,
+          activeFilter,
+        ),
       ),
-    );
-  }, [parents, activeFilter]);
+    [parents, activeFilter],
+  );
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -250,243 +285,238 @@ export function DirectoryParentsPage() {
     }
   }
 
+  function rowActions(parent: DirectoryParent) {
+    if (!canManage) {
+      return null;
+    }
+    return (
+      <>
+        <DirectoryIconAction
+          icon={Pencil}
+          label={`Edit ${parent.fullName}`}
+          disabled={busy}
+          onClick={() => {
+            clearMessages();
+            setParentDialog(parent);
+          }}
+        />
+        <DirectoryIconAction
+          icon={parent.isActive ? UserX : UserCheck}
+          label={
+            parent.isActive
+              ? `Deactivate ${parent.fullName}`
+              : `Activate ${parent.fullName}`
+          }
+          disabled={busy}
+          onClick={() => void toggleActive(parent)}
+        />
+        <DirectoryIconAction
+          icon={Link2}
+          label={`Link student to ${parent.fullName}`}
+          variant="default"
+          disabled={busy}
+          onClick={() => setLinkParent(parent)}
+        />
+        <DirectoryIconAction
+          icon={Unlink}
+          label={`Unlink student from ${parent.fullName}`}
+          disabled={busy}
+          onClick={() => void handleUnlink(parent)}
+        />
+      </>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title="Parents"
-        description="Search parents and manage linked student relationships."
-        action={
-          <div className="flex flex-wrap gap-2">
-            {canManage ? (
-              <button
-                type="button"
-                onClick={() => {
-                  clearMessages();
-                  setParentDialog("create");
-                }}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-              >
-                Create parent
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Refresh
-            </button>
-            <Link
-              to="/admin/directory"
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Directory home
-            </Link>
-          </div>
-        }
+    <DirectoryPageShell
+      title="Parents"
+      primaryAction={
+        canManage ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 whitespace-nowrap"
+            onClick={() => {
+              clearMessages();
+              setParentDialog("create");
+            }}
+          >
+            Create parent
+          </Button>
+        ) : null
+      }
+    >
+      <DirectoryFilterPanel>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <AppSearchInput
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                applySearch();
+              }
+            }}
+            placeholder="Search parents..."
+            containerClassName="min-w-0 flex-1 lg:min-w-[200px]"
+          />
+          <select
+            value={activeFilter}
+            onChange={(event) =>
+              setActiveFilter(
+                event.target.value as DirectoryAccountStatusFilter,
+              )
+            }
+            className={cn(directorySelectClassName, "lg:w-40")}
+            aria-label="Filter by status"
+          >
+            {DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            className="h-11 shrink-0 sm:h-10"
+            onClick={applySearch}
+          >
+            Search
+          </Button>
+        </div>
+      </DirectoryFilterPanel>
+
+      <DirectoryFlash
+        error={error?.message ?? actionError}
+        success={successMessage}
+        onRetry={error ? () => void refetch() : undefined}
       />
 
-      <section className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-4">
-        <input
-          type="search"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              applySearch();
-            }
-          }}
-          placeholder="Search parents..."
-          className="min-w-[220px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
-        />
-        <select
-          value={activeFilter}
-          onChange={(event) =>
-            setActiveFilter(event.target.value as DirectoryAccountStatusFilter)
-          }
-          className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
-        >
-          {DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <button
+      <DirectoryBulkBar count={canManage ? selectedIds.size : 0}>
+        <Button
           type="button"
-          onClick={applySearch}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+          variant="destructive"
+          size="sm"
+          disabled={busy}
+          onClick={() => void handleBulkDeactivate()}
         >
-          Search
-        </button>
-      </section>
+          Bulk deactivate
+        </Button>
+      </DirectoryBulkBar>
 
-      {error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error.message}
-        </div>
-      ) : null}
-
-      {actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {actionError}
-        </div>
-      ) : null}
-
-      {successMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {successMessage}
-        </div>
-      ) : null}
-
-      {canManage && selectedIds.size > 0 ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <span className="text-slate-700">{selectedIds.size} selected</span>
-          <button
-            type="button"
-            onClick={() => void handleBulkDeactivate()}
-            disabled={busy}
-            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-          >
-            Bulk deactivate
-          </button>
-        </div>
-      ) : null}
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {isLoading ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            Loading parents...
-          </div>
-        ) : visibleParents.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No parents found.
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    {canManage ? (
-                      <th className="px-4 py-3 text-left">
-                        <input
-                          type="checkbox"
-                          checked={allVisibleSelected}
-                          onChange={toggleSelectAll}
-                          aria-label="Select all parents on this page"
-                          className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                        />
-                      </th>
-                    ) : null}
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Username
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Linked students
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Status
-                    </th>
-                    {canManage ? (
-                      <th className="px-4 py-3 text-right font-medium text-slate-600">
-                        Actions
-                      </th>
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {visibleParents.map((parent) => (
-                    <tr key={parent.parentId} className="hover:bg-slate-50">
-                      {canManage ? (
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(parent.parentId)}
-                            onChange={() => toggleSelect(parent.parentId)}
-                            aria-label={`Select ${parent.fullName}`}
-                            className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                          />
-                        </td>
-                      ) : null}
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {parent.fullName}
-                        <p className="text-xs font-normal text-slate-500">
-                          ID {parent.parentId}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {parent.username}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {parent.linkedStudentCount}
-                      </td>
-                      <td className="px-4 py-3">
-                        <AccountStatusBadge
-                          accountStatus={parent.accountStatus}
-                          isActive={parent.isActive}
-                        />
-                      </td>
-                      {canManage ? (
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                clearMessages();
-                                setParentDialog(parent);
-                              }}
-                              disabled={busy}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void toggleActive(parent)}
-                              disabled={busy}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                            >
-                              {parent.isActive ? "Deactivate" : "Activate"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setLinkParent(parent)}
-                              disabled={busy}
-                              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
-                            >
-                              Link
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleUnlink(parent)}
-                              disabled={busy}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                            >
-                              Unlink
-                            </button>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <DirectoryPagination
-              pageNumber={pageNumber}
-              pageSize={PAGE_SIZE}
-              totalCount={totalCount}
-              onPageChange={setPageNumber}
-              disabled={isFetching}
+      <DirectoryListPanel
+        loading={isLoading}
+        empty={visibleParents.length === 0}
+        emptyTitle="No parents found"
+        emptyDescription="Try a different search or clear filters."
+        emptyActionLabel={canManage ? "Create parent" : undefined}
+        onEmptyAction={
+          canManage
+            ? () => {
+                clearMessages();
+                setParentDialog("create");
+              }
+            : undefined
+        }
+        footer={
+          <DirectoryPagination
+            pageNumber={pageNumber}
+            pageSize={PAGE_SIZE}
+            totalCount={totalCount}
+            onPageChange={setPageNumber}
+            disabled={isFetching}
+          />
+        }
+      >
+        <DirectoryMobileList>
+          {visibleParents.map((parent) => (
+            <DirectoryEntityCard
+              key={parent.parentId}
+              selected={selectedIds.has(parent.parentId)}
+              onSelect={
+                canManage ? () => toggleSelect(parent.parentId) : undefined
+              }
+              title={parent.fullName}
+              subtitle={`@${parent.username}`}
+              badge={
+                <AccountStatusBadge
+                  accountStatus={parent.accountStatus}
+                  isActive={parent.isActive}
+                />
+              }
+              meta={<p>{formatLinkedStudents(parent)}</p>}
+              actions={rowActions(parent)}
             />
-          </>
-        )}
-      </div>
+          ))}
+        </DirectoryMobileList>
+
+        <DirectoryTable>
+          <DirectoryTableHead>
+            {canManage ? (
+              <DirectoryTh>
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all parents on this page"
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+              </DirectoryTh>
+            ) : null}
+            <DirectoryTh>Name</DirectoryTh>
+            <DirectoryTh>Linked students</DirectoryTh>
+            <DirectoryTh>Status</DirectoryTh>
+            {canManage ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
+          </DirectoryTableHead>
+          <tbody className="divide-y divide-border">
+            {visibleParents.map((parent) => (
+              <tr
+                key={parent.parentId}
+                className="transition hover:bg-muted/40"
+              >
+                {canManage ? (
+                  <DirectoryTd>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(parent.parentId)}
+                      onChange={() => toggleSelect(parent.parentId)}
+                      aria-label={`Select ${parent.fullName}`}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    />
+                  </DirectoryTd>
+                ) : null}
+                <DirectoryTd>
+                  <p className="font-medium">{parent.fullName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    @{parent.username}
+                  </p>
+                </DirectoryTd>
+                <DirectoryTd>
+                  <p>{parent.linkedStudentCount}</p>
+                  {parent.linkedStudentNames &&
+                  parent.linkedStudentNames.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {parent.linkedStudentNames.join(", ")}
+                    </p>
+                  ) : null}
+                </DirectoryTd>
+                <DirectoryTd>
+                  <AccountStatusBadge
+                    accountStatus={parent.accountStatus}
+                    isActive={parent.isActive}
+                  />
+                </DirectoryTd>
+                {canManage ? (
+                  <DirectoryTd align="right">
+                    <div className="flex justify-end gap-1.5">
+                      {rowActions(parent)}
+                    </div>
+                  </DirectoryTd>
+                ) : null}
+              </tr>
+            ))}
+          </tbody>
+        </DirectoryTable>
+      </DirectoryListPanel>
 
       {parentDialog ? (
         <ParentFormDialog
@@ -505,6 +535,6 @@ export function DirectoryParentsPage() {
           onSubmit={handleLink}
         />
       ) : null}
-    </div>
+    </DirectoryPageShell>
   );
 }

@@ -3,267 +3,91 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RankUp Education â€” Questions Business &amp; QA Guide</title>
+  <title>RankUp Education — Questions Business & QA Guide</title>
   <style>
-    :root {
-      --ink: #0b2545; --blue: #2e74b5; --muted: #53606d; --border: #d9e1ea;
-      --fill: #f4f6f9; --ok: #166534; --ok-bg: #ecfdf5; --warn: #92400e; --warn-bg: #fffbeb;
-    }
-    body { margin: 0; color: #17212b; font-family: Calibri, Arial, sans-serif; font-size: 15px; line-height: 1.55; }
-    main { max-width: 1100px; margin: 0 auto; padding: 40px 24px 64px; }
-    header { border-bottom: 1px solid var(--border); margin-bottom: 28px; padding-bottom: 18px; }
-    h1 { margin: 0 0 8px; color: var(--ink); font-size: 30px; }
-    .subtitle { margin: 0; color: var(--muted); font-size: 16px; }
-    .meta { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .chip {
-      display: inline-block; border-radius: 999px; padding: 4px 10px; font-size: 12px;
-      font-weight: 600; background: var(--fill); border: 1px solid var(--border); color: var(--ink);
-    }
-    .chip.warn { background: var(--warn-bg); color: var(--warn); border-color: #fde68a; }
-    h2 { color: var(--blue); margin: 34px 0 10px; font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-    h3 { margin: 22px 0 8px; color: var(--ink); font-size: 17px; }
-    table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 13.5px; }
-    th, td { border: 1px solid var(--border); padding: 8px 10px; vertical-align: top; text-align: left; }
-    th { background: var(--fill); color: var(--ink); }
-    code { font-family: Consolas, monospace; font-size: 12.5px; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; }
-    .note { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); border: 1px solid #fde68a; color: var(--warn); }
-    .ok { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: var(--ok-bg); border: 1px solid #bbf7d0; color: var(--ok); }
-    .scenario { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
-    .scenario h3 { margin-top: 0; }
-    .id { font-weight: 700; color: var(--blue); margin-right: 6px; }
-    .expect { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--ok-bg); border: 1px solid #bbf7d0; color: var(--ok); }
-    .toc a { color: var(--blue); text-decoration: none; }
-    footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
-    ul, ol { margin: 8px 0 16px 22px; }
-</style>
+    :root { --ink:#0f172a; --primary:#2563eb; --muted:#475569; --border:#dbe3ed; --surface:#f8fafc; --ok:#166534; --ok-bg:#dcfce7; --warn:#92400e; --warn-bg:#fef3c7; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:#fff; font-family:Inter,Calibri,Arial,sans-serif; font-size:15px; line-height:1.55; }
+    main { max-width:1120px; margin:0 auto; padding:40px 24px 64px; }
+    header { border-bottom:1px solid var(--border); margin-bottom:28px; padding-bottom:20px; }
+    h1 { margin:0 0 8px; font-size:30px; }
+    h2 { color:var(--primary); margin:34px 0 10px; font-size:22px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+    h3 { margin:22px 0 8px; font-size:17px; }
+    p { margin:8px 0 14px; }
+    .subtitle { color:var(--muted); font-size:16px; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .chip { border:1px solid var(--border); border-radius:999px; padding:4px 10px; background:var(--surface); font-size:12px; font-weight:600; }
+    .ok,.note { margin:14px 0; padding:12px 14px; border-radius:10px; }
+    .ok { color:var(--ok); background:var(--ok-bg); border:1px solid #22c55e; }
+    .note { color:var(--warn); background:var(--warn-bg); border:1px solid #f59e0b; }
+    table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13.5px; }
+    th,td { border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+    th { background:var(--surface); }
+    code { background:#f1f5f9; border-radius:4px; padding:1px 5px; font-family:Consolas,monospace; }
+    li { margin:4px 0; }
+    .scenario { margin:12px 0; padding:14px; border:1px solid var(--border); border-radius:12px; }
+    .scenario strong { color:var(--primary); }
+    footer { margin-top:40px; padding-top:16px; border-top:1px solid var(--border); color:var(--muted); font-size:13px; }
+  </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>RankUp Education â€” Questions Business &amp; QA Guide</h1>
-    <p class="subtitle">Question-bank permissions, type scope (incl. Fill in the Blanks), data model, Web Excel import, and gap vs current code.</p>
+    <h1>RankUp Education — Questions Business &amp; QA Guide</h1>
+    <p class="subtitle">Current implemented rules for question status, activity, visibility, permissions, import, and QA.</p>
     <div class="meta">
-      <span class="chip">RankUp Education workspace</span>
-      <span class="chip">21 Jul 2026</span>
-      <span class="chip warn">TARGET RULES — 3-tier approval visibility (21 Jul 2026)</span>
-      <span class="chip">PortalAdmin · SchoolAdmin · CampusAdmin · Teacher · Parent (Student: quizzes only)</span>
+      <span class="chip">Current codebase</span>
+      <span class="chip">25 Jul 2026</span>
+      <span class="chip">Status and IsActive documented separately</span>
     </div>
   </header>
 
-  <h2 id="toc">Table of contents</h2>
-  <ol class="toc">
-    <li><a href="#target">1. Target business rules</a></li>
-    <li><a href="#matrix">2. Permissions matrix</a></li>
-    <li><a href="#lookups">3. Lookup IDs (QuestionStatus / Type / Difficulty)</a></li>
-    <li><a href="#types">4. Question types â€” Now / Not Now / Future</a></li>
-    <li><a href="#model">5. Question data model</a></li>
-    <li><a href="#lifecycle">6. Status lifecycle</a></li>
-    <li><a href="#import">7. Excel import (Web only)</a></li>
-    <li><a href="#gap">8. Gap vs current codebase</a></li>
-    <li><a href="#decisions">9. Open decisions</a></li>
-    <li><a href="#suggestions">10. Suggested improvements</a></li>
-    <li><a href="#scenarios">11. QA scenarios</a></li>
-    <li><a href="#checklist">12. Verification checklist</a></li>
-  </ol>
+  <div class="ok"><strong>Canonical model:</strong> QuestionStatus records workflow state. IsActive independently controls whether an Approved question is usable. Visibility controls where an Approved question may be seen and used.</div>
 
-  <div class="ok">
-    <strong>Permissions implemented</strong> in WebApi + React Web: three-tier Approve/Reject
-    (CampusAdmin → Campus visibility, SchoolAdmin → School visibility incl. all campuses,
-    PortalAdmin → Public), PortalAdmin-only lifecycle (activate/deactivate/archive),
-    owner pre-approval edit/delete, Reject reason required + Submit for review,
-    Excel import (Web), quiz eligibility after Approve within visible scope. Mobile has no Excel import.
-  </div>
-  <div class="note">
-    <strong>Approval visibility (21 Jul 2026):</strong>
-    Create stamps <code>SchoolId</code> / <code>CampusId</code> from the creator.
-    Approve sets <code>Visibility</code> = Campus | School | Public based on who approved.
-    Bank list and quiz picker only show Approved questions the viewer may use in their org
-    (plus Public). Legacy Approved rows backfill to Public.
-  </div>
-  <div class="note">
-    <strong>Type scope (15 Jul 2026):</strong> NOW = Single Choice, Multiple Choice, True/False,
-    and <strong>Fill in the Blanks</strong> (accepted answers). Descriptive = NOT NOW.
-    Matching / Ordering / media / math / coding / case-study = Future.
-  </div>
+  <h2>1. Canonical status meanings</h2>
+  <table><thead><tr><th>ID</th><th>QuestionStatus</th><th>Default activity</th><th>Meaning</th></tr></thead><tbody><tr><td>110</td><td>Draft</td><td>Legacy only</td><td>Retired from the product flow. Existing rows are migrated/read as PendingReview. Create and import never write Draft.</td></tr><tr><td>111</td><td>PendingReview</td><td>Inactive</td><td>Waiting for scoped approval. Visibility=None. Owner may edit/delete; approver may approve or reject.</td></tr><tr><td>112</td><td>Approved</td><td>Active by default</td><td>Accepted into the bank. Visibility is Campus, School, or Public. Non-PortalAdmin owners can no longer edit/delete.</td></tr><tr><td>113</td><td>Rejected</td><td>Inactive</td><td>Rejected with a required reason. Visibility=None. Owner may edit, explicitly resubmit, or delete.</td></tr><tr><td>114</td><td>Archived</td><td>Inactive</td><td>Retired by PortalAdmin and hidden from normal bank/quiz use.</td></tr></tbody></table>
+  <div class="note"><strong>Important:</strong> Active and Inactive are not QuestionStatus values. An Approved question can be active or inactive. Archived is a distinct status.</div>
 
-  <h2 id="target">1. Target business rules</h2>
-  <p><strong>Admin Portal</strong> in product language = role <code>PortalAdmin</code> (lookup id 2010).</p>
-  <ol>
-    <li><strong>1. PortalAdmin full control:</strong> PortalAdmin can Create, Update, Delete any question; Activate / Deactivate / Archive; Approve (→ <code>Public</code> visibility); and Reject (rejection reason required).</li>
-    <li><strong>2. Create:</strong> SchoolAdmin, CampusAdmin, Teacher, and Parent can create questions. Create stamps <code>SchoolId</code> / <code>CampusId</code> from the creator (when present). Status is always <code>PendingReview</code> (no Draft).</li>
-    <li><strong>3. Update own (pre-approval):</strong> SchoolAdmin, CampusAdmin, Teacher, and Parent can update their own questions only while status is not Approved (PendingReview, Rejected).</li>
-    <li><strong>4. Delete own (pre-approval):</strong> SchoolAdmin, CampusAdmin, Teacher, and Parent can delete their own questions only while status is PendingReview or Rejected (not Approved).</li>
-    <li><strong>5. Delete after Approved:</strong> Once Approved, only PortalAdmin may delete. Non–PortalAdmin cannot delete Approved questions (even their own).</li>
-    <li><strong>6. Activate / Deactivate / Archive:</strong> Only PortalAdmin can Activate, Deactivate, or Archive questions. No other role.</li>
-    <li><strong>7. View Approved (scoped):</strong> Manage roles see own questions plus Approved questions visible in their scope:
-      <ul>
-        <li><code>Public</code> — everyone (all schools/campuses)</li>
-        <li><code>School</code> — anyone in the same school (all campuses of that school)</li>
-        <li><code>Campus</code> — anyone in the same campus (SchoolAdmin also sees Campus-approved items in their school)</li>
-      </ul>
-      Students cannot open the question bank — they only see questions inside quizzes.
-    </li>
-    <li><strong>8. Approve / Reject = three admin roles (scoped):</strong>
-      <ul>
-        <li><strong>CampusAdmin</strong> — approve/reject PendingReview in their campus → visibility <code>Campus</code> (usable within that campus)</li>
-        <li><strong>SchoolAdmin</strong> — approve/reject PendingReview in their school → visibility <code>School</code> (usable across the school’s campuses)</li>
-        <li><strong>PortalAdmin</strong> — approve/reject any → visibility <code>Public</code> (usable by everyone)</li>
-      </ul>
-      Reject requires a non-empty rejection reason. After Reject: owner may edit and resubmit to PendingReview, or delete.
-    </li>
-    <li><strong>9. Excel import (Web only):</strong> Import from Excel is available on Web for create-capable roles. Always creates PendingReview. Not available on Mobile.</li>
-  </ol>
-  <p class="ok">Rule numbers match the product request (item 6 was unused in the source list).</p>
+  <h2>2. Lifecycle and transitions</h2>
+  <table><thead><tr><th>Action</th><th>Resulting status</th><th>State changes</th></tr></thead><tbody><tr><td>Create / Excel import</td><td>PendingReview</td><td>IsActive=false; Visibility=None; owner and organisation are stamped from creator.</td></tr><tr><td>Approve by CampusAdmin</td><td>Approved</td><td>Visibility=Campus; IsActive=true; only within the approver's campus scope.</td></tr><tr><td>Approve by SchoolAdmin</td><td>Approved</td><td>Visibility=School; IsActive=true; usable across that school's campuses.</td></tr><tr><td>Approve by PortalAdmin</td><td>Approved</td><td>Visibility=Public; IsActive=true; usable by all question-managing roles.</td></tr><tr><td>Reject by scoped approver</td><td>Rejected</td><td>Reason required (UI minimum 10 characters); IsActive=false; approval and visibility cleared.</td></tr><tr><td>Owner resubmits Rejected</td><td>PendingReview</td><td>Explicit Submit for review action; approval and visibility stay cleared.</td></tr><tr><td>PortalAdmin deactivate / activate</td><td>Approved (unchanged)</td><td>Only toggles IsActive. Deactivated is not a QuestionStatus.</td></tr><tr><td>PortalAdmin archive</td><td>Archived</td><td>IsActive=false; removed from normal bank/quiz use.</td></tr></tbody></table>
 
-  <h2 id="matrix">2. Permissions matrix (target)</h2>
-  <table><thead><tr><th>Action</th><th>PortalAdmin</th><th>SchoolAdmin</th><th>CampusAdmin</th><th>Teacher</th><th>Parent</th><th>Student</th></tr></thead><tbody>
-    <tr><td>Create question</td><td>Yes (any)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
-    <tr><td>Update own question (not Approved)</td><td>Yes (any)</td><td>Own only</td><td>Own only</td><td>Own only</td><td>Own only</td><td>No</td></tr>
-    <tr><td>Update Rejected → resubmit PendingReview</td><td>Yes (any)</td><td>Own only</td><td>Own only</td><td>Own only</td><td>Own only</td><td>No</td></tr>
-    <tr><td>Update Approved question</td><td>Yes (any)</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Delete own (PendingReview / Rejected)</td><td>Yes (any)</td><td>Own only</td><td>Own only</td><td>Own only</td><td>Own only</td><td>No</td></tr>
-    <tr><td>Delete Approved question</td><td>Yes (any)</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Activate / Deactivate / Archive</td><td>Yes — ONLY PortalAdmin</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Approve</td><td>Yes → Public</td><td>Yes (own school) → School</td><td>Yes (own campus) → Campus</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Reject (reason required)</td><td>Yes (any)</td><td>Yes (own school)</td><td>Yes (own campus)</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>View Approved (+ answers / details)</td><td>All</td><td>Public + School + Campus-in-school</td><td>Public + School(same) + Campus(same)</td><td>Public + School(same) + Campus(same)</td><td>Public + School(same) + Campus(same)</td><td>No (quizzes only)</td></tr>
-    <tr><td>View own PendingReview / Rejected</td><td>Yes (all)</td><td>Own</td><td>Own</td><td>Own</td><td>Own</td><td>No</td></tr>
-    <tr><td>Import from Excel (Web only)</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
-    <tr><td>Import from Excel (Mobile)</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
-  </tbody></table>
-  <ul>
-    <li><strong>Student:</strong> no question-bank access. Questions appear only inside quiz attempts.</li>
-    <li><strong>Reject:</strong> Approver must enter a non-empty rejection reason (min 10 chars).</li>
-    <li><strong>After Reject:</strong> owner may edit + resubmit to <code>PendingReview</code>, or delete.</li>
-    <li><strong>Visibility:</strong> set only on Approve; cleared on Reject / resubmit.</li>
-    <li><strong>Excel import:</strong> Web only — not on Mobile.</li>
-  </ul>
+  <h2>3. Status, activity, and visibility</h2>
+  <table><thead><tr><th>Concept</th><th>Values</th><th>Rule</th></tr></thead><tbody><tr><td>QuestionStatus</td><td>PendingReview / Approved / Rejected / Archived</td><td>Workflow decision. Draft is legacy only.</td></tr><tr><td>IsActive</td><td>true / false</td><td>Soft quiz-use switch. PortalAdmin may toggle only on Approved.</td></tr><tr><td>Visibility</td><td>None / Campus / School / Public</td><td>Set on approval from approver role; cleared on reject/resubmit.</td></tr><tr><td>ApprovedBy</td><td>User ID or null</td><td>Set on Approve; required for quiz eligibility.</td></tr></tbody></table>
 
-  <h2 id="lookups">3. Lookup IDs</h2>
-  <h3>QuestionStatus</h3>
-  <table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Notes</th></tr></thead><tbody><tr><td>110</td><td>Draft</td><td>QuestionStatus</td><td>REMOVED from product flow. Legacy rows migrate to PendingReview on API start. Lookup kept inactive.</td></tr><tr><td>111</td><td>PendingReview</td><td>QuestionStatus</td><td>Editable by owner. Waiting for CampusAdmin / SchoolAdmin / PortalAdmin approval in scope. IsActive = false. Visibility = None.</td></tr><tr><td>112</td><td>Approved</td><td>QuestionStatus</td><td>Visible per Visibility (Campus / School / Public). Locked for non-PortalAdmin edit/delete. IsActive = true.</td></tr><tr><td>113</td><td>Rejected</td><td>QuestionStatus</td><td>IsActive = false. Approver reject (reason required). Owner may edit+resubmit to PendingReview, or delete.</td></tr><tr><td>114</td><td>Archived</td><td>QuestionStatus</td><td>Retired / hidden from normal bank lists. IsActive = false.</td></tr></tbody></table>
-  <h3>Visibility levels (on questions)</h3>
-  <table><thead><tr><th>Value</th><th>Name</th><th>Set by</th><th>Who can use / see</th></tr></thead><tbody>
-    <tr><td>0</td><td>None</td><td>Pending / Rejected</td><td>Owner (+ approvers viewing pending queue)</td></tr>
-    <tr><td>1</td><td>Campus</td><td>CampusAdmin Approve</td><td>Same campus; SchoolAdmin of same school also sees</td></tr>
-    <tr><td>2</td><td>School</td><td>SchoolAdmin Approve</td><td>Entire school (all campuses)</td></tr>
-    <tr><td>3</td><td>Public</td><td>PortalAdmin Approve</td><td>Everyone (all manage roles)</td></tr>
-  </tbody></table>
-  <h3>QuestionType</h3>
-  <table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Sort</th><th>Scope</th></tr></thead><tbody><tr><td>100</td><td>Single Choice</td><td>QuestionType</td><td>1</td><td>NOW</td></tr><tr><td>101</td><td>Multiple Choice</td><td>QuestionType</td><td>2</td><td>NOW</td></tr><tr><td>102</td><td>True/False</td><td>QuestionType</td><td>3</td><td>NOW</td></tr><tr><td>103</td><td>Fill in the Blanks</td><td>QuestionType</td><td>4</td><td>NOW</td></tr><tr><td>104</td><td>Descriptive</td><td>QuestionType</td><td>5</td><td>NOT NOW</td></tr></tbody></table>
-  <h3>DifficultyLevel</h3>
-  <table><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Sort</th></tr></thead><tbody><tr><td>2001</td><td>Easy</td><td>DifficultyLevel</td><td>1</td></tr><tr><td>2002</td><td>Medium</td><td>DifficultyLevel</td><td>2</td></tr><tr><td>2003</td><td>Hard</td><td>DifficultyLevel</td><td>3</td></tr></tbody></table>
+  <h2>4. Role permissions</h2>
+  <table><thead><tr><th>Action</th><th>PortalAdmin</th><th>SchoolAdmin</th><th>CampusAdmin</th><th>Teacher</th><th>Parent</th><th>Student</th></tr></thead><tbody><tr><td>Browse/manage bank</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr><tr><td>Create</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr><tr><td>Edit/delete PendingReview or Rejected</td><td>Any</td><td>Own</td><td>Own</td><td>Own</td><td>Own</td><td>No</td></tr><tr><td>Edit/delete Approved</td><td>Any</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr><tr><td>Approve/reject PendingReview</td><td>Any scope</td><td>Own school</td><td>Own campus</td><td>No</td><td>No</td><td>No</td></tr><tr><td>Visibility produced by approval</td><td>Public</td><td>School</td><td>Campus</td><td>—</td><td>—</td><td>—</td></tr><tr><td>Activate/deactivate/archive</td><td>Yes</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr></tbody></table>
 
-  <h2 id="types">4. Question types â€” Now / Not Now / Future</h2>
-  <p>Quiz Module type support and answer storage:</p>
-  <table><thead><tr><th>Question type</th><th>Scope</th><th>Answer storage</th><th>Validation / rules</th></tr></thead><tbody><tr><td>Single Choice (100)</td><td>NOW</td><td>question_options</td><td>â‰¥2 options; exactly one option must have IsCorrect = true.</td></tr><tr><td>Multiple Choice (101)</td><td>NOW</td><td>question_options</td><td>â‰¥2 options; at least one option must have IsCorrect = true; multiple may be correct.</td></tr><tr><td>True/False (102)</td><td>NOW</td><td>question_options</td><td>Exactly two options (True / False); exactly one IsCorrect = true.</td></tr><tr><td>Fill in the Blanks (103)</td><td>NOW</td><td>question_accepted_answers</td><td>â‰¥1 accepted answer. Optional AI initial review + teacher review on attempts. Model / accepted answers must NOT be shown to the student before submission.</td></tr><tr><td>Descriptive (104)</td><td>NOT NOW</td><td>question_accepted_answers</td><td>Same review/visibility rules as Fill when built. Hide create/import until ready.</td></tr></tbody></table>
-  <h3>Future types (roadmap â€” no create UI yet)</h3>
-  <table><thead><tr><th>ID</th><th>Name</th><th>Scope</th><th>Notes</th></tr></thead><tbody><tr><td>â€”</td><td>Matching</td><td>Future</td><td>Not now â€” implement later</td></tr><tr><td>â€”</td><td>Ordering</td><td>Future</td><td>Not now â€” implement later</td></tr><tr><td>â€”</td><td>Image-based</td><td>Future</td><td>Not now â€” implement later</td></tr><tr><td>â€”</td><td>Audio-based</td><td>Future</td><td>Not now â€” implement later</td></tr><tr><td>â€”</td><td>Mathematical working</td><td>Future</td><td>Not now â€” implement later</td></tr><tr><td>â€”</td><td>Coding answer</td><td>Future</td><td>Not now â€” implement later</td></tr><tr><td>â€”</td><td>Case-study</td><td>Future</td><td>Not now â€” implement later</td></tr></tbody></table>
-  <ul>
-    <li><strong>Fill in the Blanks (NOW):</strong> AI may provide an initial attempt review; teacher review may be required;
-      model / accepted answers must not be shown before the student submits.</li>
-    <li><strong>Descriptive (NOT NOW):</strong> same review/visibility pattern when implemented; hide from create/import until then.</li>
-    <li><strong>Bank approval</strong> is CampusAdmin / SchoolAdmin / PortalAdmin (scoped visibility) for all types — separate from attempt AI/teacher review.</li>
-  </ul>
+  <h2>5. Visibility rules</h2>
+  <table><thead><tr><th>Approver</th><th>Visibility</th><th>Approved question audience</th></tr></thead><tbody><tr><td>CampusAdmin</td><td>Campus</td><td>Question-managing roles in the same campus; SchoolAdmin of that school can also manage scope.</td></tr><tr><td>SchoolAdmin</td><td>School</td><td>Question-managing roles across all campuses in the same school.</td></tr><tr><td>PortalAdmin</td><td>Public</td><td>All question-managing roles.</td></tr></tbody></table>
+  <p>Already-Approved questions are not promoted from Campus → School → Public in v1. Approval occurs from PendingReview only.</p>
 
-  <h2 id="model">5. Question data model</h2>
-  <h3>Table: questions</h3>
-  <table><thead><tr><th>Field</th><th>Notes</th></tr></thead><tbody>
-    <tr><td>Id</td><td>PK</td></tr>
-    <tr><td>QuestionText</td><td>Stem / prompt</td></tr>
-    <tr><td>QuestionType</td><td>Lookup: Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive</td></tr>
-    <tr><td>Class</td><td>Lookup / ClassId</td></tr>
-    <tr><td>Subject</td><td>Lookup / SubjectId</td></tr>
-    <tr><td>Topic</td><td>Lookup / TopicId (optional)</td></tr>
-    <tr><td>DifficultyLevel</td><td>Easy / Medium / Hard</td></tr>
-    <tr><td>Explanation</td><td>Shown after attempt per quiz rules; bank detail for manage roles</td></tr>
-    <tr><td>Hint</td><td>Optional hint</td></tr>
-    <tr><td>EstimatedTimeSeconds</td><td>Estimated time</td></tr>
-    <tr><td>Marks</td><td>Marks / points</td></tr>
-    <tr><td>IsActive</td><td>True only for Approved (default). PendingReview / Rejected / Archived are false. PortalAdmin may soft deactivate Approved.</td></tr>
-    <tr><td>Status</td><td>PendingReview, Approved, Rejected, Archived (Draft removed from product)</td></tr>
-    <tr><td>SchoolId</td><td>Owning school stamped from creator (nullable for PortalAdmin-created)</td></tr>
-    <tr><td>CampusId</td><td>Owning campus stamped from creator (nullable)</td></tr>
-    <tr><td>VisibilityLevel</td><td>0=None, 1=Campus, 2=School, 3=Public — set by who Approved</td></tr>
-    <tr><td>CreatedBy</td><td>Owner</td></tr>
-    <tr><td>IsAiApproved</td><td>Legacy flag — set true on Approve; not a second bank gate</td></tr>
-    <tr><td>ApprovedBy</td><td>Admin user id who approved</td></tr>
-    <tr><td>RejectionReason</td><td>Required on Reject</td></tr>
-    <tr><td>CreatedDate</td><td>Created timestamp</td></tr>
-    <tr><td>ModifiedDate</td><td>Modified timestamp</td></tr>
-  </tbody></table>
-  <h3>Table: question_options</h3>
-  <p>For choice-based types (Single Choice, Multiple Choice, True/False):</p>
-  <table><thead><tr><th>Field</th><th>Notes</th></tr></thead><tbody><tr><td>Id</td><td>PK</td></tr><tr><td>QuestionId</td><td>FK â†’ questions</td></tr><tr><td>OptionText</td><td>Choice text</td></tr><tr><td>OptionImageUrl</td><td>Optional image (future image-based use; column kept)</td></tr><tr><td>IsCorrect</td><td>Whether this option is a correct choice</td></tr><tr><td>Explanation</td><td>Optional per-option explanation</td></tr><tr><td>IsActive</td><td>Soft-disable option without delete</td></tr></tbody></table>
-  <h3>Table: question_accepted_answers</h3>
-  <p>For Fill in the Blanks (NOW) and Descriptive (NOT NOW):</p>
-  <table><thead><tr><th>Field</th><th>Notes</th></tr></thead><tbody><tr><td>Id</td><td>PK</td></tr><tr><td>QuestionId</td><td>FK â†’ questions</td></tr><tr><td>AnswerText</td><td>Canonical accepted answer text</td></tr><tr><td>IsCaseSensitive</td><td>Match case when scoring</td></tr><tr><td>AllowPartialMatch</td><td>Allow substring / partial credit rules</td></tr><tr><td>NormalizedAnswer</td><td>Normalized form for matching (e.g. lowercase trim)</td></tr><tr><td>MinimumLength</td><td>Min student answer length</td></tr><tr><td>MaximumLength</td><td>Max student answer length</td></tr><tr><td>AllowAIReview</td><td>Attempt may get AI initial review (Fill / Descriptive)</td></tr><tr><td>AllowTeacherReview</td><td>Attempt may require teacher review (Fill / Descriptive)</td></tr></tbody></table>
-  <div class="note">
-    Do not store Fill answers as <code>question_options</code>. Use <code>question_accepted_answers</code> only.
-    Manage roles may see accepted answers in the bank; students must not see them before attempt submit.
-  </div>
+  <h2>6. Quiz eligibility</h2>
+  <p>A bank question is eligible for quiz use only when all are true:</p>
+  <ul><li>QuestionStatus is Approved (legacy Approved aliases remain readable).</li><li>IsActive is true.</li><li>ApprovedBy is present.</li><li>Visibility is Campus, School, or Public and the viewer is within that scope.</li></ul>
+  <p>Deactivating an Approved question keeps its status Approved but removes it from new quiz selection. Archiving changes status to Archived and also makes it inactive.</p>
 
-  <h2 id="lifecycle">6. Status lifecycle (target)</h2>
-  <table><thead><tr><th>Step</th><th>Status</th><th>Notes</th></tr></thead><tbody>
-    <tr><td>Create / Import (Web)</td><td>PendingReview</td><td>Always PendingReview with IsActive=false, Visibility=None. Stamps SchoolId/CampusId from creator. Import never sets Approved.</td></tr>
-    <tr><td>Resubmit after Reject</td><td>PendingReview</td><td>Owner submits Rejected → PendingReview; clears approval + visibility; appears on scoped approver queues.</td></tr>
-    <tr><td>CampusAdmin Approve</td><td>Approved</td><td>Visibility=Campus. IsActive=true. Visible within that campus (+ SchoolAdmin of same school).</td></tr>
-    <tr><td>SchoolAdmin Approve</td><td>Approved</td><td>Visibility=School. IsActive=true. Visible across the school’s campuses.</td></tr>
-    <tr><td>PortalAdmin Approve</td><td>Approved</td><td>Visibility=Public. IsActive=true. Visible to everyone. Locked for non-PortalAdmin edit/delete.</td></tr>
-    <tr><td>Approver Reject</td><td>Rejected</td><td>Campus/School/Portal Admin in scope. IsActive=false. Reason REQUIRED. Owner may edit+resubmit or delete.</td></tr>
-    <tr><td>PortalAdmin Archive</td><td>Archived</td><td>Only PortalAdmin. IsActive=false. Hidden from normal bank lists.</td></tr>
-    <tr><td>PortalAdmin Activate / Deactivate</td><td>IsActive on Approved</td><td>Only PortalAdmin, and only on Approved (soft quiz hide/show).</td></tr>
-  </tbody></table>
-  <ul>
-    <li>Canonical status names/IDs above replace loose aliases where possible.</li>
-    <li>Approved questions show options / accepted answers to manage roles (not Students in the bank).</li>
-  </ul>
+  <h2>7. Question types</h2>
+  <table><thead><tr><th>ID</th><th>Type</th><th>Availability</th><th>Validation</th></tr></thead><tbody><tr><td>100</td><td>Single Choice</td><td>Now</td><td>At least 2 options; exactly 1 correct.</td></tr><tr><td>101</td><td>Multiple Choice</td><td>Now</td><td>At least 2 options; at least 1 correct.</td></tr><tr><td>102</td><td>True/False</td><td>Now</td><td>Exactly True and False; exactly 1 correct.</td></tr><tr><td>103</td><td>Fill in the Blanks</td><td>Now</td><td>At least 1 accepted answer; accepted answers hidden before attempt submission.</td></tr><tr><td>104</td><td>Descriptive</td><td>Not now</td><td>Retained as a lookup/legacy type but hidden and rejected by create/import.</td></tr></tbody></table>
 
-  <h2 id="import">7. Excel import (Web only)</h2>
-  <p>On <strong>Web</strong>, create-capable roles get an <strong>Import from Excel</strong> action.
-  <strong>Mobile does not</strong> expose import.</p>
-  <table><thead><tr><th>Column</th><th>Required</th><th>Notes</th></tr></thead><tbody><tr><td>QuestionText</td><td>Required</td><td>Stem / prompt text</td></tr><tr><td>QuestionType</td><td>Required</td><td>NOW: Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103). NOT NOW: Descriptive (104) â€” reject or skip until enabled. Future types: not allowed.</td></tr><tr><td>Class</td><td>Required</td><td>Lookup name or ID</td></tr><tr><td>Subject</td><td>Required</td><td>Lookup name or ID</td></tr><tr><td>Topic</td><td>Optional</td><td>Lookup name or ID</td></tr><tr><td>DifficultyLevel</td><td>Required</td><td>Easy (2001) / Medium (2002) / Hard (2003) â€” name or ID</td></tr><tr><td>Marks</td><td>Required</td><td>Positive number</td></tr><tr><td>EstimatedTimeSeconds</td><td>Optional</td><td>Default if blank</td></tr><tr><td>Hint</td><td>Optional</td><td></td></tr><tr><td>Explanation</td><td>Optional</td><td></td></tr><tr><td>Option1â€¦OptionN</td><td>Choice types</td><td>Required for Single Choice / Multiple Choice / True/False. Mark correct with IsCorrect1â€¦ or CorrectOption index.</td></tr><tr><td>AcceptedAnswer1â€¦N</td><td>Fill in the Blanks</td><td>One or more accepted answers for type 103. Optional columns: IsCaseSensitive, AllowPartialMatch, MinLength, MaxLength, AllowAIReview, AllowTeacherReview.</td></tr><tr><td>Status</td><td>Ignored</td><td>Deprecated — import always creates PendingReview</td></tr></tbody></table>
-  <div class="note">Import must never set status to Approved. Only CampusAdmin / SchoolAdmin / PortalAdmin approval promotes to Approved (with scoped visibility).
-  Import should accept NOW types only (100â€“103); reject Descriptive until enabled.
-  Class/Subject/Topic columns also accept ClassId/SubjectId/TopicId headers. CorrectOption is 1-based (Option1 = 1)
-  and may be combined with IsCorrectN flags.</div>
+  <h2>8. Excel import</h2>
+  <ul><li>Web-only UI at /questions/import; available to question-managing roles.</li><li>Dry run validates the workbook and returns all row errors.</li><li>Confirm import creates valid rows as PendingReview only.</li><li>A Status column cannot approve a question; import never creates Approved.</li><li>Class, Subject, Topic, Type, and Difficulty accept supported names or canonical IDs.</li><li>Choice types accept IsCorrectN and/or CorrectOption; Fill uses accepted-answer fields.</li></ul>
 
-  <h2 id="gap">8. Gap vs current codebase</h2>
-  <p>Core permission / approve / import / Fill / type-validation rules are implemented (see DONE rows).
-  Remaining items are OPTIONAL polish (Â§10) or product decisions already recorded in Â§9.</p>
-  <table><thead><tr><th>Topic</th><th>Current</th><th>Target</th><th>Action</th></tr></thead><tbody><tr><td>Web list Edit/Delete buttons</td><td>QuestionsPage gated: View always; Edit/Delete for PortalAdmin or owner + Draft/PendingReview/Rejected</td><td>Gate like Detail page (PortalAdmin or owner + Draft/PendingReview/Rejected)</td><td>DONE</td></tr><tr><td>No Draft status</td><td>Create/import always PendingReview; IsActive false until Approve; Draft lookup inactive; legacy Draft rows remapped</td><td>No Draft; PendingReview + IsActive rules</td><td>DONE</td></tr><tr><td>Canonical status IDs 110â€“114</td><td>Writes prefer IDs 110â€“114; seed/remap on API start; canonical names Draft/PendingReview/Approved/Rejected/Archived (legacy aliases still readable)</td><td>Prefer fixed IDs / names Draft, PendingReview, Approved, Rejected, Archived only</td><td>DONE</td></tr><tr><td>Canonical QuestionType 100â€“104 + Difficulty 2001â€“2003</td><td>Seed/remap on API start (same pattern as status); resolve prefers fixed IDs; Excel accepts type name/id and Easy/Medium/Hard or 2001â€“2003</td><td>Fixed Type 100â€“104 and Difficulty 2001â€“2003</td><td>DONE</td></tr><tr><td>IsAiApproved leftover</td><td>Dual gate removed; Mobile/Web no AI copy; API docs note IsAiApproved is legacy (column kept)</td><td>Clean messaging; optional deprecate field</td><td>DONE</td></tr><tr><td>Fill in the Blanks storage</td><td>Fill create/update/import use question_accepted_answers; legacy options migrated on API start; attempt omits answers pre-submit</td><td>Use question_accepted_answers only for type 103; enforce â‰¥1 answer; wire create/update/import</td><td>DONE</td></tr><tr><td>Fill AI / teacher review flags</td><td>AllowAiReview / AllowTeacherReview applied on submit: text-match suggested marks; AllowTeacherReview â†’ pending teacher finalize; AllowAiReview â†’ QuizReview AI stub; RequiresReview only when Fill + AllowTeacherReview (not all text answers)</td><td>Optional AI then teacher review on attempts when flags set</td><td>DONE</td></tr><tr><td>Type validation rules</td><td>API + Web enforce Single=exactly 1 correct; Multi=â‰¥1; T/F=exactly 2 + 1 correct; Fill=â‰¥1 accepted; Descriptive rejected</td><td>Enforce Single=exactly 1 correct; Multi=â‰¥1; T/F=exactly 2 opts + 1 correct; Fill=â‰¥1 accepted answer</td><td>DONE</td></tr><tr><td>Hide Descriptive + future types in UI</td><td>Create/import UI and ResolveQuestionType offer NOW types only (100â€“103); Descriptive rejected</td><td>Create/import: NOW types only (100â€“103); hide Descriptive until enabled</td><td>DONE</td></tr><tr><td>Attempt answer visibility (Fill)</td><td>Student start-attempt returns empty options for Fill; scoring uses accepted answers server-side</td><td>Student attempt APIs omit accepted/model answers until after submit (or review)</td><td>DONE</td></tr><tr><td>Mobile question bank</td><td>Router + page gate: manage roles only; Student redirected; no AI approved copy</td><td>Manage roles only; Student must not open bank route</td><td>DONE</td></tr><tr><td>Import dry-run UI</td><td>Web: Dry run Excel + full error list + Confirm import after clean dry run</td><td>Optional Dry run button + full error list</td><td>DONE</td></tr><tr><td>Excel import Class/Subject/CorrectOption</td><td>Always PendingReview on import; Class/Subject/Topic name or ID; CorrectOption and/or IsCorrectN</td><td>Import PendingReview only (no Draft/Approved)</td><td>DONE</td></tr><tr><td>Delete while quiz-linked</td><td>Hard block for everyone (correct)</td><td>Optional guided unlink then delete for PortalAdmin</td><td>OPTIONAL</td></tr><tr><td>Approve/Reject audit trail</td><td>Not logged beyond question fields</td><td>Actor + timestamp log for Approve/Reject/Archive</td><td>OPTIONAL</td></tr><tr><td>Core permission matrix</td><td>3-tier approve: Campus/School/Public visibility; PortalAdmin lifecycle; org stamp on create; scoped bank/quiz list</td><td>CampusAdmin→Campus, SchoolAdmin→School, PortalAdmin→Public; lifecycle PortalAdmin-only; Web Excel import</td><td>DONE</td></tr>
-    <tr><td>Question SchoolId / CampusId / VisibilityLevel</td><td>Columns + backfill (Approved→Public; org from creator); API/UI expose Visibility</td><td>Org-scoped visibility after Approve</td><td>DONE</td></tr>
-  </tbody></table>
+  <h2>9. API transition map</h2>
+  <table><thead><tr><th>Endpoint</th><th>Business effect</th></tr></thead><tbody><tr><td>POST /api/questions</td><td>Create as PendingReview</td></tr><tr><td>POST /api/questions/import</td><td>Validate/import as PendingReview only</td></tr><tr><td>PUT /api/questions/{id}</td><td>Update content; Rejected remains Rejected</td></tr><tr><td>POST /api/questions/{id}/submit</td><td>Rejected → PendingReview</td></tr><tr><td>POST /api/questions/{id}/approve</td><td>PendingReview → Approved + scoped visibility</td></tr><tr><td>POST /api/questions/{id}/reject</td><td>PendingReview → Rejected + reason</td></tr><tr><td>POST /api/questions/{id}/activate</td><td>Approved: IsActive=true</td></tr><tr><td>POST /api/questions/{id}/deactivate</td><td>Approved: IsActive=false</td></tr><tr><td>POST /api/questions/{id}/archive</td><td>→ Archived; IsActive=false</td></tr><tr><td>DELETE /api/questions/{id}</td><td>Delete if permitted and not quiz-linked</td></tr></tbody></table>
 
-  <h2 id="decisions">9. Open decisions</h2>
-  <ol>
-    <li>Import always PendingReview (Status column ignored). Never Approved via import.</li>
-    <li>Delete while linked to quizzes: blocked for everyone including PortalAdmin (implemented).</li>
-    <li>Rejected edit stays Rejected until Submit for review (implemented).</li>
-    <li>IsAiApproved dual gate dropped — Approve + Visibility sets quiz eligibility in scope (implemented).</li>
-    <li>Fill in the Blanks is NOW — accepted answers. Descriptive remains NOT NOW.</li>
-    <li>Fill AI/Teacher review flags apply at attempt submit. Bank approval is 3-tier (Campus / School / Public).</li>
-    <li>Promotion of Campus→School→Public on already-Approved items: not required for v1 (approve from PendingReview only). Optional later.</li>
-  </ol>
+  <h2>10. UI presentation rules</h2>
+  <ul><li>Question status filters are PendingReview, Approved, Rejected, and Archived.</li><li>Active/Inactive filters represent IsActive and must be visually separated from workflow status.</li><li>Approved uses green; Active uses blue; Pending uses amber; Rejected uses red; Archived/Inactive use slate.</li><li>When both are needed, show two concepts separately: e.g. Status=Approved and Activity=Inactive.</li><li>Question-list rows navigate to detail; mutation and workflow actions live on the question detail page.</li></ul>
 
-  <h2 id="suggestions">10. Suggested improvements</h2>
-  <p>Core type storage, validation, Fill accepted answers, review flags, canonical lookups, import dry-run,
-  answer privacy, and resubmit-as-explicit-action are already implemented (see Â§8 DONE rows). Remaining advisory items:</p>
-  <ul>
-<li><strong>External AI grading pipeline:</strong> AllowAiReview currently writes a QuizReview AI stub at attempt time; replace with a real grading service when available.</li>
-<li><strong>Reject reason UX polish:</strong> Enforce a minimum reason length (e.g. 10 chars), keep reason visible on the ownerâ€™s detail card, and clear it when resubmitted to PendingReview (if not already cleared).</li>
-<li><strong>Descriptive (104) when enabled:</strong> Reuse Fill accepted-answer + review-flag patterns; unhide create/import only then.</li>
-<li><strong>Audit trail (OPTIONAL):</strong> Log Approve/Reject/Activate/Archive with actor + timestamp (and reject reason) for disputes and QA.</li>
-<li><strong>Guided unlink-before-delete (OPTIONAL):</strong> Keep hard block while quiz-linked; optionally let PortalAdmin unlink then delete in one guided flow.</li>
-  </ul>
+  <h2>11. QA scenarios</h2>
+  <div class="scenario"><strong>Q-01 — Create starts pending</strong><p><b>Steps:</b> Create as Teacher/Parent/CampusAdmin/SchoolAdmin/PortalAdmin.</p><p><b>Expected:</b> Status=PendingReview, IsActive=false, Visibility=None; Draft is never created.</p></div><div class="scenario"><strong>Q-02 — Campus approval</strong><p><b>Steps:</b> CampusAdmin approves an in-scope PendingReview question.</p><p><b>Expected:</b> Approved + Campus visibility + active. Other campuses cannot use it.</p></div><div class="scenario"><strong>Q-03 — School approval</strong><p><b>Steps:</b> SchoolAdmin approves an in-school PendingReview question.</p><p><b>Expected:</b> Approved + School visibility + active across that school's campuses.</p></div><div class="scenario"><strong>Q-04 — Portal approval</strong><p><b>Steps:</b> PortalAdmin approves PendingReview.</p><p><b>Expected:</b> Approved + Public visibility + active.</p></div><div class="scenario"><strong>Q-05 — Reject and resubmit</strong><p><b>Steps:</b> Approver rejects with reason; owner edits and submits for review.</p><p><b>Expected:</b> Rejected stays Rejected during edit, then explicit submit returns it to PendingReview.</p></div><div class="scenario"><strong>Q-06 — Approved deactivation</strong><p><b>Steps:</b> PortalAdmin deactivates an Approved question.</p><p><b>Expected:</b> Status remains Approved; IsActive=false; question is unavailable for new quiz use.</p></div><div class="scenario"><strong>Q-07 — Archive</strong><p><b>Steps:</b> PortalAdmin archives a question.</p><p><b>Expected:</b> Status=Archived; IsActive=false; hidden from normal bank/quiz use.</p></div><div class="scenario"><strong>Q-08 — Ownership lock</strong><p><b>Steps:</b> Non-PortalAdmin owner tries to edit/delete after approval.</p><p><b>Expected:</b> Forbidden. PortalAdmin retains lifecycle and mutation control.</p></div><div class="scenario"><strong>Q-09 — Excel import</strong><p><b>Steps:</b> Upload valid/invalid rows, run dry-run, then confirm.</p><p><b>Expected:</b> Valid rows become PendingReview only; row errors are reported; import never approves.</p></div><div class="scenario"><strong>Q-10 — Fill answer privacy</strong><p><b>Steps:</b> Student starts a quiz containing Fill in the Blanks.</p><p><b>Expected:</b> Accepted/model answers are not returned before submission.</p></div>
 
-  <h2 id="scenarios">11. QA scenarios</h2>
-  <div class="scenario"><h3><span class="id">Q-01</span>PortalAdmin CRUD + Approve + Activate</h3><ol class="steps"><li>PortalAdmin creates a question â†’ Approve â†’ status Approved.</li><li>PortalAdmin Activate / Deactivate / Archive â†’ allowed; other roles â†’ forbidden.</li><li>PortalAdmin updates/deletes any question â†’ allowed (respect quiz-link policy if still enforced).</li></ol><div class="expect">Expected: Full control for PortalAdmin including Activate/Deactivate/Archive.</div></div><div class="scenario"><h3><span class="id">Q-02</span>Teacher creates and edits own Pending</h3><ol class="steps"><li>Teacher creates question â†’ PendingReview (or Draft then submit).</li><li>Teacher updates own Pending question â†’ allowed.</li><li>Teacher deletes own Pending question â†’ allowed.</li></ol><div class="expect">Expected: Owner can manage pre-Approved own items.</div></div><div class="scenario"><h3><span class="id">Q-03</span>Teacher blocked on Approved</h3><ol class="steps"><li>PortalAdmin approves Teacherâ€™s question.</li><li>Teacher tries Update â†’ forbidden.</li><li>Teacher tries Delete â†’ forbidden.</li><li>Teacher tries Activate/Deactivate â†’ forbidden.</li></ol><div class="expect">Expected: Approved is locked for nonâ€“PortalAdmin; lifecycle flags are PortalAdmin-only.</div></div><div class="scenario"><h3><span class="id">Q-04</span>CampusAdmin create</h3><ol class="steps"><li>Login as CampusAdmin â†’ Create question succeeds.</li><li>CampusAdmin sees own Pending; can edit/delete until Approved.</li></ol><div class="expect">Expected: CampusAdmin is a first-class creator.</div></div><div class="scenario"><h3><span class="id">Q-05</span>Three-tier Approve visibility</h3><ol class="steps"><li>Teacher in Campus A creates question → PendingReview (SchoolId/CampusId stamped).</li><li>CampusAdmin of Campus A Approves → Approved, Visibility=Campus. Teacher in Campus B (same school) cannot see it; Teacher in Campus A can.</li><li>SchoolAdmin Approves a different Pending in the school → Visibility=School. All campuses of that school can see/use it.</li><li>PortalAdmin Approves another → Visibility=Public. Manage roles in other schools can see/use it.</li><li>CampusAdmin of Campus B tries Approve on Campus A pending → forbidden.</li></ol><div class="expect">Expected: Visibility matches approver role; org scope enforced.</div></div><div class="scenario"><h3><span class="id">Q-06</span>Approved scoped visibility; Student blocked from bank</h3><ol class="steps"><li>Create + Campus-approve a question with options.</li><li>Same-campus Teacher: sees it in bank + quiz picker. Other-campus Teacher (same school): does not (unless SchoolAdmin approved).</li><li>Public-approved: any manage role sees it.</li><li>As Student: no Questions bank menu; API list/get bank → forbidden. Student still answers questions inside a quiz attempt.</li></ol><div class="expect">Expected: Scoped bank read; Students only via quizzes.</div></div><div class="scenario"><h3><span class="id">Q-07</span>Excel import â€” Web only</h3><ol class="steps"><li>On Web, creator clicks Import â†’ uploads valid .xlsx.</li><li>Rows create questions owned by importer; status Draft or PendingReview (never Approved).</li><li>Invalid rows reported with row errors.</li><li>On Mobile: no Import button / no import API usage from app.</li></ol><div class="expect">Expected: Bulk create from Excel on Web only.</div></div><div class="scenario"><h3><span class="id">Q-08</span>Reject requires reason; owner resubmit or delete</h3><ol class="steps"><li>CampusAdmin / SchoolAdmin / PortalAdmin Reject without reason → validation error.</li><li>Approver Reject with reason → Rejected; Visibility cleared; reason shown to owner.</li><li>Owner edits Rejected question and submits → PendingReview.</li><li>Alternatively owner deletes Rejected question → allowed.</li></ol><div class="expect">Expected: Reject is reasoned; owner can fix/resubmit or remove.</div></div><div class="scenario"><h3><span class="id">Q-09</span>Parent ownership + SchoolAdmin approve in school</h3><ol class="steps"><li>Parent creates → edits own Pending → cannot edit after Approve.</li><li>SchoolAdmin can Approve/Reject Pending in their school (→ School visibility) but cannot Activate/Archive (PortalAdmin-only).</li><li>Teacher cannot Approve/Reject.</li></ol><div class="expect">Expected: Ownership + scoped admin approval + PortalAdmin lifecycle.</div></div><div class="scenario"><h3><span class="id">Q-10</span>Fill in the Blanks â€” accepted answers + visibility + review flags</h3><ol class="steps"><li>Creator adds Fill in the Blanks with â‰¥1 accepted answer (case / partial / length flags as needed).</li><li>Create with zero accepted answers â†’ validation error.</li><li>PortalAdmin Approves â†’ manage roles see accepted answers in bank detail.</li><li>Student starts quiz attempt containing the Fill question â†’ API/UI must NOT return accepted/model answers before submit.</li><li>Fill with <strong>no</strong> AllowTeacherReview â†’ auto text-match scores immediately (no teacher pending for that question).</li><li>Fill with AllowTeacherReview â†’ suggested marks stored; student result pending while quiz review required; teacher must mark feedback before finalize.</li><li>Fill with AllowAiReview â†’ QuizReview AI stub comment with suggested match; does not finalize without human feedback when teacher review is also required.</li></ol><div class="expect">Expected: Fill uses accepted answers; students never see model answers pre-submit; review flags drive attempt/review behaviour.</div></div><div class="scenario"><h3><span class="id">Q-11</span>Choice-type validation</h3><ol class="steps"><li>Single Choice with 0 or 2+ correct options â†’ rejected.</li><li>Multiple Choice with no correct options â†’ rejected.</li><li>True/False with wrong option count or both correct â†’ rejected.</li></ol><div class="expect">Expected: Per-type IsCorrect rules enforced on create/update/import.</div></div>
+  <h2>12. Verification checklist</h2>
+  <ul><li>☐ Create and import always produce PendingReview, IsActive=false, Visibility=None.</li><li>☐ Draft is inactive/legacy and never appears as a create/import choice.</li><li>☐ Approve is allowed only from PendingReview and only within approver scope.</li><li>☐ CampusAdmin/SchoolAdmin/PortalAdmin approval produces Campus/School/Public visibility.</li><li>☐ Reject requires a reason and clears active/approval/visibility state.</li><li>☐ Editing Rejected does not auto-submit; explicit Submit returns it to PendingReview.</li><li>☐ Only PortalAdmin can activate, deactivate, archive, or mutate Approved questions.</li><li>☐ Deactivate keeps QuestionStatus=Approved and only changes IsActive.</li><li>☐ Archived and inactive are not interchangeable: Archived is status; inactive is a flag.</li><li>☐ Quiz eligibility requires Approved + IsActive + ApprovedBy + visible scope.</li><li>☐ Question bank excludes Students; students receive questions only through quiz attempts.</li><li>☐ Single/Multi/True-False/Fill validation rules are enforced on create/update/import.</li><li>☐ Descriptive remains unavailable.</li><li>☐ Accepted answers are hidden from students before attempt submission.</li><li>☐ Deleting a quiz-linked question is blocked.</li></ul>
 
-  <h2 id="checklist">12. Verification checklist</h2>
-  <table><thead><tr><th style="width:8%">#</th><th style="width:82%">Check</th><th style="width:10%">Pass?</th></tr></thead><tbody><tr><td>1</td><td>PortalAdmin Create/Update/Delete/Approve/Reject(reason)/Activate/Deactivate/Archive</td><td>â˜</td></tr><tr><td>2</td><td>SchoolAdmin / CampusAdmin / Teacher / Parent can Create</td><td>â˜</td></tr><tr><td>3</td><td>Those roles Update own only if not Approved (incl. Rejected â†’ resubmit)</td><td>â˜</td></tr><tr><td>4</td><td>Those roles Delete own PendingReview/Rejected only</td><td>â˜</td></tr><tr><td>5</td><td>Only PortalAdmin deletes Approved (or any)</td><td>â˜</td></tr><tr><td>6</td><td>CampusAdmin / SchoolAdmin / PortalAdmin Approve in scope (Campus / School / Public); Reject requires reason</td><td>☐</td></tr><tr><td>7</td><td>Only PortalAdmin Activate / Deactivate / Archive</td><td>☐</td></tr><tr><td>8</td><td>Manage roles see Approved only within visibility scope (+ Public); Student has no bank access</td><td>☐</td></tr><tr><td>9</td><td>Student still sees questions inside quizzes</td><td>â˜</td></tr><tr><td>10</td><td>Status IDs 110â€“114; Type 100â€“104; Difficulty 2001â€“2003 (canonical seeds + remaps)</td><td>â˜</td></tr><tr><td>11</td><td>CampusAdmin included in create/manage scope</td><td>â˜</td></tr><tr><td>12</td><td>Excel import on Web only (not Mobile)</td><td>â˜</td></tr><tr><td>13</td><td>NOW types: Single Choice, Multiple Choice, True/False, Fill in the Blanks</td><td>â˜</td></tr><tr><td>14</td><td>Fill uses question_accepted_answers (â‰¥1); choice types use question_options</td><td>â˜</td></tr><tr><td>15</td><td>Student attempt: no model/accepted answers before submit (esp. Fill)</td><td>â˜</td></tr><tr><td>16</td><td>Descriptive + future types hidden until enabled</td><td>â˜</td></tr><tr><td>17</td><td>IsAiApproved is optional flag â€” not a second quiz-eligibility gate</td><td>â˜</td></tr><tr><td>18</td><td>Fill AllowTeacherReview â†’ teacher pending; AllowAiReview â†’ AI stub; plain Fill auto-scores</td><td>â˜</td></tr><tr><td>19</td><td>Excel import: Class/Subject/Topic name or ID; Status Draft|PendingReview; CorrectOption index and/or IsCorrectN</td><td>â˜</td></tr></tbody></table>
+  <h2>13. Known compatibility and optional work</h2>
+  <ul><li>Legacy status names Pending, UnderReview, Active, Published, and Declined remain readable for migrated data; new writes use canonical names/IDs.</li><li>IsAiApproved is a legacy compatibility field, not a second approval gate.</li><li>Delete remains blocked while a question is linked to a quiz; guided unlink-then-delete is optional.</li><li>A separate workflow audit log for Approve/Reject/Activate/Deactivate/Archive is optional and not part of the current status fields.</li><li>External AI grading for Fill is future work; current AllowAiReview behavior is a review stub.</li></ul>
 
-  <footer>Generated from docs/03_build_questions_business_qa.py. Edit that file and re-run to refresh HTML + DOCX. Fill in the Blanks is in NOW scope; Descriptive remains NOT NOW.</footer>
+  <footer>Generated by docs/build_questions_business_qa.mjs. Edit the generator and rerun <code>npm run build:questions-qa</code>.</footer>
 </main>
 </body>
 </html>

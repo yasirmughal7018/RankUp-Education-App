@@ -3,23 +3,30 @@
  *
  * Approve (Campus→Campus / School→School / Portal→Public visibility), reject with reason,
  * resubmit after reject, and PortalAdmin-only activate / deactivate / archive.
+ * Status and Activity are shown as separate badges per QA guide §10.
  */
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
+import { useLookups } from "@/core/hooks/useLookups";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { useScopeNames } from "@/features/authentication/presentation/hooks/useScopeNames";
 import {
   approvalVisibilityForRole,
+  canActivateQuestion,
   canApproveQuestions,
-  canLifecycleQuestions,
+  canArchiveQuestion,
+  canDeactivateQuestion,
   canMutateQuestion,
-  isApprovedQuestionStatus,
+  displayQuestionStatusLabel,
   isEligibleForQuizQuestion,
   isPendingQuestionStatus,
   isRejectedQuestionStatus,
 } from "@/features/questions/domain/questionTypes";
 import {
-  getQuestionStatusTone,
+  getQuestionActivityStatusKey,
+  getQuestionWorkflowStatusKey,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
@@ -33,6 +40,17 @@ import {
   useSubmitQuestionMutation,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
 
+function lookupName(
+  items: { id: number; name: string }[] | undefined,
+  id: number | null | undefined,
+  fallback: string,
+): string {
+  if (!id || id <= 0) {
+    return "—";
+  }
+  return items?.find((item) => item.id === id)?.name ?? `${fallback} #${id}`;
+}
+
 export function QuestionDetailPage() {
   const { questionId } = useParams();
   const navigate = useNavigate();
@@ -40,6 +58,18 @@ export function QuestionDetailPage() {
   const numericQuestionId = Number(questionId);
 
   const { data: question, isLoading, error } = useQuestionQuery(numericQuestionId);
+  const { schoolName, campusName } = useScopeNames(
+    question?.schoolId,
+    question?.campusId,
+  );
+  const { data: classes = [] } = useLookups(LOOKUP_TYPES.CLASS);
+  const { data: subjects = [] } = useLookups(LOOKUP_TYPES.SUBJECT);
+  const { data: topics = [] } = useLookups(
+    LOOKUP_TYPES.TOPIC,
+    question?.subjectId && question.subjectId > 0 ? question.subjectId : null,
+  );
+  const { data: difficulties = [] } = useLookups(LOOKUP_TYPES.DIFFICULTY);
+
   const approveQuestion = useApproveQuestionMutation(numericQuestionId);
   const rejectQuestion = useRejectQuestionMutation(numericQuestionId);
   const submitQuestion = useSubmitQuestionMutation(numericQuestionId);
@@ -54,8 +84,6 @@ export function QuestionDetailPage() {
   const [rejectReason, setRejectReason] = useState("");
 
   const canApprove = user ? canApproveQuestions(user.role) : false;
-  // Activate / deactivate / archive — PortalAdmin only.
-  const canLifecycle = user ? canLifecycleQuestions(user.role) : false;
   const isOwner =
     user != null &&
     question != null &&
@@ -70,7 +98,6 @@ export function QuestionDetailPage() {
     archiveQuestion.isPending ||
     deleteQuestion.isPending;
 
-  /** Shared success / error banner wrapper for mutation buttons. */
   async function runAction(action: () => Promise<unknown>, success: string) {
     setActionError(null);
     setSuccessMessage(null);
@@ -86,7 +113,7 @@ export function QuestionDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-10 text-sm text-slate-600 sm:px-6">
+      <div className="mx-auto max-w-4xl px-4 py-10 text-sm text-muted-foreground sm:px-6">
         Loading question...
       </div>
     );
@@ -101,7 +128,7 @@ export function QuestionDetailPage() {
         />
         <Link
           to="/questions"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
+          className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
         >
           Back to question bank
         </Link>
@@ -110,7 +137,6 @@ export function QuestionDetailPage() {
   }
 
   const isPending = isPendingQuestionStatus(question.status);
-  const isApproved = isApprovedQuestionStatus(question.status);
   const isRejected = isRejectedQuestionStatus(question.status);
   const canEdit =
     user != null &&
@@ -123,8 +149,41 @@ export function QuestionDetailPage() {
   const canDelete = canEdit;
   // Owner or PortalAdmin may re-queue a Rejected item into PendingReview.
   const canSubmit =
-    (canLifecycle || isOwner) && isRejected;
+    user != null &&
+    (user.role === "PortalAdmin" || isOwner) &&
+    isRejected;
+  const showActivate =
+    user != null &&
+    canActivateQuestion({
+      role: user.role,
+      status: question.status,
+      isActive: question.isActive,
+    });
+  const showDeactivate =
+    user != null &&
+    canDeactivateQuestion({
+      role: user.role,
+      status: question.status,
+      isActive: question.isActive,
+    });
+  const showArchive =
+    user != null &&
+    canArchiveQuestion({
+      role: user.role,
+      status: question.status,
+    });
   const isQuizReady = isEligibleForQuizQuestion(question);
+
+  const className = lookupName(classes, question.classId, "Class");
+  const subjectName = lookupName(subjects, question.subjectId, "Subject");
+  const topicName = question.topicId
+    ? lookupName(topics, question.topicId, "Topic")
+    : "—";
+  const difficultyName = lookupName(
+    difficulties,
+    question.difficultyLevel,
+    "Difficulty",
+  );
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -135,7 +194,7 @@ export function QuestionDetailPage() {
           canEdit ? (
             <Link
               to={`/questions/${question.questionId}/edit`}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
             >
               Edit
             </Link>
@@ -144,80 +203,108 @@ export function QuestionDetailPage() {
       />
 
       {successMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div className="mb-4 rounded-lg border border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] px-4 py-3 text-sm text-[var(--status-approved-text)]">
           {successMessage}
         </div>
       ) : null}
 
       {actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-4 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
           {actionError}
         </div>
       ) : null}
 
-      <section className="mb-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="mb-6 space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge
-            label={question.status}
-            tone={getQuestionStatusTone(question.status, question.isActive)}
+            label={displayQuestionStatusLabel(question.status)}
+            status={getQuestionWorkflowStatusKey(question.status)}
           />
           <StatusBadge
             label={question.isActive ? "Active" : "Inactive"}
-            tone={question.isActive ? "success" : "default"}
+            status={getQuestionActivityStatusKey(question.isActive)}
           />
           {isQuizReady ? (
-            <StatusBadge label="Quiz ready" tone="success" />
+            <StatusBadge label="Quiz ready" status="approved" />
           ) : null}
         </div>
 
-        <p className="text-base leading-7 text-slate-900">{question.questionText}</p>
+        <p className="text-base leading-7 text-foreground">{question.questionText}</p>
 
         {question.rejectionReason ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
             <strong>Rejection reason:</strong> {question.rejectionReason}
           </div>
         ) : null}
 
-        <div className="grid gap-4 text-sm text-slate-700 md:grid-cols-2">
-          <p>Class ID: {question.classId}</p>
-          <p>Subject ID: {question.subjectId}</p>
-          <p>Topic ID: {question.topicId ?? "—"}</p>
-          <p>Difficulty: {question.difficultyLevel}</p>
-          <p>Marks: {question.marks}</p>
-          <p>Time: {question.estimatedTimeSeconds}s</p>
-          <p>Created by: {question.createdBy}</p>
-          <p>Approved by: {question.approvedBy ?? "—"}</p>
-          <p>Visibility: {question.visibility ?? "None"}</p>
-          <p>School ID: {question.schoolId ?? "—"}</p>
-          <p>Campus ID: {question.campusId ?? "—"}</p>
+        <div className="grid gap-4 text-sm text-muted-foreground md:grid-cols-2">
+          <p>
+            <span className="text-foreground">Class:</span> {className}
+          </p>
+          <p>
+            <span className="text-foreground">Subject:</span> {subjectName}
+          </p>
+          <p>
+            <span className="text-foreground">Topic:</span> {topicName}
+          </p>
+          <p>
+            <span className="text-foreground">Difficulty:</span> {difficultyName}
+          </p>
+          <p>
+            <span className="text-foreground">Marks:</span> {question.marks}
+          </p>
+          <p>
+            <span className="text-foreground">Time:</span>{" "}
+            {question.estimatedTimeSeconds}s
+          </p>
+          <p>
+            <span className="text-foreground">Created by:</span>{" "}
+            {question.createdBy}
+          </p>
+          <p>
+            <span className="text-foreground">Approved by:</span>{" "}
+            {question.approvedBy ?? "—"}
+          </p>
+          <p>
+            <span className="text-foreground">Visibility:</span>{" "}
+            {question.visibility ?? "None"}
+          </p>
+          <p>
+            <span className="text-foreground">School:</span> {schoolName ?? "—"}
+          </p>
+          <p>
+            <span className="text-foreground">Campus:</span> {campusName ?? "—"}
+          </p>
         </div>
 
         {question.hint ? (
           <div>
-            <h3 className="text-sm font-medium text-slate-900">Hint</h3>
-            <p className="mt-1 text-sm text-slate-600">{question.hint}</p>
+            <h3 className="text-sm font-medium text-foreground">Hint</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{question.hint}</p>
           </div>
         ) : null}
 
         {question.explanation ? (
           <div>
-            <h3 className="text-sm font-medium text-slate-900">Explanation</h3>
-            <p className="mt-1 text-sm text-slate-600">{question.explanation}</p>
+            <h3 className="text-sm font-medium text-foreground">Explanation</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {question.explanation}
+            </p>
           </div>
         ) : null}
 
         {question.options.length > 0 ? (
           <div>
-            <h3 className="mb-3 text-sm font-medium text-slate-900">Options</h3>
+            <h3 className="mb-3 text-sm font-medium text-foreground">Options</h3>
             <ul className="space-y-2">
               {question.options.map((option) => (
                 <li
                   key={option.optionId}
-                  className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700"
+                  className="rounded-lg border border-border px-4 py-3 text-sm text-foreground"
                 >
                   {option.optionText}
                   {option.isCorrect ? (
-                    <span className="ml-2 text-xs font-medium text-emerald-700">
+                    <span className="ml-2 text-xs font-medium text-[var(--status-approved-text)]">
                       Correct
                     </span>
                   ) : null}
@@ -229,17 +316,17 @@ export function QuestionDetailPage() {
 
         {(question.acceptedAnswers?.length ?? 0) > 0 ? (
           <div>
-            <h3 className="mb-3 text-sm font-medium text-slate-900">
+            <h3 className="mb-3 text-sm font-medium text-foreground">
               Accepted answers
             </h3>
             <ul className="space-y-2">
               {question.acceptedAnswers.map((answer) => (
                 <li
                   key={answer.acceptedAnswerId}
-                  className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-slate-700"
+                  className="rounded-lg border border-[var(--status-approved-border)] bg-[var(--status-approved-bg)]/60 px-4 py-3 text-sm text-foreground"
                 >
                   <span className="font-medium">{answer.answerText}</span>
-                  <span className="mt-1 block text-xs text-slate-500">
+                  <span className="mt-1 block text-xs text-muted-foreground">
                     {[
                       answer.isCaseSensitive ? "case-sensitive" : null,
                       answer.allowPartialMatch ? "partial match" : null,
@@ -257,7 +344,6 @@ export function QuestionDetailPage() {
       </section>
 
       <section className="flex flex-wrap gap-2">
-        {/* Approvers only while PendingReview — visibility tier follows role. */}
         {canApprove && isPending ? (
           <>
             <button
@@ -271,7 +357,7 @@ export function QuestionDetailPage() {
                     : "Question approved.",
                 )
               }
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
             >
               Approve
               {user ? ` · ${approvalVisibilityForRole(user.role)}` : null}
@@ -285,7 +371,7 @@ export function QuestionDetailPage() {
                 setActionError(null);
                 setSuccessMessage(null);
               }}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+              className="rounded-lg border border-[var(--status-rejected-border)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:bg-[var(--status-rejected-bg)] disabled:opacity-70"
             >
               Reject
             </button>
@@ -293,12 +379,15 @@ export function QuestionDetailPage() {
         ) : null}
 
         {canApprove && isPending && showRejectReason ? (
-          <div className="w-full rounded-xl border border-red-200 bg-red-50/60 p-4">
+          <div className="w-full rounded-xl border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)]/60 p-4">
             <label
               htmlFor="rejectReason"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
-              Rejection reason <span className="font-bold text-red-800">*</span>
+              Rejection reason{" "}
+              <span className="font-bold text-[var(--status-rejected-text)]">
+                *
+              </span>
             </label>
             <textarea
               id="rejectReason"
@@ -320,7 +409,7 @@ export function QuestionDetailPage() {
                     setRejectReason("");
                   }, "Question rejected.")
                 }
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-70"
+                className="rounded-lg bg-[var(--status-rejected-text)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-70"
               >
                 Confirm reject
               </button>
@@ -331,7 +420,7 @@ export function QuestionDetailPage() {
                   setShowRejectReason(false);
                   setRejectReason("");
                 }}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-70"
               >
                 Cancel
               </button>
@@ -346,16 +435,16 @@ export function QuestionDetailPage() {
             onClick={() =>
               void runAction(
                 () => submitQuestion.mutateAsync(),
-                "Submitted for Portal Admin review.",
+                "Submitted for review (PendingReview).",
               )
             }
-            className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-50 disabled:opacity-70"
+            className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
           >
             Submit for review
           </button>
         ) : null}
 
-        {canLifecycle && isApproved && !question.isActive ? (
+        {showActivate ? (
           <button
             type="button"
             disabled={isSubmitting}
@@ -365,13 +454,13 @@ export function QuestionDetailPage() {
                 "Question activated.",
               )
             }
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
           >
             Activate
           </button>
         ) : null}
 
-        {canLifecycle && question.isActive ? (
+        {showDeactivate ? (
           <button
             type="button"
             disabled={isSubmitting}
@@ -381,13 +470,13 @@ export function QuestionDetailPage() {
                 "Question deactivated.",
               )
             }
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-70"
           >
             Deactivate
           </button>
         ) : null}
 
-        {canLifecycle ? (
+        {showArchive ? (
           <button
             type="button"
             disabled={isSubmitting}
@@ -397,7 +486,7 @@ export function QuestionDetailPage() {
                 "Question archived.",
               )
             }
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-70"
           >
             Archive
           </button>
@@ -424,7 +513,7 @@ export function QuestionDetailPage() {
                 }
               })();
             }}
-            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+            className="rounded-lg border border-[var(--status-rejected-border)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:bg-[var(--status-rejected-bg)] disabled:opacity-70"
           >
             Delete
           </button>

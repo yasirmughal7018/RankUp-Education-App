@@ -221,7 +221,7 @@ export function StudentFormDialog({
             </>
           ) : (
             <p className="text-sm text-slate-500">
-              Username {student.username} · School ID {student.schoolId}
+              Username {student.username} · {student.schoolName || "—"}
             </p>
           )}
 
@@ -250,7 +250,7 @@ export function StudentFormDialog({
                   : ([
                       {
                         id: student.campusId,
-                        name: `Campus ${student.campusId}`,
+                        name: student.campusName || "Current campus",
                       },
                     ] as Pick<DirectoryCampus, "id" | "name">[])
                 : campuses

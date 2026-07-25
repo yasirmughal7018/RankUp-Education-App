@@ -228,20 +228,14 @@ export function PendingRegistrationsPage() {
     if (registration.schoolId == null) {
       return "No school";
     }
-    return (
-      schoolNameById.get(registration.schoolId) ??
-      `School #${registration.schoolId}`
-    );
+    return schoolNameById.get(registration.schoolId) ?? "Unknown school";
   }
 
   function campusLabel(registration: PendingRegistration): string | null {
     if (registration.campusId == null) {
       return null;
     }
-    return (
-      campusNameById.get(registration.campusId) ??
-      `Campus #${registration.campusId}`
-    );
+    return campusNameById.get(registration.campusId) ?? "Unknown campus";
   }
 
   function formatPendingApprovers(registration: PendingRegistration): string {

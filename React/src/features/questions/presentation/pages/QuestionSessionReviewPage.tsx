@@ -4,13 +4,15 @@ import { PageHeader } from "@/core/components/PageHeader";
 import { useLookups } from "@/core/hooks/useLookups";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import {
+  displayQuestionStatusLabel,
   normalizeQuestionType,
   type QuestionDetail,
   type QuestionFormValues,
 } from "@/features/questions/domain/questionTypes";
 import {
   StatusBadge,
-  getQuestionStatusTone,
+  getQuestionActivityStatusKey,
+  getQuestionWorkflowStatusKey,
 } from "@/features/questions/presentation/components/StatusBadge";
 
 /** Location state passed from batch create to the session review route. */
@@ -58,6 +60,7 @@ export function QuestionSessionReviewPage() {
     LOOKUP_TYPES.TOPIC,
     question?.subjectId && question.subjectId > 0 ? question.subjectId : null,
   );
+  const { data: difficulties = [] } = useLookups(LOOKUP_TYPES.DIFFICULTY);
 
   const scopeSummary = useMemo(() => {
     if (!question) {
@@ -136,12 +139,12 @@ export function QuestionSessionReviewPage() {
       <section className="mb-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge
-            label={question.status}
-            tone={getQuestionStatusTone(question.status, question.isActive)}
+            label={displayQuestionStatusLabel(question.status)}
+            status={getQuestionWorkflowStatusKey(question.status)}
           />
           <StatusBadge
             label={question.isActive ? "Active" : "Inactive"}
-            tone={question.isActive ? "success" : "default"}
+            status={getQuestionActivityStatusKey(question.isActive)}
           />
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
             {normalizeQuestionType(question.questionType)}
@@ -164,7 +167,7 @@ export function QuestionSessionReviewPage() {
               ? lookupName(topics, question.topicId, "Topic")
               : "—"}
           </p>
-          <p>Difficulty: {question.difficultyLevel}</p>
+          <p>Difficulty: {lookupName(difficulties, question.difficultyLevel, "Difficulty")}</p>
           <p>Marks: {question.marks}</p>
           <p>Time: {question.estimatedTimeSeconds}s</p>
         </div>
