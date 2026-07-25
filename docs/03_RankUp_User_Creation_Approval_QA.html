@@ -186,7 +186,7 @@
     <li>Roles live only in <code>app_user_roles</code>. Columns <code>app_users.role</code> and <code>app_users.admin_target</code> are <strong>removed</strong>.</li>
     <li>Default login role = earliest role assignment in <code>app_user_roles</code> (by <code>created_at</code>).</li>
     <li>JWT <code>role</code> claim = <strong>active</strong> session role; <code>roles</code> = all assigned roles.</li>
-    <li>Registration routing: <code>app_approval</code>. School/campus change routing: <code>app_user_school_change_request</code> + <code>app_user_school_change_approval</code>.</li>
+    <li>Registration routing: <code>app_approval</code> — a generic approval table shared with the question bank (<code>entity_type=1</code> user registration rows with <code>user_id</code>; <code>entity_type=2</code> question workflow-trail rows with <code>question_id</code>). School/campus change routing: <code>app_user_school_change_request</code> + <code>app_user_school_change_approval</code>.</li>
     <li>Registration reject is a <strong>soft-reject</strong> (no hard delete). Unique indexes on username/CNIC ignore rows where <code>rejected_at IS NOT NULL</code>.</li>
   </ul>
 

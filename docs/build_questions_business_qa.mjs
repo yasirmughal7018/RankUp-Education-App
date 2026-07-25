@@ -91,6 +91,11 @@ const lifecycle = [
     "Explicit Submit for review action; endorsement and visibility stay cleared.",
   ],
   [
+    "Owner / PortalAdmin edits content",
+    "Unchanged",
+    "Owners may edit while PendingReview or Rejected; PortalAdmin may edit any. Records a Modified event in the approval trail; Rejected stays Rejected until an explicit resubmit.",
+  ],
+  [
     "PortalAdmin deactivate / activate",
     "Approved (unchanged)",
     "Applies to a Published (Public) question. Deactivate sets IsActive=false (UI Activity=Inactive); activate sets IsActive=true. Endorsed, PendingReview, Rejected, and Archived stay Inactive and cannot be activated.",
@@ -148,7 +153,8 @@ const permissions = [
     "No",
   ],
   ["Publish (Public + Active)", "Yes", "No", "No", "No", "No", "No"],
-  ["Activate/deactivate/archive", "Yes", "No", "No", "No", "No", "No"],
+  ["Activate / deactivate / archive / unarchive", "Yes", "No", "No", "No", "No", "No"],
+  ["View Approval history on detail", "Yes", "Yes (visible questions)", "Yes (visible questions)", "Yes (own + Public)", "Yes (own + Public)", "No"],
 ];
 
 const questionTypes = [
@@ -170,17 +176,29 @@ const questionTypes = [
 ];
 
 const apiTransitions = [
-  ["POST /api/questions", "Create as PendingReview"],
-  ["POST /api/questions/import", "Validate/import as PendingReview only"],
-  ["PUT /api/questions/{id}", "Update content; Rejected remains Rejected"],
-  ["POST /api/questions/{id}/submit", "Rejected → PendingReview"],
-  ["POST /api/questions/{id}/approve", "PendingReview → Approved + scoped visibility"],
-  ["POST /api/questions/{id}/reject", "PendingReview → Rejected + reason"],
-  ["POST /api/questions/{id}/activate", "Approved: IsActive=true"],
-  ["POST /api/questions/{id}/deactivate", "Approved: IsActive=false"],
-  ["POST /api/questions/{id}/archive", "→ Archived; IsActive=false"],
-  ["POST /api/questions/{id}/unarchive", "Archived → Approved/PendingReview (Public also Active)"],
-  ["DELETE /api/questions/{id}", "Delete if permitted and not quiz-linked"],
+  ["GET /api/questions/{id}", "Detail with options/answers, creator/approver names, and ApprovalHistory trail"],
+  ["POST /api/questions", "Create as PendingReview (PortalAdmin: auto-published); trail: Created + Submitted/Published"],
+  ["POST /api/questions/import", "Validate/import as PendingReview only (max 200 rows); trail per created row"],
+  ["PUT /api/questions/{id}", "Update content; trail: Modified; Rejected remains Rejected"],
+  ["POST /api/questions/{id}/submit", "Rejected → PendingReview; trail: SubmittedForReview"],
+  ["POST /api/questions/{id}/approve", "PendingReview → Approved + scoped visibility; trail: Endorsed or Published"],
+  ["POST /api/questions/{id}/reject", "PendingReview → Rejected + reason (min 10 chars); trail: Rejected + reason"],
+  ["POST /api/questions/{id}/activate", "Approved (Public): IsActive=true; trail: Activated"],
+  ["POST /api/questions/{id}/deactivate", "Approved (Public): IsActive=false; trail: Deactivated"],
+  ["POST /api/questions/{id}/archive", "→ Archived; IsActive=false; trail: Archived"],
+  ["POST /api/questions/{id}/unarchive", "Archived → Approved/PendingReview (Public also Active); trail: Unarchived"],
+  ["DELETE /api/questions/{id}", "Delete if permitted and not quiz-linked (trail rows are removed with the question)"],
+];
+
+const trailEvents = [
+  ["Created", "Question authored (bank create, import row, inline quiz create, quiz duplicate)", "Creator (any question-managing role)"],
+  ["SubmittedForReview", "Sent (or resent) into the pending queue", "Creator; PortalAdmin may resubmit any"],
+  ["Endorsed", "Approved with Campus/School visibility — recorded, still Inactive", "CampusAdmin / SchoolAdmin"],
+  ["Published", "Approved as Public + Active + quiz-usable (incl. PortalAdmin auto-publish on create)", "PortalAdmin"],
+  ["Rejected", "Refused with the stored reason shown in the trail", "Eligible higher-tier approver"],
+  ["Modified", "Content/options/answers edited (bank edit or inline quiz edit)", "Owner or PortalAdmin"],
+  ["Activated / Deactivated", "Published question switched on/off for quiz use", "PortalAdmin"],
+  ["Archived / Unarchived", "Retired from the bank / restored to prior state", "PortalAdmin"],
 ];
 
 const scenarios = [
@@ -268,6 +286,18 @@ const scenarios = [
     "Student starts a quiz containing Fill in the Blanks.",
     "Accepted/model answers are not returned before submission.",
   ],
+  [
+    "Q-13",
+    "Approval history trail",
+    "Teacher creates; CampusAdmin endorses; owner edits; PortalAdmin publishes, deactivates, archives, unarchives.",
+    "Question detail shows every step in Approval history — actor name + role, action chip, timestamp, and the rejection reason when present — in chronological order for all roles.",
+  ],
+  [
+    "Q-14",
+    "Modified is recorded",
+    "Owner edits a PendingReview/Rejected question (or their inline quiz question).",
+    "A Modified event with the editor's name and role appears in the trail; status and visibility are unchanged.",
+  ],
 ];
 
 const checklist = [
@@ -291,6 +321,10 @@ const checklist = [
   "Descriptive remains unavailable.",
   "Accepted answers are hidden from students before attempt submission.",
   "Deleting a quiz-linked question is blocked.",
+  "Every workflow action (create, submit, endorse, publish, reject, modify, activate, deactivate, archive, unarchive) appends an Approval history row with actor name + role + timestamp, for every role.",
+  "Question detail always shows the Approval history panel; rejection reasons appear inline in the trail.",
+  "Archive preserves Visibility/ApprovedBy; Unarchive restores Public → Approved+Active, Campus/School → Approved+Inactive, None → PendingReview.",
+  "Created by / Approved by show user display names (FKs to app_users), not raw IDs.",
 ];
 
 function escapeHtml(value) {
@@ -355,14 +389,15 @@ const html = `<!doctype html>
     <p class="subtitle">Intended rules for question status, activity, visibility, role-based approval hierarchy, import, and QA.</p>
     <div class="meta">
       <span class="chip">Approval model v2</span>
-      <span class="chip">25 Jul 2026</span>
+      <span class="chip">26 Jul 2026</span>
       <span class="chip">PortalAdmin-only publish</span>
+      <span class="chip">Approval history trail</span>
     </div>
   </header>
 
   <div class="ok"><strong>Canonical model:</strong> A question is usable — Public, Active, and quiz-eligible — only after <strong>PortalAdmin</strong> approves (publishes) it. A CampusAdmin/SchoolAdmin approval is an <em>endorsement</em>: it records review progress but keeps the question Inactive and restricted to its creator plus that creator's own CampusAdmin, SchoolAdmin, and PortalAdmin. QuestionStatus records workflow state; IsActive is true only for a Published (Public) question; Visibility records how far a question has been endorsed.</div>
 
-  <div class="note"><strong>Spec status &amp; assumptions:</strong> This v2 model reflects the confirmed rules: (1) only PortalAdmin approval publishes/activates; (2) only Public questions are quiz-usable; (3) the approver must be a strictly higher tier than the creator (no self / same-tier approval), and any eligible higher tier may act independently. <strong>Assumption to confirm:</strong> a CampusAdmin/SchoolAdmin endorsement is recorded as Status=Approved with Visibility=Campus/School but IsActive=false and a restricted audience (it does not widen the audience to peers). Not yet implemented in code — awaiting your go-ahead.</div>
+  <div class="note"><strong>Spec status:</strong> This v2 model is <strong>implemented in code</strong>: (1) only PortalAdmin approval publishes/activates; (2) only Public questions are quiz-usable; (3) the approver must be a strictly higher tier than the creator (no self / same-tier approval), and any eligible higher tier may act independently; (4) a CampusAdmin/SchoolAdmin endorsement is recorded as Status=Approved with Visibility=Campus/School but IsActive=false and a restricted audience (it does not widen the audience to peers); (5) every workflow step is written to the <code>app_approval</code> trail and shown as Approval history on the question detail page.</div>
 
   <h2>1. Canonical status meanings</h2>
   ${htmlTable(["ID", "QuestionStatus", "Activity", "Meaning"], statuses)}
@@ -417,6 +452,7 @@ const html = `<!doctype html>
   <h2>8. Excel import</h2>
   ${htmlList([
     "Web-only UI at /questions/import; available to question-managing roles.",
+    "Import is limited to 200 rows per file; row 1 is the header.",
     "Dry run validates the workbook and returns all row errors.",
     "Confirm import creates valid rows as PendingReview only.",
     "A Status column cannot approve a question; import never creates Approved.",
@@ -427,16 +463,31 @@ const html = `<!doctype html>
   <h2>9. API transition map</h2>
   ${htmlTable(["Endpoint", "Business effect"], apiTransitions)}
 
-  <h2>10. UI presentation rules</h2>
+  <h2>10. Approval history (workflow trail)</h2>
+  <p>Every question carries a full audit trail in the generic <code>app_approval</code> table (<code>entity_type = 2</code>, typed FK to <code>questions</code>; user-registration rows share the same table with <code>entity_type = 1</code>). Each row stores the acting user (FK to <code>app_users</code>), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel — for Teacher, Parent, CampusAdmin, SchoolAdmin, and PortalAdmin alike — with an actor card, role, colour-coded action chip, and the rejection reason inline.</p>
+  ${htmlTable(["Event", "Meaning", "Recorded for"], trailEvents)}
+  ${htmlList([
+    "Inline quiz-created and quiz-duplicated questions record Created + Endorsed in one step.",
+    "Pre-existing questions were seeded with Created plus Endorsed/Published rows derived from created_by / approved_by.",
+    "Historical rejections are not attributed (the rejector was never stored before the trail existed); all new rejections are.",
+    "Trail rows are removed together with the question on delete (cascade).",
+  ])}
+
+  <h2>11. UI presentation rules</h2>
   ${htmlList([
     "Question status filters are PendingReview, Approved, Rejected, and Archived.",
     "Active/Inactive filters represent IsActive. Meaningful Active/Inactive variation applies only to Approved questions; other statuses are always Inactive.",
     "Approved uses green; Active uses blue; Pending uses amber; Rejected uses red; Archived/Inactive use slate.",
     "When both are needed, show two concepts separately: e.g. Status=Approved and Activity=Inactive for a PortalAdmin-deactivated Approved question.",
     "Question-list rows navigate to detail; mutation and workflow actions live on the question detail page.",
+    "The list shows a Time sec column (estimated seconds); mobile combines Marks / Time / Visibility in one line.",
+    "The Subjects / Classes / Difficulties filter panel is hidden by default and toggled on demand.",
+    "Detail shows metadata (status badges, class/subject/topic, marks, time, creator/approver names, visibility, org) before the question text; Created by / Approved by show display names, not IDs.",
+    "Detail shows Endorsed and Quiz ready badges where applicable, and always shows the Approval history panel.",
+    "Archived questions show an Unarchive action (PortalAdmin).",
   ])}
 
-  <h2>11. QA scenarios</h2>
+  <h2>12. QA scenarios</h2>
   ${scenarios
     .map(
       ([id, title, steps, expected]) =>
@@ -444,15 +495,15 @@ const html = `<!doctype html>
     )
     .join("")}
 
-  <h2>12. Verification checklist</h2>
+  <h2>13. Verification checklist</h2>
   ${htmlList(checklist.map((item) => `☐ ${item}`))}
 
-  <h2>13. Known compatibility and optional work</h2>
+  <h2>14. Known compatibility and optional work</h2>
   ${htmlList([
     "Legacy status names Pending, UnderReview, Active, Published, and Declined remain readable for migrated data; new writes use canonical names/IDs.",
     "IsAiApproved is a legacy compatibility field, not a second approval gate.",
+    "created_by / approved_by are bigint FKs to app_users; the API returns CreatedByName / ApprovedByName for display.",
     "Delete remains blocked while a question is linked to a quiz; guided unlink-then-delete is optional.",
-    "Workflow trail: every Create / Submit / Endorse / Publish / Reject / Modify / Activate / Deactivate / Archive / Unarchive appends a row to the generic app_approval table (entity_type 2) with actor, role, reason, and timestamp — for Teacher, CampusAdmin, SchoolAdmin, and PortalAdmin alike. The detail page shows it as Approval history. Pre-existing questions are seeded with Created + Endorsed/Published rows; old rejections are not attributed (rejector was never stored).",
     "External AI grading for Fill is future work; current AllowAiReview behavior is a review stub.",
   ])}
 
@@ -528,7 +579,7 @@ function docTable(headers, rows) {
 
 const docChildren = [
   docHeading("RankUp Education — Questions Business & QA Guide", HeadingLevel.TITLE),
-  docParagraph("Current implemented rules · 25 Jul 2026", {
+  docParagraph("Current implemented rules · 26 Jul 2026", {
     run: { italics: true, color: "475569" },
   }),
   docParagraph(
@@ -536,7 +587,7 @@ const docChildren = [
     { run: { bold: true, color: "166534" } },
   ),
   docParagraph(
-    "Spec status & assumptions: v2 model reflects confirmed rules — (1) only PortalAdmin publishes/activates; (2) only Public questions are quiz-usable; (3) the approver must be a strictly higher tier than the creator (no self / same-tier approval), and any eligible higher tier may act independently. Assumption to confirm: a CampusAdmin/SchoolAdmin endorsement is recorded as Status=Approved with Visibility=Campus/School but IsActive=false and a restricted audience. Not yet implemented in code — awaiting go-ahead.",
+    "Spec status: v2 model is implemented in code — (1) only PortalAdmin publishes/activates; (2) only Public questions are quiz-usable; (3) the approver must be a strictly higher tier than the creator (no self / same-tier approval), and any eligible higher tier may act independently; (4) a CampusAdmin/SchoolAdmin endorsement is Status=Approved with Visibility=Campus/School but IsActive=false and a restricted audience; (5) every workflow step is written to the app_approval trail and shown as Approval history on question detail.",
     { run: { bold: true, color: "92400E" } },
   ),
 
@@ -596,6 +647,7 @@ const docChildren = [
   docHeading("8. Excel import"),
   ...[
     "Web-only UI at /questions/import.",
+    "Import is limited to 200 rows per file; row 1 is the header.",
     "Dry run returns all row errors.",
     "Confirm creates valid rows as PendingReview only; import never approves.",
     "Lookup names or canonical IDs are accepted where documented.",
@@ -604,31 +656,47 @@ const docChildren = [
   docHeading("9. API transition map"),
   docTable(["Endpoint", "Business effect"], apiTransitions),
 
-  docHeading("10. UI presentation rules"),
+  docHeading("10. Approval history (workflow trail)"),
+  docParagraph(
+    "Every question carries a full audit trail in the generic app_approval table (entity_type=2, typed FK to questions; user-registration rows share the table with entity_type=1). Each row stores the acting user (FK to app_users), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel for every question-managing role, with actor name, role, colour-coded action chip, and the rejection reason inline.",
+  ),
+  docTable(["Event", "Meaning", "Recorded for"], trailEvents),
+  ...[
+    "Inline quiz-created and quiz-duplicated questions record Created + Endorsed in one step.",
+    "Pre-existing questions were seeded with Created plus Endorsed/Published rows.",
+    "Historical rejections are not attributed; all new rejections are.",
+    "Trail rows are removed with the question on delete (cascade).",
+  ].map(docBullet),
+
+  docHeading("11. UI presentation rules"),
   ...[
     "Workflow Status and IsActive are separate concepts.",
     "Only Approved can be Active or Inactive; other statuses are always Inactive.",
     "Approved=green; Active=blue; Pending=amber; Rejected=red; Archived/Inactive=slate.",
     "Show Status=Approved and Activity=Inactive when PortalAdmin deactivates an Approved question.",
     "List rows open detail; actions live on the detail page.",
+    "List shows a Time sec column; mobile combines Marks / Time / Visibility.",
+    "Subjects / Classes / Difficulties filter panel is hidden by default.",
+    "Detail shows metadata before the question text; Created by / Approved by show display names.",
+    "Detail always shows the Approval history panel; Archived questions offer Unarchive (PortalAdmin).",
   ].map(docBullet),
 
-  docHeading("11. QA scenarios"),
+  docHeading("12. QA scenarios"),
   ...scenarios.flatMap(([id, title, steps, expected]) => [
     docHeading(`${id} — ${title}`, HeadingLevel.HEADING_2),
     docParagraph(`Steps: ${steps}`),
     docParagraph(`Expected: ${expected}`, { run: { bold: true, color: "166534" } }),
   ]),
 
-  docHeading("12. Verification checklist"),
+  docHeading("13. Verification checklist"),
   ...checklist.map((item) => docBullet(`☐ ${item}`)),
 
-  docHeading("13. Known compatibility and optional work"),
+  docHeading("14. Known compatibility and optional work"),
   ...[
     "Legacy status aliases remain readable; new writes use canonical names/IDs.",
     "IsAiApproved is a legacy field, not a second gate.",
+    "created_by / approved_by are bigint FKs to app_users; the API returns display names.",
     "Delete is blocked while quiz-linked; guided unlink is optional.",
-    "Workflow trail recorded in app_approval; shown as Approval history on question detail.",
     "External AI grading is future work.",
   ].map(docBullet),
 ];

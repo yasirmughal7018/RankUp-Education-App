@@ -1,5 +1,5 @@
 /**
- * Rebuilds docs/02_RankUp_User_Creation_Approval_QA.docx from current business rules.
+ * Rebuilds docs/03_RankUp_User_Creation_Approval_QA.docx from current business rules.
  * Run: npm run build:user-qa-docx  (from docs/)
  */
 import { writeFileSync } from "node:fs";
@@ -115,6 +115,7 @@ const doc = new Document({
 
         h2("2. Registration (unchanged core)"),
         bullet("Student / Parent / Teacher self-request → app_approval queue."),
+        bullet("app_approval is a generic approval table shared with the question bank: user-registration rows use entity_type=1 (user_id), question workflow-trail rows use entity_type=2 (question_id)."),
         bullet("SchoolAdmin / CampusAdmin soft-approve only; do NOT activate."),
         bullet("PortalAdmin alone activates → NeedsPasswordSetup → set password → login."),
         bullet("Soft-reject keeps row (rejected_at); same CNIC/mobile can re-request."),
@@ -167,7 +168,7 @@ const doc = new Document({
   ],
 });
 
-const out = join(__dirname, "02_RankUp_User_Creation_Approval_QA.docx");
+const out = join(__dirname, "03_RankUp_User_Creation_Approval_QA.docx");
 const buffer = await Packer.toBuffer(doc);
 writeFileSync(out, buffer);
 console.log(`Wrote ${out}`);
