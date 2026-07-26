@@ -298,6 +298,7 @@ public sealed class QuizzesController : ControllerBase
 
     /// <summary>School admin approves a teacher quiz.</summary>
     [HttpPost("{quizId:long}/approve")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
     public async Task<ActionResult<ApiResponse<ApproveQuizResponse>>> ApproveAsync(
         long quizId,
         CancellationToken cancellationToken)

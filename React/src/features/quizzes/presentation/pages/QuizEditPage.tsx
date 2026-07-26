@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
-import { mapManageQuizToForm } from "@/features/quizzes/domain/quizTypes";
+import { mapManageQuizToForm, suggestTimeLimitMinutes } from "@/features/quizzes/domain/quizTypes";
 import { QuizForm } from "@/features/quizzes/presentation/components/QuizForm";
 import {
   useManageQuizQuery,
@@ -52,6 +52,7 @@ export function QuizEditPage() {
           initialValues={mapManageQuizToForm(quiz)}
           submitLabel="Save changes"
           isSubmitting={updateQuiz.isPending}
+          suggestedTimeMinutes={suggestTimeLimitMinutes(quiz.questions)}
           onSubmit={async (values) => {
             const updated = await updateQuiz.mutateAsync(values);
             navigate(`/quizzes/${updated.id}`);

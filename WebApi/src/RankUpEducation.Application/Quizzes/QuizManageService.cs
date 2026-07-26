@@ -124,7 +124,11 @@ public sealed class QuizManageService : IQuizManageService
             request.AllowedAttempts,
             request.ShuffleQuestions,
             request.ShuffleOptions,
-            request.IsReviewRequired);
+            request.IsReviewRequired,
+            request.NavigationMode);
+
+        var quizTypeName = await _lookups.GetLookupNameAsync(quizTypeId, cancellationToken);
+        QuizTypeBehavior.ApplyCreateDefaults(quiz, quizTypeName, request.NavigationMode);
 
         await _quizzes.AddQuizAsync(quiz, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -152,7 +156,8 @@ public sealed class QuizManageService : IQuizManageService
             request.AllowedAttempts,
             request.ShuffleQuestions,
             request.ShuffleOptions,
-            request.IsReviewRequired);
+            request.IsReviewRequired,
+            request.NavigationMode);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await BuildManageResponseAsync(quizId, cancellationToken);
@@ -275,10 +280,10 @@ public sealed class QuizManageService : IQuizManageService
             QuizLookupNames.RejectedApprovalStatusNames,
             cancellationToken);
 
-        quiz.Reject(rejectedStatusId);
+        quiz.Reject(rejectedStatusId, request.Reason);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var reason = request.Reason.AsTrimmedOrNull();
+        var reason = quiz.RejectionReason;
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new RejectQuizResponse(quizId, "Rejected", lifecycleName, reason);
     }
@@ -363,7 +368,8 @@ public sealed class QuizManageService : IQuizManageService
             source.AllowedAttempts,
             source.ShuffleQuestions,
             source.ShuffleOptions,
-            source.IsReviewRequired);
+            source.IsReviewRequired,
+            source.NavigationMode);
 
         await _quizzes.AddQuizAsync(copy, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

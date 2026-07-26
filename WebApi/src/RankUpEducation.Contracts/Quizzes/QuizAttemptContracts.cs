@@ -28,14 +28,16 @@ public sealed record StartQuizAttemptResponse(
     DateTimeOffset StartedAt,
     bool Resumed,
     IReadOnlyList<QuizQuestionForAttemptResponse> Questions,
-    IReadOnlyList<SavedQuizAnswerResponse> SavedAnswers);
+    IReadOnlyList<SavedQuizAnswerResponse> SavedAnswers,
+    string NavigationMode = "Free");
 
 /// <summary>Previously saved draft answer restored on attempt resume.</summary>
 public sealed record SavedQuizAnswerResponse(
     long QuestionId,
     long? SelectedOptionId,
     string? SubmittedText,
-    IReadOnlyList<long>? SelectedOptionIds = null);
+    IReadOnlyList<long>? SelectedOptionIds = null,
+    bool IsMarkedForReview = false);
 
 /// <summary>Autosave payload for an in-progress attempt.</summary>
 public sealed record SaveQuizAttemptAnswersRequest(
@@ -51,12 +53,14 @@ public sealed record SubmitQuizAnswerRequest(
     long QuestionId,
     long? SelectedOptionId,
     string? SubmittedText,
-    IReadOnlyList<long>? SelectedOptionIds = null);
+    IReadOnlyList<long>? SelectedOptionIds = null,
+    bool? IsMarkedForReview = null);
 
 /// <summary>Final submission with all answers and elapsed time.</summary>
 public sealed record SubmitQuizAttemptRequest(
     IReadOnlyList<SubmitQuizAnswerRequest> Answers,
-    short TimeSpentSeconds);
+    short TimeSpentSeconds,
+    bool IsAutoSubmit = false);
 
 /// <summary>Scored attempt result; may mask marks while subjective review is pending.</summary>
 public sealed record QuizAttemptResultResponse(

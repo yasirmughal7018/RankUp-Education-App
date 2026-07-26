@@ -36,4 +36,9 @@ public interface IQuizAssignmentRepository
         long quizId,
         long studentId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Marks not-attempted assignments past their end window as Expired.
+    /// </summary>
+    Task<int> ExpireOverdueUnattemptedAsync(DateTimeOffset now, CancellationToken cancellationToken);
 }

@@ -69,6 +69,7 @@ public sealed class QuizService : IQuizService
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IQuizAiReviewService _aiReview;
 
     public QuizService(
         IQuizRepository quizzes,
@@ -80,7 +81,8 @@ public sealed class QuizService : IQuizService
         IStudentScopeRepository studentScope,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IQuizAiReviewService aiReview)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -92,6 +94,7 @@ public sealed class QuizService : IQuizService
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _unitOfWork = unitOfWork;
+        _aiReview = aiReview;
     }
 
     public async Task<QuizListResponse> ListAsync(
@@ -102,6 +105,15 @@ public sealed class QuizService : IQuizService
     {
         var role = ParseRole(_currentUser.Role);
         var now = _dateTimeProvider.UtcNow;
+
+        if (role is UserRole.Student or UserRole.Parent or UserRole.Teacher)
+        {
+            var expired = await _assignments.ExpireOverdueUnattemptedAsync(now, cancellationToken);
+            if (expired > 0)
+            {
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+        }
 
         IReadOnlyList<QuizListItem> items = role switch
         {
@@ -191,6 +203,7 @@ public sealed class QuizService : IQuizService
                 true,
                 true,
                 summary.ReviewAvailable,
+                "Free",
                 0,
                 summary.ResultPercent,
                 summary.CompletedAt,
@@ -225,6 +238,34 @@ public sealed class QuizService : IQuizService
         if (!quiz.IsActive)
         {
             throw new BusinessRuleException("This quiz is no longer available.");
+        }
+
+        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+        if (quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase)
+            && quiz.TimeLimitMinutes is null or <= 0)
+        {
+            throw new BusinessRuleException("Competition quizzes require a time limit.");
+        }
+
+        if (access.AssignmentId == 0)
+        {
+            var resultStatusId = await _lookups.ResolveLookupIdAsync(
+                QuizLookupNames.QuizResultStatus,
+                "Not Attempted",
+                fallback: QuizLookupNames.QuizResultStatusIds.NotAttempted,
+                cancellationToken);
+            var materialized = new QuizAssignment(
+                quizId,
+                studentId,
+                studentId,
+                access.StartDateTime,
+                access.EndDateTime,
+                access.AllowedAttempts,
+                resultStatusId);
+            await _assignments.AddAssignmentsAsync([materialized], cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
+                ?? throw new NotFoundAppException("This quiz is not assigned to you.");
         }
 
         var now = _dateTimeProvider.UtcNow;
@@ -277,10 +318,29 @@ public sealed class QuizService : IQuizService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var attemptQuestions = orderedQuestions
-            .Select((question, index) => new QuizAttemptQuestion(attempt.Id, question.QuestionId, (short)(index + 1)))
+            .Select((question, index) => new QuizAttemptQuestion(
+                attempt.Id,
+                question.QuestionId,
+                (short)(index + 1),
+                question.Marks))
             .ToArray();
 
         await _attempts.AddAttemptQuestionsAsync(attemptQuestions, cancellationToken);
+
+        var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
+        if (assignment is not null
+            && (assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.NotAttempted
+                || assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Upcoming
+                || assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Expired))
+        {
+            var inProgressResultId = await _lookups.ResolveLookupIdAsync(
+                QuizLookupNames.QuizResultStatus,
+                "In Progress",
+                fallback: QuizLookupNames.QuizResultStatusIds.InProgress,
+                cancellationToken);
+            assignment.SetResultStatus(inProgressResultId);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await BuildAttemptPayloadAsync(
@@ -321,7 +381,12 @@ public sealed class QuizService : IQuizService
 
         var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("This quiz is not assigned to you.");
-        EnsureAttemptWindow(access, _dateTimeProvider.UtcNow);
+        var now = _dateTimeProvider.UtcNow;
+        EnsureAttemptWindow(access, now);
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz was not found.");
+        EnsureAttemptTimeBudget(quiz.TimeLimitMinutes, attempt.StartedDate, now, graceSeconds: 30);
 
         var answers = request.Answers ?? Array.Empty<SubmitQuizAnswerRequest>();
         var savedCount = 0;
@@ -341,6 +406,11 @@ public sealed class QuizService : IQuizService
             }
 
             var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
+            if (submitted.IsMarkedForReview is bool marked)
+            {
+                attemptQuestion.SetMarkedForReview(marked);
+            }
+
             await ReplaceAttemptAnswersAsync(
                 attemptQuestion.Id,
                 selectedOptionIds,
@@ -378,24 +448,50 @@ public sealed class QuizService : IQuizService
             throw new NotFoundAppException("Quiz attempt was not found.");
         }
 
+        var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
+            ?? throw new NotFoundAppException("This quiz is not assigned to you.");
+        var now = _dateTimeProvider.UtcNow;
+        EnsureAttemptWindow(access, now);
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz was not found.");
+        // Auto-submit after client timer expiry may arrive slightly late; give a wider grace than manual submit.
+        EnsureAttemptTimeBudget(
+            quiz.TimeLimitMinutes,
+            attempt.StartedDate,
+            now,
+            graceSeconds: request.IsAutoSubmit ? 90 : 15);
+
+        var submittedStatusName = request.IsAutoSubmit ? "AutoSubmitted" : SubmittedStatusName;
+        var submittedStatusFallback = request.IsAutoSubmit
+            ? QuizLookupNames.QuizAttemptStatusIds.AutoSubmitted
+            : QuizLookupNames.QuizAttemptStatusIds.Submitted;
         var submittedStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
-            SubmittedStatusName,
-            fallback: QuizLookupNames.QuizAttemptStatusIds.Submitted,
+            submittedStatusName,
+            fallback: submittedStatusFallback,
             cancellationToken);
 
-        if (attempt.StatusId == submittedStatusId)
+        var statusName = await _lookups.GetLookupNameAsync(attempt.StatusId, cancellationToken);
+        var alreadySubmitted =
+            attempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.Submitted
+            || attempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.AutoSubmitted
+            || attempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.Reviewed
+            || string.Equals(statusName, "Submitted", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(statusName, "AutoSubmitted", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(statusName, "Reviewed", StringComparison.OrdinalIgnoreCase);
+        if (alreadySubmitted)
         {
             throw new BusinessRuleException("This quiz attempt has already been submitted.");
         }
 
         var quizQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken);
         var questionMap = quizQuestions.ToDictionary(question => question.QuestionId);
-        var totalMarks = (short)quizQuestions.Sum(question => question.Marks);
-        short obtainedMarks = 0;
 
         var attemptDetail = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
+        var totalMarks = (short)attemptDetail.Questions.Sum(question => question.Marks);
+        short obtainedMarks = 0;
 
         var answersByQuestionId = request.Answers
             .GroupBy(answer => answer.QuestionId)
@@ -415,6 +511,16 @@ public sealed class QuizService : IQuizService
                 continue;
             }
 
+            var attemptQuestionEntity = await _attempts.GetAttemptQuestionEntityAsync(
+                attemptId,
+                attemptQuestion.QuestionId,
+                cancellationToken);
+            if (attemptQuestionEntity is not null && submitted.IsMarkedForReview is bool marked)
+            {
+                attemptQuestionEntity.SetMarkedForReview(marked);
+            }
+
+            var questionMarks = attemptQuestion.Marks;
             var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
             var isCorrect = false;
             short awardedMarks = 0;
@@ -434,7 +540,7 @@ public sealed class QuizService : IQuizService
                 (isCorrect, awardedMarks) = QuizAnswerSelection.ScoreMultiSelect(
                     selectedOptionIds,
                     correctOptionIds,
-                    question.Marks);
+                    questionMarks);
                 obtainedMarks += awardedMarks;
             }
             else if (isFillBlank && submitted.SubmittedText.HasTrimmedText())
@@ -447,7 +553,7 @@ public sealed class QuizService : IQuizService
                             option.OptionText.AsTrimmedString(),
                             submittedText,
                             StringComparison.OrdinalIgnoreCase));
-                awardedMarks = isCorrect ? question.Marks : (short)0;
+                awardedMarks = isCorrect ? questionMarks : (short)0;
                 obtainedMarks += awardedMarks;
 
                 // Question-level OR: any accepted-answer flag enables that review path.
@@ -469,12 +575,15 @@ public sealed class QuizService : IQuizService
 
                 if (allowAiReview)
                 {
-                    await EnsureFillAiReviewStubAsync(
+                    await EnsureFillAiReviewAsync(
                         attemptId,
                         attemptQuestion.QuestionId,
+                        bankQuestionText: question.QuestionText,
+                        submittedText: submitted.SubmittedText ?? string.Empty,
                         isCorrect,
                         awardedMarks,
-                        question.Marks,
+                        questionMarks,
+                        question.AcceptedAnswers.Select(answer => answer.AnswerText).ToArray(),
                         cancellationToken);
                 }
 
@@ -485,7 +594,7 @@ public sealed class QuizService : IQuizService
                 var selectedOptionId = selectedOptionIds[0];
                 var selectedOption = question.Options.FirstOrDefault(option => option.OptionId == selectedOptionId);
                 isCorrect = selectedOption?.IsCorrect ?? false;
-                awardedMarks = isCorrect ? question.Marks : (short)0;
+                awardedMarks = isCorrect ? questionMarks : (short)0;
                 obtainedMarks += awardedMarks;
             }
             else if (isDescriptive)
@@ -508,6 +617,26 @@ public sealed class QuizService : IQuizService
             totalMarks,
             (short)Math.Clamp((int)request.TimeSpentSeconds, 0, short.MaxValue));
 
+        var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
+        // Hide auto-score from student until teacher finalizes when quiz requires review and subjective answers exist.
+        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false } && hasSubjectiveAnswers;
+
+        var quizTypeNameForResult = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+        var showAnswers = QuizTypeBehavior.ShouldShowAnswersAfterSubmit(quizTypeNameForResult, maskPendingReview);
+
+        var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
+        if (assignment is not null)
+        {
+            var resultStatusId = await _lookups.ResolveLookupIdAsync(
+                QuizLookupNames.QuizResultStatus,
+                maskPendingReview ? "Under Review" : "Completed",
+                fallback: maskPendingReview
+                    ? QuizLookupNames.QuizResultStatusIds.UnderReview
+                    : QuizLookupNames.QuizResultStatusIds.Completed,
+                cancellationToken);
+            assignment.SetResultStatus(resultStatusId);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var quizTitle = (await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken))?.QuizTitle
@@ -516,14 +645,10 @@ public sealed class QuizService : IQuizService
         var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
-        // Hide auto-score from student until teacher finalizes when quiz requires review and subjective answers exist.
-        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false } && hasSubjectiveAnswers;
-
         return QuizMapping.ToAttemptResult(
             result,
             quizTitle,
-            reviewAvailable: !maskPendingReview,
+            reviewAvailable: showAnswers,
             maskPendingReview: maskPendingReview,
             resultStatusOverride: maskPendingReview ? "Pending Review" : null);
     }
@@ -606,7 +731,7 @@ public sealed class QuizService : IQuizService
                     bankQuestion.QuestionId,
                     bankQuestion.QuestionText,
                     bankQuestion.QuestionTypeName,
-                    bankQuestion.Marks,
+                    attemptQuestion.Marks,
                     attemptQuestion.DisplayOrder,
                     bankQuestion.Hint,
                     options);
@@ -617,12 +742,14 @@ public sealed class QuizService : IQuizService
             .Where(question =>
                 question.SelectedOptionIds.Count > 0
                 || question.SelectedOptionId is not null
-                || question.SubmittedText.HasTrimmedText())
+                || question.SubmittedText.HasTrimmedText()
+                || question.IsMarkedForReview)
             .Select(question => new SavedQuizAnswerResponse(
                 question.QuestionId,
                 question.SelectedOptionId,
                 question.SubmittedText,
-                question.SelectedOptionIds))
+                question.SelectedOptionIds,
+                question.IsMarkedForReview))
             .ToArray();
 
         return new StartQuizAttemptResponse(
@@ -633,7 +760,8 @@ public sealed class QuizService : IQuizService
             attempt.StartedDate,
             resumed,
             questions,
-            savedAnswers);
+            savedAnswers,
+            string.IsNullOrWhiteSpace(quiz.NavigationMode) ? "Free" : quiz.NavigationMode);
     }
 
     private async Task ReplaceAttemptAnswersAsync(
@@ -760,6 +888,27 @@ public sealed class QuizService : IQuizService
         }
     }
 
+    /// <summary>
+    /// Soft client countdown is backed by a hard server budget with a small grace for clock skew / network latency.
+    /// </summary>
+    private static void EnsureAttemptTimeBudget(
+        short? timeLimitMinutes,
+        DateTimeOffset startedAt,
+        DateTimeOffset now,
+        int graceSeconds)
+    {
+        if (timeLimitMinutes is null or <= 0)
+        {
+            return;
+        }
+
+        var budget = TimeSpan.FromMinutes(timeLimitMinutes.Value) + TimeSpan.FromSeconds(graceSeconds);
+        if (now - startedAt > budget)
+        {
+            throw new BusinessRuleException("The time limit for this quiz attempt has expired.");
+        }
+    }
+
     private static void ValidateDeviceId(string deviceId)
     {
         if (string.IsNullOrWhiteSpace(deviceId))
@@ -813,12 +962,15 @@ public sealed class QuizService : IQuizService
             ?? throw new ForbiddenAppException("Student profile was not found.");
     }
 
-    private async Task EnsureFillAiReviewStubAsync(
+    private async Task EnsureFillAiReviewAsync(
         long attemptId,
         long questionId,
+        string bankQuestionText,
+        string submittedText,
         bool isCorrect,
         short awardedMarks,
         short maxMarks,
+        IReadOnlyList<string> acceptedAnswers,
         CancellationToken cancellationToken)
     {
         var attemptQuestion = await _attempts.GetAttemptQuestionEntityAsync(
@@ -830,21 +982,32 @@ public sealed class QuizService : IQuizService
             return;
         }
 
-        var suggestion =
-            $"AI suggested: {(isCorrect ? "correct" : "incorrect")} ({awardedMarks}/{maxMarks} marks). "
-            + "Awaiting teacher confirmation when teacher review is required.";
+        var suggestion = await _aiReview.SuggestAsync(
+            new QuizAiReviewRequest(
+                bankQuestionText,
+                submittedText,
+                isCorrect,
+                awardedMarks,
+                maxMarks,
+                acceptedAnswers),
+            cancellationToken);
+
+        var feedback =
+            $"{suggestion.Feedback} (suggested {suggestion.SuggestedMarks}/{maxMarks}"
+            + (suggestion.IsCorrect ? ", correct" : ", incorrect")
+            + "). Awaiting teacher confirmation when teacher review is required.";
 
         if (attemptQuestion.QuizReviewId is not null)
         {
             var existing = await _reviews.GetQuestionReviewEntityAsync(
                 attemptQuestion.QuizReviewId.Value,
                 cancellationToken);
-            existing?.SetAiReview(statusId: null, suggestion);
+            existing?.SetAiReview(statusId: null, feedback);
             return;
         }
 
         var review = new QuizReview("AI", quizId: null, questionId: questionId);
-        review.SetAiReview(statusId: null, suggestion);
+        review.SetAiReview(statusId: null, feedback);
         await _reviews.AddReviewAsync(review, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         attemptQuestion.LinkReview(review.Id);

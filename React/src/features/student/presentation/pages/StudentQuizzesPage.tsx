@@ -1,10 +1,15 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { FieldLabel } from "@/core/components/FieldLabel";
 import { PageHeader } from "@/core/components/PageHeader";
 import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import { useStudentQuizzesQuery } from "@/features/student/presentation/hooks/useStudentQuizQueries";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+
+const inputClassName = FORM_FIELD_CLASS;
 
 function formatDateTime(value: string | null): string {
   if (!value) {
@@ -20,6 +25,58 @@ function formatDateTime(value: string | null): string {
 export function StudentQuizzesPage() {
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     useStudentQuizzesQuery();
+
+  const [search, setSearch] = useState("");
+  const [quizTypeFilter, setQuizTypeFilter] = useState("");
+  const [resultStatusFilter, setResultStatusFilter] = useState("");
+
+  const quizTypeOptions = useMemo(
+    () =>
+      [...new Set(quizzes.map((quiz) => quiz.quizType).filter(Boolean))].sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [quizzes],
+  );
+
+  const resultStatusOptions = useMemo(
+    () =>
+      [
+        ...new Set(quizzes.map((quiz) => quiz.resultStatus).filter(Boolean)),
+      ].sort((a, b) => a.localeCompare(b)),
+    [quizzes],
+  );
+
+  const filteredQuizzes = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+
+    return quizzes.filter((quiz) => {
+      if (quizTypeFilter && quiz.quizType !== quizTypeFilter) {
+        return false;
+      }
+
+      if (resultStatusFilter && quiz.resultStatus !== resultStatusFilter) {
+        return false;
+      }
+
+      if (!needle) {
+        return true;
+      }
+
+      const haystack = [
+        quiz.title,
+        quiz.subject,
+        quiz.grade,
+        quiz.quizType,
+        quiz.resultStatus,
+        quiz.dueAt ? formatDateTime(quiz.dueAt) : "",
+        quiz.startAt ? formatDateTime(quiz.startAt) : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(needle);
+    });
+  }, [quizzes, search, quizTypeFilter, resultStatusFilter]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -38,6 +95,60 @@ export function StudentQuizzesPage() {
         }
       />
 
+      <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-3">
+        <div className="md:col-span-1">
+          <FieldLabel htmlFor="student-quiz-search" optional>
+            Search
+          </FieldLabel>
+          <input
+            id="student-quiz-search"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Title, subject, type, status…"
+            className={inputClassName}
+          />
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="student-quiz-type" optional>
+            Quiz type
+          </FieldLabel>
+          <select
+            id="student-quiz-type"
+            value={quizTypeFilter}
+            onChange={(event) => setQuizTypeFilter(event.target.value)}
+            className={inputClassName}
+          >
+            <option value="">All types</option>
+            {quizTypeOptions.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="student-quiz-result" optional>
+            Result status
+          </FieldLabel>
+          <select
+            id="student-quiz-result"
+            value={resultStatusFilter}
+            onChange={(event) => setResultStatusFilter(event.target.value)}
+            className={inputClassName}
+          >
+            <option value="">All statuses</option>
+            {resultStatusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error.message}
@@ -49,9 +160,11 @@ export function StudentQuizzesPage() {
           <div className="px-6 py-10 text-center text-sm text-slate-600">
             Loading assigned quizzes...
           </div>
-        ) : quizzes.length === 0 ? (
+        ) : filteredQuizzes.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No quizzes assigned yet.
+            {quizzes.length === 0
+              ? "No quizzes assigned yet."
+              : "No quizzes match your filters."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -79,7 +192,7 @@ export function StudentQuizzesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {quizzes.map((quiz) => (
+                {filteredQuizzes.map((quiz) => (
                   <tr key={quiz.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <Link
@@ -89,7 +202,8 @@ export function StudentQuizzesPage() {
                         {quiz.title}
                       </Link>
                       <p className="mt-1 text-xs text-slate-500">
-                        {quiz.questionCount} questions · {quiz.totalMarks} marks
+                        {quiz.quizType} · {quiz.questionCount} questions ·{" "}
+                        {quiz.totalMarks} marks
                       </p>
                     </td>
                     <td className="px-4 py-3 text-slate-700">

@@ -45,8 +45,11 @@ export interface QuizQuestionItem {
   marks: number;
   displayOrder: number;
   hint: string | null;
+  estimatedTimeSeconds: number;
   options: QuizQuestionOption[];
 }
+
+export type QuizNavigationMode = "Free" | "Sequential" | "Locked";
 
 export interface ManageQuiz {
   id: number;
@@ -70,6 +73,7 @@ export interface ManageQuiz {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   isReviewRequired: boolean;
+  navigationMode: QuizNavigationMode;
   createdBy: string;
   schoolName: string;
   questions: QuizQuestionItem[];
@@ -82,12 +86,14 @@ export interface QuizFormValues {
   subjectId: number;
   topicId: number;
   difficultyLevelId: number;
+  quizTypeId: number;
   instructions: string;
   timeLimitMinutes: number | null;
   allowedAttempts: number | null;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   isReviewRequired: boolean;
+  navigationMode: QuizNavigationMode;
   contextStudentId: number | null;
 }
 
@@ -130,6 +136,8 @@ export interface AssignQuizInput {
   endAt: string;
   allowedAttempts: number;
   gradeId: number | null;
+  section?: string | null;
+  schoolIds?: number[] | null;
 }
 
 export interface QuizAssignment {
@@ -158,6 +166,20 @@ export function isDraftQuiz(status: string): boolean {
   return normalized === "not assigned" || normalized === "draft";
 }
 
+/** Normalize API/form navigation mode to a known value. */
+export function normalizeQuizNavigationMode(
+  value: string | null | undefined,
+): QuizNavigationMode {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "sequential") {
+    return "Sequential";
+  }
+  if (normalized === "locked") {
+    return "Locked";
+  }
+  return "Free";
+}
+
 /** Default values for the create-quiz form. */
 export function createEmptyQuizForm(): QuizFormValues {
   return {
@@ -167,12 +189,14 @@ export function createEmptyQuizForm(): QuizFormValues {
     subjectId: 0,
     topicId: 0,
     difficultyLevelId: 0,
+    quizTypeId: 0,
     instructions: "Read all questions carefully before answering.",
     timeLimitMinutes: 30,
     allowedAttempts: 1,
     shuffleQuestions: false,
     shuffleOptions: false,
     isReviewRequired: false,
+    navigationMode: "Free",
     contextStudentId: null,
   };
 }
@@ -186,12 +210,14 @@ export function mapManageQuizToForm(quiz: ManageQuiz): QuizFormValues {
     subjectId: quiz.subjectId,
     topicId: quiz.topicId,
     difficultyLevelId: quiz.difficultyLevelId,
+    quizTypeId: 0,
     instructions: quiz.instructions.join("\n"),
     timeLimitMinutes: quiz.timeLimitMinutes,
     allowedAttempts: quiz.allowedAttempts,
     shuffleQuestions: quiz.shuffleQuestions,
     shuffleOptions: quiz.shuffleOptions,
     isReviewRequired: quiz.isReviewRequired,
+    navigationMode: normalizeQuizNavigationMode(quiz.navigationMode),
     contextStudentId: null,
   };
 }
@@ -205,18 +231,20 @@ export function buildQuizPayload(values: QuizFormValues) {
     subjectId: values.subjectId,
     topicId: values.topicId,
     difficultyLevelId: values.difficultyLevelId,
+    quizTypeId: values.quizTypeId > 0 ? values.quizTypeId : null,
     instructions: values.instructions.trim(),
     timeLimitMinutes: values.timeLimitMinutes,
     allowedAttempts: values.allowedAttempts,
     shuffleQuestions: values.shuffleQuestions,
     shuffleOptions: values.shuffleOptions,
     isReviewRequired: values.isReviewRequired,
+    navigationMode: normalizeQuizNavigationMode(values.navigationMode),
     contextStudentId: values.contextStudentId,
   };
 }
 
 /** Client-side validation; returns error message or null. */
-export function validateQuizForm(values: QuizFormValues): string | null {
+export function validateQuizForm(values: QuizFormValues, requireQuizType = false): string | null {
   if (!values.title.trim()) {
     return "Title is required.";
   }
@@ -233,7 +261,25 @@ export function validateQuizForm(values: QuizFormValues): string | null {
     return "Difficulty level is required.";
   }
 
+  if (requireQuizType && values.quizTypeId <= 0) {
+    return "Quiz type is required.";
+  }
+
   return null;
+}
+
+/** Suggested quiz time limit in minutes from question estimated durations. */
+export function suggestTimeLimitMinutes(
+  questions: Array<{ estimatedTimeSeconds?: number | null }>,
+): number | null {
+  const totalSeconds = questions.reduce(
+    (sum, question) => sum + Math.max(0, question.estimatedTimeSeconds ?? 0),
+    0,
+  );
+  if (totalSeconds <= 0) {
+    return null;
+  }
+  return Math.max(1, Math.ceil(totalSeconds / 60));
 }
 
 /** Default inline question editor state. */

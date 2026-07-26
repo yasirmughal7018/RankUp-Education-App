@@ -147,12 +147,12 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
         return items;
     }
 
-    public Task<QuizAssignmentAccess?> GetAssignmentAccessAsync(
+    public async Task<QuizAssignmentAccess?> GetAssignmentAccessAsync(
         long quizId,
         long studentId,
         CancellationToken cancellationToken)
     {
-        return _dbContext.QuizAssignments.AsNoTracking()
+        var existing = await _dbContext.QuizAssignments.AsNoTracking()
             .Where(assignment => assignment.QuizId == quizId && assignment.StudentId == studentId)
             .Select(assignment => new QuizAssignmentAccess(
                 assignment.Id,
@@ -163,6 +163,50 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 assignment.AllowedAttempts,
                 _dbContext.QuizAttempts.Count(attempt => attempt.QuizId == quizId && attempt.StudentId == studentId)))
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var quiz = await _dbContext.Quizzes.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == quizId && item.IsActive && !item.IsDeleted, cancellationToken);
+        if (quiz is null
+            || quiz.AudienceStartAt is null
+            || quiz.AudienceEndAt is null
+            || quiz.AudienceAllowedAttempts is null)
+        {
+            return null;
+        }
+
+        var studentUser = await _dbContext.Users.AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Id == studentId, cancellationToken);
+        if (studentUser?.SchoolId is null)
+        {
+            return null;
+        }
+
+        var scope = quiz.AudienceScope;
+        var isPublic = scope.Equals("Public", StringComparison.OrdinalIgnoreCase);
+        var isSchool = scope.Equals("School", StringComparison.OrdinalIgnoreCase)
+            && studentUser.SchoolId == quiz.SchoolId;
+        if (!isPublic && !isSchool)
+        {
+            return null;
+        }
+
+        var attemptCount = await _dbContext.QuizAttempts.AsNoTracking()
+            .CountAsync(attempt => attempt.QuizId == quizId && attempt.StudentId == studentId, cancellationToken);
+
+        // AssignmentId 0 signals audience access without a materialized row yet.
+        return new QuizAssignmentAccess(
+            0,
+            quiz.Id,
+            studentId,
+            quiz.AudienceStartAt.Value,
+            quiz.AudienceEndAt.Value,
+            quiz.AudienceAllowedAttempts.Value,
+            attemptCount);
     }
 
     public Task<QuizAssignment?> GetAssignmentEntityAsync(long quizId, long studentId, CancellationToken cancellationToken)
@@ -196,5 +240,29 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 assignment.IsReviewDone,
                 quiz.IsReviewRequired))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<int> ExpireOverdueUnattemptedAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var candidates = await _dbContext.QuizAssignments
+            .Where(assignment =>
+                assignment.EndDateTime < now
+                && (assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.NotAttempted
+                    || assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Upcoming)
+                && !_dbContext.QuizAttempts.Any(attempt =>
+                    attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId))
+            .ToListAsync(cancellationToken);
+
+        if (candidates.Count == 0)
+        {
+            return 0;
+        }
+
+        foreach (var assignment in candidates)
+        {
+            assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.Expired);
+        }
+
+        return candidates.Count;
     }
 }

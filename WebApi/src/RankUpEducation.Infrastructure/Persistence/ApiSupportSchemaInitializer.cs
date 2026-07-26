@@ -38,6 +38,9 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DifficultyLevelLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizLookupSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizAttemptQuestionMarksSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizRejectionReasonSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizNavigationAndMarkReviewSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
@@ -574,6 +577,50 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         UPDATE public.lookups SET is_active = FALSE, order_by = 99
         WHERE (id IN (41, 42, 43) AND type = 'QuizApprovalStatus')
            OR (id IN (63, 64) AND type = 'QuizLifecycleStatus');
+        """;
+
+    /// <summary>
+    /// Freeze quiz-specific marks on each attempt question so later QuizQuestion edits
+    /// cannot change historical scoring. Backfills from live quiz_questions when possible.
+    /// </summary>
+    private const string QuizAttemptQuestionMarksSupportSql = """
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS marks smallint NOT NULL DEFAULT 0;
+
+        UPDATE public.quiz_attempt_questions AS aq
+        SET marks = qq.marks
+        FROM public.quiz_attempts AS a
+        INNER JOIN public.quiz_questions AS qq
+            ON qq.quiz_id = a.quiz_id
+        WHERE aq.quiz_attempt_id = a.id
+          AND aq.question_id = qq.question_id
+          AND aq.marks = 0
+          AND qq.marks > 0;
+        """;
+
+    private const string QuizRejectionReasonSupportSql = """
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS rejection_reason varchar(1000) NULL;
+        """;
+
+    private const string QuizNavigationAndMarkReviewSupportSql = """
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS navigation_mode varchar(20) NOT NULL DEFAULT 'Free';
+
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS audience_scope varchar(20) NOT NULL DEFAULT 'Assigned';
+
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS audience_start_at timestamptz NULL;
+
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS audience_end_at timestamptz NULL;
+
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS audience_allowed_attempts smallint NULL;
+
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS is_marked_for_review boolean NOT NULL DEFAULT FALSE;
         """;
 
     private const string UserRoleSupportSql = """

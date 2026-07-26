@@ -120,8 +120,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
         var items = new List<PendingReviewItem>();
         foreach (var row in rows)
         {
-            var totalMarks = await _dbContext.QuizQuestions.AsNoTracking()
-                .Where(link => link.QuizId == row.QuizId)
+            var totalMarks = await _dbContext.QuizAttemptQuestions.AsNoTracking()
+                .Where(link => link.QuizAttemptId == row.AttemptId)
                 .SumAsync(link => (short?)link.Marks, cancellationToken) ?? 0;
 
             items.Add(new PendingReviewItem(
@@ -177,14 +177,11 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 attemptQuestion.QuestionId,
                 question.QuestionText,
                 question.QuestionTypeId,
-                attemptQuestion.QuizReviewId
+                attemptQuestion.QuizReviewId,
+                attemptQuestion.Marks
             }).ToListAsync(cancellationToken);
 
         var questionIds = attemptQuestions.Select(item => item.QuestionId).ToArray();
-        var quizQuestions = await _dbContext.QuizQuestions.AsNoTracking()
-            .Where(item => item.QuizId == quizId && questionIds.Contains(item.QuestionId))
-            .ToDictionaryAsync(item => item.QuestionId, item => item.Marks, cancellationToken);
-
         var typeNames = await _dbContext.Lookups.AsNoTracking()
             .Where(lookup => attemptQuestions.Select(item => item.QuestionTypeId).Contains(lookup.Id))
             .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
@@ -239,7 +236,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             select student.FullName).FirstOrDefaultAsync(cancellationToken)
             ?? $"Student {attempt.StudentId}";
 
-        var totalMarks = quizQuestions.Values.Sum(marks => marks);
+        var totalMarks = attemptQuestions.Sum(item => (int)item.Marks);
 
         return new AttemptReviewDetailItem(
             attempt.Id,
@@ -289,7 +286,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     item.QuestionId,
                     item.QuestionText,
                     typeName,
-                    quizQuestions.GetValueOrDefault(item.QuestionId, (short)0),
+                    item.Marks,
                     marked?.AwardedMarks ?? 0,
                     marked?.IsCorrect ?? false,
                     selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,

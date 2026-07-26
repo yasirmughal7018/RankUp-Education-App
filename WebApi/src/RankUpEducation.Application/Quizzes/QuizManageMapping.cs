@@ -32,6 +32,7 @@ internal static class QuizManageMapping
             detail.ShuffleQuestions,
             detail.ShuffleOptions,
             detail.IsReviewRequired,
+            detail.NavigationMode,
             detail.CreatedByName,
             detail.SchoolName,
             questions.Select(QuizQuestionMapping.ToQuestionResponse).ToArray());

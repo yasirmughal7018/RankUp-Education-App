@@ -17,7 +17,8 @@ public sealed record CreateQuizRequest(
     bool ShuffleOptions,
     bool IsReviewRequired,
     long? ContextStudentId,
-    short? QuizTypeId = null);
+    short? QuizTypeId = null,
+    string? NavigationMode = null);
 
 /// <summary>Editable quiz metadata (blocked after assignment window starts).</summary>
 public sealed record UpdateQuizRequest(
@@ -32,7 +33,8 @@ public sealed record UpdateQuizRequest(
     short? AllowedAttempts,
     bool ShuffleQuestions,
     bool ShuffleOptions,
-    bool IsReviewRequired);
+    bool IsReviewRequired,
+    string? NavigationMode = null);
 
 /// <summary>Owner manage view returned after create/update/publish/question changes.</summary>
 public sealed record ManageQuizResponse(
@@ -57,12 +59,14 @@ public sealed record ManageQuizResponse(
     bool ShuffleQuestions,
     bool ShuffleOptions,
     bool IsReviewRequired,
+    string NavigationMode,
     string CreatedBy,
     string SchoolName,
     IReadOnlyList<ManageQuizQuestionResponse> Questions);
 
 /// <summary>
-/// Assignment request. <see cref="Mode"/> values: one, selected, group, allLinked (parent), allInGrade (teacher).
+/// Assignment request. Modes: one, selected, group, allLinked (parent), allInGrade / allInSection (teacher),
+/// allInSchool (school admin), multiSchool / public (portal admin).
 /// </summary>
 public sealed record AssignQuizRequest(
     string Mode,
@@ -71,7 +75,9 @@ public sealed record AssignQuizRequest(
     DateTimeOffset StartAt,
     DateTimeOffset EndAt,
     short AllowedAttempts,
-    short? GradeId = null);
+    short? GradeId = null,
+    string? Section = null,
+    IReadOnlyList<int>? SchoolIds = null);
 
 /// <summary>One student assignment with attempt and review summary.</summary>
 public sealed record QuizAssignmentResponse(

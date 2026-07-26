@@ -94,6 +94,55 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<long>> GetStudentIdsInCampusByGradeAndSectionAsync(
+        int schoolId,
+        int campusId,
+        short gradeId,
+        string section,
+        CancellationToken cancellationToken)
+    {
+        var normalized = section.Trim();
+        return await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where user.SchoolId == schoolId
+                && user.CampusId == campusId
+                && student.Grade == gradeId
+                && student.Section == normalized
+            select student.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<long>> GetStudentIdsInSchoolAsync(
+        int schoolId,
+        CancellationToken cancellationToken)
+    {
+        return await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where user.SchoolId == schoolId
+            select student.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<long>> GetStudentIdsInSchoolsAsync(
+        IReadOnlyList<int> schoolIds,
+        CancellationToken cancellationToken)
+    {
+        if (schoolIds.Count == 0)
+        {
+            return Array.Empty<long>();
+        }
+
+        return await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where user.SchoolId != null && schoolIds.Contains(user.SchoolId.Value)
+            select student.Id)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<long>> GetGroupMemberStudentIdsAsync(
         long groupId,
         long ownerUserId,

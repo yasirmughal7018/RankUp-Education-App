@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IQuizAssignService, QuizAssignService>();
         services.AddScoped<IQuizMonitorService, QuizMonitorService>();
         services.AddScoped<IQuizReviewService, QuizReviewService>();
+        services.AddScoped<IQuizAiReviewService, HeuristicQuizAiReviewService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IParentService, ParentService>();
         services.AddScoped<IDirectoryService, DirectoryService>();

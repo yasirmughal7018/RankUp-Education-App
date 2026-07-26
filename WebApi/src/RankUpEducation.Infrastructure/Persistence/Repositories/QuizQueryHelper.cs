@@ -144,6 +144,7 @@ internal static class QuizQueryHelper
             quiz.ShuffleQuestions,
             quiz.ShuffleOptions,
             quiz.IsReviewRequired,
+            quiz.NavigationMode,
             attemptCount,
             bestPercentage,
             lastSubmittedAt,

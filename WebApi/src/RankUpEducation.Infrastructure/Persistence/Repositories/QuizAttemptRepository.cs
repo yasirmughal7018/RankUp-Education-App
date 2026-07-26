@@ -76,14 +76,12 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                 attemptQuestion.QuestionId,
                 question.QuestionText,
                 question.Explanation,
-                attemptQuestion.DisplayOrder
+                attemptQuestion.DisplayOrder,
+                attemptQuestion.Marks,
+                attemptQuestion.IsMarkedForReview
             }).ToListAsync(cancellationToken);
 
         var questionIds = attemptQuestions.Select(item => item.QuestionId).ToArray();
-        var quizQuestions = await _dbContext.QuizQuestions.AsNoTracking()
-            .Where(item => item.QuizId == attempt.QuizId && questionIds.Contains(item.QuestionId))
-            .ToDictionaryAsync(item => item.QuestionId, item => item.Marks, cancellationToken);
-
         var answers = await _dbContext.QuizAttemptAnswers.AsNoTracking()
             .Where(answer => attemptQuestions.Select(item => item.Id).Contains(answer.QuizAttemptQuestionId))
             .ToListAsync(cancellationToken);
@@ -92,7 +90,7 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
             .Where(option => questionIds.Contains(option.QuestionId))
             .ToListAsync(cancellationToken);
 
-        var totalMarks = quizQuestions.Values.DefaultIfEmpty((short)0).Sum(marks => marks);
+        var totalMarks = attemptQuestions.Sum(item => (int)item.Marks);
 
         return new QuizAttemptDetailItem(
             attempt.Id,
@@ -136,7 +134,7 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                     item.Id,
                     item.QuestionId,
                     item.QuestionText,
-                    quizQuestions.GetValueOrDefault(item.QuestionId, (short)0),
+                    item.Marks,
                     item.DisplayOrder,
                     item.Explanation,
                     selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
@@ -151,7 +149,8 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                             option.OptionImageUrl,
                             option.IsCorrect))
                         .ToArray(),
-                    selectedOptionIds);
+                    selectedOptionIds,
+                    item.IsMarkedForReview);
             }).ToArray());
     }
 

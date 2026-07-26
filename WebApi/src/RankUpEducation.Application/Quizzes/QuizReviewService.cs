@@ -213,6 +213,13 @@ public sealed class QuizReviewService : IQuizReviewService
         attempt.ApplyReviewedScore(obtainedMarks, reviewDetail.TotalMarks, reviewedStatusId);
         assignment.MarkReviewDone();
 
+        var completedResultId = await _lookups.ResolveLookupIdAsync(
+            QuizLookupNames.QuizResultStatus,
+            "Completed",
+            fallback: QuizLookupNames.QuizResultStatusIds.Completed,
+            cancellationToken);
+        assignment.SetResultStatus(completedResultId);
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new FinalizeReviewResponse(

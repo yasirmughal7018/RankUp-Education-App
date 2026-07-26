@@ -1,16 +1,31 @@
 import { useState, type FormEvent } from "react";
-import type { QuizFormValues } from "@/features/quizzes/domain/quizTypes";
+import type {
+  QuizFormValues,
+  QuizNavigationMode,
+} from "@/features/quizzes/domain/quizTypes";
 import { validateQuizForm } from "@/features/quizzes/domain/quizTypes";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
+const NAVIGATION_MODE_OPTIONS: Array<{
+  value: QuizNavigationMode;
+  label: string;
+}> = [
+  { value: "Free", label: "Free — jump to any question" },
+  { value: "Sequential", label: "Sequential — previous/next only" },
+  { value: "Locked", label: "Locked — next after answering" },
+];
+
 interface QuizFormProps {
   initialValues: QuizFormValues;
   submitLabel: string;
   isSubmitting?: boolean;
   showContextStudentId?: boolean;
+  /** When true, quiz type is required (create). Edit hides the field because API update omits type. */
+  requireQuizType?: boolean;
+  suggestedTimeMinutes?: number | null;
   onSubmit: (values: QuizFormValues) => Promise<void>;
   onCancel: () => void;
 }
@@ -23,6 +38,8 @@ export function QuizForm({
   submitLabel,
   isSubmitting = false,
   showContextStudentId = false,
+  requireQuizType = false,
+  suggestedTimeMinutes = null,
   onSubmit,
   onCancel,
 }: QuizFormProps) {
@@ -33,7 +50,7 @@ export function QuizForm({
     event.preventDefault();
     setError(null);
 
-    const validationError = validateQuizForm(values);
+    const validationError = validateQuizForm(values, requireQuizType);
     if (validationError) {
       setError(validationError);
       return;
@@ -149,6 +166,22 @@ export function QuizForm({
           }
         />
 
+        {requireQuizType ? (
+          <LookupSelect
+            label="Quiz type"
+            type={LOOKUP_TYPES.QUIZ_TYPE}
+            value={values.quizTypeId || ""}
+            disabled={isSubmitting}
+            required
+            onChange={(quizTypeId) =>
+              setValues((current) => ({
+                ...current,
+                quizTypeId: quizTypeId === "" ? 0 : quizTypeId,
+              }))
+            }
+          />
+        ) : null}
+
         {showContextStudentId ? (
           <div>
             <FieldLabel htmlFor="contextStudentId" optional>
@@ -214,6 +247,21 @@ export function QuizForm({
             className={inputClassName}
             min={1}
           />
+          {suggestedTimeMinutes != null && suggestedTimeMinutes > 0 ? (
+            <button
+              type="button"
+              disabled={isSubmitting}
+              className="mt-1.5 text-sm font-medium text-sky-700 hover:text-sky-900"
+              onClick={() =>
+                setValues((current) => ({
+                  ...current,
+                  timeLimitMinutes: suggestedTimeMinutes,
+                }))
+              }
+            >
+              Use suggested {suggestedTimeMinutes} min from questions
+            </button>
+          ) : null}
         </div>
 
         <div>
@@ -239,51 +287,75 @@ export function QuizForm({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={values.shuffleQuestions}
-            disabled={isSubmitting}
-            onChange={(event) =>
-              setValues((current) => ({
-                ...current,
-                shuffleQuestions: event.target.checked,
-              }))
-            }
-          />
-          Shuffle questions
-        </label>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3 md:col-span-1">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={values.shuffleQuestions}
+              disabled={isSubmitting}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  shuffleQuestions: event.target.checked,
+                }))
+              }
+            />
+            Shuffle questions
+          </label>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={values.shuffleOptions}
-            disabled={isSubmitting}
-            onChange={(event) =>
-              setValues((current) => ({
-                ...current,
-                shuffleOptions: event.target.checked,
-              }))
-            }
-          />
-          Shuffle options
-        </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={values.shuffleOptions}
+              disabled={isSubmitting}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  shuffleOptions: event.target.checked,
+                }))
+              }
+            />
+            Shuffle options
+          </label>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={values.isReviewRequired}
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={values.isReviewRequired}
+              disabled={isSubmitting}
+              onChange={(event) =>
+                setValues((current) => ({
+                  ...current,
+                  isReviewRequired: event.target.checked,
+                }))
+              }
+            />
+            Review required
+          </label>
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="navigationMode">Navigation mode</FieldLabel>
+          <select
+            id="navigationMode"
+            value={values.navigationMode}
             disabled={isSubmitting}
             onChange={(event) =>
               setValues((current) => ({
                 ...current,
-                isReviewRequired: event.target.checked,
+                navigationMode: event.target.value as QuizNavigationMode,
               }))
             }
-          />
-          Review required
-        </label>
+            className={inputClassName}
+          >
+            {NAVIGATION_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="flex justify-end gap-3">

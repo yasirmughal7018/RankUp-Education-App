@@ -42,11 +42,14 @@ export interface QuizAttemptQuestion {
   options: QuizAttemptOption[];
 }
 
+export type QuizNavigationMode = "Free" | "Sequential" | "Locked";
+
 export interface SavedQuizAnswer {
   questionId: number;
   selectedOptionId: number | null;
   submittedText: string | null;
   selectedOptionIds?: number[] | null;
+  isMarkedForReview?: boolean;
 }
 
 export interface StartQuizAttempt {
@@ -58,6 +61,7 @@ export interface StartQuizAttempt {
   resumed: boolean;
   questions: QuizAttemptQuestion[];
   savedAnswers: SavedQuizAnswer[];
+  navigationMode?: QuizNavigationMode | string;
 }
 
 export interface SubmitQuizAnswer {
@@ -65,6 +69,7 @@ export interface SubmitQuizAnswer {
   selectedOptionId: number | null;
   submittedText: string | null;
   selectedOptionIds?: number[] | null;
+  isMarkedForReview?: boolean | null;
 }
 
 export interface SaveQuizDraftInput {

@@ -63,6 +63,7 @@ public sealed record QuizDetailItem(
     bool ShuffleQuestions,
     bool ShuffleOptions,
     bool IsReviewRequired,
+    string NavigationMode,
     int AttemptCount,
     short? BestPercentage,
     DateTimeOffset? LastSubmittedAt,
@@ -102,6 +103,7 @@ public sealed record QuizQuestionItem(
     short Marks,
     short DisplayOrder,
     string? Hint,
+    short EstimatedTimeSeconds,
     IReadOnlyList<QuizQuestionOptionItem> Options,
     IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
 
@@ -151,7 +153,8 @@ public sealed record QuizAttemptQuestionItem(
     short AwardedMarks,
     bool IsCorrect,
     IReadOnlyList<QuizQuestionOptionItem> Options,
-    IReadOnlyList<long> SelectedOptionIds);
+    IReadOnlyList<long> SelectedOptionIds,
+    bool IsMarkedForReview = false);
 
 /// <summary>Assignment window and attempt quota checked before start/submit.</summary>
 public sealed record QuizAssignmentAccess(

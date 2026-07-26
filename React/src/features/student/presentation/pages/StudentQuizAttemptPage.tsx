@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import type {
+  QuizNavigationMode,
   SavedQuizAnswer,
   StartQuizAttempt,
   SubmitQuizAnswer,
@@ -28,6 +29,19 @@ const startedAtStorageKey = (attemptId: number) =>
   `rankup-quiz-started-${attemptId}`;
 const reviewStorageKey = (attemptId: number) =>
   `rankup-quiz-review-${attemptId}`;
+
+function normalizeNavigationMode(
+  value: string | null | undefined,
+): QuizNavigationMode {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "sequential") {
+    return "Sequential";
+  }
+  if (normalized === "locked") {
+    return "Locked";
+  }
+  return "Free";
+}
 
 function readStoredAttempt(attemptId: number): StartQuizAttempt | null {
   const raw = sessionStorage.getItem(attemptStorageKey(attemptId));
@@ -122,6 +136,26 @@ function hydrateAnswers(
   );
 }
 
+function hydrateReviewFlags(
+  questions: StartQuizAttempt["questions"],
+  savedAnswers: SavedQuizAnswer[] | undefined,
+  stored: Record<number, boolean>,
+): Record<number, boolean> {
+  const fromSaved = Object.fromEntries(
+    (savedAnswers ?? []).map((answer) => [
+      answer.questionId,
+      Boolean(answer.isMarkedForReview),
+    ]),
+  );
+
+  return Object.fromEntries(
+    questions.map((question) => {
+      const flagged = stored[question.id] ?? fromSaved[question.id] ?? false;
+      return [question.id, flagged];
+    }),
+  );
+}
+
 function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const minutes = Math.floor(safe / 60);
@@ -144,6 +178,7 @@ function isAnswered(answer: AnswerState | undefined): boolean {
 function toSubmitAnswer(
   questionId: number,
   answer: AnswerState | undefined,
+  isMarkedForReview?: boolean,
 ): SubmitQuizAnswer {
   const selectedOptionIds = answer?.selectedOptionIds ?? [];
   const selectedOptionId =
@@ -157,6 +192,7 @@ function toSubmitAnswer(
     selectedOptionId,
     submittedText,
     selectedOptionIds: selectedOptionIds.length > 0 ? selectedOptionIds : null,
+    isMarkedForReview: Boolean(isMarkedForReview),
   };
 }
 
@@ -199,13 +235,28 @@ export function StudentQuizAttemptPage() {
   });
 
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>(
-    () => readStoredReviewFlags(numericAttemptId),
+    () => {
+      const initialAttempt =
+        attemptFromNavigation ?? readStoredAttempt(numericAttemptId);
+      if (!initialAttempt) {
+        return readStoredReviewFlags(numericAttemptId);
+      }
+
+      return hydrateReviewFlags(
+        initialAttempt.questions,
+        initialAttempt.savedAnswers,
+        readStoredReviewFlags(numericAttemptId),
+      );
+    },
   );
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [draftStatus, setDraftStatus] = useState<string | null>(null);
+  const [timeWarning, setTimeWarning] = useState<string | null>(null);
   const answersDirtyRef = useRef(false);
   const lastSavedSnapshotRef = useRef("");
+  const warnedAt300Ref = useRef(false);
+  const warnedAt60Ref = useRef(false);
 
   const [startedAt] = useState(() => {
     const stored = sessionStorage.getItem(startedAtStorageKey(numericAttemptId));
@@ -243,6 +294,13 @@ export function StudentQuizAttemptPage() {
           readStoredAnswers(attemptFromNavigation.attemptId),
         ),
       );
+      setMarkedForReview(
+        hydrateReviewFlags(
+          attemptFromNavigation.questions,
+          attemptFromNavigation.savedAnswers,
+          readStoredReviewFlags(attemptFromNavigation.attemptId),
+        ),
+      );
     }
   }, [attemptFromNavigation]);
 
@@ -258,11 +316,19 @@ export function StudentQuizAttemptPage() {
             readStoredAnswers(numericAttemptId),
           ),
         );
+        setMarkedForReview(
+          hydrateReviewFlags(
+            stored.questions,
+            stored.savedAnswers,
+            readStoredReviewFlags(numericAttemptId),
+          ),
+        );
       }
     }
   }, [attempt, numericAttemptId]);
 
   const questions = attempt?.questions ?? [];
+  const navigationMode = normalizeNavigationMode(attempt?.navigationMode);
 
   const orderedQuestions = useMemo(
     () => [...questions].sort((a, b) => a.displayOrder - b.displayOrder),
@@ -297,6 +363,7 @@ export function StudentQuizAttemptPage() {
       reviewStorageKey(numericAttemptId),
       JSON.stringify(markedForReview),
     );
+    answersDirtyRef.current = true;
   }, [markedForReview, numericAttemptId]);
 
   const timeLimitSeconds = attempt?.timeLimitMinutes
@@ -319,6 +386,22 @@ export function StudentQuizAttemptPage() {
     return () => window.clearInterval(timer);
   }, [startedAt, timeLimitSeconds]);
 
+  useEffect(() => {
+    if (remainingSeconds == null) {
+      return;
+    }
+
+    if (remainingSeconds <= 300 && remainingSeconds > 60 && !warnedAt300Ref.current) {
+      warnedAt300Ref.current = true;
+      setTimeWarning("5 minutes remaining. Wrap up and review your answers.");
+    }
+
+    if (remainingSeconds <= 60 && !warnedAt60Ref.current) {
+      warnedAt60Ref.current = true;
+      setTimeWarning("Less than 1 minute remaining. Submit soon — auto-submit is imminent.");
+    }
+  }, [remainingSeconds]);
+
   async function persistDraft(force = false) {
     if (
       !attempt ||
@@ -334,7 +417,11 @@ export function StudentQuizAttemptPage() {
     }
 
     const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) =>
-      toSubmitAnswer(question.id, answers[question.id]),
+      toSubmitAnswer(
+        question.id,
+        answers[question.id],
+        markedForReview[question.id],
+      ),
     );
 
     const snapshot = JSON.stringify(payload);
@@ -372,7 +459,7 @@ export function StudentQuizAttemptPage() {
 
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt, orderedQuestions.length, answers, startedAt]);
+  }, [attempt, orderedQuestions.length, answers, markedForReview, startedAt]);
 
   useEffect(() => {
     if (!attempt || orderedQuestions.length === 0) {
@@ -385,15 +472,46 @@ export function StudentQuizAttemptPage() {
 
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers]);
+  }, [answers, markedForReview]);
+
+  useEffect(() => {
+    if (!attempt || orderedQuestions.length === 0) {
+      return;
+    }
+
+    function onVisibilityChange() {
+      if (document.hidden) {
+        void persistDraft(true);
+      }
+    }
+
+    function onPageHide() {
+      void persistDraft(true);
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt, orderedQuestions.length, answers, markedForReview, startedAt]);
 
   async function handleSubmit(isAuto = false) {
     if (submitAttempt.isPending) {
       return;
     }
 
+    // Flush the latest answers before final submit (especially important for timer auto-submit).
+    await persistDraft();
+
     const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) =>
-      toSubmitAnswer(question.id, answers[question.id]),
+      toSubmitAnswer(
+        question.id,
+        answers[question.id],
+        markedForReview[question.id],
+      ),
     );
 
     const timeSpentSeconds = Math.max(
@@ -405,6 +523,7 @@ export function StudentQuizAttemptPage() {
       const result = await submitAttempt.mutateAsync({
         answers: payload,
         timeSpentSeconds,
+        isAutoSubmit: isAuto,
       });
       sessionStorage.removeItem(attemptStorageKey(numericAttemptId));
       sessionStorage.removeItem(answersStorageKey(numericAttemptId));
@@ -450,6 +569,12 @@ export function StudentQuizAttemptPage() {
   const currentAnswer = currentQuestion
     ? answers[currentQuestion.id]
     : undefined;
+  const currentAnswered = isAnswered(currentAnswer);
+  const canJumpByNumber = navigationMode === "Free";
+  const canGoPrevious = navigationMode !== "Locked" && currentIndex > 0;
+  const canGoNext =
+    currentIndex < orderedQuestions.length - 1 &&
+    (navigationMode !== "Locked" || currentAnswered);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -477,6 +602,19 @@ export function StudentQuizAttemptPage() {
         }
       />
 
+      {timeWarning ? (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>{timeWarning}</span>
+          <button
+            type="button"
+            onClick={() => setTimeWarning(null)}
+            className="shrink-0 text-xs font-medium text-amber-800 hover:text-amber-950"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       {submitAttempt.error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {submitAttempt.error.message}
@@ -492,12 +630,18 @@ export function StudentQuizAttemptPage() {
           const answered = isAnswered(answers[question.id]);
           const flagged = Boolean(markedForReview[question.id]);
           const active = index === currentIndex;
+          const jumpDisabled = !canJumpByNumber && !active;
 
           return (
             <button
               key={question.id}
               type="button"
-              onClick={() => setCurrentIndex(index)}
+              disabled={jumpDisabled}
+              onClick={() => {
+                if (canJumpByNumber) {
+                  setCurrentIndex(index);
+                }
+              }}
               className={`h-9 min-w-9 rounded-lg border px-2 text-xs font-medium transition ${
                 active
                   ? "border-brand-600 bg-brand-600 text-white"
@@ -506,7 +650,7 @@ export function StudentQuizAttemptPage() {
                     : answered
                       ? "border-emerald-300 bg-emerald-50 text-emerald-800"
                       : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white`}
             >
               {index + 1}
             </button>
@@ -638,7 +782,7 @@ export function StudentQuizAttemptPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={currentIndex === 0}
+                disabled={!canGoPrevious}
                 onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
@@ -646,7 +790,7 @@ export function StudentQuizAttemptPage() {
               </button>
               <button
                 type="button"
-                disabled={currentIndex >= orderedQuestions.length - 1}
+                disabled={!canGoNext}
                 onClick={() =>
                   setCurrentIndex((value) =>
                     Math.min(orderedQuestions.length - 1, value + 1),

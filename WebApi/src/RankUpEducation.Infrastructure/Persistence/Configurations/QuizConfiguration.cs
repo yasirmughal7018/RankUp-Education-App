@@ -27,10 +27,16 @@ public sealed class QuizConfiguration : IEntityTypeConfiguration<Quiz>
         builder.Property(quiz => quiz.AllowedAttempts).HasColumnName("allowed_attempts");
         builder.Property(quiz => quiz.ShuffleQuestions).HasColumnName("shuffle_questions").HasDefaultValue(true);
         builder.Property(quiz => quiz.ShuffleOptions).HasColumnName("shuffle_options").HasDefaultValue(true);
+        builder.Property(quiz => quiz.NavigationMode).HasColumnName("navigation_mode").HasMaxLength(20).HasDefaultValue("Free");
+        builder.Property(quiz => quiz.AudienceScope).HasColumnName("audience_scope").HasMaxLength(20).HasDefaultValue("Assigned");
+        builder.Property(quiz => quiz.AudienceStartAt).HasColumnName("audience_start_at");
+        builder.Property(quiz => quiz.AudienceEndAt).HasColumnName("audience_end_at");
+        builder.Property(quiz => quiz.AudienceAllowedAttempts).HasColumnName("audience_allowed_attempts");
         builder.Property(quiz => quiz.Instructions).HasColumnName("instructions").HasMaxLength(1000).IsRequired();
         builder.Property(quiz => quiz.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(quiz => quiz.CreatedByName).HasColumnName("created_by").HasMaxLength(100).IsRequired();
         builder.Property(quiz => quiz.ApprovedBy).HasColumnName("approved_by").HasMaxLength(100);
+        builder.Property(quiz => quiz.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(1000);
         builder.Property(quiz => quiz.ApprovalStatusId).HasColumnName("approval_status_id").IsRequired();
         builder.Property(quiz => quiz.LifecycleStatusId).HasColumnName("lifecycle_status_id").IsRequired();
         builder.Property(quiz => quiz.CreatedDate).HasColumnName("created_date");
@@ -144,6 +150,8 @@ public sealed class QuizAttemptQuestionConfiguration : IEntityTypeConfiguration<
         builder.Property(question => question.QuizAttemptId).HasColumnName("quiz_attempt_id").IsRequired();
         builder.Property(question => question.QuestionId).HasColumnName("question_id").IsRequired();
         builder.Property(question => question.DisplayOrder).HasColumnName("display_order").IsRequired();
+        builder.Property(question => question.Marks).HasColumnName("marks").IsRequired();
+        builder.Property(question => question.IsMarkedForReview).HasColumnName("is_marked_for_review").HasDefaultValue(false);
         builder.Property(question => question.QuizReviewId).HasColumnName("quiz_review_id");
         builder.HasIndex(question => question.QuizAttemptId).HasDatabaseName("idx_quiz_attempt_questions_attempt");
     }

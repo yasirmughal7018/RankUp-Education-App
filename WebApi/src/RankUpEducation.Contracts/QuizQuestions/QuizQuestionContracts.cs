@@ -42,6 +42,7 @@ public sealed record ManageQuizQuestionResponse(
     short Marks,
     short DisplayOrder,
     string? Hint,
+    short EstimatedTimeSeconds,
     IReadOnlyList<QuizQuestionOptionResponse> Options);
 
 public sealed record QuizQuestionListResponse(

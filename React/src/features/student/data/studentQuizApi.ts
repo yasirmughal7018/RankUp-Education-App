@@ -47,12 +47,13 @@ export async function submitQuizAttempt(
   attemptId: number,
   answers: SubmitQuizAnswer[],
   timeSpentSeconds: number,
+  isAutoSubmit = false,
 ): Promise<QuizAttemptResult> {
   return apiRequest<QuizAttemptResult>(
     `/quizzes/${quizId}/attempts/${attemptId}/submit`,
     {
       method: "POST",
-      body: { answers, timeSpentSeconds },
+      body: { answers, timeSpentSeconds, isAutoSubmit },
     },
   );
 }

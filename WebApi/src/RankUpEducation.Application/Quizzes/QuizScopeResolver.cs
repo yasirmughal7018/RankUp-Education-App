@@ -65,9 +65,58 @@ public static class QuizScopeResolver
         return new QuizManageScope(role, userId, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
+    /// <summary>Requires Parent, Teacher, SchoolAdmin, or PortalAdmin for assignment operations.</summary>
+    public static QuizManageScope RequireAssignScope(ICurrentUserService currentUser)
+    {
+        var role = ParseRole(currentUser.Role);
+        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        {
+            throw new ForbiddenAppException("Your role cannot assign quizzes.");
+        }
+
+        var userId = currentUser.UserId
+            ?? throw new ForbiddenAppException("User account was not found.");
+
+        var profileId = currentUser.ProfileId ?? userId;
+
+        if (role == UserRole.Teacher)
+        {
+            var schoolId = currentUser.SchoolId
+                ?? throw new ForbiddenAppException("Teacher school context was not found.");
+            var campusId = currentUser.CampusId
+                ?? throw new ForbiddenAppException("Teacher campus context was not found.");
+
+            return new QuizManageScope(role, userId, profileId, schoolId, campusId);
+        }
+
+        if (role == UserRole.SchoolAdmin)
+        {
+            var schoolId = currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School admin school context was not found.");
+            return new QuizManageScope(role, userId, profileId, schoolId, currentUser.CampusId);
+        }
+
+        return new QuizManageScope(role, userId, profileId, currentUser.SchoolId, currentUser.CampusId);
+    }
+
     /// <summary>Verifies creator ownership and, for teachers, matching school/campus on the quiz row.</summary>
     public static void EnsureOwnsQuiz(Quiz quiz, QuizManageScope scope)
     {
+        if (scope.Role == UserRole.PortalAdmin)
+        {
+            return;
+        }
+
+        if (scope.Role == UserRole.SchoolAdmin)
+        {
+            if (scope.SchoolId != quiz.SchoolId)
+            {
+                throw new ForbiddenAppException("You can only manage quizzes in your school.");
+            }
+
+            return;
+        }
+
         if (!IsQuizOwner(quiz, scope))
         {
             throw new ForbiddenAppException("You do not have access to this quiz.");
@@ -114,6 +163,18 @@ public static class QuizScopeResolver
                     cancellationToken))
             {
                 throw new ForbiddenAppException("You can only assign quizzes to students in your school campus.");
+            }
+
+            return;
+        }
+
+        if (scope.Role == UserRole.SchoolAdmin)
+        {
+            var context = await studentScope.GetStudentSchoolContextAsync(studentId, cancellationToken)
+                ?? throw new ForbiddenAppException("Student school context was not found.");
+            if (scope.SchoolId != context.SchoolId)
+            {
+                throw new ForbiddenAppException("You can only assign quizzes to students in your school.");
             }
         }
     }

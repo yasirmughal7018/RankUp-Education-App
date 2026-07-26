@@ -60,6 +60,13 @@ public sealed class QuizAssignment : BaseEntity
         ModifiedDate = DateTimeOffset.UtcNow;
     }
 
+    /// <summary>Updates per-student result status (Not Attempted → In Progress → Under Review / Completed / Expired).</summary>
+    public void SetResultStatus(short quizResultStatus)
+    {
+        QuizResultStatus = quizResultStatus;
+        ModifiedDate = DateTimeOffset.UtcNow;
+    }
+
     /// <summary>Extends attempt allowance and reopens review after all attempts were exhausted.</summary>
     public void GrantRetry(short additionalAttempts)
     {

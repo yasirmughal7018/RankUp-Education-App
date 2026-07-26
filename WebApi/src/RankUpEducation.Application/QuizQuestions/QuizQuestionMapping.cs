@@ -16,6 +16,7 @@ internal static class QuizQuestionMapping
             question.Marks,
             question.DisplayOrder,
             question.Hint,
+            question.EstimatedTimeSeconds,
             question.Options.Select(option => new QuizQuestionOptionResponse(
                 option.OptionId,
                 option.OptionText,

@@ -47,12 +47,17 @@ export function AssignQuizDialog({
 }: AssignQuizDialogProps) {
   const { user } = useAuth();
   const isTeacher = user?.role === "Teacher";
+  const isParent = user?.role === "Parent";
+  const isSchoolAdmin = user?.role === "SchoolAdmin";
+  const isPortalAdmin = user?.role === "PortalAdmin";
   const [mode, setMode] = useState("selected");
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [groupId, setGroupId] = useState("");
   const [gradeId, setGradeId] = useState<number | "">("");
+  const [section, setSection] = useState("");
+  const [schoolIdsText, setSchoolIdsText] = useState("");
   const [gradeFilter, setGradeFilter] = useState<number | "">(
     () => parseGradeNumber(defaultGrade) ?? "",
   );
@@ -76,7 +81,7 @@ export function AssignQuizDialog({
       pageNumber: 1,
       pageSize: 50,
     },
-    mode === "selected",
+    mode === "selected" || mode === "one",
   );
 
   const students = studentsQuery.data?.items ?? [];
@@ -98,6 +103,11 @@ export function AssignQuizDialog({
   }, [isSubmitting, onClose]);
 
   function toggleStudent(studentId: number) {
+    if (mode === "one") {
+      setSelectedStudentIds([studentId]);
+      return;
+    }
+
     setSelectedStudentIds((current) =>
       current.includes(studentId)
         ? current.filter((id) => id !== studentId)
@@ -108,6 +118,11 @@ export function AssignQuizDialog({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
+    if (mode === "one" && selectedStudentIds.length !== 1) {
+      setError("Select exactly one student for one-student assignment.");
+      return;
+    }
 
     if (mode === "selected" && selectedStudentIds.length === 0) {
       setError("Select at least one student for selected assignment.");
@@ -124,6 +139,30 @@ export function AssignQuizDialog({
       return;
     }
 
+    if (mode === "allinsection") {
+      if (gradeId === "") {
+        setError("Grade is required for all-in-section assignment.");
+        return;
+      }
+      if (!section.trim()) {
+        setError("Section is required for all-in-section assignment.");
+        return;
+      }
+    }
+
+    if (mode === "multischool" && !schoolIdsText.trim()) {
+      setError("Enter at least one school id for multi-school assignment.");
+      return;
+    }
+
+    const schoolIds =
+      mode === "multischool" || mode === "allinschool"
+        ? schoolIdsText
+            .split(/[,\s]+/)
+            .map((value) => Number(value.trim()))
+            .filter((value) => Number.isFinite(value) && value > 0)
+        : null;
+
     try {
       await onSubmit({
         mode,
@@ -133,6 +172,8 @@ export function AssignQuizDialog({
         endAt: new Date(endAt).toISOString(),
         allowedAttempts,
         gradeId: gradeId === "" ? null : gradeId,
+        section: mode === "allinsection" ? section.trim() : null,
+        schoolIds,
       });
     } catch (caught) {
       const apiError = caught as ApiError;
@@ -163,16 +204,27 @@ export function AssignQuizDialog({
               id="mode"
               value={mode}
               disabled={isSubmitting}
-              onChange={(event) => setMode(event.target.value)}
+              onChange={(event) => {
+                setMode(event.target.value);
+                setSelectedStudentIds([]);
+              }}
               className={inputClassName}
             >
+              <option value="one">One student</option>
               <option value="selected">Selected students</option>
               <option value="group">Group</option>
               {isTeacher ? <option value="allingrade">All in grade</option> : null}
+              {isTeacher ? <option value="allinsection">All in section</option> : null}
+              {isSchoolAdmin || isPortalAdmin ? (
+                <option value="allinschool">All in school</option>
+              ) : null}
+              {isPortalAdmin ? <option value="multischool">Multiple schools</option> : null}
+              {isPortalAdmin ? <option value="public">Public (catalog)</option> : null}
+              {isParent ? <option value="alllinked">All linked children</option> : null}
             </select>
           </div>
 
-          {mode === "selected" ? (
+          {mode === "selected" || mode === "one" ? (
             <div className="space-y-3">
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
@@ -301,6 +353,57 @@ export function AssignQuizDialog({
               required
               placeholder="Select grade..."
             />
+          ) : null}
+
+          {mode === "allinsection" ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <LookupSelect
+                label="Grade"
+                value={gradeId}
+                onChange={setGradeId}
+                type={LOOKUP_TYPES.CLASS}
+                disabled={isSubmitting}
+                required
+                placeholder="Select grade..."
+              />
+              <div>
+                <FieldLabel htmlFor="section" required>
+                  Section
+                </FieldLabel>
+                <input
+                  id="section"
+                  value={section}
+                  disabled={isSubmitting}
+                  onChange={(event) => setSection(event.target.value)}
+                  className={inputClassName}
+                  placeholder="e.g. A"
+                  required
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {mode === "multischool" || (mode === "allinschool" && isPortalAdmin) ? (
+            <div>
+              <FieldLabel htmlFor="schoolIds" required={mode === "multischool"}>
+                School IDs
+              </FieldLabel>
+              <input
+                id="schoolIds"
+                value={schoolIdsText}
+                disabled={isSubmitting}
+                onChange={(event) => setSchoolIdsText(event.target.value)}
+                className={inputClassName}
+                placeholder="Comma-separated school ids"
+              />
+            </div>
+          ) : null}
+
+          {mode === "public" ? (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+              Public quizzes appear in the student catalog. Assignments are created
+              lazily when a student starts the quiz.
+            </p>
           ) : null}
 
           <div className="grid gap-4 md:grid-cols-2">

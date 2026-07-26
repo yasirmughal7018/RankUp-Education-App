@@ -19,20 +19,92 @@ public sealed class QuizRepository : IQuizRepository
         _lookups = lookups;
     }
 
-    public Task<IReadOnlyList<QuizListItem>> ListForStudentAsync(
+    public async Task<IReadOnlyList<QuizListItem>> ListForStudentAsync(
         long studentId,
         string? search,
         string? subject,
         string? grade,
         CancellationToken cancellationToken)
     {
-        return ListFromAssignmentsAsync(
+        var assigned = await ListFromAssignmentsAsync(
             _dbContext.QuizAssignments.Where(assignment => assignment.StudentId == studentId),
             search,
             subject,
             grade,
             studentId,
             cancellationToken);
+
+        var studentUser = await _dbContext.Users.AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Id == studentId, cancellationToken);
+        if (studentUser?.SchoolId is null)
+        {
+            return assigned;
+        }
+
+        var audienceQuizzes = await _dbContext.Quizzes.AsNoTracking()
+            .Where(quiz => quiz.IsActive
+                && !quiz.IsDeleted
+                && quiz.AudienceStartAt != null
+                && quiz.AudienceEndAt != null
+                && (quiz.AudienceScope == "Public"
+                    || (quiz.AudienceScope == "School" && quiz.SchoolId == studentUser.SchoolId.Value)))
+            .ToListAsync(cancellationToken);
+
+        if (audienceQuizzes.Count == 0)
+        {
+            return assigned;
+        }
+
+        var assignedIds = assigned.Select(item => item.QuizId).ToHashSet();
+        var lookupNames = await QuizQueryHelper.LoadLookupNamesAsync(_dbContext, audienceQuizzes, cancellationToken);
+        var schools = await QuizQueryHelper.LoadSchoolNamesAsync(
+            _dbContext,
+            audienceQuizzes.Select(quiz => quiz.SchoolId).Distinct(),
+            cancellationToken);
+
+        var merged = assigned.ToList();
+        foreach (var quiz in audienceQuizzes)
+        {
+            if (assignedIds.Contains(quiz.Id))
+            {
+                continue;
+            }
+
+            var stats = await QuizQueryHelper.GetAttemptStatsAsync(_dbContext, quiz.Id, studentId, cancellationToken);
+            var item = new QuizListItem(
+                quiz.Id,
+                null,
+                quiz.QuizTitle,
+                quiz.Description,
+                quiz.TotalQuestions,
+                quiz.TotalMarks,
+                quiz.TimeLimitMinutes,
+                quiz.AudienceAllowedAttempts ?? quiz.AllowedAttempts ?? 1,
+                quiz.AudienceStartAt,
+                quiz.AudienceEndAt,
+                quiz.CreatedByName,
+                schools.GetValueOrDefault(quiz.SchoolId, "School"),
+                lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
+                lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
+                lookupNames.GetValueOrDefault(quiz.TopicId, "Topic"),
+                lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
+                lookupNames.GetValueOrDefault(quiz.DifficultyLevelId, "Medium"),
+                quiz.Instructions,
+                quiz.IsReviewRequired,
+                stats.AttemptCount,
+                stats.BestPercentage,
+                stats.LastSubmittedAt,
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"));
+
+            if (!QuizQueryHelper.MatchesFilters(item, search, subject, grade))
+            {
+                continue;
+            }
+
+            merged.Add(item);
+        }
+
+        return merged.OrderByDescending(item => item.StartDateTime).ToArray();
     }
 
     public Task<IReadOnlyList<QuizListItem>> ListForLinkedStudentsAsync(
@@ -217,11 +289,6 @@ public sealed class QuizRepository : IQuizRepository
         var assignment = await _dbContext.QuizAssignments.AsNoTracking()
             .FirstOrDefaultAsync(item => item.QuizId == quizId && item.StudentId == studentId, cancellationToken);
 
-        if (assignment is null)
-        {
-            return null;
-        }
-
         var quiz = await _dbContext.Quizzes.AsNoTracking()
             .FirstOrDefaultAsync(item => item.Id == quizId && item.IsActive && !item.IsDeleted, cancellationToken);
 
@@ -230,20 +297,71 @@ public sealed class QuizRepository : IQuizRepository
             return null;
         }
 
+        if (assignment is null)
+        {
+            var studentUser = await _dbContext.Users.AsNoTracking()
+                .FirstOrDefaultAsync(user => user.Id == studentId, cancellationToken);
+            var canAudience = quiz.AudienceStartAt is not null
+                && quiz.AudienceEndAt is not null
+                && (quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
+                    || (quiz.AudienceScope.Equals("School", StringComparison.OrdinalIgnoreCase)
+                        && studentUser?.SchoolId == quiz.SchoolId));
+            if (!canAudience)
+            {
+                return null;
+            }
+        }
+
         var stats = await QuizQueryHelper.GetAttemptStatsAsync(_dbContext, quizId, studentId, cancellationToken);
         var lookupNames = await QuizQueryHelper.LoadLookupNamesAsync(_dbContext, [quiz], cancellationToken);
         var schools = await QuizQueryHelper.LoadSchoolNamesAsync(_dbContext, [quiz.SchoolId], cancellationToken);
 
-        return QuizQueryHelper.MapQuizDetail(
-            quiz,
-            assignment,
-            lookupNames,
-            schools,
+        if (assignment is not null)
+        {
+            return QuizQueryHelper.MapQuizDetail(
+                quiz,
+                assignment,
+                lookupNames,
+                schools,
+                stats.AttemptCount,
+                stats.BestPercentage,
+                stats.LastSubmittedAt,
+                quiz.LifecycleStatusId,
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"));
+        }
+
+        return new QuizDetailItem(
+            quiz.Id,
+            null,
+            quiz.QuizTitle,
+            quiz.Description,
+            quiz.TotalQuestions,
+            quiz.TotalMarks,
+            quiz.TimeLimitMinutes,
+            quiz.AudienceAllowedAttempts ?? quiz.AllowedAttempts ?? 1,
+            quiz.AudienceStartAt,
+            quiz.AudienceEndAt,
+            quiz.CreatedByName,
+            schools.GetValueOrDefault(quiz.SchoolId, "School"),
+            lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
+            lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
+            lookupNames.GetValueOrDefault(quiz.TopicId, "Topic"),
+            lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
+            lookupNames.GetValueOrDefault(quiz.DifficultyLevelId, "Medium"),
+            quiz.Instructions,
+            quiz.ShuffleQuestions,
+            quiz.ShuffleOptions,
+            quiz.IsReviewRequired,
+            quiz.NavigationMode,
             stats.AttemptCount,
             stats.BestPercentage,
             stats.LastSubmittedAt,
+            quiz.ClassId,
+            quiz.SubjectId,
+            quiz.TopicId,
+            quiz.DifficultyLevelId,
             quiz.LifecycleStatusId,
-            lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"));
+            lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"));
     }
 
     public async Task AddQuizAsync(Quiz quiz, CancellationToken cancellationToken)
@@ -372,6 +490,7 @@ public sealed class QuizRepository : IQuizRepository
             quiz.ShuffleQuestions,
             quiz.ShuffleOptions,
             quiz.IsReviewRequired,
+            quiz.NavigationMode,
             0,
             null,
             null,

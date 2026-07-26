@@ -55,15 +55,18 @@ export function useSubmitQuizAttemptMutation(quizId: number, attemptId: number) 
     mutationFn: ({
       answers,
       timeSpentSeconds,
+      isAutoSubmit = false,
     }: {
       answers: SubmitQuizAnswer[];
       timeSpentSeconds: number;
+      isAutoSubmit?: boolean;
     }) =>
       studentQuizApi.submitQuizAttempt(
         quizId,
         attemptId,
         answers,
         timeSpentSeconds,
+        isAutoSubmit,
       ),
     onSuccess: (result) => {
       queryClient.setQueryData(

@@ -71,6 +71,7 @@ export async function updateQuiz(
   const payload = buildQuizPayload(values);
   const updatePayload = { ...payload };
   delete (updatePayload as { contextStudentId?: number | null }).contextStudentId;
+  delete (updatePayload as { quizTypeId?: number | null }).quizTypeId;
 
   return apiRequest<ManageQuiz>(`/quizzes/${quizId}`, {
     method: "PUT",
@@ -192,6 +193,8 @@ export async function assignQuiz(
       endAt: input.endAt,
       allowedAttempts: input.allowedAttempts,
       gradeId: input.gradeId,
+      section: input.section ?? null,
+      schoolIds: input.schoolIds?.length ? input.schoolIds : null,
     },
   });
 }

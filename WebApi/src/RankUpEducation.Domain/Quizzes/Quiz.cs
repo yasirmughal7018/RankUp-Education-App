@@ -65,10 +65,22 @@ public sealed class Quiz : SoftDeleteEntity
     public short? AllowedAttempts { get; private set; }
     public bool ShuffleQuestions { get; private set; } = true;
     public bool ShuffleOptions { get; private set; } = true;
+
+    /// <summary>Free = jump anywhere; Sequential = prev/next only; Locked = forward only after answering.</summary>
+    public string NavigationMode { get; private set; } = "Free";
+
+    /// <summary>Assigned (row-based), School (all campuses), or Public (platform catalog + lazy assignment).</summary>
+    public string AudienceScope { get; private set; } = "Assigned";
+
+    public DateTimeOffset? AudienceStartAt { get; private set; }
+    public DateTimeOffset? AudienceEndAt { get; private set; }
+    public short? AudienceAllowedAttempts { get; private set; }
+
     public string Instructions { get; private set; }
     public bool IsActive { get; private set; } = true;
     public string CreatedByName { get; private set; }
     public string? ApprovedBy { get; private set; }
+    public string? RejectionReason { get; private set; }
     public short ApprovalStatusId { get; private set; }
     public short LifecycleStatusId { get; private set; }
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -88,7 +100,8 @@ public sealed class Quiz : SoftDeleteEntity
         short? allowedAttempts,
         bool shuffleQuestions,
         bool shuffleOptions,
-        bool isReviewRequired)
+        bool isReviewRequired,
+        string? navigationMode = null)
     {
         QuizTitle = quizTitle.AsTrimmedString();
         Description = description.AsTrimmedString();
@@ -102,6 +115,32 @@ public sealed class Quiz : SoftDeleteEntity
         ShuffleQuestions = shuffleQuestions;
         ShuffleOptions = shuffleOptions;
         IsReviewRequired = isReviewRequired;
+        NavigationMode = NormalizeNavigationMode(navigationMode);
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    private static string NormalizeNavigationMode(string? navigationMode)
+    {
+        var mode = navigationMode.AsTrimmedOrNull() ?? "Free";
+        return mode.Equals("Sequential", StringComparison.OrdinalIgnoreCase) ? "Sequential"
+            : mode.Equals("Locked", StringComparison.OrdinalIgnoreCase) ? "Locked"
+            : "Free";
+    }
+
+    /// <summary>Opens school-wide or public audience access without requiring pre-created rows for every student.</summary>
+    public void SetAudienceAccess(
+        string audienceScope,
+        DateTimeOffset startAt,
+        DateTimeOffset endAt,
+        short allowedAttempts)
+    {
+        var scope = audienceScope.AsTrimmedOrNull() ?? "Assigned";
+        AudienceScope = scope.Equals("Public", StringComparison.OrdinalIgnoreCase) ? "Public"
+            : scope.Equals("School", StringComparison.OrdinalIgnoreCase) ? "School"
+            : "Assigned";
+        AudienceStartAt = startAt;
+        AudienceEndAt = endAt;
+        AudienceAllowedAttempts = allowedAttempts;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -151,14 +190,21 @@ public sealed class Quiz : SoftDeleteEntity
     {
         ApprovalStatusId = approvalStatusId;
         ApprovedBy = approvedBy.AsTrimmedString();
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     /// <summary>School admin rejects a pending teacher quiz; clears prior approver stamp.</summary>
-    public void Reject(short approvalStatusId)
+    public void Reject(short approvalStatusId, string? reason = null)
     {
         ApprovalStatusId = approvalStatusId;
         ApprovedBy = null;
+        var trimmed = reason.AsTrimmedOrNull();
+        RejectionReason = trimmed is null
+            ? null
+            : trimmed.Length > 1000
+                ? trimmed[..1000]
+                : trimmed;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

@@ -32,6 +32,24 @@ public interface IStudentScopeRepository
         short gradeId,
         CancellationToken cancellationToken);
 
+    /// <summary>Returns active student ids in a campus matching grade and section.</summary>
+    Task<IReadOnlyList<long>> GetStudentIdsInCampusByGradeAndSectionAsync(
+        int schoolId,
+        int campusId,
+        short gradeId,
+        string section,
+        CancellationToken cancellationToken);
+
+    /// <summary>Returns active student ids across all campuses in a school.</summary>
+    Task<IReadOnlyList<long>> GetStudentIdsInSchoolAsync(
+        int schoolId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Returns active student ids across the given schools (PortalAdmin multi-school).</summary>
+    Task<IReadOnlyList<long>> GetStudentIdsInSchoolsAsync(
+        IReadOnlyList<int> schoolIds,
+        CancellationToken cancellationToken);
+
     /// <summary>Returns student ids in a group when the caller owns or may access that group.</summary>
     Task<IReadOnlyList<long>> GetGroupMemberStudentIdsAsync(
         long groupId,
