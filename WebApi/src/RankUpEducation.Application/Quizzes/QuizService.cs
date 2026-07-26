@@ -55,7 +55,7 @@ public interface IQuizService
 /// <inheritdoc cref="IQuizService"/>
 public sealed class QuizService : IQuizService
 {
-    private const string AttemptStatusType = "QuizAttemptStatus";
+    private const string AttemptStatusType = QuizLookupNames.QuizAttemptStatus;
     private const string InProgressStatusName = "InProgress";
     private const string SubmittedStatusName = "Submitted";
 
@@ -233,7 +233,7 @@ public sealed class QuizService : IQuizService
         var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             InProgressStatusName,
-            fallback: 1,
+            fallback: QuizLookupNames.QuizAttemptStatusIds.InProgress,
             cancellationToken);
 
         var existingInProgress = await _attempts.GetInProgressAttemptAsync(
@@ -311,7 +311,7 @@ public sealed class QuizService : IQuizService
         var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             InProgressStatusName,
-            fallback: 1,
+            fallback: QuizLookupNames.QuizAttemptStatusIds.InProgress,
             cancellationToken);
 
         if (attempt.StatusId != inProgressStatusId)
@@ -381,7 +381,7 @@ public sealed class QuizService : IQuizService
         var submittedStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             SubmittedStatusName,
-            fallback: 2,
+            fallback: QuizLookupNames.QuizAttemptStatusIds.Submitted,
             cancellationToken);
 
         if (attempt.StatusId == submittedStatusId)

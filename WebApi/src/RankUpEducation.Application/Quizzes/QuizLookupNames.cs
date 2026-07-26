@@ -7,8 +7,67 @@ public static class QuizLookupNames
     public const string QuizLifecycleStatus = "QuizLifecycleStatus";
     public const string QuizApprovalStatus = "QuizApprovalStatus";
     public const string QuizResultStatus = "QuizResultStatus";
+    public const string QuizAttemptStatus = "QuizAttemptStatus";
     public const string QuestionType = "QuestionType";
     public const string QuestionStatus = "QuestionStatus";
+
+    /// <summary>Canonical IDs aligned with the deployed quiz lookup table.</summary>
+    public static class QuizTypeIds
+    {
+        public const short Practice = 1;
+        public const short Assessment = 2;
+        public const short Competition = 3;
+        public const short Surprise = 4;
+        public const short ParentPrivate = 5;
+    }
+
+    /// <summary>
+    /// Approval gate only: Pending → Approved / Rejected.
+    /// Legacy rows 41 (Under Teacher Review), 42 (Under AI Review), and 43 (Cancelled)
+    /// are deactivated by the schema initializer — review belongs to attempts,
+    /// cancellation to the lifecycle.
+    /// </summary>
+    public static class QuizApprovalStatusIds
+    {
+        /// <summary>Row 40; renamed from legacy 'Draft' — means awaiting approval.</summary>
+        public const short Pending = 40;
+        public const short Approved = 44;
+        public const short Rejected = 45;
+    }
+
+    /// <summary>
+    /// Quiz-definition lifecycle only: NotAssigned → Published → Assigned → Cancelled / Archived.
+    /// Legacy rows 63 ('In Progress:') and 64 (Completed) are deactivated — per-student
+    /// progress lives on attempts/results, never on the quiz row.
+    /// </summary>
+    public static class QuizLifecycleStatusIds
+    {
+        public const short NotAssigned = 60;
+        public const short Published = 61;
+        public const short Assigned = 62;
+        public const short Cancelled = 65;
+        public const short Archived = 66;
+    }
+
+    public static class QuizAttemptStatusIds
+    {
+        public const short Started = 80;
+        public const short InProgress = 81;
+        public const short Submitted = 82;
+        public const short AutoSubmitted = 83;
+        public const short Expired = 84;
+        public const short Reviewed = 85;
+    }
+
+    public static class QuizResultStatusIds
+    {
+        public const short Expired = 20;
+        public const short Completed = 21;
+        public const short UnderReview = 22;
+        public const short InProgress = 23;
+        public const short NotAttempted = 24;
+        public const short Upcoming = 25;
+    }
 
     /// <summary>Canonical QuestionStatus lookup IDs (seeded / preferred for writes).</summary>
     public static class QuestionStatusIds
@@ -47,14 +106,16 @@ public static class QuizLookupNames
     public static readonly string[] ParentPrivateQuizTypeNames = ["ParentPrivate", "Parent Private", "Private"];
     public static readonly string[] SchoolQuizTypeNames = ["Practice", "Assessment", "Competition", "Surprise"];
     public static readonly string[] PendingApprovalStatusNames = ["Pending", "Draft", "Under Review"];
-    public static readonly string[] DraftLifecycleNames = ["Draft", "DRAFT"];
+    // The deployed lookup table calls the initial editable lifecycle "Not Assigned".
+    public static readonly string[] DraftLifecycleNames = ["Not Assigned", "Draft", "DRAFT"];
     public static readonly string[] PublishedLifecycleNames = ["Published", "PUBLISHED"];
     public static readonly string[] AssignedLifecycleNames = ["Assigned", "ASSIGNED"];
     public static readonly string[] CancelledLifecycleNames = ["Cancelled", "CANCELLED"];
     public static readonly string[] ArchivedLifecycleNames = ["Archived", "ARCHIVED"];
     public static readonly string[] ApprovedStatusNames = ["Approved", "APPROVED"];
     public static readonly string[] RejectedApprovalStatusNames = ["Rejected", "Declined", "REJECTED"];
-    public static readonly string[] AssignedResultNames = ["Assigned", "Not Started", "Pending"];
+    public static readonly string[] AssignedResultNames =
+        ["Not Attempted", "Assigned", "Not Started", "Pending", "Up Coming", "Upcoming"];
 
     /// <summary>Single-select option questions (exactly one correct).</summary>
     public static readonly string[] SingleChoiceQuestionTypeNames =

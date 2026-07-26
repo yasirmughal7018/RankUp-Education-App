@@ -37,6 +37,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionStatusLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionTypeLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DifficultyLevelLookupSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
@@ -526,6 +527,52 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
           AND lower(l.name) = 'hard'
           AND qz.difficulty_level_id <> 2003
           AND EXISTS (SELECT 1 FROM public.lookups c WHERE c.id = 2003 AND c.type = 'DifficultyLevel');
+        """;
+
+    private const string QuizLookupSupportSql = """
+        -- Existing deployed quiz lookups are retained:
+        -- QuizType 1–4; QuizApprovalStatus 40–44; QuizLifecycleStatus 60–64;
+        -- QuizResultStatus 20–25; QuizAttemptStatus 80–85.
+        --
+        -- Add only business states required by current flows but absent from that set.
+        -- IDs continue each existing range and inserts are safe on repeated startup.
+        INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
+        SELECT v.id, v.name, v.type, v.ord, TRUE, NULL
+        FROM (
+            VALUES
+                (5::smallint,  'ParentPrivate'::varchar, 'QuizType'::varchar, 5::smallint),
+                (45::smallint, 'Rejected'::varchar,      'QuizApprovalStatus'::varchar, 6::smallint),
+                (65::smallint, 'Cancelled'::varchar,     'QuizLifecycleStatus'::varchar, 6::smallint),
+                (66::smallint, 'Archived'::varchar,      'QuizLifecycleStatus'::varchar, 7::smallint)
+        ) AS v(id, name, type, ord)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public.lookups existing WHERE existing.id = v.id
+        )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.lookups existing
+            WHERE existing.type = v.type
+              AND lower(existing.name) = lower(v.name)
+        );
+
+        -- Keep the required canonical rows active if they already exist at these IDs.
+        UPDATE public.lookups SET is_active = TRUE
+        WHERE (id = 5 AND type = 'QuizType')
+           OR (id = 45 AND type = 'QuizApprovalStatus')
+           OR (id IN (65, 66) AND type = 'QuizLifecycleStatus');
+
+        -- Clean model: approval = Pending/Approved/Rejected; lifecycle = quiz definition only.
+        -- Rename approval 40 'Draft' -> 'Pending' (code reads both as pending; zero-risk).
+        UPDATE public.lookups SET name = 'Pending'
+        WHERE id = 40 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'Pending';
+
+        -- Deactivate dead/overlapping states (ID stability kept, hidden from normal use):
+        -- 41 Under Teacher Review / 42 Under AI Review (review is per attempt, not approval),
+        -- 43 approval-Cancelled (cancellation lives on lifecycle 65),
+        -- 63 'In Progress:' / 64 Completed (per-student progress, never valid on the quiz row).
+        UPDATE public.lookups SET is_active = FALSE, order_by = 99
+        WHERE (id IN (41, 42, 43) AND type = 'QuizApprovalStatus')
+           OR (id IN (63, 64) AND type = 'QuizLifecycleStatus');
         """;
 
     private const string UserRoleSupportSql = """

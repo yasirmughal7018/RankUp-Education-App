@@ -152,9 +152,10 @@ export function canManageQuizzes(role: UserRole): boolean {
   return QUIZ_MANAGER_ROLES.includes(role);
 }
 
-/** Lifecycle status is draft (editable). */
+/** Initial editable lifecycle: deployed lookup uses "Not Assigned"; "Draft" is legacy. */
 export function isDraftQuiz(status: string): boolean {
-  return status.toLowerCase() === "draft";
+  const normalized = status.trim().toLowerCase();
+  return normalized === "not assigned" || normalized === "draft";
 }
 
 /** Default values for the create-quiz form. */

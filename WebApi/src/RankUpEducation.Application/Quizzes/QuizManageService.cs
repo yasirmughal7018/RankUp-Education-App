@@ -590,7 +590,8 @@ public sealed class QuizManageService : IQuizManageService
     }
 
     private static bool IsDraftLifecycle(string lifecycleName)
-        => lifecycleName.Equals("Draft", StringComparison.OrdinalIgnoreCase);
+        => QuizLookupNames.DraftLifecycleNames.Any(
+            name => lifecycleName.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsArchivedLifecycle(string lifecycleName)
         => lifecycleName.Equals("Archived", StringComparison.OrdinalIgnoreCase);
