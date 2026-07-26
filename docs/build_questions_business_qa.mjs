@@ -464,7 +464,7 @@ const html = `<!doctype html>
   ${htmlTable(["Endpoint", "Business effect"], apiTransitions)}
 
   <h2>10. Approval history (workflow trail)</h2>
-  <p>Every question carries a full audit trail in the generic <code>app_approval</code> table (<code>entity_type = 2</code>, typed FK to <code>questions</code>; user-registration rows share the same table with <code>entity_type = 1</code>). Each row stores the acting user (FK to <code>app_users</code>), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel — for Teacher, Parent, CampusAdmin, SchoolAdmin, and PortalAdmin alike — with an actor card, role, colour-coded action chip, and the rejection reason inline.</p>
+  <p>Every question carries a full audit trail in the generic <code>app_approval</code> table (<code>entity_type = 2102</code> Question, typed FK to <code>questions</code>; user-registration rows share the same table with <code>entity_type = 2101</code> User). <code>entity_type</code> and <code>action</code> are lookup-backed (<code>ApprovalEntityType</code> / <code>ApprovalAction</code>). Each row stores the acting user (FK to <code>app_users</code>), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel — for Teacher, Parent, CampusAdmin, SchoolAdmin, and PortalAdmin alike — with an actor card, role, colour-coded action chip, and the rejection reason inline.</p>
   ${htmlTable(["Event", "Meaning", "Recorded for"], trailEvents)}
   ${htmlList([
     "Inline quiz-created and quiz-duplicated questions record Created + Endorsed in one step.",
@@ -658,7 +658,7 @@ const docChildren = [
 
   docHeading("10. Approval history (workflow trail)"),
   docParagraph(
-    "Every question carries a full audit trail in the generic app_approval table (entity_type=2, typed FK to questions; user-registration rows share the table with entity_type=1). Each row stores the acting user (FK to app_users), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel for every question-managing role, with actor name, role, colour-coded action chip, and the rejection reason inline.",
+    "Every question carries a full audit trail in the generic app_approval table (entity_type=2102 Question, typed FK to questions; user-registration rows share the table with entity_type=2101 User). entity_type and action are lookup-backed (ApprovalEntityType / ApprovalAction). Each row stores the acting user (FK to app_users), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel for every question-managing role, with actor name, role, colour-coded action chip, and the rejection reason inline.",
   ),
   docTable(["Event", "Meaning", "Recorded for"], trailEvents),
   ...[

@@ -2,42 +2,43 @@ namespace RankUpEducation.Domain.Approvals;
 
 /// <summary>
 /// Workflow event recorded on an approval row. Null while a queue row is still pending.
+/// Numeric values match lookups.id for type = ApprovalAction.
 /// </summary>
 public enum ApprovalAction : short
 {
     /// <summary>Row was authored.</summary>
-    Created = 1,
+    Created = 2201,
 
     /// <summary>Owner sent the row into the review queue.</summary>
-    SubmittedForReview = 2,
+    SubmittedForReview = 2202,
 
     /// <summary>Generic approval (user registration).</summary>
-    Approved = 3,
+    Approved = 2203,
 
     /// <summary>
     /// Question endorsed by CampusAdmin/SchoolAdmin — records review progress but
     /// leaves the question inactive and restricted.
     /// </summary>
-    Endorsed = 4,
+    Endorsed = 2204,
 
     /// <summary>Question published by PortalAdmin — Public + Active + quiz-usable.</summary>
-    Published = 5,
+    Published = 2205,
 
     /// <summary>Approval refused, with a reason.</summary>
-    Rejected = 6,
+    Rejected = 2206,
 
     /// <summary>Published question switched on for quiz use.</summary>
-    Activated = 7,
+    Activated = 2207,
 
     /// <summary>Published question switched off for quiz use (status unchanged).</summary>
-    Deactivated = 8,
+    Deactivated = 2208,
 
     /// <summary>Row retired from the bank.</summary>
-    Archived = 9,
+    Archived = 2209,
 
     /// <summary>Archived row restored to its prior workflow status.</summary>
-    Unarchived = 10,
+    Unarchived = 2210,
 
     /// <summary>Question content or answers were edited.</summary>
-    Modified = 11,
+    Modified = 2211,
 }

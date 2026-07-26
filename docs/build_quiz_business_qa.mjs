@@ -53,20 +53,67 @@ const attemptStatuses = [
 ];
 
 const resultStatuses = [
-  ["20", "Expired", "Existing result state; current assignment/attempt services do not automatically write it."],
-  ["21", "Completed", "Existing result state; reporting reads it, but submit does not progress assignment result status."],
-  ["22", "Under Review", "Existing result state; UI derives Pending Review but assignment result is not automatically progressed."],
-  ["23", "In Progress", "Existing result state; assignment result is not automatically progressed on attempt start."],
-  ["24", "Not Attempted", "Canonical initial assignment result. Mapped by AssignedResultNames."],
-  ["25", "Up Coming", "Existing spelling retained as an alias; list status is primarily computed from dates."],
+  ["20", "Expired", "Assignment window ended and the student did not complete an attempt (intended). Services do not always auto-write this today."],
+  ["21", "Completed", "Student finished the assignment cycle (intended after submit/review). Reporting reads it; submit does not always progress it today."],
+  ["22", "Under Review", "This student’s attempt is submitted and awaiting teacher/parent/AI subjective review (IsReviewDone=false)."],
+  ["23", "In Progress", "This student has started an attempt that is not yet submitted."],
+  ["24", "Not Attempted", "Canonical initial assignment result when the window is open and the student has not started. (Older drafts said “Not Started” — same meaning.)"],
+  ["25", "Up Coming", "StartDateTime is still in the future for this assignment. List UIs may also compute this from dates."],
+];
+
+const quizAssignmentFields = [
+  ["Id", "Primary key."],
+  ["QuizId", "Quiz being assigned."],
+  ["StudentId", "Target student. One row per (quiz, student). Group/class assign expands to multiple rows."],
+  ["AssignedById", "Teacher or Parent who created the assignment. Students do not assign quizzes in the current model."],
+  ["StudentGroupId", "Optional. Set when the row was created via a group expand; still one row per student."],
+  ["StartDateTime", "Availability window start for this student."],
+  ["EndDateTime", "Availability window end; must be after StartDateTime."],
+  ["AllowedAttempts", "Attempt quota for this assignment (> 0). Increased by Allow Retry (ExtraAttempts)."],
+  ["QuizResultStatus", "Per-assignment result lookup (see meanings below). Initial value is typically Not Attempted (24) or Up Coming (25)."],
+  ["IsReviewDone", "True after teacher/parent finalize-review for this student’s subjective answers. Reset to false on Allow Retry."],
+  ["CreatedDate", "When the assignment row was created."],
+  ["ModifiedDate", "Updated on review finalize / retry grant."],
+];
+
+const assignmentResultMeanings = [
+  ["Up Coming (25)", "StartDateTime is in the future for this student."],
+  ["Not Attempted (24)", "Window is open (or ready) and this student has not started. Prefer this name over “Not Started”."],
+  ["In Progress (23)", "This student has an InProgress attempt."],
+  ["Under Review (22)", "This student’s attempt is Submitted and subjective review is pending (IsReviewDone=false)."],
+  ["Expired (20)", "EndDateTime passed without a completed attempt for this student."],
+  ["Completed (21)", "This student’s attempt cycle is done (submitted and, if required, reviewed)."],
+];
+
+const assignmentStatusConflicts = [
+  [
+    "Result status means “no student / one of the students”",
+    "Per-assignment only",
+    "QuizResultStatus is stored on each quiz_assignment row (one student). Aggregate board status (how many children started) is computed in monitoring UI, not stored as this field.",
+  ],
+  [
+    "Assigned by student",
+    "Teacher or Parent only",
+    "AssignedById is the managing owner. Students take attempts; they do not create assignments.",
+  ],
+  [
+    "Under Review = quiz under AI/teacher review",
+    "This student’s review pending",
+    "School quiz approval is separate (Pending/Approved). Under Review here means subjective marking for this assignment after submit.",
+  ],
+  [
+    "Not Started vs Not Attempted",
+    "Use Not Attempted (24)",
+    "Lookup name is Not Attempted; “Not Started” is an acceptable UI synonym only.",
+  ],
 ];
 
 const quizTypes = [
-  ["1", "Practice", "Teacher", "School quiz type; admin approval required before assign."],
-  ["2", "Assessment", "Teacher", "School quiz type; admin approval required before assign."],
-  ["3", "Competition", "Teacher", "School quiz type; admin approval required before assign."],
-  ["4", "Surprise", "Teacher", "School quiz type; admin approval required before assign."],
-  ["5", "ParentPrivate", "Parent", "Required by parent flow; seeded by API support initializer. Auto-approved on publish and excluded from admin queue."],
+  ["1", "Practice", "Teacher", "Learning-oriented school quiz. Admin approval before assign. Intended: flexible attempts / optional time / answers may show after submit (type-specific UX still soft)."],
+  ["2", "Assessment", "Teacher", "Assigned assessment with due window; may have limited time; visible to selected audience after assign. Admin approval before assign."],
+  ["3", "Competition", "Teacher", "Class/school/inter-school competition intent: fixed schedule, strict attempts, anti-cheat later. Admin approval before assign."],
+  ["4", "Surprise", "Teacher", "Short availability window / limited advance notice intent. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
+  ["5", "ParentPrivate", "Parent", "Private parent quiz. Auto-approved on publish; excluded from admin queue; assign only to linked children / parent groups."],
 ];
 
 const lifecycle = [
@@ -99,8 +146,30 @@ const questionRules = [
   ["Attach from bank", "Requires Active + Approved status + ApprovedBy + Visibility=Public + class/subject match + not already linked + marks > 0."],
   ["Edit question on quiz", "Caller must own the quiz AND be the question CreatedBy. Recalculates totals."],
   ["Remove from quiz", "Deletes QuizQuestion link; if caller created the question, deactivates it. Recalculates totals."],
-  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103). Descriptive (104) blocked."],
+  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103). Descriptive (104) blocked for authoring now. File answers / Matching / Ordering / media types are Not Now."],
   ["Shuffle", "Quiz-level ShuffleQuestions / ShuffleOptions (DB default true; create form UI defaults false). Per-question ShuffleOptions exists but attempt uses quiz-level only."],
+];
+
+const importantBusinessRules = [
+  ["A quiz can contain many questions", "Yes", "Quiz → QuizQuestion → Question."],
+  ["A question can belong to many quizzes", "Yes", "Same bank question may be attached to multiple quizzes via separate QuizQuestion rows."],
+  ["QuizQuestion manages the many-to-many", "Yes", "Link table owns DisplayOrder, Marks, ShuffleOptions, CreatedAt."],
+  ["Question order belongs to QuizQuestion", "Yes", "DisplayOrder is per quiz link, not on the bank question."],
+  ["Quiz-specific marks belong to QuizQuestion", "Yes", "Copied from question marks on attach/create; may be overwritten per quiz. Totals recalculate from link marks."],
+  ["Choice options belong to the question", "Yes", "question_options are bank-question owned; quizzes do not duplicate option rows."],
+  ["Random/shuffled quizzes store exact questions shown", "Partial", "QuizAttemptQuestion stores QuestionId + DisplayOrder on start. Marks freeze on that row is intended but not implemented yet."],
+  ["Student answers stored per attempt", "Yes", "QuizAttemptAnswer rows hang off QuizAttemptQuestion."],
+  ["Multiple-choice selected answers stored separately", "Yes", "Each selected option is a QuizAttemptAnswer with QuestionOptionId; free text uses SubmittedText."],
+  ["Descriptive / file answers may need teacher or AI review", "Partial", "Descriptive/Fill + AllowTeacherReview / AllowAiReview supported. File answers are Not Now."],
+];
+
+const quizQuestionFields = [
+  ["QuizId", "Parent quiz."],
+  ["QuestionId", "Bank question linked into the quiz."],
+  ["DisplayOrder", "Order of the question within this quiz."],
+  ["Marks", "Quiz-specific marks (copied from question; may be overwritten)."],
+  ["ShuffleOptions", "Per-link option shuffle flag (attempt currently uses quiz-level ShuffleOptions)."],
+  ["CreatedAt", "When the link was created."],
 ];
 
 const quizAudiences = [
@@ -170,6 +239,48 @@ const audienceVisibilityRules = [
   "Assignment always materializes per-student quiz_assignment rows at assign time (even when the audience is Class/Group). Later public audience may use a different visibility model.",
 ];
 
+const studentAttemptFlow = [
+  ["1", "Student opens quiz details", "Covered", "/student/quizzes detail; requires an assignment row for this student."],
+  ["2", "System checks eligibility", "Covered", "Assignment exists, quiz IsActive, now within [StartDateTime, EndDateTime], attempt quota not exhausted, DeviceId present."],
+  ["3", "Student reads instructions", "Partial", "Instructions are stored and displayed on detail; there is no separate must-acknowledge instructions gate."],
+  ["4", "Student starts the quiz", "Covered", "POST .../attempts starts a new attempt or resumes an InProgress one."],
+  ["5", "Attempt start time is recorded", "Covered", "QuizAttempt.StartedDate set on Begin."],
+  ["6", "Questions are displayed", "Covered", "From the QuizAttemptQuestion snapshot in DisplayOrder (shuffled at start when enabled)."],
+  ["7", "Answers are saved automatically", "Partial", "Draft-save endpoint exists (PUT .../attempts/{id}/draft). Autosave triggers (on change / interval / background / before submit) are UX intent; not all wired in the web client."],
+  ["8", "Student moves between questions where permitted", "Planned", "Free / Sequential / Locked navigation modes are not implemented; current attempt UI allows free movement only."],
+  ["9", "Student may mark questions for review", "Planned", "Mark-for-review flag and navigator grouping are not implemented yet."],
+  ["10", "Student submits manually", "Covered", "POST .../attempts/{id}/submit auto-scores then MarkSubmitted; resubmission blocked."],
+  ["11", "System auto-submits when time expires", "Partial", "UI countdown triggers a normal submit at zero. AutoSubmitted (83) is not written and the time limit is not enforced server-side."],
+  ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) → Reviewed (85) after finalize."],
+  ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse first option; Multiple exact set; Fill accepted-answer rules."],
+  ["14", "Descriptive answers go to AI or teacher review", "Partial", "Fill + AllowTeacherReview is the live subjective path (Descriptive authoring blocked). AI review is a text stub only."],
+  ["15", "Student sees the permitted review screen", "Partial", "Result screen exists with score masking until review is done. Configurable review-display modes (correct answers / explanations / feedback / nothing until publication) are not implemented."],
+  ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true, results released. AI portion is a stub."],
+];
+
+const timeManagementModes = [
+  ["No time limit", "Covered", "Quiz.TimeLimitMinutes is optional/null. Attempt page shows no countdown; student may take as long as the assignment window allows."],
+  ["Total quiz time limit", "Partial", "Stored as Quiz.TimeLimitMinutes and returned to the client. Intended to equal sum of question EstimatedTimeSeconds when questions are added/removed — not implemented; owner sets minutes manually today."],
+  ["Time limit per question", "Gap", "Question.EstimatedTimeSeconds exists on the bank question and is shown in authoring/lists, but is never enforced as a per-question timer at attempt time."],
+  ["Fixed availability window", "Covered", "QuizAssignment.StartDateTime / EndDateTime gate start, resume, and submit. Outside the window the attempt is blocked."],
+];
+
+const timeManagementAppBehaviors = [
+  ["Show remaining time", "Covered", "Student attempt page countdown from TimeLimitMinutes × 60 minus elapsed since StartedDate."],
+  ["Warn when time is low", "Partial", "UI applies urgent styling when remainingSeconds ≤ 60. Not documented as a product rule before; no audio/modal warning."],
+  ["Auto-submit on expiry", "Partial", "When remainingSeconds hits 0 the UI triggers submit. Status written is Submitted (82), not AutoSubmitted (83). Not enforced server-side — a client can bypass the timer."],
+  ["Save answers before auto-submission", "Gap", "No explicit draft flush immediately before auto-submit. Submit payload uses in-memory answers; an unsaved last keystroke can be lost if it never reached draft-save."],
+  ["Prevent reopening after expiry unless allowed", "Partial", "Assignment window expiry blocks new/continued attempts. Allow Retry grants ExtraAttempts after review; it does not reopen a closed EndDateTime window by itself."],
+];
+
+const timeManagementGaps = [
+  "Quiz time is not derived from question EstimatedTimeSeconds on add/remove/attach — TimeLimitMinutes stays whatever the owner typed.",
+  "No per-question timer; EstimatedTimeSeconds is metadata only at attempt time.",
+  "Time limit is client-side only — server does not reject submit after TimeLimitMinutes elapses (only the assignment EndDateTime window is server-checked).",
+  "Auto-submit does not write QuizAttemptStatus AutoSubmitted (83).",
+  "No guaranteed save-before-auto-submit draft flush.",
+];
+
 const attemptRules = [
   "Student role only for start / draft / submit.",
   "Assignment required; quiz IsActive; now within [StartDateTime, EndDateTime].",
@@ -177,8 +288,63 @@ const attemptRules = [
   "New start blocked when ExistingAttemptCount ≥ AllowedAttempts.",
   "DeviceId required (non-empty).",
   "Time limit returned to client; UI countdown + auto-submit. Not enforced server-side.",
-  "Draft save: InProgress only; last answer wins per question.",
-  "Submit scores then MarkSubmitted. Cannot resubmit.",
+  "On start: create QuizAttempt and snapshot QuizAttemptQuestion rows (shuffled order when ShuffleQuestions is on).",
+  "Draft save: InProgress only; answers stored on QuizAttemptAnswer linked to QuizAttemptQuestion; last answer wins per question.",
+  "Multiple-choice selections are stored as separate answer rows (QuestionOptionId), not only as free text.",
+  "Submit scores then MarkSubmitted (status → Submitted). Cannot resubmit.",
+  "Subjective review finalizes to Reviewed; do not use Under Teacher/AI Review as attempt StatusId values.",
+];
+
+const quizAttemptFields = [
+  ["Id", "Primary key."],
+  ["QuizId", "Quiz definition being attempted."],
+  ["StudentId", "Student taking the attempt."],
+  ["NumberOfQuestionAttempt", "Count of questions presented on this attempt (from the snapshot)."],
+  ["StatusId", "QuizAttemptStatus: Started (80), InProgress (81), Submitted (82), AutoSubmitted (83), Expired (84), Reviewed (85). Current start flow writes InProgress."],
+  ["StartedDate", "When the attempt began / resumed."],
+  ["SubmittedDate", "When submitted (or placeholder until submit)."],
+  ["TimeSpentSeconds", "Elapsed time recorded on the attempt."],
+  ["DeviceId", "Required non-empty device identifier."],
+  ["IsOfflineAttempt", "Reserved for offline sync; default false today."],
+  ["QuizReviewId", "Optional link to a quiz_reviews row when an attempt-level review record is used."],
+  ["ObtainedMarks", "Scored / reviewed obtained marks."],
+  ["Percentage", "Derived from obtained ÷ total marks."],
+];
+
+const quizAttemptQuestionFields = [
+  ["Id", "Primary key."],
+  ["QuizAttemptId", "Parent attempt."],
+  ["QuestionId", "Bank question shown on this attempt."],
+  ["DisplayOrder", "Exact order presented to the student (preserved even when ShuffleQuestions is on)."],
+  ["QuizReviewId", "Optional link to quiz_reviews for per-question teacher/parent/AI feedback."],
+  ["Marks (intended)", "Quiz-specific marks at attempt time. Required so later QuizQuestion/bank mark edits do not change old attempts. Not yet a column on QuizAttemptQuestion — gap to implement; today scoring still reads live QuizQuestion.Marks."],
+];
+
+const attemptSnapshotReasons = [
+  "Different students may receive different question orders (and later different subsets if random selection is added).",
+  "The exact question order must be preserved for resume, submit, and review screens.",
+  "Later edits to the quiz’s QuizQuestion list must not rewrite an old attempt’s presented set/order.",
+  "Review screens must show the original attempt questions in the original order.",
+  "Question marks may change later on the quiz or bank — attempt should freeze Marks on QuizAttemptQuestion (intended; not implemented yet).",
+  "Answers are stored per attempt via QuizAttemptAnswer → QuizAttemptQuestion (option id and/or submitted text).",
+];
+
+const attemptStatusConflicts = [
+  [
+    "Under Teacher Review / Under AI Review as attempt Status",
+    "Rejected for StatusId",
+    "Teacher/AI review is modeled by quiz_reviews (+ assignment IsReviewDone) and attempt status Submitted → Reviewed. Do not add Under Teacher/AI Review as QuizAttemptStatus values.",
+  ],
+  [
+    "Completed as attempt Status",
+    "Use Submitted / Reviewed",
+    "“Completed” is a student-list / result concept, not a QuizAttemptStatus lookup. After submit use Submitted (82); after finalize use Reviewed (85).",
+  ],
+  [
+    "Full content freeze (question text/options)",
+    "Partial today",
+    "Today QuizAttemptQuestion stores QuestionId + DisplayOrder only. If bank question text/options change after the attempt, historical review may show the updated bank content. Full content snapshot is a future hardening item.",
+  ],
 ];
 
 const scoring = [
@@ -325,6 +491,18 @@ const scenarios = [
     "Parent tries to assign ParentPrivate quiz to an unrelated student or whole school.",
     "Rejected. Parent audience is limited to linked children / parent-owned child groups.",
   ],
+  [
+    "QZ-18",
+    "Time limit countdown and auto-submit",
+    "Student starts a quiz with TimeLimitMinutes set; waits until remaining time hits zero.",
+    "Countdown is shown; UI auto-submits. Status becomes Submitted (not AutoSubmitted). Server does not independently enforce the minute budget — only the assignment EndDateTime window is hard-checked.",
+  ],
+  [
+    "QZ-19",
+    "No time limit still respects availability window",
+    "Student starts a quiz with TimeLimitMinutes null after EndDateTime has passed.",
+    "No countdown UI, but start/submit is still rejected because the assignment window expired.",
+  ],
 ];
 
 const checklist = [
@@ -333,12 +511,16 @@ const checklist = [
   "Teacher assign requires Approval=Approved; Parent assign does not need school approval.",
   "Student sees only assigned quizzes (or later permitted audience); ParentPrivate never targets school/public.",
   "Supported audiences now: one student, selected, group, class (allInGrade), parent’s child / all linked. Section, school, multi-school, public are planned.",
+  "QuizAssignment is one row per student with AssignedById, optional StudentGroupId, window, AllowedAttempts, QuizResultStatus, IsReviewDone.",
+  "QuizResultStatus is per student (Up Coming / Not Attempted / In Progress / Under Review / Expired / Completed) — not a quiz-wide aggregate.",
   "Editable only Not Assigned/Published, not Archived, and no started assignment.",
   "Bank attach requires Public + Active + Approved + ApprovedBy + class/subject match.",
   "Inline questions are Approved+Campus+Active and usable on that quiz only for bank eligibility rules.",
   "Descriptive type blocked for authoring.",
   "Student attempts require assignment, active quiz, window, DeviceId, and attempt quota.",
   "InProgress resumes; time limit is client-enforced only.",
+  "Time management: optional TimeLimitMinutes, assignment window, UI countdown + low-time warn (≤60s); AutoSubmitted not written; no per-question timer; quiz time not derived from EstimatedTimeSeconds.",
+  "On attempt start, QuizAttemptQuestion rows snapshot the presented question set/order; answers store per attempt (MCQ options separately).",
   "Scoring: single/TF one correct; multi exact set; Fill accepted-answer rules.",
   "IsReviewRequired + subjective → masked until finalize-review.",
   "Allow-retry only after IsReviewDone; adds ExtraAttempts.",
@@ -357,11 +539,21 @@ const knownGaps = [
   "Audience Section / School / Multiple schools / Public platform are documented as planned; only one, selected, group, class (allInGrade), and parent-child targets exist today.",
   "ShuffleQuestions / ShuffleOptions / IsReviewRequired: DB defaults true; create form defaults false / false / false.",
   "Time limit enforced in UI only (not server-side).",
+  "Quiz TimeLimitMinutes is not recalculated from question EstimatedTimeSeconds when questions are added/removed.",
+  "No per-question timer at attempt time (EstimatedTimeSeconds is metadata only).",
+  "Auto-submit writes Submitted (82), not AutoSubmitted (83); no explicit draft flush immediately before auto-submit.",
+  "Low-time warning is UI styling at ≤60s only (no dedicated modal/audio).",
   "Reject reason returned in API response but not persisted on the quiz.",
   "AI review is a stub comment only.",
   "CampusAdmin can open quiz-approvals UI; approve/reject APIs deny CampusAdmin.",
   "Teacher list API returns campus-active quizzes; \"mine only\" is a client-side filter.",
   "Assignment QuizResultStatus is set at create and not progressed to Completed/Reviewed in submit services.",
+  "QuizAttemptQuestion does not yet store Marks; scoring still uses live QuizQuestion.Marks — mark edits can affect historical attempts.",
+  "Attempt snapshot stores QuestionId + DisplayOrder only; bank question text/option edits can still affect historical review display.",
+  "IsOfflineAttempt exists on QuizAttempt but offline sync is not fully implemented.",
+  "Navigation modes (Free / Sequential / Locked) and mark-question-for-review are planned attempt UX, not implemented.",
+  "Autosave triggers (on change / interval / app background) are UX intent; only explicit draft-save calls exist today.",
+  "Configurable post-submit review display modes (correct answers / explanations / feedback / nothing until publication) are not implemented.",
   "Per-question ShuffleOptions unused at attempt time (quiz-level only).",
   "No quiz-related notifications.",
   "Approve endpoint relies on service-layer role checks (reject has controller Roles attribute).",
@@ -471,6 +663,10 @@ const html = `<!doctype html>
 
   <h2>7. Questions on a quiz</h2>
   ${htmlTable(["Topic", "Rule"], questionRules)}
+  <h3>Important business rules</h3>
+  ${htmlTable(["Rule", "Covered", "Detail"], importantBusinessRules)}
+  <h3>QuizQuestion link fields</h3>
+  ${htmlTable(["Field", "Meaning"], quizQuestionFields)}
   <h3>Type validation</h3>
   ${htmlList([
     "Single Choice: ≥2 options; exactly 1 correct.",
@@ -494,16 +690,47 @@ const html = `<!doctype html>
     "Cancel: hard-delete future assignments only; set lifecycle Cancelled.",
     "Allow retry: review must be finalized; attempt count ≥ allowed; ExtraAttempts += 1 (default); IsReviewDone=false. Archived blocked.",
   ])}
+  <h3>QuizAssignment table</h3>
+  <p>Each assignment grants one student access to one quiz within a window and attempt limit. Group/class audiences expand into many rows.</p>
+  ${htmlTable(["Field", "Meaning"], quizAssignmentFields)}
+  <h3>Quiz Result Status meanings (per assignment)</h3>
+  ${htmlTable(["Status", "Meaning"], assignmentResultMeanings)}
+  <h3>Assignment corrections vs older drafts</h3>
+  ${htmlTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts)}
+  <div class="note"><strong>Progression gap:</strong> the lookup values exist, but current services often leave QuizResultStatus at the create-time value and let student list/monitor UIs <em>compute</em> status from dates + attempts. Auto-progressing Expired / In Progress / Under Review / Completed on the assignment row is still optional work.</div>
 
   <h2>9. Student attempt flow</h2>
+  <h3>Step-by-step student journey</h3>
+  <p>Status legend: <strong>Covered</strong> = implemented today; <strong>Partial</strong> = implemented with limitations; <strong>Planned</strong> = documented intent, not built yet.</p>
+  ${htmlTable(["#", "Step", "Status", "Detail"], studentAttemptFlow)}
+  <h3>Attempt rules</h3>
   ${htmlList(attemptRules)}
+  <h3>QuizAttempt table</h3>
+  <p>One row per student run. When questions are shuffled/randomized, the attempt owns the exact set/order shown via <code>QuizAttemptQuestion</code>.</p>
+  ${htmlTable(["Field", "Meaning"], quizAttemptFields)}
+  <h3>QuizAttemptQuestion (attempt-specific questions)</h3>
+  <p>If questions are shuffled/randomized, save the exact questions shown to each student on the attempt.</p>
+  ${htmlTable(["Field", "Meaning"], quizAttemptQuestionFields)}
+  ${htmlList(attemptSnapshotReasons)}
+  <h3>Status / snapshot corrections vs older drafts</h3>
+  ${htmlTable(["Older draft idea", "Canonical rule", "Why"], attemptStatusConflicts)}
   <h3>Auto-scoring</h3>
   ${htmlTable(["Type", "Rule"], scoring)}
 
-  <h2>10. Review and results release</h2>
+  <h2>10. Time Management</h2>
+  <p>Status legend: <strong>Covered</strong> = implemented today; <strong>Partial</strong> = implemented with limitations; <strong>Gap</strong> = documented business intent, not built yet.</p>
+  <h3>Quiz may have</h3>
+  ${htmlTable(["Mode", "Status", "Detail"], timeManagementModes)}
+  <h3>The app should</h3>
+  ${htmlTable(["Behavior", "Status", "Detail"], timeManagementAppBehaviors)}
+  <h3>Known time-management gaps</h3>
+  ${htmlList(timeManagementGaps)}
+  <div class="note"><strong>Hard vs soft clock:</strong> the assignment availability window (<code>StartDateTime</code>–<code>EndDateTime</code>) is server-enforced. The quiz minute budget (<code>TimeLimitMinutes</code>) is currently a soft client countdown only — a modified client can keep answering until the window closes.</div>
+
+  <h2>11. Review and results release</h2>
   ${htmlList(reviewRules)}
 
-  <h2>11. Parent and student visibility</h2>
+  <h2>12. Parent and student visibility</h2>
   ${htmlList([
     "Parent list = assignments of linked children ∪ quizzes they created.",
     "Parent may review/finalize only their own quizzes; may view linked-child results and quiz history.",
@@ -512,23 +739,23 @@ const html = `<!doctype html>
     "Rankings / performance / summary: Teacher (own), SchoolAdmin (school), PortalAdmin (all) — not students/parents.",
   ])}
 
-  <h2>12. Validation and limits</h2>
+  <h2>13. Validation and limits</h2>
   ${htmlList([
     "Title required; DB max 100. Duplicate truncates to 92 + \" (Copy)\".",
     "Description DB max 500 (not required empty-check in app).",
     "Instructions required; DB max 1000.",
     "Class / Subject / Topic / Difficulty required on create (UI); difficulty Easy/Medium/Hard (2001–2003).",
-    "TimeLimitMinutes optional; no server min/max; client countdown only.",
+    "TimeLimitMinutes optional; no server min/max; client countdown only. Not auto-derived from question EstimatedTimeSeconds.",
     "Quiz AllowedAttempts optional on metadata; assignment AllowedAttempts must be > 0.",
     "Question marks > 0; publish/assign/duplicate need ≥1 question; no hard max count.",
     "Submitted text DB max 1000.",
     "Domain defaults: ShuffleQuestions/Options=true, IsReviewRequired=true. Create form: shuffle false, review required false, time 30, attempts 1.",
   ])}
 
-  <h2>13. API transition map</h2>
+  <h2>14. API transition map</h2>
   ${htmlTable(["Endpoint", "Business effect"], apiMap)}
 
-  <h2>14. UI routes</h2>
+  <h2>15. UI routes</h2>
   ${htmlList([
     "/quizzes — Teacher/Parent list, New, Assignments, Pending reviews.",
     "/quizzes/new, /quizzes/:id/edit — create/update form.",
@@ -542,7 +769,7 @@ const html = `<!doctype html>
     "/reports — Teacher / SchoolAdmin / PortalAdmin analytics.",
   ])}
 
-  <h2>15. QA scenarios</h2>
+  <h2>16. QA scenarios</h2>
   ${scenarios
     .map(
       ([id, title, steps, expected]) =>
@@ -550,10 +777,10 @@ const html = `<!doctype html>
     )
     .join("")}
 
-  <h2>16. Verification checklist</h2>
+  <h2>17. Verification checklist</h2>
   ${htmlList(checklist.map((item) => `☐ ${item}`))}
 
-  <h2>17. Known gaps, stubs, and optional work</h2>
+  <h2>18. Known gaps, stubs, and optional work</h2>
   ${htmlList(knownGaps)}
 
   <footer>Generated by docs/build_quiz_business_qa.mjs. Edit the generator and rerun <code>npm run build:quiz-qa</code>. Related: <code>04_RankUp_Questions_Business_QA</code> for bank eligibility and question approval.</footer>
@@ -680,6 +907,10 @@ const docChildren = [
 
   docHeading("7. Questions on a quiz"),
   docTable(["Topic", "Rule"], questionRules),
+  docHeading("Important business rules", HeadingLevel.HEADING_2),
+  docTable(["Rule", "Covered", "Detail"], importantBusinessRules),
+  docHeading("QuizQuestion link fields", HeadingLevel.HEADING_2),
+  docTable(["Field", "Meaning"], quizQuestionFields),
   ...[
     "Single Choice: ≥2 options; exactly 1 correct.",
     "Multiple Choice: ≥2 options; ≥1 correct.",
@@ -702,16 +933,63 @@ const docChildren = [
     "Cancel removes future assignments only.",
     "Allow-retry after finalize adds ExtraAttempts.",
   ].map(docBullet),
+  docHeading("QuizAssignment table", HeadingLevel.HEADING_2),
+  docParagraph(
+    "Each assignment grants one student access to one quiz within a window and attempt limit. Group/class audiences expand into many rows.",
+  ),
+  docTable(["Field", "Meaning"], quizAssignmentFields),
+  docHeading("Quiz Result Status meanings (per assignment)", HeadingLevel.HEADING_2),
+  docTable(["Status", "Meaning"], assignmentResultMeanings),
+  docHeading("Assignment corrections vs older drafts", HeadingLevel.HEADING_2),
+  docTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts),
+  docParagraph(
+    "Progression gap: lookup values exist, but services often leave QuizResultStatus at create-time and UIs compute status from dates + attempts.",
+    { run: { bold: true, color: "92400E" } },
+  ),
 
   docHeading("9. Student attempt flow"),
+  docHeading("Step-by-step student journey", HeadingLevel.HEADING_2),
+  docParagraph(
+    "Status legend: Covered = implemented today; Partial = implemented with limitations; Planned = documented intent, not built yet.",
+  ),
+  docTable(["#", "Step", "Status", "Detail"], studentAttemptFlow),
+  docHeading("Attempt rules", HeadingLevel.HEADING_2),
   ...attemptRules.map(docBullet),
+  docHeading("QuizAttempt table", HeadingLevel.HEADING_2),
+  docParagraph(
+    "One row per student run. When questions are shuffled/randomized, the attempt owns the exact set/order shown via QuizAttemptQuestion.",
+  ),
+  docTable(["Field", "Meaning"], quizAttemptFields),
+  docHeading("QuizAttemptQuestion (attempt-specific questions)", HeadingLevel.HEADING_2),
+  docParagraph(
+    "If questions are shuffled/randomized, save the exact questions shown to each student on the attempt.",
+  ),
+  docTable(["Field", "Meaning"], quizAttemptQuestionFields),
+  ...attemptSnapshotReasons.map(docBullet),
+  docHeading("Status / snapshot corrections vs older drafts", HeadingLevel.HEADING_2),
+  docTable(["Older draft idea", "Canonical rule", "Why"], attemptStatusConflicts),
   docHeading("Auto-scoring", HeadingLevel.HEADING_2),
   docTable(["Type", "Rule"], scoring),
 
-  docHeading("10. Review and results release"),
+  docHeading("10. Time Management"),
+  docParagraph(
+    "Status legend: Covered = implemented today; Partial = implemented with limitations; Gap = documented business intent, not built yet.",
+  ),
+  docHeading("Quiz may have", HeadingLevel.HEADING_2),
+  docTable(["Mode", "Status", "Detail"], timeManagementModes),
+  docHeading("The app should", HeadingLevel.HEADING_2),
+  docTable(["Behavior", "Status", "Detail"], timeManagementAppBehaviors),
+  docHeading("Known time-management gaps", HeadingLevel.HEADING_2),
+  ...timeManagementGaps.map(docBullet),
+  docParagraph(
+    "Hard vs soft clock: assignment StartDateTime–EndDateTime is server-enforced. TimeLimitMinutes is a soft client countdown only.",
+    { run: { bold: true, color: "92400E" } },
+  ),
+
+  docHeading("11. Review and results release"),
   ...reviewRules.map(docBullet),
 
-  docHeading("11. Parent and student visibility"),
+  docHeading("12. Parent and student visibility"),
   ...[
     "Parent list = linked-child assignments ∪ own quizzes.",
     "Student sees only assigned quizzes (v1). See §8 for future audiences.",
@@ -719,18 +997,18 @@ const docChildren = [
     "Reports: Teacher own / SchoolAdmin school / PortalAdmin all.",
   ].map(docBullet),
 
-  docHeading("12. Validation and limits"),
+  docHeading("13. Validation and limits"),
   ...[
     "Title required (max 100); instructions required (max 1000).",
     "Difficulty Easy/Medium/Hard (2001–2003).",
-    "Time limit client-enforced only.",
+    "TimeLimitMinutes optional; client countdown only; not auto-derived from EstimatedTimeSeconds.",
     "Publish/assign/duplicate need ≥1 question.",
   ].map(docBullet),
 
-  docHeading("13. API transition map"),
+  docHeading("14. API transition map"),
   docTable(["Endpoint", "Business effect"], apiMap),
 
-  docHeading("14. UI routes"),
+  docHeading("15. UI routes"),
   ...[
     "/quizzes manage routes for Teacher/Parent.",
     "/admin/quiz-approvals for SchoolAdmin/PortalAdmin.",
@@ -739,17 +1017,17 @@ const docChildren = [
     "/reports for analytics.",
   ].map(docBullet),
 
-  docHeading("15. QA scenarios"),
+  docHeading("16. QA scenarios"),
   ...scenarios.flatMap(([id, title, steps, expected]) => [
     docHeading(`${id} — ${title}`, HeadingLevel.HEADING_2),
     docParagraph(`Steps: ${steps}`),
     docParagraph(`Expected: ${expected}`, { run: { bold: true, color: "166534" } }),
   ]),
 
-  docHeading("16. Verification checklist"),
+  docHeading("17. Verification checklist"),
   ...checklist.map((item) => docBullet(`☐ ${item}`)),
 
-  docHeading("17. Known gaps, stubs, and optional work"),
+  docHeading("18. Known gaps, stubs, and optional work"),
   ...knownGaps.map(docBullet),
 ];
 

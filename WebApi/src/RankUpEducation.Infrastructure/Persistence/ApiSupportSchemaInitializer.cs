@@ -41,6 +41,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(ApprovalLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(ApprovalSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionApprovalTrailBackfillSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserAvatarAndSchoolChangeSupportSql, cancellationToken);
@@ -831,8 +832,60 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         """;
 
     /// <summary>
-    /// Generic approval table shared by registration (entity_type 1) and the question-bank
-    /// workflow trail (entity_type 2). Renames the legacy app_user_approval in place so existing
+    /// Lookup rows for app_approval.entity_type and app_approval.action.
+    /// IDs match Domain.Approvals enums (high range, same pattern as UserRole 2010+).
+    /// Legacy small values 1/2 and 1–11 collided with QuizType and are migrated in ApprovalSupportSql.
+    /// </summary>
+    private const string ApprovalLookupSupportSql = """
+        INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
+        SELECT v.id, v.name, v.type, v.ord, TRUE, NULL
+        FROM (
+            VALUES
+                (2101::smallint, 'User'::varchar,     'ApprovalEntityType'::varchar, 1::smallint),
+                (2102,           'Question',           'ApprovalEntityType',          2),
+                (2201,           'Created',            'ApprovalAction',              1),
+                (2202,           'SubmittedForReview', 'ApprovalAction',              2),
+                (2203,           'Approved',           'ApprovalAction',              3),
+                (2204,           'Endorsed',           'ApprovalAction',              4),
+                (2205,           'Published',          'ApprovalAction',              5),
+                (2206,           'Rejected',           'ApprovalAction',              6),
+                (2207,           'Activated',          'ApprovalAction',              7),
+                (2208,           'Deactivated',        'ApprovalAction',              8),
+                (2209,           'Archived',           'ApprovalAction',              9),
+                (2210,           'Unarchived',         'ApprovalAction',             10),
+                (2211,           'Modified',           'ApprovalAction',             11)
+        ) AS v(id, name, type, ord)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public.lookups existing WHERE existing.id = v.id
+        );
+
+        UPDATE public.lookups AS existing
+        SET name = seed.name,
+            type = seed.type,
+            order_by = seed.ord,
+            is_active = TRUE
+        FROM (
+            VALUES
+                (2101::smallint, 'User'::varchar,     'ApprovalEntityType'::varchar, 1::smallint),
+                (2102,           'Question',           'ApprovalEntityType',          2),
+                (2201,           'Created',            'ApprovalAction',              1),
+                (2202,           'SubmittedForReview', 'ApprovalAction',              2),
+                (2203,           'Approved',           'ApprovalAction',              3),
+                (2204,           'Endorsed',           'ApprovalAction',              4),
+                (2205,           'Published',          'ApprovalAction',              5),
+                (2206,           'Rejected',           'ApprovalAction',              6),
+                (2207,           'Activated',          'ApprovalAction',              7),
+                (2208,           'Deactivated',        'ApprovalAction',              8),
+                (2209,           'Archived',           'ApprovalAction',              9),
+                (2210,           'Unarchived',         'ApprovalAction',             10),
+                (2211,           'Modified',           'ApprovalAction',             11)
+        ) AS seed(id, name, type, ord)
+        WHERE existing.id = seed.id;
+        """;
+
+    /// <summary>
+    /// Generic approval table shared by registration (entity_type 2101 = User) and the question-bank
+    /// workflow trail (entity_type 2102 = Question). Renames the legacy app_user_approval in place so existing
     /// registration rows are preserved, then widens it with a discriminator, a typed question FK,
     /// and the action / reason / created_at columns the trail needs.
     /// </summary>
@@ -841,7 +894,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         CREATE TABLE IF NOT EXISTS public.app_approval (
             id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-            entity_type int2 NOT NULL DEFAULT 1,
+            entity_type int2 NOT NULL DEFAULT 2101,
             user_id bigint NULL,
             question_id bigint NULL,
             approved_by_user_id bigint NOT NULL,
@@ -884,7 +937,10 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         $rename$;
 
         ALTER TABLE public.app_approval
-            ADD COLUMN IF NOT EXISTS entity_type int2 NOT NULL DEFAULT 1;
+            ADD COLUMN IF NOT EXISTS entity_type int2 NOT NULL DEFAULT 2101;
+
+        ALTER TABLE public.app_approval
+            ALTER COLUMN entity_type SET DEFAULT 2101;
 
         ALTER TABLE public.app_approval
             ADD COLUMN IF NOT EXISTS question_id bigint NULL;
@@ -901,7 +957,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_approval
             ADD COLUMN IF NOT EXISTS is_approved boolean NULL;
 
-        -- user_id only applies to entity_type 1 now.
+        -- user_id only applies to entity_type User (2101) now.
         ALTER TABLE public.app_approval
             ALTER COLUMN user_id DROP NOT NULL;
 
@@ -932,10 +988,26 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         WHERE approved_at IS NOT NULL
           AND is_approved IS NULL;
 
+        -- Drop target check / filtered indexes before remapping legacy enum values 1/2 and 1–11.
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
+        DROP INDEX IF EXISTS ix_app_approval_user_approver_role;
+        DROP INDEX IF EXISTS ix_app_approval_pending;
+        DROP INDEX IF EXISTS ix_app_approval_question_trail;
+
+        -- Remap legacy entity_type: 1→User(2101), 2→Question(2102).
+        UPDATE public.app_approval SET entity_type = 2101 WHERE entity_type = 1;
+        UPDATE public.app_approval SET entity_type = 2102 WHERE entity_type = 2;
+
+        -- Remap legacy action 1–11 → 2201–2211 (idempotent: only unmigrated rows).
+        UPDATE public.app_approval
+        SET action = action + 2200
+        WHERE action IS NOT NULL
+          AND action BETWEEN 1 AND 11;
+
         -- Legacy registration rows carried the decision in is_approved only.
         UPDATE public.app_approval
-        SET action = CASE WHEN is_approved THEN 3 ELSE 6 END
-        WHERE entity_type = 1
+        SET action = CASE WHEN is_approved THEN 2203 ELSE 2206 END
+        WHERE entity_type = 2101
           AND action IS NULL
           AND is_approved IS NOT NULL;
 
@@ -945,22 +1017,12 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         WHERE approved_at IS NOT NULL
           AND created_at > approved_at;
 
-        -- Exactly one typed target, matching the discriminator.
-        DO $target_check$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1
-                FROM pg_constraint
-                WHERE conname = 'chk_app_approval_target'
-            ) THEN
-                ALTER TABLE public.app_approval
-                    ADD CONSTRAINT chk_app_approval_target CHECK (
-                        (entity_type = 1 AND user_id IS NOT NULL AND question_id IS NULL)
-                        OR (entity_type = 2 AND question_id IS NOT NULL AND user_id IS NULL)
-                    );
-            END IF;
-        END
-        $target_check$;
+        -- Exactly one typed target, matching the discriminator (lookup-backed IDs).
+        ALTER TABLE public.app_approval
+            ADD CONSTRAINT chk_app_approval_target CHECK (
+                (entity_type = 2101 AND user_id IS NOT NULL AND question_id IS NULL)
+                OR (entity_type = 2102 AND question_id IS NOT NULL AND user_id IS NULL)
+            );
 
         DROP INDEX IF EXISTS ix_app_user_approval_user_id;
         DROP INDEX IF EXISTS ix_app_user_approval_approved_by;
@@ -990,15 +1052,36 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         -- Registration keeps one row per approver; question trails allow repeat rows.
         CREATE UNIQUE INDEX IF NOT EXISTS ix_app_approval_user_approver_role
             ON public.app_approval (user_id, approved_by_user_id, approved_by_role)
-            WHERE entity_type = 1;
+            WHERE entity_type = 2101;
 
         CREATE INDEX IF NOT EXISTS ix_app_approval_pending
             ON public.app_approval (user_id)
-            WHERE entity_type = 1 AND approved_at IS NULL AND is_approved IS NULL;
+            WHERE entity_type = 2101 AND approved_at IS NULL AND is_approved IS NULL;
 
         CREATE INDEX IF NOT EXISTS ix_app_approval_question_trail
             ON public.app_approval (question_id, created_at DESC)
-            WHERE entity_type = 2;
+            WHERE entity_type = 2102;
+
+        -- Optional integrity: entity_type / action resolve to lookup names.
+        DO $approval_lookup_fks$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'app_approval_entity_type_fkey'
+            ) THEN
+                ALTER TABLE public.app_approval
+                    ADD CONSTRAINT app_approval_entity_type_fkey
+                    FOREIGN KEY (entity_type) REFERENCES public.lookups(id);
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'app_approval_action_fkey'
+            ) THEN
+                ALTER TABLE public.app_approval
+                    ADD CONSTRAINT app_approval_action_fkey
+                    FOREIGN KEY (action) REFERENCES public.lookups(id);
+            END IF;
+        END
+        $approval_lookup_fks$;
         """;
 
     /// <summary>
@@ -1012,11 +1095,11 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             entity_type, question_id, approved_by_user_id, approved_by_role,
             action, created_at, approved_at, is_approved)
         SELECT
-            2,
+            2102, -- Question
             q.id,
             q.created_by,
             q.created_by_role,
-            1, -- Created
+            2201, -- Created
             q.created_date::timestamptz,
             q.created_date::timestamptz,
             NULL
@@ -1025,14 +1108,14 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
           AND NOT EXISTS (
               SELECT 1
               FROM public.app_approval a
-              WHERE a.entity_type = 2 AND a.question_id = q.id AND a.action = 1);
+              WHERE a.entity_type = 2102 AND a.question_id = q.id AND a.action = 2201);
 
         -- Endorse / publish event for questions that carry an approver.
         INSERT INTO public.app_approval (
             entity_type, question_id, approved_by_user_id, approved_by_role,
             action, created_at, approved_at, is_approved)
         SELECT
-            2,
+            2102, -- Question
             q.id,
             q.approved_by,
             COALESCE(
@@ -1048,7 +1131,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 ),
                 2010
             ),
-            CASE WHEN q.visibility_level = 3 THEN 5 ELSE 4 END, -- Published : Endorsed
+            CASE WHEN q.visibility_level = 3 THEN 2205 ELSE 2204 END, -- Published : Endorsed
             q.modified_date::timestamptz,
             q.modified_date::timestamptz,
             TRUE
@@ -1058,7 +1141,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
           AND NOT EXISTS (
               SELECT 1
               FROM public.app_approval a
-              WHERE a.entity_type = 2 AND a.question_id = q.id AND a.action IN (4, 5));
+              WHERE a.entity_type = 2102 AND a.question_id = q.id AND a.action IN (2204, 2205));
         """;
 
     private const string RegistrationSupportSql = """

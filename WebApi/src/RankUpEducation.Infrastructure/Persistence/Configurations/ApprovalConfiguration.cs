@@ -73,7 +73,7 @@ public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
                 approval.ApprovedByRole
             })
             .IsUnique()
-            .HasFilter("entity_type = 1");
+            .HasFilter("entity_type = 2101");
 
         builder.HasOne<User>()
             .WithMany()
