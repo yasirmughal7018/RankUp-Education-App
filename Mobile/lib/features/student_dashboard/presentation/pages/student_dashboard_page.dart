@@ -34,6 +34,11 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage> {
         title: const Text('Home'),
         actions: [
           IconButton(
+            tooltip: 'Notifications',
+            onPressed: () => context.go('/notifications'),
+            icon: const Icon(Icons.notifications_outlined),
+          ),
+          IconButton(
             tooltip: 'Messages',
             onPressed: () => context.go('/messages'),
             icon: const Icon(Icons.chat_bubble_outline),

@@ -30,7 +30,8 @@ export function useStartQuizAttemptMutation(quizId: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => studentQuizApi.startQuizAttempt(quizId),
+    mutationFn: (input?: { instructionsAcknowledged?: boolean }) =>
+      studentQuizApi.startQuizAttempt(quizId, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.studentQuizDetail(quizId),

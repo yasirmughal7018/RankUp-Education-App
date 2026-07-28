@@ -28,7 +28,9 @@ public sealed record AttemptReviewResponse(
     string Status,
     bool IsReviewDone,
     DateTimeOffset SubmittedAt,
-    IReadOnlyList<AttemptReviewQuestionResponse> Questions);
+    IReadOnlyList<AttemptReviewQuestionResponse> Questions,
+    short FocusLossCount = 0,
+    short ClipboardPasteCount = 0);
 
 /// <summary>One question on the review screen with marks and feedback.</summary>
 public sealed record AttemptReviewQuestionResponse(

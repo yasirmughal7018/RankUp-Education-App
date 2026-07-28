@@ -44,24 +44,46 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             assignments.Select(item => item.StudentId),
             cancellationToken);
 
+        var attempts = await _dbContext.QuizAttempts.AsNoTracking()
+            .Where(attempt => attempt.QuizId == quizId)
+            .Select(attempt => new
+            {
+                attempt.StudentId,
+                attempt.Percentage,
+                attempt.SubmittedDate,
+                attempt.StartedDate,
+                attempt.FocusLossCount,
+                attempt.ClipboardPasteCount
+            })
+            .ToListAsync(cancellationToken);
+
         var items = new List<QuizMonitoringStudentItem>();
         foreach (var assignment in assignments)
         {
-            var stats = await QuizQueryHelper.GetAttemptStatsAsync(
-                _dbContext,
-                quizId,
-                assignment.StudentId,
-                cancellationToken);
+            var studentAttempts = attempts
+                .Where(attempt => attempt.StudentId == assignment.StudentId)
+                .ToArray();
+            var latestAttempt = studentAttempts
+                .OrderByDescending(attempt => attempt.SubmittedDate)
+                .ThenByDescending(attempt => attempt.StartedDate)
+                .FirstOrDefault();
+
             items.Add(new QuizMonitoringStudentItem(
                 assignment.StudentId,
                 studentNames.GetValueOrDefault(assignment.StudentId, $"Student {assignment.StudentId}"),
                 assignment.Id,
-                stats.AttemptCount,
-                stats.BestPercentage,
+                studentAttempts.Length,
+                studentAttempts.Length == 0
+                    ? null
+                    : studentAttempts.Max(attempt => (short?)attempt.Percentage),
                 assignment.IsReviewDone,
-                stats.LastSubmittedAt,
+                studentAttempts.Length == 0
+                    ? null
+                    : studentAttempts.Max(attempt => (DateTimeOffset?)attempt.SubmittedDate),
                 assignment.StartDateTime,
-                assignment.EndDateTime));
+                assignment.EndDateTime,
+                latestAttempt?.FocusLossCount ?? 0,
+                latestAttempt?.ClipboardPasteCount ?? 0));
         }
 
         return items;
@@ -296,7 +318,9 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     item.QuizReviewId,
                     selectedOptionIds,
                     hasHumanReviewFeedback);
-            }).ToArray());
+            }).ToArray(),
+            attempt.FocusLossCount,
+            attempt.ClipboardPasteCount);
     }
 
     public Task<QuizReview?> GetQuestionReviewEntityAsync(long reviewId, CancellationToken cancellationToken)

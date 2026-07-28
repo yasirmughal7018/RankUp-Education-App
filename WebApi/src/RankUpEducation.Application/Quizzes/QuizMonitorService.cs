@@ -91,7 +91,9 @@ public sealed class QuizMonitorService : IQuizMonitorService
                 item.AttemptCount,
                 item.IsReviewDone,
                 item.LastSubmittedAt),
-            item.LastSubmittedAt)).ToArray();
+            item.LastSubmittedAt,
+            item.FocusLossCount,
+            item.ClipboardPasteCount)).ToArray();
 
         return new QuizMonitoringResponse(
             quiz.QuizId,

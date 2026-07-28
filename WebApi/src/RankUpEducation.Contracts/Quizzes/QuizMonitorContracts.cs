@@ -36,4 +36,6 @@ public sealed record QuizMonitoringStudentResponse(
     short? BestPercentage,
     bool IsReviewDone,
     string Status,
-    DateTimeOffset? LastSubmittedAt);
+    DateTimeOffset? LastSubmittedAt,
+    short FocusLossCount = 0,
+    short ClipboardPasteCount = 0);

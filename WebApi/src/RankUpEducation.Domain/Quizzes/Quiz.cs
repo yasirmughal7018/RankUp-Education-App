@@ -69,6 +69,12 @@ public sealed class Quiz : SoftDeleteEntity
     /// <summary>Free = jump anywhere; Sequential = prev/next only; Locked = forward only after answering.</summary>
     public string NavigationMode { get; private set; } = "Free";
 
+    /// <summary>
+    /// Post-submit review: Full (score + correct + explanations), CorrectAnswers (score + correct),
+    /// ScoreOnly, or Withheld (hide score/answers until review is published).
+    /// </summary>
+    public string ReviewDisplayMode { get; private set; } = "ScoreOnly";
+
     /// <summary>Assigned (row-based) or Public (platform catalog + lazy assignment). School-wide targets use assignment rows only.</summary>
     public string AudienceScope { get; private set; } = "Assigned";
 
@@ -101,7 +107,8 @@ public sealed class Quiz : SoftDeleteEntity
         bool shuffleQuestions,
         bool shuffleOptions,
         bool isReviewRequired,
-        string? navigationMode = null)
+        string? navigationMode = null,
+        string? reviewDisplayMode = null)
     {
         QuizTitle = quizTitle.AsTrimmedString();
         Description = description.AsTrimmedString();
@@ -116,6 +123,7 @@ public sealed class Quiz : SoftDeleteEntity
         ShuffleOptions = shuffleOptions;
         IsReviewRequired = isReviewRequired;
         NavigationMode = NormalizeNavigationMode(navigationMode);
+        ReviewDisplayMode = NormalizeReviewDisplayMode(reviewDisplayMode);
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -125,6 +133,29 @@ public sealed class Quiz : SoftDeleteEntity
         return mode.Equals("Sequential", StringComparison.OrdinalIgnoreCase) ? "Sequential"
             : mode.Equals("Locked", StringComparison.OrdinalIgnoreCase) ? "Locked"
             : "Free";
+    }
+
+    private static string NormalizeReviewDisplayMode(string? reviewDisplayMode)
+    {
+        var mode = reviewDisplayMode.AsTrimmedOrNull() ?? "ScoreOnly";
+        if (mode.Equals("Full", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Full";
+        }
+
+        if (mode.Equals("CorrectAnswers", StringComparison.OrdinalIgnoreCase)
+            || mode.Equals("Correct", StringComparison.OrdinalIgnoreCase))
+        {
+            return "CorrectAnswers";
+        }
+
+        if (mode.Equals("Withheld", StringComparison.OrdinalIgnoreCase)
+            || mode.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Withheld";
+        }
+
+        return "ScoreOnly";
     }
 
     /// <summary>Opens public catalog access without requiring pre-created rows for every student.</summary>
@@ -143,11 +174,15 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>Recalculates aggregate question count and marks after bank attach or inline add/remove.</summary>
-    public void SetQuestionTotals(short totalQuestions, short totalMarks)
+    /// <summary>
+    /// Recalculates aggregate question count, marks, and time limit (ceil of Σ EstimatedTimeSeconds / 60)
+    /// after bank attach or inline add/update/remove.
+    /// </summary>
+    public void SetQuestionTotals(short totalQuestions, short totalMarks, short? timeLimitMinutes)
     {
         TotalQuestions = totalQuestions;
         TotalMarks = totalMarks;
+        TimeLimitMinutes = timeLimitMinutes;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

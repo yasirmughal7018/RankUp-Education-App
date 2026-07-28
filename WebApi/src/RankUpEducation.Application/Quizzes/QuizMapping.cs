@@ -127,12 +127,13 @@ internal static class QuizMapping
     public static QuizAttemptResultResponse ToAttemptResult(
         QuizAttemptDetailItem item,
         string quizTitle,
-        bool reviewAvailable,
-        bool maskPendingReview = false,
+        QuizReviewDisplay.Visibility visibility,
         string? resultStatusOverride = null)
     {
-        var displayedObtained = maskPendingReview ? (short)0 : item.ObtainedMarks;
-        var displayedPercentage = maskPendingReview ? (short)0 : item.Percentage;
+        var maskScore = !visibility.ShowScore;
+        var displayedObtained = maskScore ? (short)0 : item.ObtainedMarks;
+        var displayedPercentage = maskScore ? (short)0 : item.Percentage;
+        var reviewAvailable = visibility.ShowCorrectAnswers || visibility.ShowExplanations;
 
         return new QuizAttemptResultResponse(
             item.AttemptId,
@@ -152,22 +153,25 @@ internal static class QuizMapping
                 var isSubjective = !string.IsNullOrWhiteSpace(question.SubmittedText)
                     && question.SelectedOptionIds.Count == 0
                     && question.SelectedOptionId is null;
-                var awardedMarks = maskPendingReview && isSubjective ? (short)0 : question.AwardedMarks;
+                var hideSubjectiveScore = maskScore || (visibility.ReviewPending && isSubjective);
+                var awardedMarks = hideSubjectiveScore ? (short)0 : question.AwardedMarks;
 
                 return new QuizResultQuestionResponse(
                     question.QuestionId,
                     question.QuestionText,
                     question.Marks,
                     awardedMarks,
-                    maskPendingReview && isSubjective ? false : question.IsCorrect,
-                    question.Explanation,
+                    visibility.ShowScore && !hideSubjectiveScore && question.IsCorrect,
+                    visibility.ShowExplanations ? question.Explanation : null,
                     question.SelectedOptionId,
-                    maskPendingReview && isSubjective ? null : correctOption?.OptionId,
+                    visibility.ShowCorrectAnswers ? correctOption?.OptionId : null,
                     question.SubmittedText,
                     question.SelectedOptionIds,
-                    maskPendingReview && isSubjective
-                        ? null
-                        : correctOptions.Select(option => option.OptionId).ToArray());
-            }).ToArray());
+                    visibility.ShowCorrectAnswers
+                        ? correctOptions.Select(option => option.OptionId).ToArray()
+                        : null);
+            }).ToArray(),
+            visibility.ReviewPending,
+            visibility.Mode);
     }
 }

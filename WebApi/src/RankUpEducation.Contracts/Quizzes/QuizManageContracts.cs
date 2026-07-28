@@ -18,7 +18,8 @@ public sealed record CreateQuizRequest(
     bool IsReviewRequired,
     long? ContextStudentId,
     short? QuizTypeId = null,
-    string? NavigationMode = null);
+    string? NavigationMode = null,
+    string? ReviewDisplayMode = null);
 
 /// <summary>Editable quiz metadata (blocked after assignment window starts).</summary>
 public sealed record UpdateQuizRequest(
@@ -34,7 +35,8 @@ public sealed record UpdateQuizRequest(
     bool ShuffleQuestions,
     bool ShuffleOptions,
     bool IsReviewRequired,
-    string? NavigationMode = null);
+    string? NavigationMode = null,
+    string? ReviewDisplayMode = null);
 
 /// <summary>Owner manage view returned after create/update/publish/question changes.</summary>
 public sealed record ManageQuizResponse(
@@ -60,6 +62,7 @@ public sealed record ManageQuizResponse(
     bool ShuffleOptions,
     bool IsReviewRequired,
     string NavigationMode,
+    string ReviewDisplayMode,
     string CreatedBy,
     string SchoolName,
     IReadOnlyList<ManageQuizQuestionResponse> Questions);

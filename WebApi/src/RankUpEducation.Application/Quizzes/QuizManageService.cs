@@ -125,10 +125,11 @@ public sealed class QuizManageService : IQuizManageService
             request.ShuffleQuestions,
             request.ShuffleOptions,
             request.IsReviewRequired,
-            request.NavigationMode);
+            request.NavigationMode,
+            request.ReviewDisplayMode);
 
         var quizTypeName = await _lookups.GetLookupNameAsync(quizTypeId, cancellationToken);
-        QuizTypeBehavior.ApplyCreateDefaults(quiz, quizTypeName, request.NavigationMode);
+        QuizTypeBehavior.ApplyCreateDefaults(quiz, quizTypeName, request.NavigationMode, request.ReviewDisplayMode);
 
         await _quizzes.AddQuizAsync(quiz, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -157,7 +158,8 @@ public sealed class QuizManageService : IQuizManageService
             request.ShuffleQuestions,
             request.ShuffleOptions,
             request.IsReviewRequired,
-            request.NavigationMode);
+            request.NavigationMode,
+            request.ReviewDisplayMode);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await BuildManageResponseAsync(quizId, cancellationToken);
@@ -369,7 +371,8 @@ public sealed class QuizManageService : IQuizManageService
             source.ShuffleQuestions,
             source.ShuffleOptions,
             source.IsReviewRequired,
-            source.NavigationMode);
+            source.NavigationMode,
+            source.ReviewDisplayMode);
 
         await _quizzes.AddQuizAsync(copy, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -452,7 +455,12 @@ public sealed class QuizManageService : IQuizManageService
             }
 
             await _quizQuestions.AddQuizQuestionAsync(
-                new QuizQuestion(copy.Id, question.Id, sourceQuestion.DisplayOrder, sourceQuestion.Marks),
+                new QuizQuestion(
+                    copy.Id,
+                    question.Id,
+                    sourceQuestion.DisplayOrder,
+                    sourceQuestion.Marks,
+                    sourceQuestion.ShuffleOptions),
                 cancellationToken);
         }
 

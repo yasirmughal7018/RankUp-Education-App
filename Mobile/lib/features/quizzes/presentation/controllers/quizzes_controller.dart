@@ -169,6 +169,9 @@ class QuizzesController extends StateNotifier<QuizzesState> {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     int? timeSpentSeconds,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+    String? deviceId,
   }) async {
     try {
       await _repository.saveDraft(
@@ -176,6 +179,9 @@ class QuizzesController extends StateNotifier<QuizzesState> {
         attemptId: attemptId,
         answers: answers,
         timeSpentSeconds: timeSpentSeconds,
+        focusLossDelta: focusLossDelta,
+        clipboardPasteDelta: clipboardPasteDelta,
+        deviceId: deviceId,
       );
       return true;
     } on Exception {
@@ -188,6 +194,8 @@ class QuizzesController extends StateNotifier<QuizzesState> {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     required int timeSpentSeconds,
+    bool isAutoSubmit = false,
+    String? deviceId,
   }) async {
     state = state.copyWith(isAttemptLoading: true, clearActionError: true);
 
@@ -197,6 +205,8 @@ class QuizzesController extends StateNotifier<QuizzesState> {
         attemptId: attemptId,
         answers: answers,
         timeSpentSeconds: timeSpentSeconds,
+        isAutoSubmit: isAutoSubmit,
+        deviceId: deviceId,
       );
       state = state.copyWith(
         attemptResult: result,

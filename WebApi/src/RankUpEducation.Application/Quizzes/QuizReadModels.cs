@@ -74,7 +74,8 @@ public sealed record QuizDetailItem(
     short DifficultyLevelId,
     short LifecycleStatusId,
     string LifecycleStatusName,
-    string? QuizResultStatusName = null);
+    string? QuizResultStatusName = null,
+    string ReviewDisplayMode = "ScoreOnly");
 
 /// <summary>School and campus resolved from a linked student when a parent creates a quiz.</summary>
 public sealed record StudentSchoolContext(
@@ -108,7 +109,8 @@ public sealed record QuizQuestionItem(
     string? Explanation,
     short EstimatedTimeSeconds,
     IReadOnlyList<QuizQuestionOptionItem> Options,
-    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers,
+    bool ShuffleOptions = true);
 
 /// <summary>Server-side Fill scoring model — never returned on student attempt start.</summary>
 public sealed record QuestionAcceptedAnswerScoreItem(
@@ -199,7 +201,9 @@ public sealed record QuizMonitoringStudentItem(
     bool IsReviewDone,
     DateTimeOffset? LastSubmittedAt,
     DateTimeOffset StartDateTime,
-    DateTimeOffset EndDateTime);
+    DateTimeOffset EndDateTime,
+    short FocusLossCount = 0,
+    short ClipboardPasteCount = 0);
 
 /// <summary>Submitted attempt awaiting teacher/parent review of subjective answers.</summary>
 public sealed record PendingReviewItem(
@@ -227,7 +231,9 @@ public sealed record AttemptReviewDetailItem(
     string StatusName,
     bool IsReviewDone,
     DateTimeOffset SubmittedAt,
-    IReadOnlyList<AttemptReviewQuestionItem> Questions);
+    IReadOnlyList<AttemptReviewQuestionItem> Questions,
+    short FocusLossCount = 0,
+    short ClipboardPasteCount = 0);
 
 public sealed record AttemptReviewQuestionItem(
     long AttemptQuestionId,
@@ -260,7 +266,8 @@ public sealed record QuizQuestionCopyItem(
     string? Explanation,
     short DisplayOrder,
     IReadOnlyList<QuizQuestionOptionItem> Options,
-    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers,
+    bool ShuffleOptions = true);
 
 /// <summary>Whether subjective review is required and completed for an assignment.</summary>
 public sealed record QuizAssignmentReviewState(

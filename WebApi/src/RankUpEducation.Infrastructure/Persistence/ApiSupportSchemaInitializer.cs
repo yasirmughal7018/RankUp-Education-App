@@ -41,6 +41,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuizAttemptQuestionMarksSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizRejectionReasonSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizNavigationAndMarkReviewSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizReviewDisplayModeSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizOfflineSyncSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizContentFreezeAndIntegritySupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
@@ -622,6 +624,20 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         ALTER TABLE public.quiz_attempt_questions
             ADD COLUMN IF NOT EXISTS is_marked_for_review boolean NOT NULL DEFAULT FALSE;
+        """;
+
+    private const string QuizReviewDisplayModeSupportSql = """
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS review_display_mode varchar(20) NOT NULL DEFAULT 'ScoreOnly';
+        """;
+
+    private const string QuizOfflineSyncSupportSql = """
+        ALTER TABLE public.quiz_attempts
+            ADD COLUMN IF NOT EXISTS client_sync_id varchar(64) NULL;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_quiz_attempts_client_sync_id
+            ON public.quiz_attempts (client_sync_id)
+            WHERE client_sync_id IS NOT NULL;
         """;
 
     private const string QuizContentFreezeAndIntegritySupportSql = """

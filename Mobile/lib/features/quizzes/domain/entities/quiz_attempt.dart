@@ -116,12 +116,14 @@ class SavedQuizAnswer {
     this.selectedOptionId,
     this.selectedOptionIds = const [],
     this.submittedText,
+    this.isMarkedForReview = false,
   });
 
   final String questionId;
   final String? selectedOptionId;
   final List<String> selectedOptionIds;
   final String? submittedText;
+  final bool isMarkedForReview;
 }
 
 /// Server-issued attempt session with timing and draft answers.
@@ -135,6 +137,11 @@ class QuizAttemptSession {
     this.timeLimitMinutes,
     this.resumed = false,
     this.savedAnswers = const [],
+    this.navigationMode = 'Free',
+    this.enforceDeviceLock = false,
+    this.focusLossCount = 0,
+    this.clipboardPasteCount = 0,
+    this.enablePerQuestionTimer = false,
   });
 
   final String attemptId;
@@ -145,6 +152,11 @@ class QuizAttemptSession {
   final int? timeLimitMinutes;
   final bool resumed;
   final List<SavedQuizAnswer> savedAnswers;
+  final String navigationMode;
+  final bool enforceDeviceLock;
+  final int focusLossCount;
+  final int clipboardPasteCount;
+  final bool enablePerQuestionTimer;
 }
 
 /// Per-question grading breakdown after submission.

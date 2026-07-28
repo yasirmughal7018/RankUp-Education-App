@@ -37,6 +37,9 @@ export function StudentQuizResultPage() {
     );
   }
 
+  const reviewPending = Boolean(result.reviewPending);
+  const scoreVisible = !reviewPending;
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <PageHeader
@@ -58,13 +61,15 @@ export function StudentQuizResultPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-500">Score</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {result.obtainedMarks}/{result.totalMarks}
+            {scoreVisible
+              ? `${result.obtainedMarks}/${result.totalMarks}`
+              : "—"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-500">Percentage</p>
           <p className="mt-2 text-2xl font-semibold text-brand-700">
-            {result.percentage}%
+            {scoreVisible ? `${result.percentage}%` : "—"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -78,9 +83,16 @@ export function StudentQuizResultPage() {
         </div>
       </section>
 
-      {result.reviewAvailable ? (
+      {reviewPending ? (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Some answers are pending teacher review. Final marks may change.
+          Results are withheld until the teacher publishes review. Final marks
+          may change.
+        </div>
+      ) : null}
+
+      {!reviewPending && !result.reviewAvailable ? (
+        <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Correct answers and explanations are not shown for this quiz.
         </div>
       ) : null}
 
@@ -94,15 +106,21 @@ export function StudentQuizResultPage() {
               <h2 className="text-sm font-semibold text-slate-900">
                 Q{index + 1}. {question.text}
               </h2>
-              <span
-                className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
-                  question.isCorrect
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-red-50 text-red-700"
-                }`}
-              >
-                {question.awardedMarks}/{question.marks}
-              </span>
+              {scoreVisible ? (
+                <span
+                  className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                    question.isCorrect
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-red-50 text-red-700"
+                  }`}
+                >
+                  {question.awardedMarks}/{question.marks}
+                </span>
+              ) : (
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
+                  Pending
+                </span>
+              )}
             </div>
 
             {question.submittedText ? (

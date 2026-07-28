@@ -46,19 +46,19 @@ const deprecatedLookups = [
 const attemptStatuses = [
   ["80", "Started", "Existing lookup; current start flow writes InProgress directly."],
   ["81", "InProgress", "Student started; draft answers may be saved. Canonical fallback is now 81."],
-  ["82", "Submitted", "Answers submitted and auto-scored. Canonical fallback is now 82."],
-  ["83", "AutoSubmitted", "Existing lookup; UI auto-submit currently calls normal submit, so this is not written."],
-  ["84", "Expired", "Existing lookup; current service blocks outside-window attempts but does not transition attempts to Expired."],
+  ["82", "Submitted", "Manual submit + auto-score. Canonical fallback is now 82."],
+  ["83", "AutoSubmitted", "Written when submit carries IsAutoSubmit=true (UI/server time-budget expiry). Server also enforces TimeLimitMinutes with grace."],
+  ["84", "Expired", "Written by ExpireOverdueUnattemptedAsync when an InProgress attempt’s assignment EndDateTime has passed; also blocked on start outside the window."],
   ["85", "Reviewed", "Teacher/Parent finalized subjective review; results released."],
 ];
 
 const resultStatuses = [
-  ["20", "Expired", "Assignment window ended and the student did not complete an attempt (intended). Services do not always auto-write this today."],
-  ["21", "Completed", "Student finished the assignment cycle (intended after submit/review). Reporting reads it; submit does not always progress it today."],
-  ["22", "Under Review", "This student’s attempt is submitted and awaiting teacher/parent/AI subjective review (IsReviewDone=false)."],
-  ["23", "In Progress", "This student has started an attempt that is not yet submitted."],
-  ["24", "Not Attempted", "Canonical initial assignment result when the window is open and the student has not started. (Older drafts said “Not Started” — same meaning.)"],
-  ["25", "Up Coming", "StartDateTime is still in the future for this assignment. List UIs may also compute this from dates."],
+  ["20", "Expired", "Written when EndDateTime passed with no completed attempt (unattempted or overdue InProgress). ExpireOverdue runs on student list and assign list."],
+  ["21", "Completed", "Written on submit when review is not pending (no subjective / review already done)."],
+  ["22", "Under Review", "Written on submit when IsReviewRequired and subjective answers exist (IsReviewDone=false)."],
+  ["23", "In Progress", "Written when the student starts an attempt that is not yet submitted."],
+  ["24", "Not Attempted", "Initial assignment result when StartAt ≤ now and the student has not started. Also promoted from Up Coming when the window opens."],
+  ["25", "Up Coming", "Written on assign when StartAt > now. Promoted to Not Attempted when StartAt arrives (no attempt yet)."],
 ];
 
 const quizAssignmentFields = [
@@ -147,7 +147,7 @@ const questionRules = [
   ["Edit question on quiz", "Caller must own the quiz AND be the question CreatedBy. Recalculates totals."],
   ["Remove from quiz", "Deletes QuizQuestion link; if caller created the question, deactivates it. Recalculates totals."],
   ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103). Descriptive (104) blocked for authoring now. File answers / Matching / Ordering / media types are Not Now."],
-  ["Shuffle", "Quiz-level ShuffleQuestions / ShuffleOptions (DB default true; create form UI defaults false). Per-question ShuffleOptions exists but attempt uses quiz-level only."],
+  ["Shuffle", "Quiz-level ShuffleQuestions / ShuffleOptions. At attempt start, options shuffle when quiz.ShuffleOptions AND link.ShuffleOptions are both true (per-question can opt out)."],
 ];
 
 const importantBusinessRules = [
@@ -157,10 +157,10 @@ const importantBusinessRules = [
   ["Question order belongs to QuizQuestion", "Yes", "DisplayOrder is per quiz link, not on the bank question."],
   ["Quiz-specific marks belong to QuizQuestion", "Yes", "Copied from question marks on attach/create; may be overwritten per quiz. Totals recalculate from link marks."],
   ["Choice options belong to the question", "Yes", "question_options are bank-question owned; quizzes do not duplicate option rows."],
-  ["Random/shuffled quizzes store exact questions shown", "Partial", "QuizAttemptQuestion stores QuestionId + DisplayOrder on start. Marks freeze on that row is intended but not implemented yet."],
+  ["Random/shuffled quizzes store exact questions shown", "Yes", "QuizAttemptQuestion freezes QuestionId, DisplayOrder, Marks, QuestionText; options snapshotted on QuizAttemptQuestionOption."],
   ["Student answers stored per attempt", "Yes", "QuizAttemptAnswer rows hang off QuizAttemptQuestion."],
   ["Multiple-choice selected answers stored separately", "Yes", "Each selected option is a QuizAttemptAnswer with QuestionOptionId; free text uses SubmittedText."],
-  ["Descriptive / file answers may need teacher or AI review", "Partial", "Descriptive/Fill + AllowTeacherReview / AllowAiReview supported. File answers are Not Now."],
+  ["Descriptive / file answers may need teacher or AI review", "Partial", "Fill + AllowTeacherReview / AllowAiReview live (OpenAI or heuristic). Descriptive authoring blocked; file answers are Not Now."],
 ];
 
 const quizQuestionFields = [
@@ -168,7 +168,7 @@ const quizQuestionFields = [
   ["QuestionId", "Bank question linked into the quiz."],
   ["DisplayOrder", "Order of the question within this quiz."],
   ["Marks", "Quiz-specific marks (copied from question; may be overwritten)."],
-  ["ShuffleOptions", "Per-link option shuffle flag (attempt currently uses quiz-level ShuffleOptions)."],
+  ["ShuffleOptions", "Per-link option shuffle flag; AND’d with quiz-level ShuffleOptions at attempt start."],
   ["CreatedAt", "When the link was created."],
 ];
 
@@ -177,7 +177,7 @@ const quizAudiences = [
     "One student",
     "Teacher / Parent",
     "Now",
-    "Creates one quiz_assignment row for a single student. Teacher: campus student. Parent: linked child. API mode: one (not yet in Assign dialog UI).",
+    "Creates one quiz_assignment row for a single student. Teacher: campus student. Parent: linked child. API mode: one.",
   ],
   [
     "Group of students",
@@ -200,85 +200,85 @@ const quizAudiences = [
   [
     "Section",
     "Teacher",
-    "Planned",
-    "Class + section (e.g. Class 1 Section A, Class 1 Section B). Students already store section; assign-by-section mode is not implemented yet.",
+    "Now",
+    "Campus + grade + section. API mode: allInSection. Materializes one quiz_assignment row per student (AudienceScope stays Assigned).",
   ],
   [
     "School",
-    "SchoolAdmin / PortalAdmin (or Teacher with school-wide permission)",
-    "Planned",
-    "All active students in one school (all campuses). Not implemented; current teacher assign is campus-scoped.",
+    "SchoolAdmin / PortalAdmin",
+    "Now",
+    "All active students in one school (all campuses). API mode: allInSchool. Materializes per-student rows; AudienceScope stays Assigned — does NOT open the student catalog.",
   ],
   [
     "Multiple schools",
     "PortalAdmin",
-    "Planned",
-    "Cross-school competitions / platform events. Requires multi-school targeting and broader visibility rules. Not implemented.",
+    "Now",
+    "Cross-school targeting via SchoolIds. API mode: multiSchool. Materializes per-student rows; AudienceScope stays Assigned.",
   ],
   [
     "Public platform audience",
     "PortalAdmin",
-    "Planned",
-    "Open/self-start for permitted platform students without a private assignment list. Not implemented; today students only see quizzes with an assignment row.",
+    "Now",
+    "Only Public sets AudienceScope=Public (open catalog). Students see Public quizzes without a private assignment row; start may still create an assignment. School/section/multi modes must never set Public.",
   ],
 ];
 
 const assignmentModes = [
-  ["one", "Teacher / Parent", "Audience: One student / Parent’s child. API only — not in Assign dialog UI."],
-  ["selected", "Teacher / Parent", "Audience: selected students or selected parent children; out-of-scope IDs skipped."],
+  ["one", "Teacher / Parent / Admin", "Audience: One student / Parent’s child."],
+  ["selected", "Teacher / Parent / Admin", "Audience: selected students or selected parent children; out-of-scope IDs skipped."],
   ["group", "Teacher / Parent", "Audience: Group of students / parent child group owned by the assigner."],
   ["allInGrade", "Teacher", "Audience: Class (campus + grade). UI: allingrade."],
-  ["allLinked", "Parent", "Audience: Parent’s child — all linked children. API only — not in Assign dialog UI."],
+  ["allInSection", "Teacher", "Audience: Section (campus + grade + section)."],
+  ["allInSchool", "SchoolAdmin / PortalAdmin", "Audience: School — materializes rows; does not open catalog."],
+  ["multiSchool", "PortalAdmin", "Audience: Multiple schools — materializes rows; does not open catalog."],
+  ["public", "PortalAdmin", "Audience: Public platform catalog (AudienceScope=Public)."],
+  ["allLinked", "Parent", "Audience: Parent’s child — all linked children."],
 ];
 
 const audienceVisibilityRules = [
-  "A student may only see quizzes that are assigned to them, or (later) available to their permitted audience (school / multi-school / public).",
-  "v1 rule (current code): student list and detail require a quiz_assignment row for that student. No open catalog yet.",
+  "A student may see (1) quizzes with a quiz_assignment row for them, and/or (2) quizzes with AudienceScope=Public in the open catalog.",
+  "School / multi-school / section / class assign create materialized rows and keep AudienceScope=Assigned. Only Public is open-catalog — prevents school-audience leakage into the student catalog.",
   "ParentPrivate quizzes may only target the parent’s linked children or the parent’s own child groups — never unrelated students, whole school, multi-school, or public.",
-  "Teacher quizzes may only target students inside the teacher’s school + campus scope (today). School-wide / multi-school / public are future PortalAdmin (or elevated) audiences.",
-  "Assignment always materializes per-student quiz_assignment rows at assign time (even when the audience is Class/Group). Later public audience may use a different visibility model.",
+  "Teacher assign is campus-scoped (grade/section/group/selected). School-wide is SchoolAdmin/PortalAdmin; multi-school and public are PortalAdmin.",
+  "Student list filters Public catalog with AudienceScope == \"Public\" only; SetAudienceAccess maps any non-Public scope to Assigned.",
 ];
 
 const studentAttemptFlow = [
-  ["1", "Student opens quiz details", "Covered", "/student/quizzes detail; requires an assignment row for this student."],
-  ["2", "System checks eligibility", "Covered", "Assignment exists, quiz IsActive, now within [StartDateTime, EndDateTime], attempt quota not exhausted, DeviceId present."],
-  ["3", "Student reads instructions", "Partial", "Instructions are stored and displayed on detail; there is no separate must-acknowledge instructions gate."],
+  ["1", "Student opens quiz details", "Covered", "/student/quizzes detail; assignment row or Public catalog quiz."],
+  ["2", "System checks eligibility", "Covered", "Assignment (or Public window), quiz IsActive, now within window, attempt quota, DeviceId, optional instructions ack."],
+  ["3", "Student reads instructions", "Covered", "When Instructions are set, start requires InstructionsAcknowledged=true (API + student detail checkbox)."],
   ["4", "Student starts the quiz", "Covered", "POST .../attempts starts a new attempt or resumes an InProgress one."],
   ["5", "Attempt start time is recorded", "Covered", "QuizAttempt.StartedDate set on Begin."],
-  ["6", "Questions are displayed", "Covered", "From the QuizAttemptQuestion snapshot in DisplayOrder (shuffled at start when enabled)."],
-  ["7", "Answers are saved automatically", "Partial", "Draft-save endpoint exists (PUT .../attempts/{id}/draft). Autosave triggers (on change / interval / background / before submit) are UX intent; not all wired in the web client."],
-  ["8", "Student moves between questions where permitted", "Planned", "Free / Sequential / Locked navigation modes are not implemented; current attempt UI allows free movement only."],
-  ["9", "Student may mark questions for review", "Planned", "Mark-for-review flag and navigator grouping are not implemented yet."],
+  ["6", "Questions are displayed", "Covered", "From the QuizAttemptQuestion snapshot in DisplayOrder (shuffled at start when enabled); content + marks frozen."],
+  ["7", "Answers are saved automatically", "Covered", "Web: debounce + interval + visibility/pagehide autosave via draft endpoint; flush before submit/cancel. Mobile mirrors draft saves."],
+  ["8", "Student moves between questions where permitted", "Covered", "Quiz.NavigationMode Free / Sequential / Locked enforced in web + mobile attempt UI."],
+  ["9", "Student may mark questions for review", "Covered", "IsMarkedForReview on draft/submit; navigator groups marked questions."],
   ["10", "Student submits manually", "Covered", "POST .../attempts/{id}/submit auto-scores then MarkSubmitted; resubmission blocked."],
-  ["11", "System auto-submits when time expires", "Partial", "UI countdown triggers a normal submit at zero. AutoSubmitted (83) is not written and the time limit is not enforced server-side."],
-  ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) → Reviewed (85) after finalize."],
+  ["11", "System auto-submits when time expires", "Covered", "Client auto-submit with IsAutoSubmit=true → AutoSubmitted (83). Server rejects over-budget submits (grace for auto-submit)."],
+  ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83) → Reviewed (85) after finalize. Expired (84) via overdue job."],
   ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse first option; Multiple exact set; Fill accepted-answer rules."],
-  ["14", "Descriptive answers go to AI or teacher review", "Partial", "Fill + AllowTeacherReview is the live subjective path (Descriptive authoring blocked). AI review is a text stub only."],
-  ["15", "Student sees the permitted review screen", "Partial", "Result screen exists with score masking until review is done. Configurable review-display modes (correct answers / explanations / feedback / nothing until publication) are not implemented."],
-  ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true, results released. AI portion is a stub."],
+  ["14", "Descriptive answers go to AI or teacher review", "Partial", "Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic). Descriptive authoring still blocked."],
+  ["15", "Student sees the permitted review screen", "Covered", "Quiz.ReviewDisplayMode (Full / CorrectAnswers / ScoreOnly / Withheld) + shared QuizReviewDisplay.Resolve on submit and get-result."],
+  ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true. AI suggests; teacher confirms when required."],
 ];
 
 const timeManagementModes = [
   ["No time limit", "Covered", "Quiz.TimeLimitMinutes is optional/null. Attempt page shows no countdown; student may take as long as the assignment window allows."],
-  ["Total quiz time limit", "Partial", "Stored as Quiz.TimeLimitMinutes and returned to the client. Intended to equal sum of question EstimatedTimeSeconds when questions are added/removed — not implemented; owner sets minutes manually today."],
-  ["Time limit per question", "Gap", "Question.EstimatedTimeSeconds exists on the bank question and is shown in authoring/lists, but is never enforced as a per-question timer at attempt time."],
-  ["Fixed availability window", "Covered", "QuizAssignment.StartDateTime / EndDateTime gate start, resume, and submit. Outside the window the attempt is blocked."],
+  ["Total quiz time limit", "Covered", "Stored as Quiz.TimeLimitMinutes. Recalculated as ceil(Σ EstimatedTimeSeconds / 60) when questions are added/removed/attached; owner may still override on edit."],
+  ["Time limit per question", "Covered", "EstimatedTimeSeconds enforced at draft/submit: late answers ignored / capped; hard per-question timer in attempt UI."],
+  ["Fixed availability window", "Covered", "QuizAssignment.StartDateTime / EndDateTime gate start, resume, and submit. Outside the window the attempt is blocked or Expired."],
 ];
 
 const timeManagementAppBehaviors = [
   ["Show remaining time", "Covered", "Student attempt page countdown from TimeLimitMinutes × 60 minus elapsed since StartedDate."],
-  ["Warn when time is low", "Partial", "UI applies urgent styling when remainingSeconds ≤ 60. Not documented as a product rule before; no audio/modal warning."],
-  ["Auto-submit on expiry", "Partial", "When remainingSeconds hits 0 the UI triggers submit. Status written is Submitted (82), not AutoSubmitted (83). Not enforced server-side — a client can bypass the timer."],
-  ["Save answers before auto-submission", "Gap", "No explicit draft flush immediately before auto-submit. Submit payload uses in-memory answers; an unsaved last keystroke can be lost if it never reached draft-save."],
-  ["Prevent reopening after expiry unless allowed", "Partial", "Assignment window expiry blocks new/continued attempts. Allow Retry grants ExtraAttempts after review; it does not reopen a closed EndDateTime window by itself."],
+  ["Warn when time is low", "Partial", "UI applies urgent styling when remainingSeconds ≤ 60. No dedicated audio modal."],
+  ["Auto-submit on expiry", "Covered", "Client submits with IsAutoSubmit=true → AutoSubmitted (83). Server enforces TimeLimitMinutes with grace for auto-submit path."],
+  ["Save answers before auto-submission", "Covered", "Autosave flush runs before submit/auto-submit on web."],
+  ["Prevent reopening after expiry unless allowed", "Covered", "Assignment window expiry blocks/expires attempts. Allow Retry grants ExtraAttempts after review; does not reopen EndDateTime by itself."],
 ];
 
 const timeManagementGaps = [
-  "Quiz time is not derived from question EstimatedTimeSeconds on add/remove/attach — TimeLimitMinutes stays whatever the owner typed.",
-  "No per-question timer; EstimatedTimeSeconds is metadata only at attempt time.",
-  "Time limit is client-side only — server does not reject submit after TimeLimitMinutes elapses (only the assignment EndDateTime window is server-checked).",
-  "Auto-submit does not write QuizAttemptStatus AutoSubmitted (83).",
-  "No guaranteed save-before-auto-submit draft flush.",
+  "Low-time warning is UI styling at ≤60s only (no dedicated modal/audio).",
 ];
 
 const attemptRules = [
@@ -287,12 +287,13 @@ const attemptRules = [
   "If an InProgress attempt exists → resume (no new attempt).",
   "New start blocked when ExistingAttemptCount ≥ AllowedAttempts.",
   "DeviceId required (non-empty).",
-  "Time limit returned to client; UI countdown + auto-submit. Not enforced server-side.",
-  "On start: create QuizAttempt and snapshot QuizAttemptQuestion rows (shuffled order when ShuffleQuestions is on).",
-  "Draft save: InProgress only; answers stored on QuizAttemptAnswer linked to QuizAttemptQuestion; last answer wins per question.",
+  "Time limit returned to client; UI countdown + auto-submit. Server enforces TimeLimitMinutes (with grace for IsAutoSubmit) and assignment EndDateTime.",
+  "On start: create QuizAttempt and snapshot QuizAttemptQuestion rows (text, marks, options; shuffled order when ShuffleQuestions is on).",
+  "Draft save: InProgress only; answers stored on QuizAttemptAnswer linked to QuizAttemptQuestion; last answer wins per question; IsMarkedForReview supported.",
   "Multiple-choice selections are stored as separate answer rows (QuestionOptionId), not only as free text.",
-  "Submit scores then MarkSubmitted (status → Submitted). Cannot resubmit.",
+  "Submit scores then MarkSubmitted (Submitted or AutoSubmitted). Cannot resubmit.",
   "Subjective review finalizes to Reviewed; do not use Under Teacher/AI Review as attempt StatusId values.",
+  "Offline: ClientSyncId + IsOfflineAttempt; POST .../attempts/{id}/sync replays queued draft/submit after reconnect.",
 ];
 
 const quizAttemptFields = [
@@ -300,12 +301,13 @@ const quizAttemptFields = [
   ["QuizId", "Quiz definition being attempted."],
   ["StudentId", "Student taking the attempt."],
   ["NumberOfQuestionAttempt", "Count of questions presented on this attempt (from the snapshot)."],
-  ["StatusId", "QuizAttemptStatus: Started (80), InProgress (81), Submitted (82), AutoSubmitted (83), Expired (84), Reviewed (85). Current start flow writes InProgress."],
+  ["StatusId", "QuizAttemptStatus: Started (80), InProgress (81), Submitted (82), AutoSubmitted (83), Expired (84), Reviewed (85). Start writes InProgress; overdue InProgress → Expired."],
   ["StartedDate", "When the attempt began / resumed."],
   ["SubmittedDate", "When submitted (or placeholder until submit)."],
   ["TimeSpentSeconds", "Elapsed time recorded on the attempt."],
   ["DeviceId", "Required non-empty device identifier."],
-  ["IsOfflineAttempt", "Reserved for offline sync; default false today."],
+  ["IsOfflineAttempt", "True when the attempt was started/synced from an offline queue."],
+  ["ClientSyncId", "Idempotency key for offline sync; unique per student when set."],
   ["QuizReviewId", "Optional link to a quiz_reviews row when an attempt-level review record is used."],
   ["ObtainedMarks", "Scored / reviewed obtained marks."],
   ["Percentage", "Derived from obtained ÷ total marks."],
@@ -316,8 +318,11 @@ const quizAttemptQuestionFields = [
   ["QuizAttemptId", "Parent attempt."],
   ["QuestionId", "Bank question shown on this attempt."],
   ["DisplayOrder", "Exact order presented to the student (preserved even when ShuffleQuestions is on)."],
+  ["Marks", "Frozen quiz-specific marks at attempt start — later QuizQuestion/bank mark edits do not change historical scoring."],
+  ["QuestionText", "Frozen question stem at attempt start."],
+  ["IsMarkedForReview", "Student mark-for-review flag."],
+  ["TimeSpentSeconds", "Per-question elapsed time (capped by EstimatedTimeSeconds when hard timer rejects late answers)."],
   ["QuizReviewId", "Optional link to quiz_reviews for per-question teacher/parent/AI feedback."],
-  ["Marks (intended)", "Quiz-specific marks at attempt time. Required so later QuizQuestion/bank mark edits do not change old attempts. Not yet a column on QuizAttemptQuestion — gap to implement; today scoring still reads live QuizQuestion.Marks."],
 ];
 
 const attemptSnapshotReasons = [
@@ -325,7 +330,7 @@ const attemptSnapshotReasons = [
   "The exact question order must be preserved for resume, submit, and review screens.",
   "Later edits to the quiz’s QuizQuestion list must not rewrite an old attempt’s presented set/order.",
   "Review screens must show the original attempt questions in the original order.",
-  "Question marks may change later on the quiz or bank — attempt should freeze Marks on QuizAttemptQuestion (intended; not implemented yet).",
+  "Question marks and text/options are frozen on QuizAttemptQuestion / QuizAttemptQuestionOption at start.",
   "Answers are stored per attempt via QuizAttemptAnswer → QuizAttemptQuestion (option id and/or submitted text).",
 ];
 
@@ -338,53 +343,55 @@ const attemptStatusConflicts = [
   [
     "Completed as attempt Status",
     "Use Submitted / Reviewed",
-    "“Completed” is a student-list / result concept, not a QuizAttemptStatus lookup. After submit use Submitted (82); after finalize use Reviewed (85).",
+    "“Completed” is a student-list / result concept, not a QuizAttemptStatus lookup. After submit use Submitted (82) or AutoSubmitted (83); after finalize use Reviewed (85).",
   ],
   [
     "Full content freeze (question text/options)",
-    "Partial today",
-    "Today QuizAttemptQuestion stores QuestionId + DisplayOrder only. If bank question text/options change after the attempt, historical review may show the updated bank content. Full content snapshot is a future hardening item.",
+    "Covered today",
+    "QuizAttemptQuestion stores QuestionId, DisplayOrder, Marks, QuestionText; options snapshotted on QuizAttemptQuestionOption. Historical review shows frozen content.",
   ],
 ];
 
 const scoring = [
   ["Single Choice / TrueFalse", "First selected option; full marks if IsCorrect, else 0."],
   ["Multiple Choice", "Exact set match of correct option IDs → full marks; else 0."],
-  ["Fill in the Blanks", "Match any accepted answer (case / partial / min-max length) OR correct option text (case-insensitive). If AllowTeacherReview → subjective for review masking. If AllowAiReview → AI stub comment."],
+  ["Fill in the Blanks", "Match any accepted answer (case / partial / min-max length) OR correct option text (case-insensitive). If AllowTeacherReview → subjective for review masking. If AllowAiReview → OpenAI or heuristic suggestion."],
   ["Descriptive / free text", "Marks 0 on auto-score; treated as subjective if present."],
 ];
 
 const reviewRules = [
-  "Pending reviews: owned quizzes with IsReviewRequired, assignment not review-done, attempt Submitted.",
+  "Pending reviews: owned quizzes with IsReviewRequired, assignment not review-done, attempt Submitted/AutoSubmitted.",
   "RequiresReview per question: Descriptive OR (Fill + AllowTeacherReview + submitted text).",
   "Mark answers: awarded marks in [0, MaxMarks]; not if already finalized.",
   "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true.",
-  "Score masking on submit: if IsReviewRequired AND review not done AND subjective answers → obtained/percentage shown as 0, status \"Pending Review\".",
-  "Score masking on get-result: if IsReviewRequired AND !IsReviewDone → mask (stricter than submit path).",
-  "AI review is a text stub only (no external grading).",
+  "Score masking uses the same QuizReviewDisplay.Resolve on submit and get-result (ReviewDisplayMode + IsReviewRequired + IsReviewDone + HasSubjectiveAnswersRequiringReview).",
+  "Modes: Full, CorrectAnswers, ScoreOnly, Withheld — owner-configured on the quiz (type defaults via ApplyCreateDefaults; bools never OR’d with defaults).",
+  "AI review: OpenAI when configured, else heuristic suggestion; teacher still finalizes when AllowTeacherReview.",
 ];
 
 const apiMap = [
-  ["GET /api/quizzes", "Role-scoped list (Student assigned; Parent linked∪own; Teacher campus; Admin list)."],
-  ["POST /api/quizzes", "Create Not Assigned + Pending (Teacher/Parent)."],
+  ["GET /api/quizzes", "Role-scoped list (Student assigned ∪ Public catalog; Parent linked∪own; Teacher campus; Admin list). Student list prefers stored QuizResultStatusName."],
+  ["POST /api/quizzes", "Create Not Assigned + Pending (Teacher/Parent). Type defaults applied for nullables; explicit bools preserved."],
   ["PUT /api/quizzes/{id}", "Update metadata while editable."],
   ["DELETE /api/quizzes/{id}", "Soft-delete Not Assigned with no assignments."],
   ["GET /api/quizzes/{id}/manage", "Owner manage view with questions."],
   ["POST /api/quizzes/{id}/publish", "Teacher → Published+Pending; Parent → Published+Approved."],
-  ["POST /api/quizzes/{id}/approve|reject", "SchoolAdmin/PortalAdmin approval gate."],
-  ["POST /api/quizzes/{id}/assign", "Create assignments; lifecycle → Assigned."],
+  ["POST /api/quizzes/{id}/approve|reject", "SchoolAdmin/PortalAdmin approval gate; reject reason persisted."],
+  ["POST /api/quizzes/{id}/assign", "Create assignments (Upcoming if StartAt>now); lifecycle → Assigned. Modes include section/school/multi/public."],
   ["POST /api/quizzes/{id}/cancel", "Remove upcoming assignments; lifecycle → Cancelled."],
   ["POST /api/quizzes/{id}/archive", "Archive Published/Assigned/Cancelled."],
   ["POST /api/quizzes/{id}/duplicate", "Deep-copy to new Not Assigned + Pending."],
   ["POST .../assignments/{id}/allow-retry", "After review finalized; ExtraAttempts (+1 default)."],
-  ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove."],
-  ["POST .../attempts", "Student start/resume."],
-  ["PUT .../attempts/{id}/draft", "Student save draft answers."],
-  ["POST .../attempts/{id}/submit", "Student submit + auto-score."],
-  ["GET .../attempts/{id}/result", "Student own or Parent linked child."],
-  ["GET .../monitoring", "Owner progress board."],
+  ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove; TimeLimitMinutes recalculated from EstimatedTimeSeconds."],
+  ["POST .../attempts", "Student start/resume; instructions ack gate when Instructions set."],
+  ["PUT .../attempts/{id}/draft", "Student save draft answers (+ mark-for-review / per-question time)."],
+  ["POST .../attempts/{id}/submit", "Student submit + auto-score; IsAutoSubmit → AutoSubmitted; shared review display mask."],
+  ["POST .../attempts/{id}/sync", "Offline queue replay (ClientSyncId idempotency)."],
+  ["GET .../attempts/{id}/result", "Student own or Parent linked child; same mask rule as submit."],
+  ["GET .../monitoring", "Owner progress board (incl. integrity signals where available)."],
   ["GET/PUT .../review|answers + finalize-review", "Subjective marking and release."],
   ["GET /api/quizzes/pending-approval", "SchoolAdmin/PortalAdmin queue."],
+  ["GET /api/notifications*", "In-app quiz notifications (bell); not admin-only."],
   ["GET /api/reports/*", "Summary, performance, rankings, student quiz history."],
 ];
 
@@ -440,14 +447,14 @@ const scenarios = [
   [
     "QZ-09",
     "Auto-score objective + mask subjective",
-    "Quiz IsReviewRequired with Fill(AllowTeacherReview) answers; student submits.",
-    "Objective items scored; obtained/percentage masked as Pending Review until finalize.",
+    "Quiz IsReviewRequired with Fill(AllowTeacherReview) answers; student submits then reloads result.",
+    "Objective items scored; submit and get-result both use QuizReviewDisplay.Resolve — same mask / Pending Review until finalize.",
   ],
   [
     "QZ-10",
     "Finalize review releases results",
     "Teacher marks all RequiresReview items and finalizes.",
-    "Attempt→Reviewed; IsReviewDone=true; student/parent see real scores.",
+    "Attempt→Reviewed; IsReviewDone=true; student/parent see real scores per ReviewDisplayMode.",
   ],
   [
     "QZ-11",
@@ -482,8 +489,8 @@ const scenarios = [
   [
     "QZ-16",
     "Student only sees permitted audience",
-    "Student A is assigned a quiz; Student B in same class is not assigned.",
-    "Student A sees the quiz. Student B does not. Section/School/Public audiences remain planned and must not leak visibility without an explicit assign or permitted-audience rule.",
+    "Student A is assigned (or Public catalog); Student B is neither assigned nor Public-eligible.",
+    "Student A sees the quiz. Student B does not. School/section/multi assign must not open catalog (AudienceScope stays Assigned).",
   ],
   [
     "QZ-17",
@@ -495,13 +502,25 @@ const scenarios = [
     "QZ-18",
     "Time limit countdown and auto-submit",
     "Student starts a quiz with TimeLimitMinutes set; waits until remaining time hits zero.",
-    "Countdown is shown; UI auto-submits. Status becomes Submitted (not AutoSubmitted). Server does not independently enforce the minute budget — only the assignment EndDateTime window is hard-checked.",
+    "Countdown is shown; client auto-submits with IsAutoSubmit → AutoSubmitted (83). Server enforces minute budget with grace.",
   ],
   [
     "QZ-19",
     "No time limit still respects availability window",
     "Student starts a quiz with TimeLimitMinutes null after EndDateTime has passed.",
-    "No countdown UI, but start/submit is still rejected because the assignment window expired.",
+    "No countdown UI, but start/submit is still rejected; overdue InProgress attempts transition to Expired (84).",
+  ],
+  [
+    "QZ-20",
+    "Upcoming assign then promote",
+    "Teacher assigns with StartAt in the future; later StartAt arrives with no attempt.",
+    "Assignment QuizResultStatus starts as Up Coming (25); ExpireOverdueUnattemptedAsync promotes to Not Attempted (24) when the window opens.",
+  ],
+  [
+    "QZ-21",
+    "Create defaults preserve bools",
+    "Client creates a Practice quiz with ShuffleQuestions=false while type default is also false/true variants.",
+    "ApplyCreateDefaults never OR’s bools with type defaults — explicit client bools win; only nullables (time/attempts/nav/review display) fall back.",
   ],
 ];
 
@@ -509,54 +528,41 @@ const checklist = [
   "Teacher create starts Not Assigned + Pending; Parent create forces ParentPrivate.",
   "Teacher publish needs ≥1 question and leaves Approval=Pending; Parent publish auto-Approves.",
   "Teacher assign requires Approval=Approved; Parent assign does not need school approval.",
-  "Student sees only assigned quizzes (or later permitted audience); ParentPrivate never targets school/public.",
-  "Supported audiences now: one student, selected, group, class (allInGrade), parent’s child / all linked. Section, school, multi-school, public are planned.",
+  "Student sees assigned quizzes and Public catalog only; school/section/multi never set AudienceScope=Public.",
+  "Supported audiences: one, selected, group, class (allInGrade), section, school, multi-school, public (PortalAdmin), parent child / allLinked.",
   "QuizAssignment is one row per student with AssignedById, optional StudentGroupId, window, AllowedAttempts, QuizResultStatus, IsReviewDone.",
-  "QuizResultStatus is per student (Up Coming / Not Attempted / In Progress / Under Review / Expired / Completed) — not a quiz-wide aggregate.",
+  "QuizResultStatus is per student (Up Coming / Not Attempted / In Progress / Under Review / Expired / Completed) — student list prefers DB name over calculator.",
+  "Assign with StartAt > now writes Up Coming; overdue job promotes Upcoming → Not Attempted and expires past-window rows / InProgress attempts.",
   "Editable only Not Assigned/Published, not Archived, and no started assignment.",
   "Bank attach requires Public + Active + Approved + ApprovedBy + class/subject match.",
   "Inline questions are Approved+Campus+Active and usable on that quiz only for bank eligibility rules.",
   "Descriptive type blocked for authoring.",
-  "Student attempts require assignment, active quiz, window, DeviceId, and attempt quota.",
-  "InProgress resumes; time limit is client-enforced only.",
-  "Time management: optional TimeLimitMinutes, assignment window, UI countdown + low-time warn (≤60s); AutoSubmitted not written; no per-question timer; quiz time not derived from EstimatedTimeSeconds.",
-  "On attempt start, QuizAttemptQuestion rows snapshot the presented question set/order; answers store per attempt (MCQ options separately).",
+  "Student attempts require assignment (or Public window), active quiz, window, DeviceId, attempt quota, and instructions ack when set.",
+  "InProgress resumes; TimeLimitMinutes enforced client + server; AutoSubmitted on IsAutoSubmit.",
+  "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time UI warn ≤60s.",
+  "On attempt start, QuizAttemptQuestion freezes text/marks/options/order; answers store per attempt.",
   "Scoring: single/TF one correct; multi exact set; Fill accepted-answer rules.",
-  "IsReviewRequired + subjective → masked until finalize-review.",
+  "ReviewDisplayMode + shared mask on submit and get-result until finalize when required.",
+  "ApplyCreateDefaults: nullable fallbacks only; bools never OR’d.",
   "Allow-retry only after IsReviewDone; adds ExtraAttempts.",
   "Cancel removes only future assignments.",
   "Archive sets Archived + Inactive; Not Assigned must be deleted.",
   "Duplicate creates Not Assigned + Pending copy with questions.",
   "CampusAdmin has no quiz manage/approve API capability.",
   "Fill answers hidden from students before submission (attempt payload).",
+  "Quiz notifications (submit/auto-submit/etc.) via in-app bell.",
+  "Offline sync via ClientSyncId + POST .../sync (web + mobile).",
   "Reports available to Teacher (own), SchoolAdmin (school), PortalAdmin (all).",
 ];
 
 const knownGaps = [
-  "Attempt Started / AutoSubmitted / Expired and result Expired / Under Review / In Progress are present but not automatically transitioned by current services.",
-  "UI question add/edit/remove shown only while Not Assigned; API still allows Published until assignment starts.",
-  "Assign modes one and allLinked exist in API but not in the Assign dialog UI.",
-  "Audience Section / School / Multiple schools / Public platform are documented as planned; only one, selected, group, class (allInGrade), and parent-child targets exist today.",
-  "ShuffleQuestions / ShuffleOptions / IsReviewRequired: DB defaults true; create form defaults false / false / false.",
-  "Time limit enforced in UI only (not server-side).",
-  "Quiz TimeLimitMinutes is not recalculated from question EstimatedTimeSeconds when questions are added/removed.",
-  "No per-question timer at attempt time (EstimatedTimeSeconds is metadata only).",
-  "Auto-submit writes Submitted (82), not AutoSubmitted (83); no explicit draft flush immediately before auto-submit.",
+  "UI question add/edit/remove may still be restricted more tightly in manage UI than API (Published until assignment starts).",
+  "Some assign modes may be uneven across Assign dialog role tabs (prefer API coverage as source of truth).",
   "Low-time warning is UI styling at ≤60s only (no dedicated modal/audio).",
-  "Reject reason returned in API response but not persisted on the quiz.",
-  "AI review is a stub comment only.",
+  "Descriptive (104) authoring remains blocked; file / Matching / Ordering media types are Not Now.",
   "CampusAdmin can open quiz-approvals UI; approve/reject APIs deny CampusAdmin.",
-  "Teacher list API returns campus-active quizzes; \"mine only\" is a client-side filter.",
-  "Assignment QuizResultStatus is set at create and not progressed to Completed/Reviewed in submit services.",
-  "QuizAttemptQuestion does not yet store Marks; scoring still uses live QuizQuestion.Marks — mark edits can affect historical attempts.",
-  "Attempt snapshot stores QuestionId + DisplayOrder only; bank question text/option edits can still affect historical review display.",
-  "IsOfflineAttempt exists on QuizAttempt but offline sync is not fully implemented.",
-  "Navigation modes (Free / Sequential / Locked) and mark-question-for-review are planned attempt UX, not implemented.",
-  "Autosave triggers (on change / interval / app background) are UX intent; only explicit draft-save calls exist today.",
-  "Configurable post-submit review display modes (correct answers / explanations / feedback / nothing until publication) are not implemented.",
-  "Per-question ShuffleOptions unused at attempt time (quiz-level only).",
-  "No quiz-related notifications.",
-  "Approve endpoint relies on service-layer role checks (reject has controller Roles attribute).",
+  "Teacher list API returns campus-active quizzes; \"mine only\" may still be a client-side filter.",
+  "Approve endpoint role attributes vs service-layer checks should stay aligned with reject.",
 ];
 
 function escapeHtml(value) {
@@ -629,7 +635,7 @@ const html = `<!doctype html>
 
   <div class="ok"><strong>Canonical model:</strong> Quizzes are owned by <strong>Teacher</strong> or <strong>Parent</strong>. Teachers create school quizzes (Practice / Assessment / Competition / Surprise) that publish into a pending-approval queue; only after <strong>SchoolAdmin</strong> or <strong>PortalAdmin</strong> approve can they be assigned. Parents create <strong>ParentPrivate</strong> quizzes that auto-approve on publish and assign to linked children. Students take attempts only through assignments. Subjective answers can require teacher/parent review before scores are released.</div>
 
-  <div class="note"><strong>Clean two-dimension model:</strong> a quiz has exactly two stored statuses — <strong>Lifecycle</strong> (what state the quiz definition is in: Not Assigned → Published → Assigned → Cancelled / Archived) and <strong>Approval</strong> (the school gate: Pending → Approved / Rejected). Per-student progress is never stored on the quiz row; it lives on attempts (InProgress 81 / Submitted 82 / Reviewed 85) and computed list statuses. The initializer renames approval 40 'Draft' → 'Pending', seeds ParentPrivate (5), Rejected (45), Cancelled (65), Archived (66), and deactivates the overlapping legacy rows (41, 42, 43, 63, 64).</div>
+  <div class="note"><strong>Clean two-dimension model:</strong> a quiz has exactly two stored statuses — <strong>Lifecycle</strong> (what state the quiz definition is in: Not Assigned → Published → Assigned → Cancelled / Archived) and <strong>Approval</strong> (the school gate: Pending → Approved / Rejected). Per-student progress is never stored on the quiz row; it lives on attempts (InProgress 81 / Submitted 82 / AutoSubmitted 83 / Expired 84 / Reviewed 85) and assignment QuizResultStatus (20–25). The initializer renames approval 40 'Draft' → 'Pending', seeds ParentPrivate (5), Rejected (45), Cancelled (65), Archived (66), and deactivates the overlapping legacy rows (41, 42, 43, 63, 64).</div>
   <div class="note"><strong>Terminology:</strong> code and UI may still say “draft quiz” as a shorthand for the editable lifecycle state. The stored lookup name is <strong>Not Assigned (60)</strong>. Approval never uses the word Draft — the pending gate is <strong>Pending (40)</strong>.</div>
 
   <h2>1. Lifecycle statuses</h2>
@@ -697,7 +703,7 @@ const html = `<!doctype html>
   ${htmlTable(["Status", "Meaning"], assignmentResultMeanings)}
   <h3>Assignment corrections vs older drafts</h3>
   ${htmlTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts)}
-  <div class="note"><strong>Progression gap:</strong> the lookup values exist, but current services often leave QuizResultStatus at the create-time value and let student list/monitor UIs <em>compute</em> status from dates + attempts. Auto-progressing Expired / In Progress / Under Review / Completed on the assignment row is still optional work.</div>
+  <div class="note"><strong>Status progression:</strong> assign writes Up Coming (25) when StartAt &gt; now, else Not Attempted (24). Start → In Progress (23). Submit → Under Review (22) or Completed (21). ExpireOverdueUnattemptedAsync promotes Upcoming → Not Attempted, expires past-window unattempted rows, and marks overdue InProgress attempts Expired (84). Student list prefers the stored QuizResultStatusName over a client calculator.</div>
 
   <h2>9. Student attempt flow</h2>
   <h3>Step-by-step student journey</h3>
@@ -725,7 +731,7 @@ const html = `<!doctype html>
   ${htmlTable(["Behavior", "Status", "Detail"], timeManagementAppBehaviors)}
   <h3>Known time-management gaps</h3>
   ${htmlList(timeManagementGaps)}
-  <div class="note"><strong>Hard vs soft clock:</strong> the assignment availability window (<code>StartDateTime</code>–<code>EndDateTime</code>) is server-enforced. The quiz minute budget (<code>TimeLimitMinutes</code>) is currently a soft client countdown only — a modified client can keep answering until the window closes.</div>
+  <div class="note"><strong>Hard clocks:</strong> assignment availability (<code>StartDateTime</code>–<code>EndDateTime</code>) and quiz minute budget (<code>TimeLimitMinutes</code>) are both server-enforced on submit (auto-submit gets a short grace). Per-question <code>EstimatedTimeSeconds</code> caps late answers.</div>
 
   <h2>11. Review and results release</h2>
   ${htmlList(reviewRules)}
@@ -734,8 +740,8 @@ const html = `<!doctype html>
   ${htmlList([
     "Parent list = assignments of linked children ∪ quizzes they created.",
     "Parent may review/finalize only their own quizzes; may view linked-child results and quiz history.",
-    "Student sees only quizzes with an assignment row; detail requires assignment. Future public/school audiences may broaden this — see §8 Quiz Audience.",
-    "Results masked while review required and not done.",
+    "Student sees assigned quizzes plus Public catalog (AudienceScope=Public only). School/section/multi assign stay Assigned — see §8.",
+    "Results masked via shared QuizReviewDisplay.Resolve on submit and get-result while review is pending.",
     "Rankings / performance / summary: Teacher (own), SchoolAdmin (school), PortalAdmin (all) — not students/parents.",
   ])}
 
@@ -743,13 +749,13 @@ const html = `<!doctype html>
   ${htmlList([
     "Title required; DB max 100. Duplicate truncates to 92 + \" (Copy)\".",
     "Description DB max 500 (not required empty-check in app).",
-    "Instructions required; DB max 1000.",
+    "Instructions required; DB max 1000. Non-empty instructions require InstructionsAcknowledged on start.",
     "Class / Subject / Topic / Difficulty required on create (UI); difficulty Easy/Medium/Hard (2001–2003).",
-    "TimeLimitMinutes optional; no server min/max; client countdown only. Not auto-derived from question EstimatedTimeSeconds.",
+    "TimeLimitMinutes optional; recalculated from Σ EstimatedTimeSeconds on question changes; server-enforced on submit.",
     "Quiz AllowedAttempts optional on metadata; assignment AllowedAttempts must be > 0.",
     "Question marks > 0; publish/assign/duplicate need ≥1 question; no hard max count.",
     "Submitted text DB max 1000.",
-    "Domain defaults: ShuffleQuestions/Options=true, IsReviewRequired=true. Create form: shuffle false, review required false, time 30, attempts 1.",
+    "ApplyCreateDefaults: nullables fall back to type defaults; ShuffleQuestions / ShuffleOptions / IsReviewRequired from client are never OR’d with defaults.",
   ])}
 
   <h2>14. API transition map</h2>
@@ -943,7 +949,7 @@ const docChildren = [
   docHeading("Assignment corrections vs older drafts", HeadingLevel.HEADING_2),
   docTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts),
   docParagraph(
-    "Progression gap: lookup values exist, but services often leave QuizResultStatus at create-time and UIs compute status from dates + attempts.",
+    "Status progression: assign writes Up Coming when StartAt > now else Not Attempted; start → In Progress; submit → Under Review or Completed; ExpireOverdue promotes Upcoming and expires past-window / overdue InProgress. Student list prefers stored QuizResultStatusName.",
     { run: { bold: true, color: "92400E" } },
   ),
 
@@ -982,7 +988,7 @@ const docChildren = [
   docHeading("Known time-management gaps", HeadingLevel.HEADING_2),
   ...timeManagementGaps.map(docBullet),
   docParagraph(
-    "Hard vs soft clock: assignment StartDateTime–EndDateTime is server-enforced. TimeLimitMinutes is a soft client countdown only.",
+    "Hard clocks: assignment StartDateTime–EndDateTime and TimeLimitMinutes are server-enforced on submit (auto-submit grace). Per-question EstimatedTimeSeconds caps late answers.",
     { run: { bold: true, color: "92400E" } },
   ),
 
@@ -992,16 +998,17 @@ const docChildren = [
   docHeading("12. Parent and student visibility"),
   ...[
     "Parent list = linked-child assignments ∪ own quizzes.",
-    "Student sees only assigned quizzes (v1). See §8 for future audiences.",
-    "Results masked while review pending.",
+    "Student sees assigned quizzes plus Public catalog only (school/section/multi stay Assigned).",
+    "Results masked via shared QuizReviewDisplay.Resolve on submit and get-result.",
     "Reports: Teacher own / SchoolAdmin school / PortalAdmin all.",
   ].map(docBullet),
 
   docHeading("13. Validation and limits"),
   ...[
-    "Title required (max 100); instructions required (max 1000).",
+    "Title required (max 100); instructions required (max 1000); non-empty instructions require ack on start.",
     "Difficulty Easy/Medium/Hard (2001–2003).",
-    "TimeLimitMinutes optional; client countdown only; not auto-derived from EstimatedTimeSeconds.",
+    "TimeLimitMinutes optional; derived from Σ EstimatedTimeSeconds on question changes; server-enforced.",
+    "ApplyCreateDefaults preserves explicit bools; nullables fall back to type defaults.",
     "Publish/assign/duplicate need ≥1 question.",
   ].map(docBullet),
 

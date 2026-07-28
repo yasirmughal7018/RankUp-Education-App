@@ -32,6 +32,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 question.QuestionTypeId,
                 quizQuestion.Marks,
                 quizQuestion.DisplayOrder,
+                quizQuestion.ShuffleOptions,
                 question.Hint,
                 question.Explanation,
                 question.EstimatedTimeSeconds
@@ -87,7 +88,8 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.MaximumLength,
                     answer.AllowAiReview,
                     answer.AllowTeacherReview))
-                .ToArray())).ToArray();
+                .ToArray(),
+            row.ShuffleOptions)).ToArray();
     }
 
     public async Task AddQuizQuestionAsync(QuizQuestion quizQuestion, CancellationToken cancellationToken)
@@ -110,13 +112,16 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
 
     public async Task RecalculateQuizTotalsAsync(long quizId, CancellationToken cancellationToken)
     {
-        var totals = await _dbContext.QuizQuestions.AsNoTracking()
-            .Where(link => link.QuizId == quizId)
-            .GroupBy(link => link.QuizId)
-            .Select(group => new
+        var totals = await (
+            from link in _dbContext.QuizQuestions.AsNoTracking()
+            join question in _dbContext.Questions.AsNoTracking() on link.QuestionId equals question.Id
+            where link.QuizId == quizId
+            group new { link.Marks, question.EstimatedTimeSeconds } by link.QuizId into grouped
+            select new
             {
-                Count = (short)group.Count(),
-                Marks = (short)group.Sum(item => item.Marks)
+                Count = (short)grouped.Count(),
+                Marks = (short)grouped.Sum(item => item.Marks),
+                EstimatedSeconds = grouped.Sum(item => (int)item.EstimatedTimeSeconds)
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -126,7 +131,19 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             return;
         }
 
-        quiz.SetQuestionTotals(totals?.Count ?? 0, totals?.Marks ?? 0);
+        short? timeLimitMinutes = null;
+        if (totals is not null && totals.EstimatedSeconds > 0)
+        {
+            timeLimitMinutes = (short)Math.Clamp(
+                (int)Math.Ceiling(totals.EstimatedSeconds / 60d),
+                1,
+                short.MaxValue);
+        }
+
+        quiz.SetQuestionTotals(
+            totals?.Count ?? 0,
+            totals?.Marks ?? 0,
+            timeLimitMinutes);
     }
 
     public async Task<IReadOnlyList<QuizQuestionCopyItem>> GetQuizQuestionsForCopyAsync(
@@ -151,7 +168,8 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 quizQuestion.Marks,
                 question.Hint,
                 question.Explanation,
-                quizQuestion.DisplayOrder
+                quizQuestion.DisplayOrder,
+                quizQuestion.ShuffleOptions
             }).ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -201,6 +219,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.MaximumLength,
                     answer.AllowAiReview,
                     answer.AllowTeacherReview))
-                .ToArray())).ToArray();
+                .ToArray(),
+            row.ShuffleOptions)).ToArray();
     }
 }

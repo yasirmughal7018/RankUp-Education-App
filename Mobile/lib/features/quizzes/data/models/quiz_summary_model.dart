@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
+import 'package:rankup_education/features/quizzes/domain/quiz_navigation.dart';
 
 /// JSON model for [QuizSummary].
 class QuizSummaryModel extends QuizSummary {
@@ -68,10 +69,8 @@ class QuizSummaryModel extends QuizSummary {
       dueAt: _readDate(json, ['dueAt', 'endAt', 'deadline']),
       completedAt: _readDate(json, ['completedAt', 'submittedAt']),
       instructions: _readStringList(json, ['instructions']),
-      navigationMode: _readString(
-        json,
-        ['navigationMode'],
-        fallback: 'Free Navigation',
+      navigationMode: normalizeQuizNavigationMode(
+        _readString(json, ['navigationMode'], fallback: quizNavigationFree),
       ),
       answersCanBeChanged:
           _readBool(json, ['answersCanBeChanged'], defaultValue: true),

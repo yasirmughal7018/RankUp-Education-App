@@ -19,7 +19,9 @@ public sealed record QuizQuestionForAttemptResponse(
     short TimeSpentSeconds = 0);
 
 /// <summary>Device id required to bind an attempt to a client.</summary>
-public sealed record StartQuizAttemptRequest(string DeviceId);
+public sealed record StartQuizAttemptRequest(
+    string DeviceId,
+    bool InstructionsAcknowledged = false);
 
 /// <summary>Attempt session with ordered questions and any saved draft answers.</summary>
 public sealed record StartQuizAttemptResponse(
@@ -51,13 +53,17 @@ public sealed record SaveQuizAttemptAnswersRequest(
     short? TimeSpentSeconds = null,
     short? FocusLossDelta = null,
     short? ClipboardPasteDelta = null,
-    string? DeviceId = null);
+    string? DeviceId = null,
+    bool IsOfflineSync = false,
+    string? ClientSyncId = null);
 
 public sealed record SaveQuizAttemptAnswersResponse(
     long AttemptId,
     int SavedCount,
     short FocusLossCount = 0,
-    short ClipboardPasteCount = 0);
+    short ClipboardPasteCount = 0,
+    bool IsOfflineAttempt = false,
+    string? ClientSyncId = null);
 
 /// <summary>One answer on submit or draft save; supports multi-select via <see cref="SelectedOptionIds"/>.</summary>
 public sealed record SubmitQuizAnswerRequest(
@@ -73,9 +79,34 @@ public sealed record SubmitQuizAttemptRequest(
     IReadOnlyList<SubmitQuizAnswerRequest> Answers,
     short TimeSpentSeconds,
     bool IsAutoSubmit = false,
-    string? DeviceId = null);
+    string? DeviceId = null,
+    bool IsOfflineSync = false,
+    string? ClientSyncId = null);
 
-/// <summary>Scored attempt result; may mask marks while subjective review is pending.</summary>
+/// <summary>
+/// Replays a queued offline draft or final submit after reconnect.
+/// <see cref="ClientSyncId"/> is idempotent — retries return the prior outcome.
+/// </summary>
+public sealed record SyncOfflineQuizAttemptRequest(
+    string ClientSyncId,
+    IReadOnlyList<SubmitQuizAnswerRequest> Answers,
+    short TimeSpentSeconds,
+    string DeviceId,
+    bool Submit = false,
+    bool IsAutoSubmit = false,
+    short? FocusLossDelta = null,
+    short? ClipboardPasteDelta = null);
+
+public sealed record SyncOfflineQuizAttemptResponse(
+    long AttemptId,
+    bool AlreadySynced,
+    bool Submitted,
+    bool IsOfflineAttempt,
+    string ClientSyncId,
+    SaveQuizAttemptAnswersResponse? Draft = null,
+    QuizAttemptResultResponse? Result = null);
+
+/// <summary>Scored attempt result; may mask marks while subjective review is pending or review is withheld.</summary>
 public sealed record QuizAttemptResultResponse(
     long AttemptId,
     long QuizId,
@@ -87,7 +118,9 @@ public sealed record QuizAttemptResultResponse(
     short TimeSpentSeconds,
     string ResultStatus,
     bool ReviewAvailable,
-    IReadOnlyList<QuizResultQuestionResponse> Questions);
+    IReadOnlyList<QuizResultQuestionResponse> Questions,
+    bool ReviewPending = false,
+    string ReviewDisplayMode = "ScoreOnly");
 
 /// <summary>Per-question breakdown on result view (includes correct answers when review allows).</summary>
 public sealed record QuizResultQuestionResponse(

@@ -9,6 +9,7 @@ import 'package:rankup_education/features/authentication/presentation/providers/
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
+import 'package:rankup_education/features/quizzes/domain/quiz_navigation.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 import 'package:rankup_education/features/quizzes/presentation/pages/teacher_quiz_views.dart';
@@ -24,7 +25,8 @@ class QuizzesPage extends ConsumerStatefulWidget {
   ConsumerState<QuizzesPage> createState() => _QuizzesPageState();
 }
 
-class _QuizzesPageState extends ConsumerState<QuizzesPage> {
+class _QuizzesPageState extends ConsumerState<QuizzesPage>
+    with WidgetsBindingObserver {
   final _searchController = TextEditingController();
   final Set<int> _answeredQuestions = {};
   final Set<int> _markedQuestions = {};
@@ -44,22 +46,54 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
   int _questionIndex = 0;
   String _saveStatus = 'All answers saved';
   Duration? _remainingTime;
+  int _focusLossCount = 0;
+  int _clipboardPasteCount = 0;
+  int _focusLossDelta = 0;
+  int _clipboardPasteDelta = 0;
+
+  static const _deviceId = 'rankup-mobile';
 
   bool get _isTeacher =>
       ref.watch(authControllerProvider).user?.role == UserRole.teacher;
 
+  String get _activeNavigationMode {
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    return normalizeQuizNavigationMode(
+      attempt?.navigationMode ?? _selectedQuiz?.navigationMode,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future<void>.microtask(_load);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _attemptTimer?.cancel();
     _draftSaveTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_view != _QuizView.attempt) {
+      return;
+    }
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      setState(() {
+        _focusLossDelta += 1;
+        _focusLossCount += 1;
+        _saveStatus = 'Saving…';
+      });
+      _scheduleDraftSave();
+    }
   }
 
   @override
@@ -284,7 +318,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     final attempt =
         await ref.read(quizzesControllerProvider.notifier).startAttempt(
               quizId: selectedQuiz.id,
-              deviceId: 'rankup-mobile',
+              deviceId: _deviceId,
             );
     if (!mounted) {
       return;
@@ -302,6 +336,16 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     _stopAttemptTimer();
     _cancelDraftSave();
 
+    Duration? remaining;
+    if (timeLimitMinutes != null) {
+      final elapsed = DateTime.now().difference(attempt.startedAt);
+      final budget = Duration(minutes: timeLimitMinutes);
+      remaining = budget - elapsed;
+      if (remaining.isNegative) {
+        remaining = Duration.zero;
+      }
+    }
+
     setState(() {
       _questionIndex = 0;
       _answeredQuestions.clear();
@@ -311,30 +355,41 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
       _revealedHints.clear();
       _hydrateSavedAnswers(attempt);
       _attemptStartedAt = attempt.startedAt;
+      _focusLossCount = attempt.focusLossCount;
+      _clipboardPasteCount = attempt.clipboardPasteCount;
+      _focusLossDelta = 0;
+      _clipboardPasteDelta = 0;
       _saveStatus = attempt.resumed
-          ? 'Resumed â€” previous answers restored'
+          ? 'Resumed — previous answers restored'
           : 'Attempt started';
-      _remainingTime =
-          timeLimitMinutes == null ? null : Duration(minutes: timeLimitMinutes);
+      _remainingTime = remaining;
       _view = _QuizView.attempt;
+      _selectedQuiz = selectedQuiz.copyWith(
+        navigationMode: normalizeQuizNavigationMode(attempt.navigationMode),
+      );
     });
 
-    if (timeLimitMinutes != null) {
+    if (remaining != null) {
+      if (remaining <= Duration.zero) {
+        unawaited(_submitAttempt(autoSubmitted: true));
+        return;
+      }
+
       _attemptTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        final remaining = _remainingTime;
-        if (!mounted || _view != _QuizView.attempt || remaining == null) {
+        final current = _remainingTime;
+        if (!mounted || _view != _QuizView.attempt || current == null) {
           _stopAttemptTimer();
           return;
         }
 
-        if (remaining <= const Duration(seconds: 1)) {
+        if (current <= const Duration(seconds: 1)) {
           setState(() => _remainingTime = Duration.zero);
           unawaited(_submitAttempt(autoSubmitted: true));
           return;
         }
 
         setState(() {
-          _remainingTime = remaining - const Duration(seconds: 1);
+          _remainingTime = current - const Duration(seconds: 1);
         });
       });
     }
@@ -370,6 +425,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _textAnswers[index] = text;
         _answeredQuestions.add(index);
       }
+
+      if (saved.isMarkedForReview) {
+        _markedQuestions.add(index);
+      }
     }
   }
 
@@ -396,6 +455,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
               attemptId: attempt.attemptId,
               answers: answers,
               timeSpentSeconds: timeSpentSeconds,
+              isAutoSubmit: autoSubmitted,
+              deviceId: _deviceId,
             );
     if (!mounted) {
       return;
@@ -439,6 +500,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
           ? selectedIds.toList(growable: false)
           : null,
       submittedText: textAnswer,
+      isMarkedForReview: _markedQuestions.contains(index),
     );
   }
 
@@ -463,31 +525,48 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
 
     final answers = <QuizAnswerSubmission>[
       for (var index = 0; index < attempt.questions.length; index++)
-        if (_answeredQuestions.contains(index))
+        if (_answeredQuestions.contains(index) ||
+            _markedQuestions.contains(index))
           _buildAnswerSubmission(attempt.questions[index], index),
     ];
-    if (answers.isEmpty) {
+    if (answers.isEmpty &&
+        _focusLossDelta <= 0 &&
+        _clipboardPasteDelta <= 0) {
       return;
     }
 
     final startedAt = _attemptStartedAt ?? attempt.startedAt;
     final timeSpentSeconds = DateTime.now().difference(startedAt).inSeconds;
+    final focusDelta = _focusLossDelta;
+    final pasteDelta = _clipboardPasteDelta;
+    _focusLossDelta = 0;
+    _clipboardPasteDelta = 0;
 
-    setState(() => _saveStatus = 'Savingâ€¦');
+    setState(() => _saveStatus = 'Saving…');
 
     final ok = await ref.read(quizzesControllerProvider.notifier).saveDraft(
           quizId: quiz.id,
           attemptId: attempt.attemptId,
           answers: answers,
           timeSpentSeconds: timeSpentSeconds,
+          focusLossDelta: focusDelta > 0 ? focusDelta : null,
+          clipboardPasteDelta: pasteDelta > 0 ? pasteDelta : null,
+          deviceId: _deviceId,
         );
     if (!mounted || _view != _QuizView.attempt) {
       return;
     }
 
+    if (!ok) {
+      _focusLossDelta += focusDelta;
+      _clipboardPasteDelta += pasteDelta;
+    }
+
     setState(() {
       _saveStatus = ok
-          ? 'Draft saved'
+          ? (_focusLossCount > 0 || _clipboardPasteCount > 0
+              ? 'Draft saved · Focus $_focusLossCount · Paste $_clipboardPasteCount'
+              : 'Draft saved')
           : (ref.read(quizzesControllerProvider).actionError ??
               'Draft save failed');
     });
@@ -529,12 +608,18 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _answeredQuestions.add(_questionIndex);
       }
 
-      _saveStatus = 'Savingâ€¦';
+      _saveStatus = 'Saving…';
     });
     _scheduleDraftSave();
   }
 
   void _answerTextQuestion(String answer) {
+    final previous = _textAnswers[_questionIndex] ?? '';
+    final grewBy = answer.length - previous.length;
+    if (grewBy > 8) {
+      _recordClipboardPaste();
+    }
+
     setState(() {
       if (answer.trim().isEmpty) {
         _textAnswers.remove(_questionIndex);
@@ -543,14 +628,14 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
         _textAnswers[_questionIndex] = answer;
         _answeredQuestions.add(_questionIndex);
       }
-      _saveStatus = 'Savingâ€¦';
+      _saveStatus = 'Saving…';
     });
     _scheduleDraftSave();
   }
 
   void _previousQuestion() {
     if (_questionIndex == 0 ||
-        _selectedQuiz?.navigationMode == 'Locked Navigation') {
+        _activeNavigationMode == quizNavigationLocked) {
       return;
     }
     setState(() {
@@ -565,19 +650,31 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage> {
     if (quiz == null || _questionIndex >= maxIndex) {
       return;
     }
+    if (_activeNavigationMode == quizNavigationLocked &&
+        !_answeredQuestions.contains(_questionIndex)) {
+      return;
+    }
     setState(() {
       _questionIndex += 1;
     });
   }
 
   void _jumpToQuestion(int index) {
-    final quiz = _selectedQuiz;
-    if (quiz == null || quiz.navigationMode != 'Free Navigation') {
+    if (_activeNavigationMode != quizNavigationFree) {
       return;
     }
     setState(() {
       _questionIndex = index;
     });
+  }
+
+  void _recordClipboardPaste() {
+    setState(() {
+      _clipboardPasteDelta += 1;
+      _clipboardPasteCount += 1;
+      _saveStatus = 'Saving…';
+    });
+    _scheduleDraftSave();
   }
 
   void _toggleMarkForReview() {
@@ -1335,8 +1432,8 @@ class _QuizDetailsView extends StatelessWidget {
           children: [
             _RuleTile(
               icon: Icons.route_outlined,
-              title: quiz.navigationMode,
-              message: _navigationMessage(quiz.navigationMode),
+              title: quizNavigationDisplayLabel(quiz.navigationMode),
+              message: quizNavigationMessage(quiz.navigationMode),
             ),
             _RuleTile(
               icon: Icons.edit_note_outlined,
@@ -1585,7 +1682,9 @@ class _QuizAttemptView extends StatelessWidget {
           currentIndex: questionIndex,
           answeredQuestions: answeredQuestions,
           markedQuestions: markedQuestions,
-          navigationLocked: quiz.navigationMode != 'Free Navigation',
+          navigationLocked:
+              normalizeQuizNavigationMode(quiz.navigationMode) !=
+                  quizNavigationFree,
           onJumpToQuestion: onJumpToQuestion,
         ),
         const SizedBox(height: 12),
@@ -1593,7 +1692,10 @@ class _QuizAttemptView extends StatelessWidget {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: onPrevious,
+                onPressed: normalizeQuizNavigationMode(quiz.navigationMode) ==
+                        quizNavigationLocked
+                    ? null
+                    : onPrevious,
                 icon: const Icon(Icons.chevron_left),
                 label: const Text('Previous'),
               ),
@@ -1613,8 +1715,13 @@ class _QuizAttemptView extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: FilledButton.icon(
-                onPressed:
-                    questionIndex == questions.length - 1 ? onSubmit : onNext,
+                onPressed: questionIndex == questions.length - 1
+                    ? onSubmit
+                    : (normalizeQuizNavigationMode(quiz.navigationMode) ==
+                                quizNavigationLocked &&
+                            !answeredQuestions.contains(questionIndex)
+                        ? null
+                        : onNext),
                 icon: Icon(
                   questionIndex == questions.length - 1
                       ? Icons.send_outlined
@@ -3181,13 +3288,4 @@ bool _matchesDateRange(DateTime date, DateTimeRange? dateRange) {
   ).add(const Duration(days: 1));
 
   return !date.isBefore(start) && date.isBefore(endExclusive);
-}
-
-String _navigationMessage(String mode) {
-  return switch (mode) {
-    'Sequential Navigation' => 'Answer questions in order before moving ahead.',
-    'Locked Navigation' =>
-      'You cannot return after moving to the next question.',
-    _ => 'Move freely between all questions.',
-  };
 }

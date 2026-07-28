@@ -47,4 +47,6 @@ public interface IQuizAttemptRepository
     Task RemoveAttemptAnswersAsync(long attemptQuestionId, CancellationToken cancellationToken);
 
     Task<bool> IsSubmittedAttemptAsync(long attemptId, CancellationToken cancellationToken);
+
+    Task<QuizAttempt?> GetAttemptByClientSyncIdAsync(string clientSyncId, CancellationToken cancellationToken);
 }

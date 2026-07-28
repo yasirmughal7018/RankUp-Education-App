@@ -25,7 +25,7 @@ class QuizSummary {
     this.dueAt,
     this.completedAt,
     this.instructions = const [],
-    this.navigationMode = 'Free Navigation',
+    this.navigationMode = 'Free',
     this.answersCanBeChanged = true,
     this.hintsAllowed = false,
     this.reviewAvailable = true,

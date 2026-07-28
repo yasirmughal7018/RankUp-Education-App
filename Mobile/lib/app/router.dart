@@ -53,7 +53,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (isAuthenticated &&
-          (location.startsWith('/admin') || location == '/notifications') &&
+          location.startsWith('/admin') &&
           !isAdminRole(user.role)) {
         return _dashboardPath(user.role);
       }

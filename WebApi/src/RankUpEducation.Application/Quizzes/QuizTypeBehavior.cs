@@ -16,46 +16,53 @@ public static class QuizTypeBehavior
         bool ShuffleOptions,
         bool IsReviewRequired,
         string NavigationMode,
-        bool ShowAnswersAfterSubmit);
+        string ReviewDisplayMode);
 
     public static TypeDefaults ResolveDefaults(string quizTypeName)
     {
         var name = quizTypeName.Trim();
         if (name.Equals("Practice", StringComparison.OrdinalIgnoreCase))
         {
-            return new TypeDefaults(3, null, false, false, false, "Free", true);
+            return new TypeDefaults(3, null, false, false, false, "Free", QuizReviewDisplay.Full);
         }
 
         if (name.Equals("Competition", StringComparison.OrdinalIgnoreCase))
         {
-            return new TypeDefaults(1, 30, true, true, false, "Locked", false);
+            return new TypeDefaults(1, 30, true, true, false, "Locked", QuizReviewDisplay.Withheld);
         }
 
         if (name.Equals("Surprise", StringComparison.OrdinalIgnoreCase))
         {
-            return new TypeDefaults(1, 15, true, true, false, "Sequential", false);
+            return new TypeDefaults(1, 15, true, true, false, "Sequential", QuizReviewDisplay.Withheld);
         }
 
         if (name.Equals("ParentPrivate", StringComparison.OrdinalIgnoreCase)
             || name.Equals("Parent Private", StringComparison.OrdinalIgnoreCase))
         {
-            return new TypeDefaults(2, 30, false, false, true, "Free", false);
+            return new TypeDefaults(2, 30, false, false, true, "Free", QuizReviewDisplay.CorrectAnswers);
         }
 
         // Assessment (default school type)
-        return new TypeDefaults(1, 45, false, true, true, "Free", false);
+        return new TypeDefaults(1, 45, false, true, true, "Free", QuizReviewDisplay.ScoreOnly);
     }
 
     /// <summary>
-    /// Applies type defaults for nullable create fields (time limit, attempts, navigation).
+    /// Applies type defaults for nullable create fields (time limit, attempts, navigation, review display).
     /// Explicit bool choices from the client are preserved — never OR'd with type defaults.
     /// </summary>
-    public static void ApplyCreateDefaults(Quiz quiz, string quizTypeName, string? requestedNavigationMode)
+    public static void ApplyCreateDefaults(
+        Quiz quiz,
+        string quizTypeName,
+        string? requestedNavigationMode,
+        string? requestedReviewDisplayMode = null)
     {
         var defaults = ResolveDefaults(quizTypeName);
         var navigation = string.IsNullOrWhiteSpace(requestedNavigationMode)
             ? defaults.NavigationMode
             : requestedNavigationMode;
+        var reviewDisplay = string.IsNullOrWhiteSpace(requestedReviewDisplayMode)
+            ? defaults.ReviewDisplayMode
+            : requestedReviewDisplayMode;
 
         quiz.UpdateDetails(
             quiz.QuizTitle,
@@ -70,7 +77,8 @@ public static class QuizTypeBehavior
             quiz.ShuffleQuestions,
             quiz.ShuffleOptions,
             quiz.IsReviewRequired,
-            navigation);
+            navigation,
+            reviewDisplay);
     }
 
     public static void EnsureAssignable(
@@ -107,15 +115,5 @@ public static class QuizTypeBehavior
                 throw new BusinessRuleException("Surprise quizzes allow at most one attempt.");
             }
         }
-    }
-
-    public static bool ShouldShowAnswersAfterSubmit(string quizTypeName, bool reviewMasked)
-    {
-        if (reviewMasked)
-        {
-            return false;
-        }
-
-        return ResolveDefaults(quizTypeName).ShowAnswersAfterSubmit;
     }
 }

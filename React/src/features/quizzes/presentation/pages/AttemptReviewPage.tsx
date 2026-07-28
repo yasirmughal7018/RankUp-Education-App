@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import type { MarkAttemptAnswerInput } from "@/features/quizzes/domain/quizMonitorTypes";
+import { formatIntegrityCounters } from "@/features/quizzes/domain/quizMonitorTypes";
 import {
   useAttemptReviewQuery,
   useFinalizeAttemptReviewMutation,
@@ -178,6 +179,26 @@ export function AttemptReviewPage() {
           {review.isReviewDone ? (
             <StatusBadge label="Finalized" tone="success" />
           ) : null}
+          {formatIntegrityCounters(
+            review.focusLossCount,
+            review.clipboardPasteCount,
+          ) ? (
+            <StatusBadge
+              label={
+                formatIntegrityCounters(
+                  review.focusLossCount,
+                  review.clipboardPasteCount,
+                )!
+              }
+              tone={
+                (review.focusLossCount ?? 0) > 2 ||
+                (review.clipboardPasteCount ?? 0) > 0
+                  ? "warning"
+                  : "default"
+              }
+            />
+          ) : null}
+        </div>
         </div>
 
         <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-2">

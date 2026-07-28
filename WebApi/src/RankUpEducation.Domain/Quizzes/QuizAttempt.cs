@@ -32,6 +32,12 @@ public sealed class QuizAttempt : BaseEntity
     public string DeviceId { get; private set; }
     public bool IsOfflineAttempt { get; private set; }
 
+    /// <summary>
+    /// Client-generated idempotency key for offline sync (unique when set).
+    /// Prevents duplicate apply when the same queued payload is retried after reconnect.
+    /// </summary>
+    public string? ClientSyncId { get; private set; }
+
     /// <summary>Count of browser focus/visibility losses during the attempt (anti-cheat signal).</summary>
     public short FocusLossCount { get; private set; }
 
@@ -78,6 +84,22 @@ public sealed class QuizAttempt : BaseEntity
         {
             ClipboardPasteCount++;
         }
+    }
+
+    /// <summary>Flags the attempt as synced from an offline client and stores the idempotency key.</summary>
+    public void MarkOfflineAttempt(string clientSyncId)
+    {
+        var syncId = clientSyncId.AsTrimmedOrNull()
+            ?? throw new BusinessRuleException("Client sync id is required for offline attempts.");
+
+        if (ClientSyncId is not null
+            && !string.Equals(ClientSyncId, syncId, StringComparison.Ordinal))
+        {
+            throw new BusinessRuleException("This attempt already has a different offline sync id.");
+        }
+
+        IsOfflineAttempt = true;
+        ClientSyncId = syncId;
     }
 
     /// <summary>Competition device lock: reject resume/submit from a different client device.</summary>

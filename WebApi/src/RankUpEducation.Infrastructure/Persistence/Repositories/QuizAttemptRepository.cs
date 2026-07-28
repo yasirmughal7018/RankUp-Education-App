@@ -301,4 +301,12 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                 attempt => attempt.Id == attemptId && submittedStatusIds.Contains(attempt.StatusId),
                 cancellationToken);
     }
+
+    public Task<QuizAttempt?> GetAttemptByClientSyncIdAsync(string clientSyncId, CancellationToken cancellationToken)
+    {
+        var normalized = clientSyncId.Trim();
+        return _dbContext.QuizAttempts.FirstOrDefaultAsync(
+            attempt => attempt.ClientSyncId == normalized,
+            cancellationToken);
+    }
 }

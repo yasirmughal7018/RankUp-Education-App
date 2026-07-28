@@ -63,6 +63,9 @@ class QuizRemoteDataSource {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     int? timeSpentSeconds,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+    String? deviceId,
   }) async {
     try {
       final response = await _dio.put<Map<String, dynamic>>(
@@ -72,6 +75,11 @@ class QuizRemoteDataSource {
             for (final answer in answers) _answerPayload(answer),
           ],
           if (timeSpentSeconds != null) 'timeSpentSeconds': timeSpentSeconds,
+          if (focusLossDelta != null && focusLossDelta > 0)
+            'focusLossDelta': focusLossDelta,
+          if (clipboardPasteDelta != null && clipboardPasteDelta > 0)
+            'clipboardPasteDelta': clipboardPasteDelta,
+          if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
         },
       );
       _ensureSuccess(response.data);
@@ -85,6 +93,8 @@ class QuizRemoteDataSource {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     required int timeSpentSeconds,
+    bool isAutoSubmit = false,
+    String? deviceId,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -94,6 +104,8 @@ class QuizRemoteDataSource {
             for (final answer in answers) _answerPayload(answer),
           ],
           'timeSpentSeconds': timeSpentSeconds,
+          'isAutoSubmit': isAutoSubmit,
+          if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
         },
       );
       return _readObject(response.data, QuizAttemptResultModel.fromJson);
@@ -144,6 +156,10 @@ class QuizRemoteDataSource {
       if (answer.submittedText != null &&
           answer.submittedText!.trim().isNotEmpty)
         'submittedText': answer.submittedText,
+      if (answer.isMarkedForReview != null)
+        'isMarkedForReview': answer.isMarkedForReview,
+      if (answer.timeSpentSeconds != null && answer.timeSpentSeconds! > 0)
+        'timeSpentSeconds': answer.timeSpentSeconds,
     };
   }
 

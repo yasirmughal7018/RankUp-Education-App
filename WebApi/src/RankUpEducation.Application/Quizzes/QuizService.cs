@@ -46,6 +46,15 @@ public interface IQuizService
         SubmitQuizAttemptRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Applies a queued offline draft or submit after reconnect (idempotent via <c>ClientSyncId</c>).
+    /// </summary>
+    Task<SyncOfflineQuizAttemptResponse> SyncOfflineAttemptAsync(
+        long quizId,
+        long attemptId,
+        SyncOfflineQuizAttemptRequest request,
+        CancellationToken cancellationToken);
+
     /// <summary>Returns attempt results; masks scores when review is required but not yet finalized.</summary>
     Task<QuizAttemptResultResponse> GetAttemptResultAsync(
         long quizId,
@@ -305,6 +314,13 @@ public sealed class QuizService : IQuizService
             throw new BusinessRuleException("You have used all allowed attempts for this quiz.");
         }
 
+        if (QuizStatusCalculator.ParseInstructions(quiz.Instructions).Count > 0
+            && !request.InstructionsAcknowledged)
+        {
+            throw new ValidationAppException(
+                ["You must acknowledge the quiz instructions before starting."]);
+        }
+
         var attemptNumber = (short)(access.ExistingAttemptCount + 1);
         var attempt = new QuizAttempt(
             quizId,
@@ -346,9 +362,12 @@ public sealed class QuizService : IQuizService
         {
             var source = orderedQuestions.First(question => question.QuestionId == attemptQuestion.QuestionId);
             var options = source.Options.ToList();
-            if (!QuizQuestionHelper.IsFillBlankType(source.QuestionTypeName)
-                && quiz.ShuffleOptions
-                && options.Count > 1)
+            // Quiz-level enables shuffling; per-question ShuffleOptions can opt a question out.
+            var shouldShuffleOptions = quiz.ShuffleOptions
+                && source.ShuffleOptions
+                && !QuizQuestionHelper.IsFillBlankType(source.QuestionTypeName)
+                && options.Count > 1;
+            if (shouldShuffleOptions)
             {
                 options = options.OrderBy(_ => Random.Shared.Next()).ToList();
             }
@@ -445,12 +464,26 @@ public sealed class QuizService : IQuizService
         var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("This quiz is not assigned to you.");
         var now = _dateTimeProvider.UtcNow;
-        await EnsureAttemptWindowAsync(access, now, attempt, cancellationToken);
+        await EnsureAttemptWindowAsync(
+            access,
+            now,
+            attempt,
+            cancellationToken,
+            allowOfflineGrace: request.IsOfflineSync);
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
         await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
-        EnsureAttemptTimeBudget(quiz.TimeLimitMinutes, attempt.StartedDate, now, graceSeconds: 30);
+        EnsureAttemptTimeBudget(
+            quiz.TimeLimitMinutes,
+            attempt.StartedDate,
+            now,
+            graceSeconds: request.IsOfflineSync ? 120 : 30);
+
+        if (request.IsOfflineSync)
+        {
+            ApplyOfflineSyncMarker(attempt, request.ClientSyncId);
+        }
 
         var answers = request.Answers ?? Array.Empty<SubmitQuizAnswerRequest>();
         var savedCount = 0;
@@ -469,13 +502,17 @@ public sealed class QuizService : IQuizService
             }
 
             if (attemptQuestion.EstimatedTimeSeconds > 0
-                && submitted.TimeSpentSeconds is short questionSpent
-                && questionSpent > attemptQuestion.EstimatedTimeSeconds + 5)
+                && IsPerQuestionTimeExceeded(
+                    attemptQuestion.EstimatedTimeSeconds,
+                    submitted.TimeSpentSeconds,
+                    attemptQuestion.TimeSpentSeconds))
             {
-                // Soft enforce: keep last valid answer time; still accept draft but clamp reported time.
+                // Hard reject: do not accept answer changes after the per-question budget.
                 attemptQuestion.UpdateTimeSpent(attemptQuestion.EstimatedTimeSeconds);
+                continue;
             }
-            else if (submitted.TimeSpentSeconds is short spent)
+
+            if (submitted.TimeSpentSeconds is short spent)
             {
                 attemptQuestion.UpdateTimeSpent(spent);
             }
@@ -523,7 +560,9 @@ public sealed class QuizService : IQuizService
             attemptId,
             savedCount,
             attempt.FocusLossCount,
-            attempt.ClipboardPasteCount);
+            attempt.ClipboardPasteCount,
+            attempt.IsOfflineAttempt,
+            attempt.ClientSyncId);
     }
 
     public async Task<QuizAttemptResultResponse> SubmitAttemptAsync(
@@ -546,17 +585,34 @@ public sealed class QuizService : IQuizService
         var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("This quiz is not assigned to you.");
         var now = _dateTimeProvider.UtcNow;
-        await EnsureAttemptWindowAsync(access, now, attempt, cancellationToken);
+        await EnsureAttemptWindowAsync(
+            access,
+            now,
+            attempt,
+            cancellationToken,
+            allowOfflineGrace: request.IsOfflineSync);
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
         await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
         // Auto-submit after client timer expiry may arrive slightly late; give a wider grace than manual submit.
+        // Offline reconnect gets additional skew room on top of auto-submit grace.
+        var graceSeconds = request.IsAutoSubmit ? 90 : 15;
+        if (request.IsOfflineSync)
+        {
+            graceSeconds = Math.Max(graceSeconds, 180);
+        }
+
         EnsureAttemptTimeBudget(
             quiz.TimeLimitMinutes,
             attempt.StartedDate,
             now,
-            graceSeconds: request.IsAutoSubmit ? 90 : 15);
+            graceSeconds);
+
+        if (request.IsOfflineSync)
+        {
+            ApplyOfflineSyncMarker(attempt, request.ClientSyncId);
+        }
 
         var submittedStatusName = request.IsAutoSubmit ? "AutoSubmitted" : SubmittedStatusName;
         var submittedStatusFallback = request.IsAutoSubmit
@@ -603,21 +659,52 @@ public sealed class QuizService : IQuizService
                 attemptId,
                 attemptQuestion.QuestionId,
                 cancellationToken);
+
+            var rejectLateAnswer = attemptQuestion.EstimatedTimeSeconds > 0
+                && IsPerQuestionTimeExceeded(
+                    attemptQuestion.EstimatedTimeSeconds,
+                    submitted.TimeSpentSeconds,
+                    attemptQuestion.TimeSpentSeconds);
+
             if (attemptQuestionEntity is not null)
             {
-                if (submitted.IsMarkedForReview is bool marked)
+                if (!rejectLateAnswer && submitted.IsMarkedForReview is bool marked)
                 {
                     attemptQuestionEntity.SetMarkedForReview(marked);
                 }
 
                 if (submitted.TimeSpentSeconds is short spent)
                 {
-                    attemptQuestionEntity.UpdateTimeSpent(spent);
+                    var capped = rejectLateAnswer
+                        ? attemptQuestion.EstimatedTimeSeconds
+                        : spent;
+                    attemptQuestionEntity.UpdateTimeSpent(capped);
+                }
+                else if (rejectLateAnswer)
+                {
+                    attemptQuestionEntity.UpdateTimeSpent(attemptQuestion.EstimatedTimeSeconds);
                 }
             }
 
+            // Late answers are ignored; score from the last in-budget draft snapshot.
+            IReadOnlyList<long> selectedOptionIds;
+            string? submittedText;
+            if (rejectLateAnswer)
+            {
+                selectedOptionIds = attemptQuestion.SelectedOptionIds.Count > 0
+                    ? attemptQuestion.SelectedOptionIds
+                    : attemptQuestion.SelectedOptionId is long optionId
+                        ? [optionId]
+                        : Array.Empty<long>();
+                submittedText = attemptQuestion.SubmittedText;
+            }
+            else
+            {
+                selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
+                submittedText = submitted.SubmittedText;
+            }
+
             var questionMarks = attemptQuestion.Marks;
-            var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
             var isCorrect = false;
             short awardedMarks = 0;
             var typeName = attemptQuestion.QuestionTypeName;
@@ -626,7 +713,7 @@ public sealed class QuizService : IQuizService
             var isDescriptive = QuizQuestionHelper.IsDescriptiveType(typeName)
                 || (!isFillBlank
                     && selectedOptionIds.Count == 0
-                    && submitted.SubmittedText.HasTrimmedText());
+                    && submittedText.HasTrimmedText());
             var acceptedAnswers = attemptQuestion.AcceptedAnswers
                 ?? Array.Empty<QuestionAcceptedAnswerScoreItem>();
 
@@ -642,15 +729,15 @@ public sealed class QuizService : IQuizService
                     questionMarks);
                 obtainedMarks += awardedMarks;
             }
-            else if (isFillBlank && submitted.SubmittedText.HasTrimmedText())
+            else if (isFillBlank && submittedText.HasTrimmedText())
             {
-                var submittedText = submitted.SubmittedText.AsTrimmedString();
-                isCorrect = acceptedAnswers.Any(answer => MatchesAcceptedAnswer(answer, submittedText))
+                var fillText = submittedText.AsTrimmedString();
+                isCorrect = acceptedAnswers.Any(answer => MatchesAcceptedAnswer(answer, fillText))
                     || attemptQuestion.Options.Any(option =>
                         option.IsCorrect
                         && string.Equals(
                             option.OptionText.AsTrimmedString(),
-                            submittedText,
+                            fillText,
                             StringComparison.OrdinalIgnoreCase));
                 awardedMarks = isCorrect ? questionMarks : (short)0;
                 obtainedMarks += awardedMarks;
@@ -665,18 +752,18 @@ public sealed class QuizService : IQuizService
                 await ReplaceAttemptAnswersAsync(
                     attemptQuestion.AttemptQuestionId,
                     selectedOptionIds,
-                    submitted.SubmittedText,
+                    submittedText,
                     awardedMarks,
                     isCorrect,
                     cancellationToken);
 
-                if (allowAiReview)
+                if (allowAiReview && !rejectLateAnswer)
                 {
                     await EnsureFillAiReviewAsync(
                         attemptId,
                         attemptQuestion.QuestionId,
                         bankQuestionText: attemptQuestion.QuestionText,
-                        submittedText: submitted.SubmittedText ?? string.Empty,
+                        submittedText: submittedText ?? string.Empty,
                         isCorrect,
                         awardedMarks,
                         questionMarks,
@@ -702,7 +789,7 @@ public sealed class QuizService : IQuizService
             await ReplaceAttemptAnswersAsync(
                 attemptQuestion.AttemptQuestionId,
                 selectedOptionIds,
-                submitted.SubmittedText,
+                submittedText,
                 awardedMarks,
                 isCorrect,
                 cancellationToken);
@@ -715,19 +802,20 @@ public sealed class QuizService : IQuizService
             (short)Math.Clamp((int)request.TimeSpentSeconds, 0, short.MaxValue));
 
         var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
-        // Hide auto-score from student until teacher finalizes when quiz requires review and subjective answers exist.
-        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false } && hasSubjectiveAnswers;
-
-        var quizTypeNameForResult = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
-        var showAnswers = QuizTypeBehavior.ShouldShowAnswersAfterSubmit(quizTypeNameForResult, maskPendingReview);
+        // Progress assignment status from scoring-loop subjective detection (pre-persist).
+        var statusVisibility = QuizReviewDisplay.Resolve(
+            quiz.ReviewDisplayMode,
+            reviewState?.IsReviewRequired ?? quiz.IsReviewRequired,
+            reviewState?.IsReviewDone ?? false,
+            hasSubjectiveAnswers);
 
         var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
         if (assignment is not null)
         {
             var resultStatusId = await _lookups.ResolveLookupIdAsync(
                 QuizLookupNames.QuizResultStatus,
-                maskPendingReview ? "Under Review" : "Completed",
-                fallback: maskPendingReview
+                statusVisibility.ReviewPending ? "Under Review" : "Completed",
+                fallback: statusVisibility.ReviewPending
                     ? QuizLookupNames.QuizResultStatusIds.UnderReview
                     : QuizLookupNames.QuizResultStatusIds.Completed,
                 cancellationToken);
@@ -755,12 +843,121 @@ public sealed class QuizService : IQuizService
         var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
+        // Same subjective detection as GetAttemptResultAsync — keeps submit/get-result mask symmetric.
+        var visibility = QuizReviewDisplay.Resolve(
+            quiz.ReviewDisplayMode,
+            reviewState?.IsReviewRequired ?? quiz.IsReviewRequired,
+            reviewState?.IsReviewDone ?? false,
+            QuizQuestionHelper.HasSubjectiveAnswersRequiringReview(result.Questions));
+
         return QuizMapping.ToAttemptResult(
             result,
             quizTitle,
-            reviewAvailable: showAnswers,
-            maskPendingReview: maskPendingReview,
-            resultStatusOverride: maskPendingReview ? "Pending Review" : null);
+            visibility,
+            resultStatusOverride: visibility.ReviewPending ? "Pending Review" : null);
+    }
+
+    public async Task<SyncOfflineQuizAttemptResponse> SyncOfflineAttemptAsync(
+        long quizId,
+        long attemptId,
+        SyncOfflineQuizAttemptRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureStudentRole();
+        var studentId = RequireStudentId();
+
+        if (!request.ClientSyncId.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Client sync id is required."]);
+        }
+
+        if (!request.DeviceId.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Device id is required."]);
+        }
+
+        var syncId = request.ClientSyncId.Trim();
+        var existingBySync = await _attempts.GetAttemptByClientSyncIdAsync(syncId, cancellationToken);
+        if (existingBySync is not null)
+        {
+            if (existingBySync.Id != attemptId || existingBySync.QuizId != quizId || existingBySync.StudentId != studentId)
+            {
+                throw new BusinessRuleException("This sync id is already used by another attempt.");
+            }
+
+            if (await _attempts.IsSubmittedAttemptAsync(attemptId, cancellationToken))
+            {
+                var priorResult = await GetAttemptResultAsync(quizId, attemptId, cancellationToken);
+                return new SyncOfflineQuizAttemptResponse(
+                    attemptId,
+                    AlreadySynced: true,
+                    Submitted: true,
+                    IsOfflineAttempt: true,
+                    ClientSyncId: syncId,
+                    Result: priorResult);
+            }
+
+            if (!request.Submit)
+            {
+                return new SyncOfflineQuizAttemptResponse(
+                    attemptId,
+                    AlreadySynced: true,
+                    Submitted: false,
+                    IsOfflineAttempt: true,
+                    ClientSyncId: syncId,
+                    Draft: new SaveQuizAttemptAnswersResponse(
+                        attemptId,
+                        0,
+                        existingBySync.FocusLossCount,
+                        existingBySync.ClipboardPasteCount,
+                        true,
+                        syncId));
+            }
+        }
+
+        if (request.Submit)
+        {
+            var result = await SubmitAttemptAsync(
+                quizId,
+                attemptId,
+                new SubmitQuizAttemptRequest(
+                    request.Answers,
+                    request.TimeSpentSeconds,
+                    request.IsAutoSubmit,
+                    request.DeviceId,
+                    IsOfflineSync: true,
+                    ClientSyncId: syncId),
+                cancellationToken);
+
+            return new SyncOfflineQuizAttemptResponse(
+                attemptId,
+                AlreadySynced: false,
+                Submitted: true,
+                IsOfflineAttempt: true,
+                ClientSyncId: syncId,
+                Result: result);
+        }
+
+        var draft = await SaveAttemptAnswersAsync(
+            quizId,
+            attemptId,
+            new SaveQuizAttemptAnswersRequest(
+                request.Answers,
+                request.TimeSpentSeconds,
+                request.FocusLossDelta,
+                request.ClipboardPasteDelta,
+                request.DeviceId,
+                IsOfflineSync: true,
+                ClientSyncId: syncId),
+            cancellationToken);
+
+        return new SyncOfflineQuizAttemptResponse(
+            attemptId,
+            AlreadySynced: false,
+            Submitted: false,
+            IsOfflineAttempt: true,
+            ClientSyncId: syncId,
+            Draft: draft);
     }
 
     public async Task<QuizAttemptResultResponse> GetAttemptResultAsync(
@@ -783,21 +980,18 @@ public sealed class QuizService : IQuizService
 
         var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
         var hasSubjectiveAnswers = QuizQuestionHelper.HasSubjectiveAnswersRequiringReview(result.Questions);
-        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false }
-            && hasSubjectiveAnswers;
-
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
-        var quizTypeName = quiz is null
-            ? string.Empty
-            : await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
-        var showAnswers = QuizTypeBehavior.ShouldShowAnswersAfterSubmit(quizTypeName, maskPendingReview);
+        var visibility = QuizReviewDisplay.Resolve(
+            quiz?.ReviewDisplayMode,
+            reviewState?.IsReviewRequired ?? quiz?.IsReviewRequired ?? false,
+            reviewState?.IsReviewDone ?? false,
+            hasSubjectiveAnswers);
 
         return QuizMapping.ToAttemptResult(
             result,
             quizTitle,
-            reviewAvailable: showAnswers,
-            maskPendingReview: maskPendingReview,
-            resultStatusOverride: maskPendingReview ? "Pending Review" : null);
+            visibility,
+            resultStatusOverride: visibility.ReviewPending ? "Pending Review" : null);
     }
 
     private async Task<StartQuizAttemptResponse> BuildAttemptPayloadAsync(
@@ -985,11 +1179,14 @@ public sealed class QuizService : IQuizService
             .ToArray();
     }
 
+    private static readonly TimeSpan OfflineSubmitGrace = TimeSpan.FromMinutes(30);
+
     private async Task EnsureAttemptWindowAsync(
         QuizAssignmentAccess access,
         DateTimeOffset now,
         QuizAttempt? inProgressAttempt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowOfflineGrace = false)
     {
         if (now < access.StartDateTime)
         {
@@ -997,6 +1194,15 @@ public sealed class QuizService : IQuizService
         }
 
         if (now <= access.EndDateTime)
+        {
+            return;
+        }
+
+        // Offline reconnect: allow a short grace when the attempt started inside the window.
+        if (allowOfflineGrace
+            && inProgressAttempt is not null
+            && inProgressAttempt.StartedDate <= access.EndDateTime
+            && now <= access.EndDateTime + OfflineSubmitGrace)
         {
             return;
         }
@@ -1023,6 +1229,16 @@ public sealed class QuizService : IQuizService
         throw new BusinessRuleException("The deadline for this quiz has passed.");
     }
 
+    private static void ApplyOfflineSyncMarker(QuizAttempt attempt, string? clientSyncId)
+    {
+        if (!clientSyncId.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Client sync id is required for offline sync."]);
+        }
+
+        attempt.MarkOfflineAttempt(clientSyncId!);
+    }
+
     /// <summary>
     /// Soft client countdown is backed by a hard server budget with a small grace for clock skew / network latency.
     /// </summary>
@@ -1042,6 +1258,28 @@ public sealed class QuizService : IQuizService
         {
             throw new BusinessRuleException("The time limit for this quiz attempt has expired.");
         }
+    }
+
+    /// <summary>
+    /// True when the per-question budget is already exhausted on the server, or the client
+    /// reports time beyond the frozen budget (no soft +5s grace for answer changes).
+    /// </summary>
+    private static bool IsPerQuestionTimeExceeded(
+        short estimatedTimeSeconds,
+        short? reportedSpentSeconds,
+        short storedSpentSeconds)
+    {
+        if (estimatedTimeSeconds <= 0)
+        {
+            return false;
+        }
+
+        if (storedSpentSeconds >= estimatedTimeSeconds)
+        {
+            return true;
+        }
+
+        return reportedSpentSeconds is short spent && spent > estimatedTimeSeconds;
     }
 
     private async Task EnsureCompetitionDeviceLockAsync(

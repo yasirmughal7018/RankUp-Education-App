@@ -85,6 +85,8 @@ export interface SaveQuizDraftInput {
   focusLossDelta?: number | null;
   clipboardPasteDelta?: number | null;
   deviceId?: string | null;
+  isOfflineSync?: boolean | null;
+  clientSyncId?: string | null;
 }
 
 export interface SaveQuizDraftResult {
@@ -92,6 +94,29 @@ export interface SaveQuizDraftResult {
   savedCount: number;
   focusLossCount?: number;
   clipboardPasteCount?: number;
+  isOfflineAttempt?: boolean;
+  clientSyncId?: string | null;
+}
+
+export interface SyncOfflineQuizAttemptInput {
+  clientSyncId: string;
+  answers: SubmitQuizAnswer[];
+  timeSpentSeconds: number;
+  deviceId?: string | null;
+  submit?: boolean;
+  isAutoSubmit?: boolean;
+  focusLossDelta?: number | null;
+  clipboardPasteDelta?: number | null;
+}
+
+export interface SyncOfflineQuizAttemptResult {
+  attemptId: number;
+  alreadySynced: boolean;
+  submitted: boolean;
+  isOfflineAttempt: boolean;
+  clientSyncId: string;
+  draft?: SaveQuizDraftResult | null;
+  result?: QuizAttemptResult | null;
 }
 
 export interface QuizResultQuestion {
@@ -117,6 +142,8 @@ export interface QuizAttemptResult {
   timeSpentSeconds: number;
   resultStatus: string;
   reviewAvailable: boolean;
+  reviewPending?: boolean;
+  reviewDisplayMode?: string;
   questions: QuizResultQuestion[];
 }
 

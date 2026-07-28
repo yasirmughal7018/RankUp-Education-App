@@ -351,7 +351,8 @@ public sealed class QuizRepository : IQuizRepository
             quiz.TopicId,
             quiz.DifficultyLevelId,
             quiz.LifecycleStatusId,
-            lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"));
+            lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"),
+            ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode);
     }
 
     public async Task AddQuizAsync(Quiz quiz, CancellationToken cancellationToken)
@@ -489,7 +490,8 @@ public sealed class QuizRepository : IQuizRepository
             quiz.TopicId,
             quiz.DifficultyLevelId,
             quiz.LifecycleStatusId,
-            lifecycleName);
+            lifecycleName,
+            ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode);
     }
 
     public async Task<bool> IsParentPrivateQuizTypeAsync(short quizTypeId, CancellationToken cancellationToken)

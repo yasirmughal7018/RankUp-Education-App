@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import {
   displayStudentName,
+  formatIntegrityCounters,
   formatMonitorStatus,
   getMonitorStatusTone,
 } from "@/features/quizzes/domain/quizMonitorTypes";
@@ -127,6 +128,9 @@ export function QuizMonitoringPage() {
                     Last submitted
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Integrity
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Review
                   </th>
                 </tr>
@@ -151,6 +155,29 @@ export function QuizMonitoringPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-700">
                       {formatDateTime(student.lastSubmittedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {(() => {
+                        const integrity = formatIntegrityCounters(
+                          student.focusLossCount,
+                          student.clipboardPasteCount,
+                        );
+                        if (!integrity) {
+                          return <span className="text-slate-400">—</span>;
+                        }
+
+                        return (
+                          <StatusBadge
+                            label={integrity}
+                            tone={
+                              (student.focusLossCount ?? 0) > 2 ||
+                              (student.clipboardPasteCount ?? 0) > 0
+                                ? "warning"
+                                : "default"
+                            }
+                          />
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       {student.isReviewDone ? (

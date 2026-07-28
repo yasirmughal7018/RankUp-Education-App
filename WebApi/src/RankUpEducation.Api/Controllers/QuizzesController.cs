@@ -127,6 +127,24 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizAttemptResultResponse>.Ok(response, "Quiz submitted successfully."));
     }
 
+    /// <summary>Replays a queued offline draft or submit after reconnect (idempotent via clientSyncId).</summary>
+    [HttpPost("{quizId:long}/attempts/{attemptId:long}/sync")]
+    public async Task<ActionResult<ApiResponse<SyncOfflineQuizAttemptResponse>>> SyncOfflineAttemptAsync(
+        long quizId,
+        long attemptId,
+        [FromBody] SyncOfflineQuizAttemptRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizService.SyncOfflineAttemptAsync(
+            quizId,
+            attemptId,
+            request,
+            cancellationToken);
+        return Ok(ApiResponse<SyncOfflineQuizAttemptResponse>.Ok(
+            response,
+            response.AlreadySynced ? "Already synced." : "Offline attempt synced."));
+    }
+
     /// <summary>Returns a previously submitted attempt with review details.</summary>
     [HttpGet("{quizId:long}/attempts/{attemptId:long}/result")]
     public async Task<ActionResult<ApiResponse<QuizAttemptResultResponse>>> GetAttemptResultAsync(

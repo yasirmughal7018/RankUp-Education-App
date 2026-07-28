@@ -21,6 +21,9 @@ abstract class QuizRepository {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     int? timeSpentSeconds,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+    String? deviceId,
   });
 
   Future<QuizAttemptResult> submitAttempt({
@@ -28,6 +31,8 @@ abstract class QuizRepository {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     required int timeSpentSeconds,
+    bool isAutoSubmit = false,
+    String? deviceId,
   });
 
   Future<QuizAttemptResult> getAttemptResult({
@@ -43,10 +48,14 @@ class QuizAnswerSubmission {
     this.selectedOptionId,
     this.selectedOptionIds,
     this.submittedText,
+    this.isMarkedForReview,
+    this.timeSpentSeconds,
   });
 
   final String questionId;
   final String? selectedOptionId;
   final List<String>? selectedOptionIds;
   final String? submittedText;
+  final bool? isMarkedForReview;
+  final int? timeSpentSeconds;
 }

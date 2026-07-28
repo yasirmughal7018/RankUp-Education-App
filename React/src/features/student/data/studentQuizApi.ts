@@ -7,6 +7,8 @@ import type {
   SaveQuizDraftResult,
   StartQuizAttempt,
   SubmitQuizAnswer,
+  SyncOfflineQuizAttemptInput,
+  SyncOfflineQuizAttemptResult,
 } from "@/features/student/domain/studentQuizTypes";
 import { STUDENT_DEVICE_ID } from "@/features/student/domain/studentQuizTypes";
 
@@ -16,10 +18,16 @@ export async function getQuizDetail(quizId: number): Promise<QuizDetail> {
 }
 
 /** Start or resume attempt (sends web device id). */
-export async function startQuizAttempt(quizId: number): Promise<StartQuizAttempt> {
+export async function startQuizAttempt(
+  quizId: number,
+  options?: { instructionsAcknowledged?: boolean },
+): Promise<StartQuizAttempt> {
   return apiRequest<StartQuizAttempt>(`/quizzes/${quizId}/attempts`, {
     method: "POST",
-    body: { deviceId: STUDENT_DEVICE_ID },
+    body: {
+      deviceId: STUDENT_DEVICE_ID,
+      instructionsAcknowledged: options?.instructionsAcknowledged ?? false,
+    },
   });
 }
 
@@ -28,17 +36,21 @@ export async function saveQuizAttemptDraft(
   quizId: number,
   attemptId: number,
   input: SaveQuizDraftInput,
+  options?: { keepalive?: boolean },
 ): Promise<SaveQuizDraftResult> {
   return apiRequest<SaveQuizDraftResult>(
     `/quizzes/${quizId}/attempts/${attemptId}/draft`,
     {
       method: "PUT",
+      keepalive: options?.keepalive === true,
       body: {
         answers: input.answers,
         timeSpentSeconds: input.timeSpentSeconds ?? null,
         focusLossDelta: input.focusLossDelta ?? null,
         clipboardPasteDelta: input.clipboardPasteDelta ?? null,
         deviceId: input.deviceId ?? STUDENT_DEVICE_ID,
+        isOfflineSync: input.isOfflineSync ?? false,
+        clientSyncId: input.clientSyncId ?? null,
       },
     },
   );
@@ -51,6 +63,7 @@ export async function submitQuizAttempt(
   answers: SubmitQuizAnswer[],
   timeSpentSeconds: number,
   isAutoSubmit = false,
+  options?: { isOfflineSync?: boolean; clientSyncId?: string | null },
 ): Promise<QuizAttemptResult> {
   return apiRequest<QuizAttemptResult>(
     `/quizzes/${quizId}/attempts/${attemptId}/submit`,
@@ -61,6 +74,32 @@ export async function submitQuizAttempt(
         timeSpentSeconds,
         isAutoSubmit,
         deviceId: STUDENT_DEVICE_ID,
+        isOfflineSync: options?.isOfflineSync ?? false,
+        clientSyncId: options?.clientSyncId ?? null,
+      },
+    },
+  );
+}
+
+/** Replay a queued offline draft or submit after reconnect. */
+export async function syncOfflineQuizAttempt(
+  quizId: number,
+  attemptId: number,
+  input: SyncOfflineQuizAttemptInput,
+): Promise<SyncOfflineQuizAttemptResult> {
+  return apiRequest<SyncOfflineQuizAttemptResult>(
+    `/quizzes/${quizId}/attempts/${attemptId}/sync`,
+    {
+      method: "POST",
+      body: {
+        clientSyncId: input.clientSyncId,
+        answers: input.answers,
+        timeSpentSeconds: input.timeSpentSeconds,
+        deviceId: input.deviceId ?? STUDENT_DEVICE_ID,
+        submit: input.submit ?? false,
+        isAutoSubmit: input.isAutoSubmit ?? false,
+        focusLossDelta: input.focusLossDelta ?? null,
+        clipboardPasteDelta: input.clipboardPasteDelta ?? null,
       },
     },
   );

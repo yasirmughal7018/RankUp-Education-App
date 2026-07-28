@@ -158,7 +158,8 @@ internal static class QuizQueryHelper
             quiz.DifficultyLevelId,
             lifecycleStatusId,
             lifecycleStatusName,
-            quizResultStatusName ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus));
+            quizResultStatusName ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus),
+            string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode);
     }
 
     public static async Task<IReadOnlyDictionary<short, string>> LoadLifecycleNamesAsync(

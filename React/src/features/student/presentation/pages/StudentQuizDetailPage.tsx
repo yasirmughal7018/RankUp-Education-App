@@ -1,4 +1,5 @@
-﻿import { useNavigate, useParams } from "react-router-dom";
+﻿import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import {
   getQuestionStatusTone,
@@ -25,13 +26,26 @@ export function StudentQuizDetailPage() {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const numericQuizId = Number(quizId);
+  const [instructionsAcknowledged, setInstructionsAcknowledged] = useState(false);
 
   const { data: quiz, isLoading, error } = useStudentQuizDetailQuery(numericQuizId);
   const startAttempt = useStartQuizAttemptMutation(numericQuizId);
 
   async function handleStartAttempt() {
+    if (!quiz) {
+      return;
+    }
+
     try {
-      const attempt = await startAttempt.mutateAsync();
+      const requiresAck =
+        !hasInProgressAttempt(quiz) && quiz.instructions.length > 0;
+      if (requiresAck && !instructionsAcknowledged) {
+        return;
+      }
+
+      const attempt = await startAttempt.mutateAsync({
+        instructionsAcknowledged: requiresAck ? instructionsAcknowledged : true,
+      });
       sessionStorage.setItem(
         `rankup-quiz-attempt-${attempt.attemptId}`,
         JSON.stringify(attempt),
@@ -113,6 +127,10 @@ export function StudentQuizDetailPage() {
   const continueQuiz = hasInProgressAttempt(quiz);
   const canStart =
     continueQuiz || attemptsRemaining === null || attemptsRemaining > 0;
+  const requiresInstructionsAck =
+    !continueQuiz && quiz.instructions.length > 0;
+  const canClickStart =
+    canStart && (!requiresInstructionsAck || instructionsAcknowledged);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -196,13 +214,29 @@ export function StudentQuizDetailPage() {
                 <li key={instruction}>{instruction}</li>
               ))}
             </ul>
+            {requiresInstructionsAck ? (
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={instructionsAcknowledged}
+                  onChange={(event) =>
+                    setInstructionsAcknowledged(event.target.checked)
+                  }
+                  className="mt-0.5"
+                />
+                <span>
+                  I have read and understand these instructions and am ready to
+                  start the quiz.
+                </span>
+              </label>
+            ) : null}
           </div>
         ) : null}
       </section>
 
       <button
         type="button"
-        disabled={startAttempt.isPending || !canStart}
+        disabled={startAttempt.isPending || !canClickStart}
         onClick={() => void handleStartAttempt()}
         className="w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
       >
@@ -214,6 +248,11 @@ export function StudentQuizDetailPage() {
             ? "Continue quiz"
             : "Start quiz"}
       </button>
+      {requiresInstructionsAck && !instructionsAcknowledged ? (
+        <p className="mt-2 text-center text-xs text-slate-500">
+          Acknowledge the instructions above to start.
+        </p>
+      ) : null}
     </div>
   );
 }

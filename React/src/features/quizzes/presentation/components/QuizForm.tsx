@@ -2,10 +2,15 @@ import { useState, type FormEvent } from "react";
 import type {
   QuizFormValues,
   QuizNavigationMode,
+  QuizReviewDisplayMode,
 } from "@/features/quizzes/domain/quizTypes";
-import { validateQuizForm } from "@/features/quizzes/domain/quizTypes";
+import {
+  resolveQuizTypeDefaults,
+  validateQuizForm,
+} from "@/features/quizzes/domain/quizTypes";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
+import { useLookups } from "@/core/hooks/useLookups";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
@@ -16,6 +21,25 @@ const NAVIGATION_MODE_OPTIONS: Array<{
   { value: "Free", label: "Free — jump to any question" },
   { value: "Sequential", label: "Sequential — previous/next only" },
   { value: "Locked", label: "Locked — next after answering" },
+];
+
+const REVIEW_DISPLAY_MODE_OPTIONS: Array<{
+  value: QuizReviewDisplayMode;
+  label: string;
+}> = [
+  {
+    value: "Full",
+    label: "Full — score, correct answers, and explanations",
+  },
+  {
+    value: "CorrectAnswers",
+    label: "Correct answers — score and correct options",
+  },
+  { value: "ScoreOnly", label: "Score only — hide answers and explanations" },
+  {
+    value: "Withheld",
+    label: "Withheld — nothing until review is published",
+  },
 ];
 
 interface QuizFormProps {
@@ -45,6 +69,9 @@ export function QuizForm({
 }: QuizFormProps) {
   const [values, setValues] = useState(initialValues);
   const [error, setError] = useState<string | null>(null);
+  const { data: quizTypes = [] } = useLookups(
+    requireQuizType ? LOOKUP_TYPES.QUIZ_TYPE : undefined,
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -173,12 +200,19 @@ export function QuizForm({
             value={values.quizTypeId || ""}
             disabled={isSubmitting}
             required
-            onChange={(quizTypeId) =>
+            onChange={(quizTypeId) => {
+              const nextTypeId = quizTypeId === "" ? 0 : quizTypeId;
+              const typeName =
+                quizTypes.find((item) => item.id === nextTypeId)?.name ?? "";
+              const typeDefaults =
+                nextTypeId > 0 ? resolveQuizTypeDefaults(typeName) : null;
+
               setValues((current) => ({
                 ...current,
-                quizTypeId: quizTypeId === "" ? 0 : quizTypeId,
-              }))
-            }
+                quizTypeId: nextTypeId,
+                ...(typeDefaults ?? {}),
+              }));
+            }}
           />
         ) : null}
 
@@ -355,6 +389,32 @@ export function QuizForm({
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="reviewDisplayMode">Review display</FieldLabel>
+          <select
+            id="reviewDisplayMode"
+            value={values.reviewDisplayMode}
+            disabled={isSubmitting}
+            onChange={(event) =>
+              setValues((current) => ({
+                ...current,
+                reviewDisplayMode: event.target.value as QuizReviewDisplayMode,
+              }))
+            }
+            className={inputClassName}
+          >
+            {REVIEW_DISPLAY_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            Controls what students see after submit. Withheld requires Review
+            required so results can be published.
+          </p>
         </div>
       </div>
 

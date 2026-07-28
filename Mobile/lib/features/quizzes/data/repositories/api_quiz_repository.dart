@@ -41,12 +41,18 @@ class ApiQuizRepository implements QuizRepository {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     int? timeSpentSeconds,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+    String? deviceId,
   }) {
     return _remoteDataSource.saveDraft(
       quizId: quizId,
       attemptId: attemptId,
       answers: answers,
       timeSpentSeconds: timeSpentSeconds,
+      focusLossDelta: focusLossDelta,
+      clipboardPasteDelta: clipboardPasteDelta,
+      deviceId: deviceId,
     );
   }
 
@@ -56,12 +62,16 @@ class ApiQuizRepository implements QuizRepository {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     required int timeSpentSeconds,
+    bool isAutoSubmit = false,
+    String? deviceId,
   }) {
     return _remoteDataSource.submitAttempt(
       quizId: quizId,
       attemptId: attemptId,
       answers: answers,
       timeSpentSeconds: timeSpentSeconds,
+      isAutoSubmit: isAutoSubmit,
+      deviceId: deviceId,
     );
   }
 

@@ -158,7 +158,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         var existingQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
         var displayOrder = (short)(existingQuestions.Count + 1);
         await _quizQuestions.AddQuizQuestionAsync(
-            new QuizQuestion(quizId, question.Id, displayOrder, request.Marks),
+            new QuizQuestion(quizId, question.Id, displayOrder, request.Marks, quiz.ShuffleOptions),
             cancellationToken);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -243,7 +243,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             includeInactive: true);
         var displayOrder = (short)(existingQuestions.Count + 1);
         await _quizQuestions.AddQuizQuestionAsync(
-            new QuizQuestion(quizId, question.Id, displayOrder, marks),
+            new QuizQuestion(quizId, question.Id, displayOrder, marks, quiz.ShuffleOptions),
             cancellationToken);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

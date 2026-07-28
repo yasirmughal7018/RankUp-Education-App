@@ -28,6 +28,7 @@ public sealed class QuizConfiguration : IEntityTypeConfiguration<Quiz>
         builder.Property(quiz => quiz.ShuffleQuestions).HasColumnName("shuffle_questions").HasDefaultValue(true);
         builder.Property(quiz => quiz.ShuffleOptions).HasColumnName("shuffle_options").HasDefaultValue(true);
         builder.Property(quiz => quiz.NavigationMode).HasColumnName("navigation_mode").HasMaxLength(20).HasDefaultValue("Free");
+        builder.Property(quiz => quiz.ReviewDisplayMode).HasColumnName("review_display_mode").HasMaxLength(20).HasDefaultValue("ScoreOnly");
         builder.Property(quiz => quiz.AudienceScope).HasColumnName("audience_scope").HasMaxLength(20).HasDefaultValue("Assigned");
         builder.Property(quiz => quiz.AudienceStartAt).HasColumnName("audience_start_at");
         builder.Property(quiz => quiz.AudienceEndAt).HasColumnName("audience_end_at");
@@ -132,12 +133,17 @@ public sealed class QuizAttemptConfiguration : IEntityTypeConfiguration<QuizAtte
         builder.Property(attempt => attempt.TimeSpentSeconds).HasColumnName("time_spent_seconds").HasDefaultValue((short)0);
         builder.Property(attempt => attempt.DeviceId).HasColumnName("device_id").HasMaxLength(100).IsRequired();
         builder.Property(attempt => attempt.IsOfflineAttempt).HasColumnName("is_offline_attempt").HasDefaultValue(false);
+        builder.Property(attempt => attempt.ClientSyncId).HasColumnName("client_sync_id").HasMaxLength(64);
         builder.Property(attempt => attempt.FocusLossCount).HasColumnName("focus_loss_count").HasDefaultValue((short)0);
         builder.Property(attempt => attempt.ClipboardPasteCount).HasColumnName("clipboard_paste_count").HasDefaultValue((short)0);
         builder.Property(attempt => attempt.QuizReviewId).HasColumnName("quiz_review_id");
         builder.Property(attempt => attempt.ObtainedMarks).HasColumnName("obtained_marks").HasDefaultValue((short)0);
         builder.Property(attempt => attempt.Percentage).HasColumnName("percentage").HasDefaultValue((short)0);
         builder.HasIndex(attempt => new { attempt.StudentId, attempt.QuizId }).HasDatabaseName("idx_quiz_attempts_student_quiz");
+        builder.HasIndex(attempt => attempt.ClientSyncId)
+            .IsUnique()
+            .HasFilter("client_sync_id IS NOT NULL")
+            .HasDatabaseName("ux_quiz_attempts_client_sync_id");
     }
 }
 

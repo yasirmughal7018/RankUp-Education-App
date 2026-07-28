@@ -9,13 +9,19 @@ public sealed class QuizQuestion : BaseEntity
     {
     }
 
-    /// <summary>Creates a quiz–question link with display order and per-question marks override.</summary>
-    public QuizQuestion(long quizId, long questionId, short displayOrder, short marks)
+    /// <summary>Creates a quiz–question link with display order, marks, and option-shuffle flag.</summary>
+    public QuizQuestion(
+        long quizId,
+        long questionId,
+        short displayOrder,
+        short marks,
+        bool shuffleOptions = true)
     {
         QuizId = quizId;
         QuestionId = questionId;
         DisplayOrder = displayOrder;
         Marks = marks;
+        ShuffleOptions = shuffleOptions;
     }
 
     public long QuizId { get; private set; }
@@ -27,5 +33,10 @@ public sealed class QuizQuestion : BaseEntity
     public void SetMarks(short marks)
     {
         Marks = marks;
+    }
+
+    public void SetShuffleOptions(bool shuffleOptions)
+    {
+        ShuffleOptions = shuffleOptions;
     }
 }

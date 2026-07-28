@@ -51,6 +51,13 @@ export interface QuizQuestionItem {
 
 export type QuizNavigationMode = "Free" | "Sequential" | "Locked";
 
+/** Post-submit review: what students see on the result screen. */
+export type QuizReviewDisplayMode =
+  | "Full"
+  | "CorrectAnswers"
+  | "ScoreOnly"
+  | "Withheld";
+
 export interface ManageQuiz {
   id: number;
   title: string;
@@ -74,6 +81,7 @@ export interface ManageQuiz {
   shuffleOptions: boolean;
   isReviewRequired: boolean;
   navigationMode: QuizNavigationMode;
+  reviewDisplayMode: QuizReviewDisplayMode;
   createdBy: string;
   schoolName: string;
   questions: QuizQuestionItem[];
@@ -94,6 +102,7 @@ export interface QuizFormValues {
   shuffleOptions: boolean;
   isReviewRequired: boolean;
   navigationMode: QuizNavigationMode;
+  reviewDisplayMode: QuizReviewDisplayMode;
   contextStudentId: number | null;
 }
 
@@ -180,7 +189,24 @@ export function normalizeQuizNavigationMode(
   return "Free";
 }
 
-/** Default values for the create-quiz form. */
+/** Normalize API/form review display mode to a known value. */
+export function normalizeQuizReviewDisplayMode(
+  value: string | null | undefined,
+): QuizReviewDisplayMode {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "full") {
+    return "Full";
+  }
+  if (normalized === "correctanswers" || normalized === "correct") {
+    return "CorrectAnswers";
+  }
+  if (normalized === "withheld" || normalized === "none") {
+    return "Withheld";
+  }
+  return "ScoreOnly";
+}
+
+/** Default values for the create-quiz form (Assessment-aligned until a type is chosen). */
 export function createEmptyQuizForm(): QuizFormValues {
   return {
     title: "",
@@ -191,13 +217,87 @@ export function createEmptyQuizForm(): QuizFormValues {
     difficultyLevelId: 0,
     quizTypeId: 0,
     instructions: "Read all questions carefully before answering.",
-    timeLimitMinutes: 30,
+    timeLimitMinutes: 45,
     allowedAttempts: 1,
     shuffleQuestions: false,
-    shuffleOptions: false,
-    isReviewRequired: false,
+    shuffleOptions: true,
+    isReviewRequired: true,
     navigationMode: "Free",
+    reviewDisplayMode: "ScoreOnly",
     contextStudentId: null,
+  };
+}
+
+/** Type-specific create defaults — mirrors WebApi QuizTypeBehavior.ResolveDefaults. */
+export function resolveQuizTypeDefaults(quizTypeName: string): Pick<
+  QuizFormValues,
+  | "timeLimitMinutes"
+  | "allowedAttempts"
+  | "shuffleQuestions"
+  | "shuffleOptions"
+  | "isReviewRequired"
+  | "navigationMode"
+  | "reviewDisplayMode"
+> {
+  const name = quizTypeName.trim().toLowerCase().replace(/\s+/g, "");
+
+  if (name === "practice") {
+    return {
+      allowedAttempts: 3,
+      timeLimitMinutes: null,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      isReviewRequired: false,
+      navigationMode: "Free",
+      reviewDisplayMode: "Full",
+    };
+  }
+
+  if (name === "competition") {
+    return {
+      allowedAttempts: 1,
+      timeLimitMinutes: 30,
+      shuffleQuestions: true,
+      shuffleOptions: true,
+      isReviewRequired: false,
+      navigationMode: "Locked",
+      reviewDisplayMode: "Withheld",
+    };
+  }
+
+  if (name === "surprise") {
+    return {
+      allowedAttempts: 1,
+      timeLimitMinutes: 15,
+      shuffleQuestions: true,
+      shuffleOptions: true,
+      isReviewRequired: false,
+      navigationMode: "Sequential",
+      reviewDisplayMode: "Withheld",
+    };
+  }
+
+  if (name === "parentprivate" || name === "private") {
+    return {
+      allowedAttempts: 2,
+      timeLimitMinutes: 30,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      isReviewRequired: true,
+      navigationMode: "Free",
+      reviewDisplayMode: "CorrectAnswers",
+    };
+  }
+
+  // Assessment (default school type)
+  return {
+    allowedAttempts: 1,
+    timeLimitMinutes: 45,
+    shuffleQuestions: false,
+    shuffleOptions: true,
+    isReviewRequired: true,
+    navigationMode: "Free",
+    reviewDisplayMode: "ScoreOnly",
   };
 }
 
@@ -218,6 +318,7 @@ export function mapManageQuizToForm(quiz: ManageQuiz): QuizFormValues {
     shuffleOptions: quiz.shuffleOptions,
     isReviewRequired: quiz.isReviewRequired,
     navigationMode: normalizeQuizNavigationMode(quiz.navigationMode),
+    reviewDisplayMode: normalizeQuizReviewDisplayMode(quiz.reviewDisplayMode),
     contextStudentId: null,
   };
 }
@@ -239,6 +340,7 @@ export function buildQuizPayload(values: QuizFormValues) {
     shuffleOptions: values.shuffleOptions,
     isReviewRequired: values.isReviewRequired,
     navigationMode: normalizeQuizNavigationMode(values.navigationMode),
+    reviewDisplayMode: normalizeQuizReviewDisplayMode(values.reviewDisplayMode),
     contextStudentId: values.contextStudentId,
   };
 }

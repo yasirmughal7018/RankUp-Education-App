@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
+import 'package:rankup_education/features/quizzes/domain/quiz_navigation.dart';
 
 /// JSON models for quiz attempt request/response payloads.
 class QuizDetailModel extends QuizDetail {
@@ -56,10 +57,8 @@ class QuizDetailModel extends QuizDetail {
       dueAt: summary.dueAt,
       completedAt: summary.completedAt,
       instructions: summary.instructions,
-      navigationMode: _readBool(json, ['shuffleQuestions'])
-          ? 'Locked Navigation'
-          : summary.navigationMode,
-      answersCanBeChanged: !_readBool(json, ['shuffleQuestions']),
+      navigationMode: summary.navigationMode,
+      answersCanBeChanged: summary.answersCanBeChanged,
       hintsAllowed: summary.hintsAllowed,
       reviewAvailable: summary.reviewAvailable,
       resultStatus: summary.resultStatus,
@@ -128,6 +127,7 @@ class SavedQuizAnswerModel extends SavedQuizAnswer {
     super.selectedOptionId,
     super.selectedOptionIds,
     super.submittedText,
+    super.isMarkedForReview,
   });
 
   factory SavedQuizAnswerModel.fromJson(Map<String, dynamic> json) {
@@ -147,6 +147,7 @@ class SavedQuizAnswerModel extends SavedQuizAnswer {
           ? parsedIds
           : (singleId == null ? const <String>[] : <String>[singleId]),
       submittedText: _readNullableString(json, ['submittedText']),
+      isMarkedForReview: _readBool(json, ['isMarkedForReview']),
     );
   }
 }
@@ -162,6 +163,11 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
     super.timeLimitMinutes,
     super.resumed,
     super.savedAnswers,
+    super.navigationMode,
+    super.enforceDeviceLock,
+    super.focusLossCount,
+    super.clipboardPasteCount,
+    super.enablePerQuestionTimer,
   });
 
   factory QuizAttemptSessionModel.fromJson(Map<String, dynamic> json) {
@@ -186,6 +192,13 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
               .map(SavedQuizAnswerModel.fromJson)
               .toList()
           : const [],
+      navigationMode: normalizeQuizNavigationMode(
+        _readNullableString(json, ['navigationMode']),
+      ),
+      enforceDeviceLock: _readBool(json, ['enforceDeviceLock']),
+      focusLossCount: _readInt(json, ['focusLossCount']),
+      clipboardPasteCount: _readInt(json, ['clipboardPasteCount']),
+      enablePerQuestionTimer: _readBool(json, ['enablePerQuestionTimer']),
     );
   }
 }
