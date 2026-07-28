@@ -31,6 +31,13 @@ public sealed class QuizAttempt : BaseEntity
     public short TimeSpentSeconds { get; private set; }
     public string DeviceId { get; private set; }
     public bool IsOfflineAttempt { get; private set; }
+
+    /// <summary>Count of browser focus/visibility losses during the attempt (anti-cheat signal).</summary>
+    public short FocusLossCount { get; private set; }
+
+    /// <summary>Count of paste events into answer fields (anti-cheat signal).</summary>
+    public short ClipboardPasteCount { get; private set; }
+
     public long? QuizReviewId { get; private set; }
     public short ObtainedMarks { get; private set; }
     public short Percentage { get; private set; }
@@ -55,6 +62,32 @@ public sealed class QuizAttempt : BaseEntity
     public void UpdateTimeSpent(short timeSpentSeconds)
     {
         TimeSpentSeconds = timeSpentSeconds;
+    }
+
+    public void RecordFocusLoss()
+    {
+        if (FocusLossCount < short.MaxValue)
+        {
+            FocusLossCount++;
+        }
+    }
+
+    public void RecordClipboardPaste()
+    {
+        if (ClipboardPasteCount < short.MaxValue)
+        {
+            ClipboardPasteCount++;
+        }
+    }
+
+    /// <summary>Competition device lock: reject resume/submit from a different client device.</summary>
+    public void EnsureSameDevice(string deviceId)
+    {
+        var normalized = deviceId.AsTrimmedString();
+        if (!string.Equals(DeviceId, normalized, StringComparison.Ordinal))
+        {
+            throw new BusinessRuleException("This attempt is locked to the device that started it.");
+        }
     }
 
     /// <summary>Finalizes auto-scored submission; subjective items may still await teacher review.</summary>

@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
@@ -48,6 +49,7 @@ public sealed class QuizReviewService : IQuizReviewService
     private readonly IStudentScopeRepository _studentScope;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationService _notifications;
 
     public QuizReviewService(
         IQuizRepository quizzes,
@@ -57,7 +59,8 @@ public sealed class QuizReviewService : IQuizReviewService
         ILookupRepository lookups,
         IStudentScopeRepository studentScope,
         IUnitOfWork unitOfWork,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        INotificationService notifications)
     {
         _quizzes = quizzes;
         _reviews = reviews;
@@ -67,6 +70,7 @@ public sealed class QuizReviewService : IQuizReviewService
         _studentScope = studentScope;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _notifications = notifications;
     }
 
     public async Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken)
@@ -221,6 +225,14 @@ public sealed class QuizReviewService : IQuizReviewService
         assignment.SetResultStatus(completedResultId);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        await _notifications.CreateAsync(
+            [attempt.StudentId],
+            "Quiz review complete",
+            $"Your results for \"{quiz?.QuizTitle ?? "Quiz"}\" are ready.",
+            QuizNotificationCategories.QuizReviewed,
+            cancellationToken);
 
         return new FinalizeReviewResponse(
             attemptId,

@@ -69,7 +69,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddApplication();
+builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiIntegrationFallbacks();
 

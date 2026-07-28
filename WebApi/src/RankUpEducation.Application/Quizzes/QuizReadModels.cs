@@ -103,6 +103,7 @@ public sealed record QuizQuestionItem(
     short Marks,
     short DisplayOrder,
     string? Hint,
+    string? Explanation,
     short EstimatedTimeSeconds,
     IReadOnlyList<QuizQuestionOptionItem> Options,
     IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
@@ -154,7 +155,12 @@ public sealed record QuizAttemptQuestionItem(
     bool IsCorrect,
     IReadOnlyList<QuizQuestionOptionItem> Options,
     IReadOnlyList<long> SelectedOptionIds,
-    bool IsMarkedForReview = false);
+    bool IsMarkedForReview = false,
+    string QuestionTypeName = "",
+    string? Hint = null,
+    short EstimatedTimeSeconds = 0,
+    short TimeSpentSeconds = 0,
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem>? AcceptedAnswers = null);
 
 /// <summary>Assignment window and attempt quota checked before start/submit.</summary>
 public sealed record QuizAssignmentAccess(

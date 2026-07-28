@@ -40,6 +40,8 @@ export interface QuizAttemptQuestion {
   displayOrder: number;
   hint: string | null;
   options: QuizAttemptOption[];
+  estimatedTimeSeconds?: number;
+  timeSpentSeconds?: number;
 }
 
 export type QuizNavigationMode = "Free" | "Sequential" | "Locked";
@@ -62,6 +64,10 @@ export interface StartQuizAttempt {
   questions: QuizAttemptQuestion[];
   savedAnswers: SavedQuizAnswer[];
   navigationMode?: QuizNavigationMode | string;
+  enforceDeviceLock?: boolean;
+  focusLossCount?: number;
+  clipboardPasteCount?: number;
+  enablePerQuestionTimer?: boolean;
 }
 
 export interface SubmitQuizAnswer {
@@ -70,16 +76,22 @@ export interface SubmitQuizAnswer {
   submittedText: string | null;
   selectedOptionIds?: number[] | null;
   isMarkedForReview?: boolean | null;
+  timeSpentSeconds?: number | null;
 }
 
 export interface SaveQuizDraftInput {
   answers: SubmitQuizAnswer[];
   timeSpentSeconds?: number | null;
+  focusLossDelta?: number | null;
+  clipboardPasteDelta?: number | null;
+  deviceId?: string | null;
 }
 
 export interface SaveQuizDraftResult {
   attemptId: number;
   savedCount: number;
+  focusLossCount?: number;
+  clipboardPasteCount?: number;
 }
 
 export interface QuizResultQuestion {

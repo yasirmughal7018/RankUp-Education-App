@@ -41,6 +41,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuizAttemptQuestionMarksSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizRejectionReasonSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizNavigationAndMarkReviewSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizContentFreezeAndIntegritySupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
@@ -621,6 +622,75 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         ALTER TABLE public.quiz_attempt_questions
             ADD COLUMN IF NOT EXISTS is_marked_for_review boolean NOT NULL DEFAULT FALSE;
+        """;
+
+    private const string QuizContentFreezeAndIntegritySupportSql = """
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS question_text varchar(2000) NOT NULL DEFAULT '';
+
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS question_type_name varchar(100) NOT NULL DEFAULT '';
+
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS hint varchar(1000) NULL;
+
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS explanation varchar(2000) NULL;
+
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS estimated_time_seconds smallint NOT NULL DEFAULT 0;
+
+        ALTER TABLE public.quiz_attempt_questions
+            ADD COLUMN IF NOT EXISTS time_spent_seconds smallint NOT NULL DEFAULT 0;
+
+        ALTER TABLE public.quiz_attempts
+            ADD COLUMN IF NOT EXISTS focus_loss_count smallint NOT NULL DEFAULT 0;
+
+        ALTER TABLE public.quiz_attempts
+            ADD COLUMN IF NOT EXISTS clipboard_paste_count smallint NOT NULL DEFAULT 0;
+
+        CREATE TABLE IF NOT EXISTS public.quiz_attempt_question_options (
+            id bigserial PRIMARY KEY,
+            quiz_attempt_question_id bigint NOT NULL
+                REFERENCES public.quiz_attempt_questions (id) ON DELETE CASCADE,
+            source_option_id bigint NULL,
+            option_text varchar(1000) NOT NULL,
+            option_image_url varchar(500) NULL,
+            is_correct boolean NOT NULL DEFAULT FALSE,
+            display_order smallint NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_quiz_attempt_question_options_aq
+            ON public.quiz_attempt_question_options (quiz_attempt_question_id);
+
+        CREATE TABLE IF NOT EXISTS public.quiz_attempt_accepted_answers (
+            id bigserial PRIMARY KEY,
+            quiz_attempt_question_id bigint NOT NULL
+                REFERENCES public.quiz_attempt_questions (id) ON DELETE CASCADE,
+            answer_text varchar(1000) NOT NULL,
+            is_case_sensitive boolean NOT NULL DEFAULT FALSE,
+            allow_partial_match boolean NOT NULL DEFAULT FALSE,
+            normalized_answer varchar(1000) NOT NULL DEFAULT '',
+            minimum_length smallint NOT NULL DEFAULT 0,
+            maximum_length smallint NOT NULL DEFAULT 0,
+            allow_ai_review boolean NOT NULL DEFAULT FALSE,
+            allow_teacher_review boolean NOT NULL DEFAULT FALSE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_quiz_attempt_accepted_answers_aq
+            ON public.quiz_attempt_accepted_answers (quiz_attempt_question_id);
+
+        -- Backfill frozen text/type from live bank for existing rows with empty snapshot.
+        UPDATE public.quiz_attempt_questions AS aq
+        SET question_text = q.question_text,
+            question_type_name = COALESCE(l.name, 'Unknown'),
+            hint = q.hint,
+            explanation = q.explanation,
+            estimated_time_seconds = COALESCE(q.estimated_time_seconds, 0)
+        FROM public.questions AS q
+        LEFT JOIN public.lookups AS l ON l.id = q.question_type_id
+        WHERE aq.question_id = q.id
+          AND (aq.question_text = '' OR aq.question_type_name = '');
         """;
 
     private const string UserRoleSupportSql = """

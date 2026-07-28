@@ -33,6 +33,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 quizQuestion.Marks,
                 quizQuestion.DisplayOrder,
                 question.Hint,
+                question.Explanation,
                 question.EstimatedTimeSeconds
             }).ToListAsync(cancellationToken);
 
@@ -64,6 +65,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             row.Marks,
             row.DisplayOrder,
             row.Hint,
+            row.Explanation,
             row.EstimatedTimeSeconds,
             options
                 .Where(option => option.QuestionId == row.QuestionId)

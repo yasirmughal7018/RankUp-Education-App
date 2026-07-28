@@ -14,7 +14,9 @@ public sealed record QuizQuestionForAttemptResponse(
     short Marks,
     short DisplayOrder,
     string? Hint,
-    IReadOnlyList<QuizOptionResponse> Options);
+    IReadOnlyList<QuizOptionResponse> Options,
+    short EstimatedTimeSeconds = 0,
+    short TimeSpentSeconds = 0);
 
 /// <summary>Device id required to bind an attempt to a client.</summary>
 public sealed record StartQuizAttemptRequest(string DeviceId);
@@ -29,7 +31,11 @@ public sealed record StartQuizAttemptResponse(
     bool Resumed,
     IReadOnlyList<QuizQuestionForAttemptResponse> Questions,
     IReadOnlyList<SavedQuizAnswerResponse> SavedAnswers,
-    string NavigationMode = "Free");
+    string NavigationMode = "Free",
+    bool EnforceDeviceLock = false,
+    short FocusLossCount = 0,
+    short ClipboardPasteCount = 0,
+    bool EnablePerQuestionTimer = false);
 
 /// <summary>Previously saved draft answer restored on attempt resume.</summary>
 public sealed record SavedQuizAnswerResponse(
@@ -42,11 +48,16 @@ public sealed record SavedQuizAnswerResponse(
 /// <summary>Autosave payload for an in-progress attempt.</summary>
 public sealed record SaveQuizAttemptAnswersRequest(
     IReadOnlyList<SubmitQuizAnswerRequest> Answers,
-    short? TimeSpentSeconds = null);
+    short? TimeSpentSeconds = null,
+    short? FocusLossDelta = null,
+    short? ClipboardPasteDelta = null,
+    string? DeviceId = null);
 
 public sealed record SaveQuizAttemptAnswersResponse(
     long AttemptId,
-    int SavedCount);
+    int SavedCount,
+    short FocusLossCount = 0,
+    short ClipboardPasteCount = 0);
 
 /// <summary>One answer on submit or draft save; supports multi-select via <see cref="SelectedOptionIds"/>.</summary>
 public sealed record SubmitQuizAnswerRequest(
@@ -54,13 +65,15 @@ public sealed record SubmitQuizAnswerRequest(
     long? SelectedOptionId,
     string? SubmittedText,
     IReadOnlyList<long>? SelectedOptionIds = null,
-    bool? IsMarkedForReview = null);
+    bool? IsMarkedForReview = null,
+    short? TimeSpentSeconds = null);
 
 /// <summary>Final submission with all answers and elapsed time.</summary>
 public sealed record SubmitQuizAttemptRequest(
     IReadOnlyList<SubmitQuizAnswerRequest> Answers,
     short TimeSpentSeconds,
-    bool IsAutoSubmit = false);
+    bool IsAutoSubmit = false,
+    string? DeviceId = null);
 
 /// <summary>Scored attempt result; may mask marks while subjective review is pending.</summary>
 public sealed record QuizAttemptResultResponse(

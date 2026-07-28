@@ -23,6 +23,13 @@ const ADMIN_NOTIFICATION_CATEGORIES = new Set([
   "PasswordResetRequest",
 ]);
 
+const QUIZ_NOTIFICATION_CATEGORIES = new Set([
+  "QuizAssigned",
+  "QuizSubmitted",
+  "QuizAutoSubmitted",
+  "QuizReviewed",
+]);
+
 const PASSWORD_RESET_TITLE_PREFIX = "Password reset: ";
 
 function usernameFromPasswordResetTitle(title: string): string | null {
@@ -43,6 +50,14 @@ function hrefForCategory(category: string): string {
     return "/admin/directory";
   }
 
+  if (category === "QuizAssigned" || category === "QuizReviewed") {
+    return "/student/quizzes";
+  }
+
+  if (category === "QuizSubmitted" || category === "QuizAutoSubmitted") {
+    return "/quizzes/reviews/pending";
+  }
+
   return "/admin/registrations";
 }
 
@@ -61,11 +76,13 @@ export function NotificationsBell() {
   });
 
   const items = data?.items ?? [];
-  const adminItems = items.filter((item) =>
-    ADMIN_NOTIFICATION_CATEGORIES.has(item.category),
+  const visibleItems = items.filter(
+    (item) =>
+      ADMIN_NOTIFICATION_CATEGORIES.has(item.category) ||
+      QUIZ_NOTIFICATION_CATEGORIES.has(item.category),
   );
-  const unreadCount = adminItems.filter((item) => !item.isRead).length;
-  const recentItems = adminItems.slice(0, 8);
+  const unreadCount = visibleItems.filter((item) => !item.isRead).length;
+  const recentItems = visibleItems.slice(0, 8);
 
   useEffect(() => {
     if (!open) {

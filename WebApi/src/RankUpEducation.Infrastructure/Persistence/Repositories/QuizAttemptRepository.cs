@@ -29,6 +29,20 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
         await _dbContext.QuizAttemptQuestions.AddRangeAsync(attemptQuestions, cancellationToken);
     }
 
+    public async Task AddAttemptQuestionOptionsAsync(
+        IReadOnlyList<QuizAttemptQuestionOption> options,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.QuizAttemptQuestionOptions.AddRangeAsync(options, cancellationToken);
+    }
+
+    public async Task AddAttemptAcceptedAnswersAsync(
+        IReadOnlyList<QuizAttemptAcceptedAnswer> answers,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.QuizAttemptAcceptedAnswers.AddRangeAsync(answers, cancellationToken);
+    }
+
     public async Task AddAttemptAnswersAsync(
         IReadOnlyList<QuizAttemptAnswer> answers,
         CancellationToken cancellationToken)
@@ -65,30 +79,44 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
         }
 
         var statusName = await _lookups.GetLookupNameAsync(attempt.StatusId, cancellationToken);
-        var attemptQuestions = await (
-            from attemptQuestion in _dbContext.QuizAttemptQuestions.AsNoTracking()
-            join question in _dbContext.Questions.AsNoTracking() on attemptQuestion.QuestionId equals question.Id
-            where attemptQuestion.QuizAttemptId == attemptId
-            orderby attemptQuestion.DisplayOrder
-            select new
-            {
-                attemptQuestion.Id,
-                attemptQuestion.QuestionId,
-                question.QuestionText,
-                question.Explanation,
-                attemptQuestion.DisplayOrder,
-                attemptQuestion.Marks,
-                attemptQuestion.IsMarkedForReview
-            }).ToListAsync(cancellationToken);
+        var attemptQuestions = await _dbContext.QuizAttemptQuestions.AsNoTracking()
+            .Where(attemptQuestion => attemptQuestion.QuizAttemptId == attemptId)
+            .OrderBy(attemptQuestion => attemptQuestion.DisplayOrder)
+            .ToListAsync(cancellationToken);
 
-        var questionIds = attemptQuestions.Select(item => item.QuestionId).ToArray();
+        var attemptQuestionIds = attemptQuestions.Select(item => item.Id).ToArray();
         var answers = await _dbContext.QuizAttemptAnswers.AsNoTracking()
-            .Where(answer => attemptQuestions.Select(item => item.Id).Contains(answer.QuizAttemptQuestionId))
+            .Where(answer => attemptQuestionIds.Contains(answer.QuizAttemptQuestionId))
             .ToListAsync(cancellationToken);
 
-        var options = await _dbContext.QuestionOptions.AsNoTracking()
-            .Where(option => questionIds.Contains(option.QuestionId))
+        var frozenOptions = await _dbContext.QuizAttemptQuestionOptions.AsNoTracking()
+            .Where(option => attemptQuestionIds.Contains(option.QuizAttemptQuestionId))
+            .OrderBy(option => option.DisplayOrder)
             .ToListAsync(cancellationToken);
+
+        var frozenAccepted = await _dbContext.QuizAttemptAcceptedAnswers.AsNoTracking()
+            .Where(answer => attemptQuestionIds.Contains(answer.QuizAttemptQuestionId))
+            .ToListAsync(cancellationToken);
+
+        // Fallback for pre-freeze attempts: live bank options.
+        var legacyQuestionIds = attemptQuestions
+            .Where(item => string.IsNullOrWhiteSpace(item.QuestionText))
+            .Select(item => item.QuestionId)
+            .Distinct()
+            .ToArray();
+        var legacyOptions = legacyQuestionIds.Length == 0
+            ? []
+            : await _dbContext.QuestionOptions.AsNoTracking()
+                .Where(option => legacyQuestionIds.Contains(option.QuestionId))
+                .ToListAsync(cancellationToken);
+        var legacyQuestions = legacyQuestionIds.Length == 0
+            ? new Dictionary<long, (string Text, string? Explanation)>()
+            : await _dbContext.Questions.AsNoTracking()
+                .Where(question => legacyQuestionIds.Contains(question.Id))
+                .ToDictionaryAsync(
+                    question => question.Id,
+                    question => (question.QuestionText, question.Explanation),
+                    cancellationToken);
 
         var totalMarks = attemptQuestions.Sum(item => (int)item.Marks);
 
@@ -117,7 +145,6 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                 var isCorrect = questionAnswers.Any(row => row.IsCorrect)
                     && awardedMarks > 0;
 
-                // Prefer marks/correct from any marked row; for multi-select only the first row holds marks.
                 if (questionAnswers.Length > 1)
                 {
                     var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
@@ -130,27 +157,69 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                     .Select(row => row.SubmittedText)
                     .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
 
-                return new QuizAttemptQuestionItem(
-                    item.Id,
-                    item.QuestionId,
-                    item.QuestionText,
-                    item.Marks,
-                    item.DisplayOrder,
-                    item.Explanation,
-                    selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
-                    submittedText,
-                    (short)awardedMarks,
-                    isCorrect,
-                    options
+                var snapshotOptions = frozenOptions
+                    .Where(option => option.QuizAttemptQuestionId == item.Id)
+                    .Select(option => new QuizQuestionOptionItem(
+                        option.SourceOptionId ?? option.Id,
+                        option.OptionText,
+                        option.OptionImageUrl,
+                        option.IsCorrect))
+                    .ToArray();
+
+                if (snapshotOptions.Length == 0)
+                {
+                    snapshotOptions = legacyOptions
                         .Where(option => option.QuestionId == item.QuestionId)
                         .Select(option => new QuizQuestionOptionItem(
                             option.Id,
                             option.OptionText,
                             option.OptionImageUrl,
                             option.IsCorrect))
-                        .ToArray(),
+                        .ToArray();
+                }
+
+                var questionText = item.QuestionText;
+                var explanation = item.Explanation;
+                if (string.IsNullOrWhiteSpace(questionText)
+                    && legacyQuestions.TryGetValue(item.QuestionId, out var legacy))
+                {
+                    questionText = legacy.Item1;
+                    explanation ??= legacy.Explanation;
+                }
+
+                var accepted = frozenAccepted
+                    .Where(answer => answer.QuizAttemptQuestionId == item.Id)
+                    .Select(answer => new QuestionAcceptedAnswerScoreItem(
+                        answer.Id,
+                        answer.AnswerText,
+                        answer.IsCaseSensitive,
+                        answer.AllowPartialMatch,
+                        answer.NormalizedAnswer,
+                        answer.MinimumLength,
+                        answer.MaximumLength,
+                        answer.AllowAiReview,
+                        answer.AllowTeacherReview))
+                    .ToArray();
+
+                return new QuizAttemptQuestionItem(
+                    item.Id,
+                    item.QuestionId,
+                    questionText,
+                    item.Marks,
+                    item.DisplayOrder,
+                    explanation,
+                    selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
+                    submittedText,
+                    (short)awardedMarks,
+                    isCorrect,
+                    snapshotOptions,
                     selectedOptionIds,
-                    item.IsMarkedForReview);
+                    item.IsMarkedForReview,
+                    item.QuestionTypeName,
+                    item.Hint,
+                    item.EstimatedTimeSeconds,
+                    item.TimeSpentSeconds,
+                    accepted);
             }).ToArray());
     }
 

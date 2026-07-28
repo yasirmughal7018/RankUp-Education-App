@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
@@ -43,6 +44,7 @@ public sealed class QuizAssignService : IQuizAssignService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationService _notifications;
 
     public QuizAssignService(
         IQuizRepository quizzes,
@@ -53,7 +55,8 @@ public sealed class QuizAssignService : IQuizAssignService
         IUserRepository users,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        INotificationService notifications)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -64,6 +67,7 @@ public sealed class QuizAssignService : IQuizAssignService
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _notifications = notifications;
     }
 
     public async Task<AssignQuizResponse> AssignAsync(
@@ -171,6 +175,13 @@ public sealed class QuizAssignService : IQuizAssignService
 
         quiz.SetLifecycleStatus(assignedLifecycleId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _notifications.CreateAsync(
+            studentIds,
+            "New quiz assigned",
+            $"\"{quiz.QuizTitle}\" has been assigned to you. Open My Quizzes to start.",
+            QuizNotificationCategories.QuizAssigned,
+            cancellationToken);
 
         var createdAssignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
         var assignedLifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);

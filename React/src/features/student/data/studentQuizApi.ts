@@ -23,7 +23,7 @@ export async function startQuizAttempt(quizId: number): Promise<StartQuizAttempt
   });
 }
 
-/** Autosave answers and elapsed time. */
+/** Autosave answers, elapsed time, and anti-cheat deltas. */
 export async function saveQuizAttemptDraft(
   quizId: number,
   attemptId: number,
@@ -36,6 +36,9 @@ export async function saveQuizAttemptDraft(
       body: {
         answers: input.answers,
         timeSpentSeconds: input.timeSpentSeconds ?? null,
+        focusLossDelta: input.focusLossDelta ?? null,
+        clipboardPasteDelta: input.clipboardPasteDelta ?? null,
+        deviceId: input.deviceId ?? STUDENT_DEVICE_ID,
       },
     },
   );
@@ -53,7 +56,12 @@ export async function submitQuizAttempt(
     `/quizzes/${quizId}/attempts/${attemptId}/submit`,
     {
       method: "POST",
-      body: { answers, timeSpentSeconds, isAutoSubmit },
+      body: {
+        answers,
+        timeSpentSeconds,
+        isAutoSubmit,
+        deviceId: STUDENT_DEVICE_ID,
+      },
     },
   );
 }

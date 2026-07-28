@@ -132,6 +132,8 @@ public sealed class QuizAttemptConfiguration : IEntityTypeConfiguration<QuizAtte
         builder.Property(attempt => attempt.TimeSpentSeconds).HasColumnName("time_spent_seconds").HasDefaultValue((short)0);
         builder.Property(attempt => attempt.DeviceId).HasColumnName("device_id").HasMaxLength(100).IsRequired();
         builder.Property(attempt => attempt.IsOfflineAttempt).HasColumnName("is_offline_attempt").HasDefaultValue(false);
+        builder.Property(attempt => attempt.FocusLossCount).HasColumnName("focus_loss_count").HasDefaultValue((short)0);
+        builder.Property(attempt => attempt.ClipboardPasteCount).HasColumnName("clipboard_paste_count").HasDefaultValue((short)0);
         builder.Property(attempt => attempt.QuizReviewId).HasColumnName("quiz_review_id");
         builder.Property(attempt => attempt.ObtainedMarks).HasColumnName("obtained_marks").HasDefaultValue((short)0);
         builder.Property(attempt => attempt.Percentage).HasColumnName("percentage").HasDefaultValue((short)0);
@@ -151,9 +153,54 @@ public sealed class QuizAttemptQuestionConfiguration : IEntityTypeConfiguration<
         builder.Property(question => question.QuestionId).HasColumnName("question_id").IsRequired();
         builder.Property(question => question.DisplayOrder).HasColumnName("display_order").IsRequired();
         builder.Property(question => question.Marks).HasColumnName("marks").IsRequired();
+        builder.Property(question => question.QuestionText).HasColumnName("question_text").HasMaxLength(2000).IsRequired();
+        builder.Property(question => question.QuestionTypeName).HasColumnName("question_type_name").HasMaxLength(100).IsRequired();
+        builder.Property(question => question.Hint).HasColumnName("hint").HasMaxLength(1000);
+        builder.Property(question => question.Explanation).HasColumnName("explanation").HasMaxLength(2000);
+        builder.Property(question => question.EstimatedTimeSeconds).HasColumnName("estimated_time_seconds").HasDefaultValue((short)0);
+        builder.Property(question => question.TimeSpentSeconds).HasColumnName("time_spent_seconds").HasDefaultValue((short)0);
         builder.Property(question => question.IsMarkedForReview).HasColumnName("is_marked_for_review").HasDefaultValue(false);
         builder.Property(question => question.QuizReviewId).HasColumnName("quiz_review_id");
         builder.HasIndex(question => question.QuizAttemptId).HasDatabaseName("idx_quiz_attempt_questions_attempt");
+    }
+}
+
+/// <summary>Frozen option snapshot for an attempt question.</summary>
+public sealed class QuizAttemptQuestionOptionConfiguration : IEntityTypeConfiguration<QuizAttemptQuestionOption>
+{
+    public void Configure(EntityTypeBuilder<QuizAttemptQuestionOption> builder)
+    {
+        builder.ToTable("quiz_attempt_question_options");
+        builder.HasKey(option => option.Id);
+        builder.Property(option => option.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(option => option.QuizAttemptQuestionId).HasColumnName("quiz_attempt_question_id").IsRequired();
+        builder.Property(option => option.SourceOptionId).HasColumnName("source_option_id");
+        builder.Property(option => option.OptionText).HasColumnName("option_text").HasMaxLength(1000).IsRequired();
+        builder.Property(option => option.OptionImageUrl).HasColumnName("option_image_url").HasMaxLength(500);
+        builder.Property(option => option.IsCorrect).HasColumnName("is_correct").HasDefaultValue(false);
+        builder.Property(option => option.DisplayOrder).HasColumnName("display_order").IsRequired();
+        builder.HasIndex(option => option.QuizAttemptQuestionId).HasDatabaseName("idx_quiz_attempt_question_options_aq");
+    }
+}
+
+/// <summary>Frozen fill accepted-answer snapshot for an attempt question.</summary>
+public sealed class QuizAttemptAcceptedAnswerConfiguration : IEntityTypeConfiguration<QuizAttemptAcceptedAnswer>
+{
+    public void Configure(EntityTypeBuilder<QuizAttemptAcceptedAnswer> builder)
+    {
+        builder.ToTable("quiz_attempt_accepted_answers");
+        builder.HasKey(answer => answer.Id);
+        builder.Property(answer => answer.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(answer => answer.QuizAttemptQuestionId).HasColumnName("quiz_attempt_question_id").IsRequired();
+        builder.Property(answer => answer.AnswerText).HasColumnName("answer_text").HasMaxLength(1000).IsRequired();
+        builder.Property(answer => answer.IsCaseSensitive).HasColumnName("is_case_sensitive").HasDefaultValue(false);
+        builder.Property(answer => answer.AllowPartialMatch).HasColumnName("allow_partial_match").HasDefaultValue(false);
+        builder.Property(answer => answer.NormalizedAnswer).HasColumnName("normalized_answer").HasMaxLength(1000).IsRequired();
+        builder.Property(answer => answer.MinimumLength).HasColumnName("minimum_length").HasDefaultValue((short)0);
+        builder.Property(answer => answer.MaximumLength).HasColumnName("maximum_length").HasDefaultValue((short)0);
+        builder.Property(answer => answer.AllowAiReview).HasColumnName("allow_ai_review").HasDefaultValue(false);
+        builder.Property(answer => answer.AllowTeacherReview).HasColumnName("allow_teacher_review").HasDefaultValue(false);
+        builder.HasIndex(answer => answer.QuizAttemptQuestionId).HasDatabaseName("idx_quiz_attempt_accepted_answers_aq");
     }
 }
 

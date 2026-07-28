@@ -7,7 +7,11 @@ import type {
   StartQuizAttempt,
   SubmitQuizAnswer,
 } from "@/features/student/domain/studentQuizTypes";
-import { isMultiSelectQuestionType, isTextQuestionType } from "@/features/student/domain/studentQuizTypes";
+import {
+  isMultiSelectQuestionType,
+  isTextQuestionType,
+  STUDENT_DEVICE_ID,
+} from "@/features/student/domain/studentQuizTypes";
 import {
   useSaveQuizDraftMutation,
   useSubmitQuizAttemptMutation,
@@ -29,6 +33,8 @@ const startedAtStorageKey = (attemptId: number) =>
   `rankup-quiz-started-${attemptId}`;
 const reviewStorageKey = (attemptId: number) =>
   `rankup-quiz-review-${attemptId}`;
+const questionTimeStorageKey = (attemptId: number) =>
+  `rankup-quiz-question-time-${attemptId}`;
 
 function normalizeNavigationMode(
   value: string | null | undefined,
@@ -77,6 +83,19 @@ function readStoredReviewFlags(attemptId: number): Record<number, boolean> {
 
   try {
     return JSON.parse(raw) as Record<number, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+function readStoredQuestionTimes(attemptId: number): Record<number, number> {
+  const raw = sessionStorage.getItem(questionTimeStorageKey(attemptId));
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw) as Record<number, number>;
   } catch {
     return {};
   }
@@ -156,6 +175,19 @@ function hydrateReviewFlags(
   );
 }
 
+function hydrateQuestionTimes(
+  questions: StartQuizAttempt["questions"],
+  stored: Record<number, number>,
+): Record<number, number> {
+  return Object.fromEntries(
+    questions.map((question) => {
+      const fromServer = Math.max(0, question.timeSpentSeconds ?? 0);
+      const fromStored = Math.max(0, stored[question.id] ?? 0);
+      return [question.id, Math.max(fromServer, fromStored)];
+    }),
+  );
+}
+
 function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const minutes = Math.floor(safe / 60);
@@ -179,6 +211,7 @@ function toSubmitAnswer(
   questionId: number,
   answer: AnswerState | undefined,
   isMarkedForReview?: boolean,
+  timeSpentSeconds?: number,
 ): SubmitQuizAnswer {
   const selectedOptionIds = answer?.selectedOptionIds ?? [];
   const selectedOptionId =
@@ -193,6 +226,10 @@ function toSubmitAnswer(
     submittedText,
     selectedOptionIds: selectedOptionIds.length > 0 ? selectedOptionIds : null,
     isMarkedForReview: Boolean(isMarkedForReview),
+    timeSpentSeconds:
+      timeSpentSeconds != null && timeSpentSeconds > 0
+        ? Math.round(timeSpentSeconds)
+        : null,
   };
 }
 
@@ -250,13 +287,51 @@ export function StudentQuizAttemptPage() {
     },
   );
 
+  const [questionTimeSpent, setQuestionTimeSpent] = useState<
+    Record<number, number>
+  >(() => {
+    const initialAttempt =
+      attemptFromNavigation ?? readStoredAttempt(numericAttemptId);
+    if (!initialAttempt) {
+      return readStoredQuestionTimes(numericAttemptId);
+    }
+
+    return hydrateQuestionTimes(
+      initialAttempt.questions,
+      readStoredQuestionTimes(numericAttemptId),
+    );
+  });
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [draftStatus, setDraftStatus] = useState<string | null>(null);
   const [timeWarning, setTimeWarning] = useState<string | null>(null);
+  const [focusLossCount, setFocusLossCount] = useState(
+    () =>
+      attemptFromNavigation?.focusLossCount ??
+      readStoredAttempt(numericAttemptId)?.focusLossCount ??
+      0,
+  );
+  const [clipboardPasteCount, setClipboardPasteCount] = useState(
+    () =>
+      attemptFromNavigation?.clipboardPasteCount ??
+      readStoredAttempt(numericAttemptId)?.clipboardPasteCount ??
+      0,
+  );
+  const [questionRemainingSeconds, setQuestionRemainingSeconds] = useState<
+    number | null
+  >(null);
+
   const answersDirtyRef = useRef(false);
   const lastSavedSnapshotRef = useRef("");
   const warnedAt300Ref = useRef(false);
   const warnedAt60Ref = useRef(false);
+  const focusLossDeltaRef = useRef(0);
+  const clipboardPasteDeltaRef = useRef(0);
+  const questionTimeSpentRef = useRef(questionTimeSpent);
+  const expiredQuestionIdsRef = useRef<Set<number>>(new Set());
+  const persistDraftRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => undefined,
+  );
 
   const [startedAt] = useState(() => {
     const stored = sessionStorage.getItem(startedAtStorageKey(numericAttemptId));
@@ -281,12 +356,18 @@ export function StudentQuizAttemptPage() {
   const [autoSubmitTriggered, setAutoSubmitTriggered] = useState(false);
 
   useEffect(() => {
+    questionTimeSpentRef.current = questionTimeSpent;
+  }, [questionTimeSpent]);
+
+  useEffect(() => {
     if (attemptFromNavigation) {
       sessionStorage.setItem(
         attemptStorageKey(attemptFromNavigation.attemptId),
         JSON.stringify(attemptFromNavigation),
       );
       setAttempt(attemptFromNavigation);
+      setFocusLossCount(attemptFromNavigation.focusLossCount ?? 0);
+      setClipboardPasteCount(attemptFromNavigation.clipboardPasteCount ?? 0);
       setAnswers(
         hydrateAnswers(
           attemptFromNavigation.questions,
@@ -301,6 +382,12 @@ export function StudentQuizAttemptPage() {
           readStoredReviewFlags(attemptFromNavigation.attemptId),
         ),
       );
+      setQuestionTimeSpent(
+        hydrateQuestionTimes(
+          attemptFromNavigation.questions,
+          readStoredQuestionTimes(attemptFromNavigation.attemptId),
+        ),
+      );
     }
   }, [attemptFromNavigation]);
 
@@ -309,6 +396,8 @@ export function StudentQuizAttemptPage() {
       const stored = readStoredAttempt(numericAttemptId);
       if (stored) {
         setAttempt(stored);
+        setFocusLossCount(stored.focusLossCount ?? 0);
+        setClipboardPasteCount(stored.clipboardPasteCount ?? 0);
         setAnswers(
           hydrateAnswers(
             stored.questions,
@@ -323,12 +412,19 @@ export function StudentQuizAttemptPage() {
             readStoredReviewFlags(numericAttemptId),
           ),
         );
+        setQuestionTimeSpent(
+          hydrateQuestionTimes(
+            stored.questions,
+            readStoredQuestionTimes(numericAttemptId),
+          ),
+        );
       }
     }
   }, [attempt, numericAttemptId]);
 
   const questions = attempt?.questions ?? [];
   const navigationMode = normalizeNavigationMode(attempt?.navigationMode);
+  const enablePerQuestionTimer = Boolean(attempt?.enablePerQuestionTimer);
 
   const orderedQuestions = useMemo(
     () => [...questions].sort((a, b) => a.displayOrder - b.displayOrder),
@@ -366,6 +462,17 @@ export function StudentQuizAttemptPage() {
     answersDirtyRef.current = true;
   }, [markedForReview, numericAttemptId]);
 
+  useEffect(() => {
+    if (numericAttemptId <= 0 || Object.keys(questionTimeSpent).length === 0) {
+      return;
+    }
+
+    sessionStorage.setItem(
+      questionTimeStorageKey(numericAttemptId),
+      JSON.stringify(questionTimeSpent),
+    );
+  }, [questionTimeSpent, numericAttemptId]);
+
   const timeLimitSeconds = attempt?.timeLimitMinutes
     ? attempt.timeLimitMinutes * 60
     : null;
@@ -402,6 +509,85 @@ export function StudentQuizAttemptPage() {
     }
   }, [remainingSeconds]);
 
+  // Accumulate per-question time and drive per-question countdown.
+  useEffect(() => {
+    const current = orderedQuestions[currentIndex];
+    if (!current || autoSubmitTriggered) {
+      setQuestionRemainingSeconds(null);
+      return;
+    }
+
+    const estimated = Math.max(0, current.estimatedTimeSeconds ?? 0);
+    const showQuestionTimer = enablePerQuestionTimer && estimated > 0;
+
+    function tickQuestionTime() {
+      setQuestionTimeSpent((currentTimes) => {
+        const spent = (currentTimes[current.id] ?? 0) + 1;
+        const next = { ...currentTimes, [current.id]: spent };
+        questionTimeSpentRef.current = next;
+
+        if (showQuestionTimer) {
+          setQuestionRemainingSeconds(Math.max(0, estimated - spent));
+        }
+
+        return next;
+      });
+    }
+
+    if (showQuestionTimer) {
+      const spent = questionTimeSpentRef.current[current.id] ?? 0;
+      setQuestionRemainingSeconds(Math.max(0, estimated - spent));
+    } else {
+      setQuestionRemainingSeconds(null);
+    }
+
+    const timer = window.setInterval(tickQuestionTime, 1000);
+    return () => window.clearInterval(timer);
+  }, [
+    autoSubmitTriggered,
+    currentIndex,
+    enablePerQuestionTimer,
+    orderedQuestions,
+  ]);
+
+  // Auto-advance once when a per-question timer first expires.
+  useEffect(() => {
+    const current = orderedQuestions[currentIndex];
+    if (
+      !current ||
+      !enablePerQuestionTimer ||
+      (current.estimatedTimeSeconds ?? 0) <= 0 ||
+      questionRemainingSeconds == null ||
+      questionRemainingSeconds > 0 ||
+      autoSubmitTriggered
+    ) {
+      return;
+    }
+
+    if (expiredQuestionIdsRef.current.has(current.id)) {
+      return;
+    }
+
+    expiredQuestionIdsRef.current.add(current.id);
+
+    if (currentIndex < orderedQuestions.length - 1) {
+      setCurrentIndex((value) =>
+        Math.min(orderedQuestions.length - 1, value + 1),
+      );
+      void persistDraftRef.current(true);
+      return;
+    }
+
+    // Last question expired — flush draft; quiz-level timer still owns auto-submit.
+    void persistDraftRef.current(true);
+  }, [
+    autoSubmitTriggered,
+    currentIndex,
+    enablePerQuestionTimer,
+    orderedQuestions,
+    questionRemainingSeconds,
+  ]);
+
   async function persistDraft(force = false) {
     if (
       !attempt ||
@@ -412,20 +598,30 @@ export function StudentQuizAttemptPage() {
       return;
     }
 
-    if (!force && !answersDirtyRef.current) {
+    const focusLossDelta = focusLossDeltaRef.current;
+    const clipboardPasteDelta = clipboardPasteDeltaRef.current;
+    const hasIntegrityDelta = focusLossDelta > 0 || clipboardPasteDelta > 0;
+
+    if (!force && !answersDirtyRef.current && !hasIntegrityDelta) {
       return;
     }
 
+    const times = questionTimeSpentRef.current;
     const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) =>
       toSubmitAnswer(
         question.id,
         answers[question.id],
         markedForReview[question.id],
+        times[question.id] ?? 0,
       ),
     );
 
-    const snapshot = JSON.stringify(payload);
-    if (!force && snapshot === lastSavedSnapshotRef.current) {
+    const snapshot = JSON.stringify({
+      answers: payload,
+      focusLossDelta,
+      clipboardPasteDelta,
+    });
+    if (!force && !hasIntegrityDelta && snapshot === lastSavedSnapshotRef.current) {
       answersDirtyRef.current = false;
       return;
     }
@@ -435,18 +631,36 @@ export function StudentQuizAttemptPage() {
       Math.round((Date.now() - startedAt) / 1000),
     );
 
+    // Claim deltas before await so concurrent events accumulate separately.
+    focusLossDeltaRef.current = 0;
+    clipboardPasteDeltaRef.current = 0;
+
     try {
-      await saveDraft.mutateAsync({
+      const result = await saveDraft.mutateAsync({
         answers: payload,
         timeSpentSeconds,
+        focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
+        clipboardPasteDelta: clipboardPasteDelta > 0 ? clipboardPasteDelta : null,
+        deviceId: STUDENT_DEVICE_ID,
       });
       lastSavedSnapshotRef.current = snapshot;
       answersDirtyRef.current = false;
+      if (result.focusLossCount != null) {
+        setFocusLossCount(result.focusLossCount);
+      }
+      if (result.clipboardPasteCount != null) {
+        setClipboardPasteCount(result.clipboardPasteCount);
+      }
       setDraftStatus("Draft saved");
     } catch {
+      // Restore unsent deltas so the next flush retries them.
+      focusLossDeltaRef.current += focusLossDelta;
+      clipboardPasteDeltaRef.current += clipboardPasteDelta;
       setDraftStatus("Draft save failed");
     }
   }
+
+  persistDraftRef.current = persistDraft;
 
   useEffect(() => {
     if (!attempt || orderedQuestions.length === 0) {
@@ -481,12 +695,14 @@ export function StudentQuizAttemptPage() {
 
     function onVisibilityChange() {
       if (document.hidden) {
-        void persistDraft(true);
+        focusLossDeltaRef.current += 1;
+        setFocusLossCount((count) => count + 1);
+        void persistDraftRef.current(true);
       }
     }
 
     function onPageHide() {
-      void persistDraft(true);
+      void persistDraftRef.current(true);
     }
 
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -495,8 +711,13 @@ export function StudentQuizAttemptPage() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt, orderedQuestions.length, answers, markedForReview, startedAt]);
+  }, [attempt, orderedQuestions.length]);
+
+  function handleAnswerPaste() {
+    clipboardPasteDeltaRef.current += 1;
+    setClipboardPasteCount((count) => count + 1);
+    void persistDraftRef.current(true);
+  }
 
   async function handleSubmit(isAuto = false) {
     if (submitAttempt.isPending) {
@@ -504,13 +725,15 @@ export function StudentQuizAttemptPage() {
     }
 
     // Flush the latest answers before final submit (especially important for timer auto-submit).
-    await persistDraft();
+    await persistDraft(true);
 
+    const times = questionTimeSpentRef.current;
     const payload: SubmitQuizAnswer[] = orderedQuestions.map((question) =>
       toSubmitAnswer(
         question.id,
         answers[question.id],
         markedForReview[question.id],
+        times[question.id] ?? 0,
       ),
     );
 
@@ -529,6 +752,7 @@ export function StudentQuizAttemptPage() {
       sessionStorage.removeItem(answersStorageKey(numericAttemptId));
       sessionStorage.removeItem(startedAtStorageKey(numericAttemptId));
       sessionStorage.removeItem(reviewStorageKey(numericAttemptId));
+      sessionStorage.removeItem(questionTimeStorageKey(numericAttemptId));
       navigate(
         `/student/quizzes/${numericQuizId}/attempts/${result.attemptId}/result`,
         { state: isAuto ? { autoSubmitted: true } : undefined },
@@ -565,6 +789,8 @@ export function StudentQuizAttemptPage() {
   }
 
   const timerUrgent = remainingSeconds != null && remainingSeconds <= 60;
+  const questionTimerUrgent =
+    questionRemainingSeconds != null && questionRemainingSeconds <= 10;
   const currentQuestion = orderedQuestions[currentIndex];
   const currentAnswer = currentQuestion
     ? answers[currentQuestion.id]
@@ -575,6 +801,8 @@ export function StudentQuizAttemptPage() {
   const canGoNext =
     currentIndex < orderedQuestions.length - 1 &&
     (navigationMode !== "Locked" || currentAnswered);
+  const showIntegrity =
+    focusLossCount > 0 || clipboardPasteCount > 0;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -588,17 +816,38 @@ export function StudentQuizAttemptPage() {
               : "Answer all questions and submit when ready."
         }
         action={
-          remainingSeconds != null ? (
-            <div
-              className={`rounded-lg px-4 py-2 text-sm font-semibold tabular-nums ${
-                timerUrgent
-                  ? "bg-red-50 text-red-700"
-                  : "bg-slate-100 text-slate-800"
-              }`}
-            >
-              {formatCountdown(remainingSeconds)}
-            </div>
-          ) : undefined
+          <div className="flex flex-col items-end gap-1">
+            {remainingSeconds != null ? (
+              <div
+                className={`rounded-lg px-4 py-2 text-sm font-semibold tabular-nums ${
+                  timerUrgent
+                    ? "bg-red-50 text-red-700"
+                    : "bg-slate-100 text-slate-800"
+                }`}
+              >
+                {formatCountdown(remainingSeconds)}
+              </div>
+            ) : null}
+            {questionRemainingSeconds != null ? (
+              <div
+                className={`rounded-md px-2.5 py-1 text-xs font-medium tabular-nums ${
+                  questionTimerUrgent
+                    ? "bg-amber-50 text-amber-800"
+                    : "bg-slate-50 text-slate-600"
+                }`}
+              >
+                Question {formatCountdown(questionRemainingSeconds)}
+              </div>
+            ) : null}
+            {showIntegrity ? (
+              <p className="text-[11px] text-slate-400">
+                Focus leaves {focusLossCount}
+                {clipboardPasteCount > 0
+                  ? ` · Pastes ${clipboardPasteCount}`
+                  : ""}
+              </p>
+            ) : null}
+          </div>
         }
       />
 
@@ -689,6 +938,7 @@ export function StudentQuizAttemptPage() {
                   },
                 }))
               }
+              onPaste={handleAnswerPaste}
               className={inputClassName}
               placeholder="Type your answer..."
             />
@@ -783,7 +1033,9 @@ export function StudentQuizAttemptPage() {
               <button
                 type="button"
                 disabled={!canGoPrevious}
-                onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))}
+                onClick={() =>
+                  setCurrentIndex((value) => Math.max(0, value - 1))
+                }
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 Previous

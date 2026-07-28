@@ -57,6 +57,8 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<QuizReview> QuizReviews => Set<QuizReview>();
     public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
     public DbSet<QuizAttemptQuestion> QuizAttemptQuestions => Set<QuizAttemptQuestion>();
+    public DbSet<QuizAttemptQuestionOption> QuizAttemptQuestionOptions => Set<QuizAttemptQuestionOption>();
+    public DbSet<QuizAttemptAcceptedAnswer> QuizAttemptAcceptedAnswers => Set<QuizAttemptAcceptedAnswer>();
     public DbSet<QuizAttemptAnswer> QuizAttemptAnswers => Set<QuizAttemptAnswer>();
 
     /// <summary>Applies entity configurations from this assembly.</summary>

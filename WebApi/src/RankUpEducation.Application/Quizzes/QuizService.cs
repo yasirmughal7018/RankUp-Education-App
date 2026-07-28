@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Notifications;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
@@ -70,6 +71,7 @@ public sealed class QuizService : IQuizService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IQuizAiReviewService _aiReview;
+    private readonly INotificationService _notifications;
 
     public QuizService(
         IQuizRepository quizzes,
@@ -82,7 +84,8 @@ public sealed class QuizService : IQuizService
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
         IUnitOfWork unitOfWork,
-        IQuizAiReviewService aiReview)
+        IQuizAiReviewService aiReview,
+        RankUpEducation.Application.Notifications.INotificationService notifications)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -95,6 +98,7 @@ public sealed class QuizService : IQuizService
         _dateTimeProvider = dateTimeProvider;
         _unitOfWork = unitOfWork;
         _aiReview = aiReview;
+        _notifications = notifications;
     }
 
     public async Task<QuizListResponse> ListAsync(
@@ -285,6 +289,7 @@ public sealed class QuizService : IQuizService
 
         if (existingInProgress is not null)
         {
+            await EnsureCompetitionDeviceLockAsync(quiz, existingInProgress, cancellationToken, request.DeviceId);
             return await BuildAttemptPayloadAsync(
                 quiz,
                 existingInProgress,
@@ -322,10 +327,66 @@ public sealed class QuizService : IQuizService
                 attempt.Id,
                 question.QuestionId,
                 (short)(index + 1),
-                question.Marks))
+                question.Marks,
+                question.QuestionText,
+                question.QuestionTypeName,
+                question.Hint,
+                question.Explanation,
+                question.EstimatedTimeSeconds))
             .ToArray();
 
         await _attempts.AddAttemptQuestionsAsync(attemptQuestions, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var snapshotOptions = new List<QuizAttemptQuestionOption>();
+        var snapshotAccepted = new List<QuizAttemptAcceptedAnswer>();
+        foreach (var attemptQuestion in attemptQuestions)
+        {
+            var source = orderedQuestions.First(question => question.QuestionId == attemptQuestion.QuestionId);
+            var options = source.Options.ToList();
+            if (!QuizQuestionHelper.IsFillBlankType(source.QuestionTypeName)
+                && quiz.ShuffleOptions
+                && options.Count > 1)
+            {
+                options = options.OrderBy(_ => Random.Shared.Next()).ToList();
+            }
+
+            short optionOrder = 1;
+            foreach (var option in options)
+            {
+                snapshotOptions.Add(new QuizAttemptQuestionOption(
+                    attemptQuestion.Id,
+                    option.OptionId,
+                    option.OptionText,
+                    option.OptionImageUrl,
+                    option.IsCorrect,
+                    optionOrder++));
+            }
+
+            foreach (var accepted in source.AcceptedAnswers)
+            {
+                snapshotAccepted.Add(new QuizAttemptAcceptedAnswer(
+                    attemptQuestion.Id,
+                    accepted.AnswerText,
+                    accepted.IsCaseSensitive,
+                    accepted.AllowPartialMatch,
+                    accepted.NormalizedAnswer,
+                    accepted.MinimumLength,
+                    accepted.MaximumLength,
+                    accepted.AllowAiReview,
+                    accepted.AllowTeacherReview));
+            }
+        }
+
+        if (snapshotOptions.Count > 0)
+        {
+            await _attempts.AddAttemptQuestionOptionsAsync(snapshotOptions, cancellationToken);
+        }
+
+        if (snapshotAccepted.Count > 0)
+        {
+            await _attempts.AddAttemptAcceptedAnswersAsync(snapshotAccepted, cancellationToken);
+        }
 
         var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
         if (assignment is not null
@@ -386,13 +447,13 @@ public sealed class QuizService : IQuizService
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
+        await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
         EnsureAttemptTimeBudget(quiz.TimeLimitMinutes, attempt.StartedDate, now, graceSeconds: 30);
 
         var answers = request.Answers ?? Array.Empty<SubmitQuizAnswerRequest>();
         var savedCount = 0;
 
         foreach (var submitted in answers
-            // Last answer wins when the client sends duplicates for the same question.
             .GroupBy(answer => answer.QuestionId)
             .Select(group => group.Last()))
         {
@@ -403,6 +464,18 @@ public sealed class QuizService : IQuizService
             if (attemptQuestion is null)
             {
                 continue;
+            }
+
+            if (attemptQuestion.EstimatedTimeSeconds > 0
+                && submitted.TimeSpentSeconds is short questionSpent
+                && questionSpent > attemptQuestion.EstimatedTimeSeconds + 5)
+            {
+                // Soft enforce: keep last valid answer time; still accept draft but clamp reported time.
+                attemptQuestion.UpdateTimeSpent(attemptQuestion.EstimatedTimeSeconds);
+            }
+            else if (submitted.TimeSpentSeconds is short spent)
+            {
+                attemptQuestion.UpdateTimeSpent(spent);
             }
 
             var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
@@ -427,8 +500,28 @@ public sealed class QuizService : IQuizService
             attempt.UpdateTimeSpent((short)Math.Clamp((int)timeSpent, 0, short.MaxValue));
         }
 
+        if (request.FocusLossDelta is > 0)
+        {
+            for (var i = 0; i < request.FocusLossDelta.Value && i < 50; i++)
+            {
+                attempt.RecordFocusLoss();
+            }
+        }
+
+        if (request.ClipboardPasteDelta is > 0)
+        {
+            for (var i = 0; i < request.ClipboardPasteDelta.Value && i < 50; i++)
+            {
+                attempt.RecordClipboardPaste();
+            }
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        return new SaveQuizAttemptAnswersResponse(attemptId, savedCount);
+        return new SaveQuizAttemptAnswersResponse(
+            attemptId,
+            savedCount,
+            attempt.FocusLossCount,
+            attempt.ClipboardPasteCount);
     }
 
     public async Task<QuizAttemptResultResponse> SubmitAttemptAsync(
@@ -455,6 +548,7 @@ public sealed class QuizService : IQuizService
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
+        await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
         // Auto-submit after client timer expiry may arrive slightly late; give a wider grace than manual submit.
         EnsureAttemptTimeBudget(
             quiz.TimeLimitMinutes,
@@ -485,9 +579,6 @@ public sealed class QuizService : IQuizService
             throw new BusinessRuleException("This quiz attempt has already been submitted.");
         }
 
-        var quizQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken);
-        var questionMap = quizQuestions.ToDictionary(question => question.QuestionId);
-
         var attemptDetail = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
         var totalMarks = (short)attemptDetail.Questions.Sum(question => question.Marks);
@@ -506,34 +597,40 @@ public sealed class QuizService : IQuizService
                 continue;
             }
 
-            if (!questionMap.TryGetValue(attemptQuestion.QuestionId, out var question))
-            {
-                continue;
-            }
-
             var attemptQuestionEntity = await _attempts.GetAttemptQuestionEntityAsync(
                 attemptId,
                 attemptQuestion.QuestionId,
                 cancellationToken);
-            if (attemptQuestionEntity is not null && submitted.IsMarkedForReview is bool marked)
+            if (attemptQuestionEntity is not null)
             {
-                attemptQuestionEntity.SetMarkedForReview(marked);
+                if (submitted.IsMarkedForReview is bool marked)
+                {
+                    attemptQuestionEntity.SetMarkedForReview(marked);
+                }
+
+                if (submitted.TimeSpentSeconds is short spent)
+                {
+                    attemptQuestionEntity.UpdateTimeSpent(spent);
+                }
             }
 
             var questionMarks = attemptQuestion.Marks;
             var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
             var isCorrect = false;
             short awardedMarks = 0;
-            var isMultiSelect = QuizQuestionHelper.IsMultiSelectType(question.QuestionTypeName);
-            var isFillBlank = QuizQuestionHelper.IsFillBlankType(question.QuestionTypeName);
-            var isDescriptive = QuizQuestionHelper.IsDescriptiveType(question.QuestionTypeName)
+            var typeName = attemptQuestion.QuestionTypeName;
+            var isMultiSelect = QuizQuestionHelper.IsMultiSelectType(typeName);
+            var isFillBlank = QuizQuestionHelper.IsFillBlankType(typeName);
+            var isDescriptive = QuizQuestionHelper.IsDescriptiveType(typeName)
                 || (!isFillBlank
                     && selectedOptionIds.Count == 0
                     && submitted.SubmittedText.HasTrimmedText());
+            var acceptedAnswers = attemptQuestion.AcceptedAnswers
+                ?? Array.Empty<QuestionAcceptedAnswerScoreItem>();
 
             if (isMultiSelect && selectedOptionIds.Count > 0)
             {
-                var correctOptionIds = question.Options
+                var correctOptionIds = attemptQuestion.Options
                     .Where(option => option.IsCorrect)
                     .Select(option => option.OptionId)
                     .ToArray();
@@ -546,8 +643,8 @@ public sealed class QuizService : IQuizService
             else if (isFillBlank && submitted.SubmittedText.HasTrimmedText())
             {
                 var submittedText = submitted.SubmittedText.AsTrimmedString();
-                isCorrect = question.AcceptedAnswers.Any(answer => MatchesAcceptedAnswer(answer, submittedText))
-                    || question.Options.Any(option =>
+                isCorrect = acceptedAnswers.Any(answer => MatchesAcceptedAnswer(answer, submittedText))
+                    || attemptQuestion.Options.Any(option =>
                         option.IsCorrect
                         && string.Equals(
                             option.OptionText.AsTrimmedString(),
@@ -556,12 +653,10 @@ public sealed class QuizService : IQuizService
                 awardedMarks = isCorrect ? questionMarks : (short)0;
                 obtainedMarks += awardedMarks;
 
-                // Question-level OR: any accepted-answer flag enables that review path.
-                var allowTeacherReview = question.AcceptedAnswers.Any(answer => answer.AllowTeacherReview);
-                var allowAiReview = question.AcceptedAnswers.Any(answer => answer.AllowAiReview);
+                var allowTeacherReview = acceptedAnswers.Any(answer => answer.AllowTeacherReview);
+                var allowAiReview = acceptedAnswers.Any(answer => answer.AllowAiReview);
                 if (allowTeacherReview)
                 {
-                    // Suggested auto-score is kept; student result stays pending until teacher finalize.
                     hasSubjectiveAnswers = true;
                 }
 
@@ -578,12 +673,12 @@ public sealed class QuizService : IQuizService
                     await EnsureFillAiReviewAsync(
                         attemptId,
                         attemptQuestion.QuestionId,
-                        bankQuestionText: question.QuestionText,
+                        bankQuestionText: attemptQuestion.QuestionText,
                         submittedText: submitted.SubmittedText ?? string.Empty,
                         isCorrect,
                         awardedMarks,
                         questionMarks,
-                        question.AcceptedAnswers.Select(answer => answer.AnswerText).ToArray(),
+                        acceptedAnswers.Select(answer => answer.AnswerText).ToArray(),
                         cancellationToken);
                 }
 
@@ -592,7 +687,7 @@ public sealed class QuizService : IQuizService
             else if (selectedOptionIds.Count > 0)
             {
                 var selectedOptionId = selectedOptionIds[0];
-                var selectedOption = question.Options.FirstOrDefault(option => option.OptionId == selectedOptionId);
+                var selectedOption = attemptQuestion.Options.FirstOrDefault(option => option.OptionId == selectedOptionId);
                 isCorrect = selectedOption?.IsCorrect ?? false;
                 awardedMarks = isCorrect ? questionMarks : (short)0;
                 obtainedMarks += awardedMarks;
@@ -641,6 +736,19 @@ public sealed class QuizService : IQuizService
 
         var quizTitle = (await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken))?.QuizTitle
             ?? "Quiz";
+
+        if (assignment is not null)
+        {
+            var category = request.IsAutoSubmit
+                ? QuizNotificationCategories.QuizAutoSubmitted
+                : QuizNotificationCategories.QuizSubmitted;
+            await _notifications.CreateAsync(
+                [assignment.AssignedById],
+                request.IsAutoSubmit ? "Quiz auto-submitted" : "Quiz submitted",
+                $"A student submitted \"{quizTitle}\" (attempt #{attempt.NumberOfQuestionAttempt}).",
+                category,
+                cancellationToken);
+        }
 
         var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
@@ -693,48 +801,36 @@ public sealed class QuizService : IQuizService
         var attemptDetail = await _attempts.GetAttemptDetailAsync(attempt.Id, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        var bankQuestions = await _quizQuestions.GetQuizQuestionsAsync(quiz.Id, cancellationToken);
-        var bankById = bankQuestions.ToDictionary(question => question.QuestionId);
+        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+        var isCompetition = quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase);
+        var enablePerQuestionTimer = attemptDetail.Questions.Any(question => question.EstimatedTimeSeconds > 0);
 
         var questions = attemptDetail.Questions
             .OrderBy(question => question.DisplayOrder)
             .Select(attemptQuestion =>
             {
-                if (!bankById.TryGetValue(attemptQuestion.QuestionId, out var bankQuestion))
-                {
-                    return new QuizQuestionForAttemptResponse(
-                        attemptQuestion.QuestionId,
-                        attemptQuestion.QuestionText,
-                        "Unknown",
-                        attemptQuestion.Marks,
-                        attemptQuestion.DisplayOrder,
-                        null,
-                        Array.Empty<QuizOptionResponse>());
-                }
-
-                var isFillBlank = QuizQuestionHelper.IsFillBlankType(bankQuestion.QuestionTypeName);
+                var isFillBlank = QuizQuestionHelper.IsFillBlankType(attemptQuestion.QuestionTypeName);
                 var options = isFillBlank
-                    ? new List<QuizOptionResponse>()
-                    : bankQuestion.Options
+                    ? Array.Empty<QuizOptionResponse>()
+                    : attemptQuestion.Options
                         .Select(option => new QuizOptionResponse(
                             option.OptionId,
                             option.OptionText,
                             option.OptionImageUrl))
-                        .ToList();
-
-                if (!isFillBlank && quiz.ShuffleOptions && options.Count > 1)
-                {
-                    options = options.OrderBy(_ => Random.Shared.Next()).ToList();
-                }
+                        .ToArray();
 
                 return new QuizQuestionForAttemptResponse(
-                    bankQuestion.QuestionId,
-                    bankQuestion.QuestionText,
-                    bankQuestion.QuestionTypeName,
+                    attemptQuestion.QuestionId,
+                    attemptQuestion.QuestionText,
+                    string.IsNullOrWhiteSpace(attemptQuestion.QuestionTypeName)
+                        ? "Unknown"
+                        : attemptQuestion.QuestionTypeName,
                     attemptQuestion.Marks,
                     attemptQuestion.DisplayOrder,
-                    bankQuestion.Hint,
-                    options);
+                    attemptQuestion.Hint,
+                    options,
+                    attemptQuestion.EstimatedTimeSeconds,
+                    attemptQuestion.TimeSpentSeconds);
             })
             .ToArray();
 
@@ -756,12 +852,16 @@ public sealed class QuizService : IQuizService
             attempt.Id,
             quiz.Id,
             attempt.NumberOfQuestionAttempt,
-            quizDetail?.TimeLimitMinutes,
+            quizDetail?.TimeLimitMinutes ?? quiz.TimeLimitMinutes,
             attempt.StartedDate,
             resumed,
             questions,
             savedAnswers,
-            string.IsNullOrWhiteSpace(quiz.NavigationMode) ? "Free" : quiz.NavigationMode);
+            string.IsNullOrWhiteSpace(quiz.NavigationMode) ? "Free" : quiz.NavigationMode,
+            EnforceDeviceLock: isCompetition,
+            FocusLossCount: attempt.FocusLossCount,
+            ClipboardPasteCount: attempt.ClipboardPasteCount,
+            EnablePerQuestionTimer: enablePerQuestionTimer);
     }
 
     private async Task ReplaceAttemptAnswersAsync(
@@ -907,6 +1007,26 @@ public sealed class QuizService : IQuizService
         {
             throw new BusinessRuleException("The time limit for this quiz attempt has expired.");
         }
+    }
+
+    private async Task EnsureCompetitionDeviceLockAsync(
+        Quiz quiz,
+        QuizAttempt attempt,
+        CancellationToken cancellationToken,
+        string? deviceId = null)
+    {
+        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+        if (!quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!deviceId.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Device id is required for competition attempts."]);
+        }
+
+        attempt.EnsureSameDevice(deviceId!);
     }
 
     private static void ValidateDeviceId(string deviceId)
