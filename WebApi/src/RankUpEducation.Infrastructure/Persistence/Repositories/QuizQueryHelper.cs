@@ -48,7 +48,8 @@ internal static class QuizQueryHelper
         QuizAssignment assignment,
         IReadOnlyDictionary<short, string> lookupNames,
         IReadOnlyDictionary<int, string> schoolNames,
-        (int AttemptCount, short? BestPercentage, DateTimeOffset? LastSubmittedAt) stats)
+        (int AttemptCount, short? BestPercentage, DateTimeOffset? LastSubmittedAt) stats,
+        string? quizResultStatusName = null)
     {
         return new QuizListItem(
             quiz.Id,
@@ -72,7 +73,9 @@ internal static class QuizQueryHelper
             quiz.IsReviewRequired,
             stats.AttemptCount,
             stats.BestPercentage,
-            stats.LastSubmittedAt);
+            stats.LastSubmittedAt,
+            QuizResultStatusName: quizResultStatusName
+                ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus));
     }
 
     public static QuizListItem MapQuizWithoutAssignment(
@@ -120,7 +123,8 @@ internal static class QuizQueryHelper
         short? bestPercentage,
         DateTimeOffset? lastSubmittedAt,
         short lifecycleStatusId,
-        string lifecycleStatusName)
+        string lifecycleStatusName,
+        string? quizResultStatusName = null)
     {
         return new QuizDetailItem(
             quiz.Id,
@@ -153,7 +157,8 @@ internal static class QuizQueryHelper
             quiz.TopicId,
             quiz.DifficultyLevelId,
             lifecycleStatusId,
-            lifecycleStatusName);
+            lifecycleStatusName,
+            quizResultStatusName ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus));
     }
 
     public static async Task<IReadOnlyDictionary<short, string>> LoadLifecycleNamesAsync(

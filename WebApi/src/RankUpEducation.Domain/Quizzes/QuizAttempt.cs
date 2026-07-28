@@ -97,6 +97,21 @@ public sealed class QuizAttempt : BaseEntity
         Submit(obtainedMarks, totalMarks, timeSpentSeconds);
     }
 
+    /// <summary>
+    /// Closes an abandoned in-progress attempt after the assignment window ends (status Expired).
+    /// Does not auto-score; obtained marks stay as previously stored (typically 0).
+    /// </summary>
+    public void MarkExpired(short expiredStatusId)
+    {
+        StatusId = expiredStatusId;
+        SubmittedDate = DateTimeOffset.UtcNow;
+        if (TimeSpentSeconds <= 0)
+        {
+            var elapsed = (int)Math.Clamp((SubmittedDate - StartedDate).TotalSeconds, 0, short.MaxValue);
+            TimeSpentSeconds = (short)elapsed;
+        }
+    }
+
     /// <summary>Replaces attempt score after teacher/parent review of subjective answers.</summary>
     public void ApplyReviewedScore(short obtainedMarks, short totalMarks, short reviewedStatusId)
     {

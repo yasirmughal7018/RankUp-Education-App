@@ -38,7 +38,8 @@ public interface IQuizAssignmentRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Marks not-attempted assignments past their end window as Expired.
+    /// Promotes due Upcoming assignments to Not Attempted, expires unattempted past-window
+    /// assignments, and marks overdue in-progress attempts as Expired (84).
     /// </summary>
     Task<int> ExpireOverdueUnattemptedAsync(DateTimeOffset now, CancellationToken cancellationToken);
 }

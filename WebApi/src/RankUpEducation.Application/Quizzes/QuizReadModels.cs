@@ -24,7 +24,8 @@ public sealed record QuizListItem(
     int AttemptCount,
     short? BestPercentage,
     DateTimeOffset? LastSubmittedAt,
-    string? LifecycleStatusName = null);
+    string? LifecycleStatusName = null,
+    string? QuizResultStatusName = null);
 
 /// <summary>Quiz awaiting school-admin approval (teacher-created, non–parent-private).</summary>
 public sealed record PendingQuizApprovalItem(
@@ -72,7 +73,8 @@ public sealed record QuizDetailItem(
     short TopicId,
     short DifficultyLevelId,
     short LifecycleStatusId,
-    string LifecycleStatusName);
+    string LifecycleStatusName,
+    string? QuizResultStatusName = null);
 
 /// <summary>School and campus resolved from a linked student when a parent creates a quiz.</summary>
 public sealed record StudentSchoolContext(

@@ -115,7 +115,10 @@ public static class QuizLookupNames
     public static readonly string[] ApprovedStatusNames = ["Approved", "APPROVED"];
     public static readonly string[] RejectedApprovalStatusNames = ["Rejected", "Declined", "REJECTED"];
     public static readonly string[] AssignedResultNames =
-        ["Not Attempted", "Assigned", "Not Started", "Pending", "Up Coming", "Upcoming"];
+        ["Not Attempted", "Assigned", "Not Started", "Pending"];
+
+    public static readonly string[] UpcomingResultNames =
+        ["Up Coming", "Upcoming"];
 
     /// <summary>Single-select option questions (exactly one correct).</summary>
     public static readonly string[] SingleChoiceQuestionTypeNames =

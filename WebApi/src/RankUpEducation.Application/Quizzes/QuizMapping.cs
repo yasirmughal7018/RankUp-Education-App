@@ -41,11 +41,7 @@ internal static class QuizMapping
             item.LastSubmittedAt,
             QuizStatusCalculator.ParseInstructions(item.Instructions),
             item.IsReviewRequired,
-            QuizStatusCalculator.ResolveResultStatus(
-                item.AttemptCount,
-                attemptLimit,
-                item.BestPercentage,
-                item.LastSubmittedAt),
+            ResolveResultStatusName(item.QuizResultStatusName, item.AttemptCount, attemptLimit, item.BestPercentage, item.LastSubmittedAt),
             item.BestPercentage,
             item.CreatedByName,
             item.SchoolName);
@@ -86,12 +82,27 @@ internal static class QuizMapping
             item.IsReviewRequired,
             item.CreatedByName,
             item.SchoolName,
-            QuizStatusCalculator.ResolveResultStatus(
-                item.AttemptCount,
-                attemptLimit,
-                item.BestPercentage,
-                item.LastSubmittedAt),
+            ResolveResultStatusName(item.QuizResultStatusName, item.AttemptCount, attemptLimit, item.BestPercentage, item.LastSubmittedAt),
             item.BestPercentage);
+    }
+
+    private static string ResolveResultStatusName(
+        string? storedResultStatusName,
+        int attemptCount,
+        int attemptLimit,
+        short? bestPercentage,
+        DateTimeOffset? lastSubmittedAt)
+    {
+        if (!string.IsNullOrWhiteSpace(storedResultStatusName))
+        {
+            return storedResultStatusName;
+        }
+
+        return QuizStatusCalculator.ResolveResultStatus(
+            attemptCount,
+            attemptLimit,
+            bestPercentage,
+            lastSubmittedAt);
     }
 
     public static QuizQuestionForAttemptResponse ToAttemptQuestion(QuizQuestionItem item, bool revealCorrectAnswers)

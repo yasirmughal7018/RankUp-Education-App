@@ -34,20 +34,12 @@ public sealed class QuizRepository : IQuizRepository
             studentId,
             cancellationToken);
 
-        var studentUser = await _dbContext.Users.AsNoTracking()
-            .FirstOrDefaultAsync(user => user.Id == studentId, cancellationToken);
-        if (studentUser?.SchoolId is null)
-        {
-            return assigned;
-        }
-
         var audienceQuizzes = await _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => quiz.IsActive
                 && !quiz.IsDeleted
                 && quiz.AudienceStartAt != null
                 && quiz.AudienceEndAt != null
-                && (quiz.AudienceScope == "Public"
-                    || (quiz.AudienceScope == "School" && quiz.SchoolId == studentUser.SchoolId.Value)))
+                && quiz.AudienceScope == "Public")
             .ToListAsync(cancellationToken);
 
         if (audienceQuizzes.Count == 0)
@@ -299,13 +291,9 @@ public sealed class QuizRepository : IQuizRepository
 
         if (assignment is null)
         {
-            var studentUser = await _dbContext.Users.AsNoTracking()
-                .FirstOrDefaultAsync(user => user.Id == studentId, cancellationToken);
             var canAudience = quiz.AudienceStartAt is not null
                 && quiz.AudienceEndAt is not null
-                && (quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
-                    || (quiz.AudienceScope.Equals("School", StringComparison.OrdinalIgnoreCase)
-                        && studentUser?.SchoolId == quiz.SchoolId));
+                && quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase);
             if (!canAudience)
             {
                 return null;
@@ -318,6 +306,7 @@ public sealed class QuizRepository : IQuizRepository
 
         if (assignment is not null)
         {
+            var resultStatusName = await _lookups.GetLookupNameAsync(assignment.QuizResultStatus, cancellationToken);
             return QuizQueryHelper.MapQuizDetail(
                 quiz,
                 assignment,
@@ -327,7 +316,8 @@ public sealed class QuizRepository : IQuizRepository
                 stats.BestPercentage,
                 stats.LastSubmittedAt,
                 quiz.LifecycleStatusId,
-                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"));
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
+                resultStatusName);
         }
 
         return new QuizDetailItem(
@@ -532,6 +522,10 @@ public sealed class QuizRepository : IQuizRepository
             _dbContext,
             rows.Select(row => row.quiz),
             cancellationToken);
+        var resultStatusIds = rows.Select(row => row.assignment.QuizResultStatus).Distinct().ToArray();
+        var resultStatusNames = await _dbContext.Lookups.AsNoTracking()
+            .Where(lookup => resultStatusIds.Contains(lookup.Id))
+            .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
         var schools = await QuizQueryHelper.LoadSchoolNamesAsync(
             _dbContext,
             rows.Select(row => row.quiz.SchoolId).Distinct(),
@@ -542,7 +536,13 @@ public sealed class QuizRepository : IQuizRepository
         {
             var studentId = statsStudentId ?? row.assignment.StudentId;
             var stats = await QuizQueryHelper.GetAttemptStatsAsync(_dbContext, row.quiz.Id, studentId, cancellationToken);
-            var item = QuizQueryHelper.MapQuizListItem(row.quiz, row.assignment, lookupNames, schools, stats);
+            var item = QuizQueryHelper.MapQuizListItem(
+                row.quiz,
+                row.assignment,
+                lookupNames,
+                schools,
+                stats,
+                resultStatusNames.GetValueOrDefault(row.assignment.QuizResultStatus));
 
             if (!QuizQueryHelper.MatchesFilters(item, search, subject, grade))
             {

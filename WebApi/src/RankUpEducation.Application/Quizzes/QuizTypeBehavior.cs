@@ -46,7 +46,10 @@ public static class QuizTypeBehavior
         return new TypeDefaults(1, 45, false, true, true, "Free", false);
     }
 
-    /// <summary>Applies type defaults when the owner left optional fields unset on create.</summary>
+    /// <summary>
+    /// Applies type defaults for nullable create fields (time limit, attempts, navigation).
+    /// Explicit bool choices from the client are preserved — never OR'd with type defaults.
+    /// </summary>
     public static void ApplyCreateDefaults(Quiz quiz, string quizTypeName, string? requestedNavigationMode)
     {
         var defaults = ResolveDefaults(quizTypeName);
@@ -64,9 +67,9 @@ public static class QuizTypeBehavior
             quiz.Instructions,
             quiz.TimeLimitMinutes ?? defaults.TimeLimitMinutes,
             quiz.AllowedAttempts ?? defaults.AllowedAttempts,
-            quiz.ShuffleQuestions || defaults.ShuffleQuestions,
-            quiz.ShuffleOptions || defaults.ShuffleOptions,
-            quiz.IsReviewRequired || defaults.IsReviewRequired,
+            quiz.ShuffleQuestions,
+            quiz.ShuffleOptions,
+            quiz.IsReviewRequired,
             navigation);
     }
 

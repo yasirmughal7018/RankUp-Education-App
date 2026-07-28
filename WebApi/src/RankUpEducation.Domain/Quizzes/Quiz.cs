@@ -69,7 +69,7 @@ public sealed class Quiz : SoftDeleteEntity
     /// <summary>Free = jump anywhere; Sequential = prev/next only; Locked = forward only after answering.</summary>
     public string NavigationMode { get; private set; } = "Free";
 
-    /// <summary>Assigned (row-based), School (all campuses), or Public (platform catalog + lazy assignment).</summary>
+    /// <summary>Assigned (row-based) or Public (platform catalog + lazy assignment). School-wide targets use assignment rows only.</summary>
     public string AudienceScope { get; private set; } = "Assigned";
 
     public DateTimeOffset? AudienceStartAt { get; private set; }
@@ -127,7 +127,7 @@ public sealed class Quiz : SoftDeleteEntity
             : "Free";
     }
 
-    /// <summary>Opens school-wide or public audience access without requiring pre-created rows for every student.</summary>
+    /// <summary>Opens public catalog access without requiring pre-created rows for every student.</summary>
     public void SetAudienceAccess(
         string audienceScope,
         DateTimeOffset startAt,
@@ -135,9 +135,8 @@ public sealed class Quiz : SoftDeleteEntity
         short allowedAttempts)
     {
         var scope = audienceScope.AsTrimmedOrNull() ?? "Assigned";
-        AudienceScope = scope.Equals("Public", StringComparison.OrdinalIgnoreCase) ? "Public"
-            : scope.Equals("School", StringComparison.OrdinalIgnoreCase) ? "School"
-            : "Assigned";
+        // School-wide and multi-school assignment use materialized rows; only Public is open-catalog.
+        AudienceScope = scope.Equals("Public", StringComparison.OrdinalIgnoreCase) ? "Public" : "Assigned";
         AudienceStartAt = startAt;
         AudienceEndAt = endAt;
         AudienceAllowedAttempts = allowedAttempts;

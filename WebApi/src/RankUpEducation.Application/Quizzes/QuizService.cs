@@ -216,7 +216,8 @@ public sealed class QuizService : IQuizService
                 0,
                 0,
                 0,
-                summary.Status);
+                summary.Status,
+                summary.ResultStatus);
 
             return QuizMapping.ToDetailResponse(detail, now);
         }
@@ -273,7 +274,6 @@ public sealed class QuizService : IQuizService
         }
 
         var now = _dateTimeProvider.UtcNow;
-        EnsureAttemptWindow(access, now);
 
         var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
@@ -286,6 +286,8 @@ public sealed class QuizService : IQuizService
             studentId,
             inProgressStatusId,
             cancellationToken);
+
+        await EnsureAttemptWindowAsync(access, now, existingInProgress, cancellationToken);
 
         if (existingInProgress is not null)
         {
@@ -443,7 +445,7 @@ public sealed class QuizService : IQuizService
         var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("This quiz is not assigned to you.");
         var now = _dateTimeProvider.UtcNow;
-        EnsureAttemptWindow(access, now);
+        await EnsureAttemptWindowAsync(access, now, attempt, cancellationToken);
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
@@ -544,7 +546,7 @@ public sealed class QuizService : IQuizService
         var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("This quiz is not assigned to you.");
         var now = _dateTimeProvider.UtcNow;
-        EnsureAttemptWindow(access, now);
+        await EnsureAttemptWindowAsync(access, now, attempt, cancellationToken);
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
@@ -780,12 +782,20 @@ public sealed class QuizService : IQuizService
             ?? "Quiz";
 
         var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
-        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false };
+        var hasSubjectiveAnswers = QuizQuestionHelper.HasSubjectiveAnswersRequiringReview(result.Questions);
+        var maskPendingReview = reviewState is { IsReviewRequired: true, IsReviewDone: false }
+            && hasSubjectiveAnswers;
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        var quizTypeName = quiz is null
+            ? string.Empty
+            : await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+        var showAnswers = QuizTypeBehavior.ShouldShowAnswersAfterSubmit(quizTypeName, maskPendingReview);
 
         return QuizMapping.ToAttemptResult(
             result,
             quizTitle,
-            reviewAvailable: reviewState?.IsReviewDone ?? true,
+            reviewAvailable: showAnswers,
             maskPendingReview: maskPendingReview,
             resultStatusOverride: maskPendingReview ? "Pending Review" : null);
     }
@@ -975,17 +985,42 @@ public sealed class QuizService : IQuizService
             .ToArray();
     }
 
-    private static void EnsureAttemptWindow(QuizAssignmentAccess access, DateTimeOffset now)
+    private async Task EnsureAttemptWindowAsync(
+        QuizAssignmentAccess access,
+        DateTimeOffset now,
+        QuizAttempt? inProgressAttempt,
+        CancellationToken cancellationToken)
     {
         if (now < access.StartDateTime)
         {
             throw new BusinessRuleException("This quiz is not open yet.");
         }
 
-        if (now > access.EndDateTime)
+        if (now <= access.EndDateTime)
         {
-            throw new BusinessRuleException("The deadline for this quiz has passed.");
+            return;
         }
+
+        if (inProgressAttempt is not null
+            && inProgressAttempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.InProgress)
+        {
+            inProgressAttempt.MarkExpired(QuizLookupNames.QuizAttemptStatusIds.Expired);
+            var assignment = await _assignments.GetAssignmentEntityAsync(
+                inProgressAttempt.QuizId,
+                inProgressAttempt.StudentId,
+                cancellationToken);
+            if (assignment is not null
+                && assignment.QuizResultStatus is QuizLookupNames.QuizResultStatusIds.InProgress
+                    or QuizLookupNames.QuizResultStatusIds.NotAttempted
+                    or QuizLookupNames.QuizResultStatusIds.Upcoming)
+            {
+                assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.Expired);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        throw new BusinessRuleException("The deadline for this quiz has passed.");
     }
 
     /// <summary>

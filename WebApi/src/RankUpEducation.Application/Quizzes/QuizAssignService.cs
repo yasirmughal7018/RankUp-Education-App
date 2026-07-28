@@ -127,10 +127,18 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["No valid students were found for this assignment."]);
         }
 
-        var resultStatusId = await RequireLookupAsync(
-            QuizLookupNames.QuizResultStatus,
-            QuizLookupNames.AssignedResultNames,
-            cancellationToken);
+        var now = _dateTimeProvider.UtcNow;
+        var resultStatusId = request.StartAt > now
+            ? await _lookups.ResolveLookupIdByNamesAsync(
+                QuizLookupNames.QuizResultStatus,
+                QuizLookupNames.UpcomingResultNames,
+                QuizLookupNames.QuizResultStatusIds.Upcoming,
+                cancellationToken)
+            : await _lookups.ResolveLookupIdByNamesAsync(
+                QuizLookupNames.QuizResultStatus,
+                QuizLookupNames.AssignedResultNames,
+                QuizLookupNames.QuizResultStatusIds.NotAttempted,
+                cancellationToken);
         var assignedLifecycleId = await RequireLookupAsync(
             QuizLookupNames.QuizLifecycleStatus,
             QuizLookupNames.AssignedLifecycleNames,
@@ -167,11 +175,6 @@ public sealed class QuizAssignService : IQuizAssignService
         }
 
         await _assignments.AddAssignmentsAsync(assignments, cancellationToken);
-
-        if (mode is "allinschool" or "multischool")
-        {
-            quiz.SetAudienceAccess("School", request.StartAt, request.EndAt, request.AllowedAttempts);
-        }
 
         quiz.SetLifecycleStatus(assignedLifecycleId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

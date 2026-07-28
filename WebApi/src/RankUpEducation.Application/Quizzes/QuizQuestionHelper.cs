@@ -1,3 +1,5 @@
+using RankUpEducation.Common.Utilities;
+
 namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>Classifies question type names for scoring, option handling, and review routing.</summary>
@@ -96,6 +98,43 @@ public static class QuizQuestionHelper
         => IsSingleChoiceType(questionTypeName)
             || IsMultiSelectType(questionTypeName)
             || IsTrueFalseType(questionTypeName);
+
+    /// <summary>
+    /// True when submitted answers include subjective items that need teacher/parent review
+    /// (descriptive text, or fill-blank with AllowTeacherReview).
+    /// </summary>
+    public static bool HasSubjectiveAnswersRequiringReview(
+        IEnumerable<QuizAttemptQuestionItem> questions)
+    {
+        foreach (var question in questions)
+        {
+            if (!question.SubmittedText.HasTrimmedText())
+            {
+                continue;
+            }
+
+            var typeName = question.QuestionTypeName;
+            var isFillBlank = IsFillBlankType(typeName);
+            if (isFillBlank)
+            {
+                var accepted = question.AcceptedAnswers ?? Array.Empty<QuestionAcceptedAnswerScoreItem>();
+                if (accepted.Any(answer => answer.AllowTeacherReview))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (IsDescriptiveType(typeName)
+                || (question.SelectedOptionIds.Count == 0 && question.SelectedOptionId is null))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static bool MatchesAny(string value, IReadOnlyList<string> names)
         => names.Any(name => name.Equals(value, StringComparison.OrdinalIgnoreCase));
