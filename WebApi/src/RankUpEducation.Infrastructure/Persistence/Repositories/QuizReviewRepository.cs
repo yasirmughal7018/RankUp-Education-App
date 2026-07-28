@@ -124,7 +124,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 quiz.QuizTitle,
                 AttemptId = attempt.Id,
                 attempt.StudentId,
-                attempt.NumberOfQuestionAttempt,
+                attempt.AttemptNumber,
                 attempt.SubmittedDate,
                 attempt.ObtainedMarks
             }).ToListAsync(cancellationToken);
@@ -152,7 +152,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 row.AttemptId,
                 row.StudentId,
                 studentNames.GetValueOrDefault(row.StudentId, $"Student {row.StudentId}"),
-                row.NumberOfQuestionAttempt,
+                row.AttemptNumber,
                 row.SubmittedDate,
                 (short)totalMarks,
                 row.ObtainedMarks));
@@ -266,7 +266,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             quiz.QuizTitle,
             attempt.StudentId,
             studentName,
-            attempt.NumberOfQuestionAttempt,
+            attempt.AttemptNumber,
             (short)totalMarks,
             attempt.ObtainedMarks,
             attempt.Percentage,

@@ -475,6 +475,8 @@ public sealed class QuizService : IQuizService
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
         await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
+        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+        QuizIntegrityRules.EnsureCompetitionDraftAllowed(quizTypeName, attempt);
         EnsureAttemptTimeBudget(
             quiz.TimeLimitMinutes,
             attempt.StartedDate,
@@ -486,7 +488,56 @@ public sealed class QuizService : IQuizService
             ApplyOfflineSyncMarker(attempt, request.ClientSyncId);
         }
 
+        // Record integrity telemetry before answer writes so breach can lock further drafts.
+        if (request.FocusLossDelta is > 0)
+        {
+            for (var i = 0; i < request.FocusLossDelta.Value && i < 50; i++)
+            {
+                attempt.RecordFocusLoss();
+            }
+        }
+
+        if (request.ClipboardPasteDelta is > 0)
+        {
+            for (var i = 0; i < request.ClipboardPasteDelta.Value && i < 50; i++)
+            {
+                attempt.RecordClipboardPaste();
+            }
+        }
+
+        if (QuizIntegrityRules.IsCompetitionBreached(attempt)
+            && quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase))
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            throw new BusinessRuleException(
+                "Competition integrity limit exceeded (too many focus losses or paste events). Submit your attempt now.");
+        }
+
         var answers = request.Answers ?? Array.Empty<SubmitQuizAnswerRequest>();
+        var contentUpdates = answers
+            .GroupBy(answer => answer.QuestionId)
+            .Where(group => AnswerRequestHasContent(group.Last()))
+            .ToDictionary(
+                group => group.Key,
+                group => true);
+
+        if (contentUpdates.Count > 0)
+        {
+            var attemptDetail = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
+                ?? throw new NotFoundAppException("Quiz attempt was not found.");
+            var navItems = attemptDetail.Questions
+                .OrderBy(question => question.DisplayOrder)
+                .Select(question => new QuizAttemptQuestionNavItem(
+                    question.QuestionId,
+                    question.DisplayOrder,
+                    HasAttemptAnswer(question)))
+                .ToArray();
+            QuizNavigationRules.EnsureAnswerUpdatesAllowed(
+                quiz.NavigationMode,
+                navItems,
+                contentUpdates);
+        }
+
         var savedCount = 0;
 
         foreach (var submitted in answers
@@ -538,22 +589,6 @@ public sealed class QuizService : IQuizService
         if (request.TimeSpentSeconds is short timeSpent)
         {
             attempt.UpdateTimeSpent((short)Math.Clamp((int)timeSpent, 0, short.MaxValue));
-        }
-
-        if (request.FocusLossDelta is > 0)
-        {
-            for (var i = 0; i < request.FocusLossDelta.Value && i < 50; i++)
-            {
-                attempt.RecordFocusLoss();
-            }
-        }
-
-        if (request.ClipboardPasteDelta is > 0)
-        {
-            for (var i = 0; i < request.ClipboardPasteDelta.Value && i < 50; i++)
-            {
-                attempt.RecordClipboardPaste();
-            }
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -646,6 +681,21 @@ public sealed class QuizService : IQuizService
         var answersByQuestionId = request.Answers
             .GroupBy(answer => answer.QuestionId)
             .ToDictionary(group => group.Key, group => group.Last());
+
+        var navItems = attemptDetail.Questions
+            .OrderBy(question => question.DisplayOrder)
+            .Select(question => new QuizAttemptQuestionNavItem(
+                question.QuestionId,
+                question.DisplayOrder,
+                HasAttemptAnswer(question)))
+            .ToArray();
+        var navUpdates = answersByQuestionId
+            .Where(pair => AnswerRequestHasContent(pair.Value))
+            .ToDictionary(pair => pair.Key, _ => true);
+        QuizNavigationRules.EnsureAnswerUpdatesAllowed(
+            quiz.NavigationMode,
+            navItems,
+            navUpdates);
 
         var hasSubjectiveAnswers = false;
 
@@ -836,7 +886,7 @@ public sealed class QuizService : IQuizService
             await _notifications.CreateAsync(
                 [assignment.AssignedById],
                 request.IsAutoSubmit ? "Quiz auto-submitted" : "Quiz submitted",
-                $"A student submitted \"{quizTitle}\" (attempt #{attempt.NumberOfQuestionAttempt}).",
+                $"A student submitted \"{quizTitle}\" (attempt #{attempt.AttemptNumber}).",
                 category,
                 cancellationToken);
         }
@@ -1056,7 +1106,7 @@ public sealed class QuizService : IQuizService
         return new StartQuizAttemptResponse(
             attempt.Id,
             quiz.Id,
-            attempt.NumberOfQuestionAttempt,
+            attempt.AttemptNumber,
             quizDetail?.TimeLimitMinutes ?? quiz.TimeLimitMinutes,
             attempt.StartedDate,
             resumed,
@@ -1348,6 +1398,17 @@ public sealed class QuizService : IQuizService
         }
 
         return attempt.StudentId;
+    }
+
+    private static bool HasAttemptAnswer(QuizAttemptQuestionItem question)
+        => question.SelectedOptionIds.Count > 0
+            || question.SelectedOptionId is not null
+            || question.SubmittedText.HasTrimmedText();
+
+    private static bool AnswerRequestHasContent(SubmitQuizAnswerRequest answer)
+    {
+        var optionIds = QuizAnswerSelection.ResolveSelectedOptionIds(answer);
+        return optionIds.Count > 0 || answer.SubmittedText.HasTrimmedText();
     }
 
     private long RequireStudentId()

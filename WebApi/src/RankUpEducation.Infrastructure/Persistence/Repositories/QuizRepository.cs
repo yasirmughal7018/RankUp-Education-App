@@ -34,12 +34,15 @@ public sealed class QuizRepository : IQuizRepository
             studentId,
             cancellationToken);
 
+        var now = DateTimeOffset.UtcNow;
         var audienceQuizzes = await _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => quiz.IsActive
                 && !quiz.IsDeleted
                 && quiz.AudienceStartAt != null
                 && quiz.AudienceEndAt != null
-                && quiz.AudienceScope == "Public")
+                && quiz.AudienceScope == "Public"
+                && quiz.AudienceStartAt <= now
+                && quiz.AudienceEndAt >= now)
             .ToListAsync(cancellationToken);
 
         if (audienceQuizzes.Count == 0)
@@ -293,7 +296,9 @@ public sealed class QuizRepository : IQuizRepository
         {
             var canAudience = quiz.AudienceStartAt is not null
                 && quiz.AudienceEndAt is not null
-                && quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase);
+                && quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
+                && quiz.AudienceStartAt <= DateTimeOffset.UtcNow
+                && quiz.AudienceEndAt >= DateTimeOffset.UtcNow;
             if (!canAudience)
             {
                 return null;

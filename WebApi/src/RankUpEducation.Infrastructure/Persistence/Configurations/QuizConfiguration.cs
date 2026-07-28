@@ -126,7 +126,7 @@ public sealed class QuizAttemptConfiguration : IEntityTypeConfiguration<QuizAtte
         builder.Property(attempt => attempt.Id).HasColumnName("id").ValueGeneratedOnAdd();
         builder.Property(attempt => attempt.QuizId).HasColumnName("quiz_id").IsRequired();
         builder.Property(attempt => attempt.StudentId).HasColumnName("student_id").IsRequired();
-        builder.Property(attempt => attempt.NumberOfQuestionAttempt).HasColumnName("number_of_question_attempt").IsRequired();
+        builder.Property(attempt => attempt.AttemptNumber).HasColumnName("number_of_question_attempt").IsRequired();
         builder.Property(attempt => attempt.StatusId).HasColumnName("status_id").IsRequired();
         builder.Property(attempt => attempt.StartedDate).HasColumnName("started_date");
         builder.Property(attempt => attempt.SubmittedDate).HasColumnName("submitted_date");

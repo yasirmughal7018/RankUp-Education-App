@@ -187,6 +187,11 @@ export function canAssignAdminAudiences(role: UserRole): boolean {
   return role === "SchoolAdmin" || role === "PortalAdmin";
 }
 
+/** True for roles that may approve/reject teacher quizzes. */
+export function canApproveQuizzes(role: UserRole): boolean {
+  return role === "SchoolAdmin" || role === "PortalAdmin";
+}
+
 /** Initial editable lifecycle: deployed lookup uses "Not Assigned"; "Draft" is legacy. */
 export function isDraftQuiz(status: string): boolean {
   const normalized = status.trim().toLowerCase();

@@ -240,7 +240,7 @@ const audienceVisibilityRules = [
   "School / multi-school / section / class assign create materialized rows and keep AudienceScope=Assigned. Only Public is open-catalog — prevents school-audience leakage into the student catalog.",
   "ParentPrivate quizzes may only target the parent’s linked children or the parent’s own child groups — never unrelated students, whole school, multi-school, or public.",
   "Teacher assign is campus-scoped (grade/section/group/selected). School-wide is SchoolAdmin/PortalAdmin; multi-school and public are PortalAdmin.",
-  "Student list filters Public catalog with AudienceScope == \"Public\" only; SetAudienceAccess maps any non-Public scope to Assigned.",
+  "Student list filters Public catalog with AudienceScope == \"Public\" and now within [AudienceStartAt, AudienceEndAt]; SetAudienceAccess maps any non-Public scope to Assigned.",
 ];
 
 const studentAttemptFlow = [
@@ -251,7 +251,7 @@ const studentAttemptFlow = [
   ["5", "Attempt start time is recorded", "Covered", "QuizAttempt.StartedDate set on Begin."],
   ["6", "Questions are displayed", "Covered", "From the QuizAttemptQuestion snapshot in DisplayOrder (shuffled at start when enabled); content + marks frozen."],
   ["7", "Answers are saved automatically", "Covered", "Web: debounce + interval + visibility/pagehide autosave via draft endpoint; flush before submit/cancel. Mobile mirrors draft saves."],
-  ["8", "Student moves between questions where permitted", "Covered", "Quiz.NavigationMode Free / Sequential / Locked enforced in web + mobile attempt UI."],
+  ["8", "Student moves between questions where permitted", "Covered", "Quiz.NavigationMode Free / Sequential / Locked enforced in web + mobile UI and on server draft/submit (Sequential: earlier answered first; Locked: no edit after advancing)."],
   ["9", "Student may mark questions for review", "Covered", "IsMarkedForReview on draft/submit; navigator groups marked questions."],
   ["10", "Student submits manually", "Covered", "POST .../attempts/{id}/submit auto-scores then MarkSubmitted; resubmission blocked."],
   ["11", "System auto-submits when time expires", "Covered", "Client auto-submit with IsAutoSubmit=true → AutoSubmitted (83). Server rejects over-budget submits (grace for auto-submit)."],
@@ -289,18 +289,19 @@ const attemptRules = [
   "DeviceId required (non-empty).",
   "Time limit returned to client; UI countdown + auto-submit. Server enforces TimeLimitMinutes (with grace for IsAutoSubmit) and assignment EndDateTime.",
   "On start: create QuizAttempt and snapshot QuizAttemptQuestion rows (text, marks, options; shuffled order when ShuffleQuestions is on).",
-  "Draft save: InProgress only; answers stored on QuizAttemptAnswer linked to QuizAttemptQuestion; last answer wins per question; IsMarkedForReview supported.",
+  "Draft save: InProgress only; answers stored on QuizAttemptAnswer linked to QuizAttemptQuestion; last answer wins per question; IsMarkedForReview supported; NavigationMode + Competition integrity enforced.",
   "Multiple-choice selections are stored as separate answer rows (QuestionOptionId), not only as free text.",
   "Submit scores then MarkSubmitted (Submitted or AutoSubmitted). Cannot resubmit.",
   "Subjective review finalizes to Reviewed; do not use Under Teacher/AI Review as attempt StatusId values.",
   "Offline: ClientSyncId + IsOfflineAttempt; POST .../attempts/{id}/sync replays queued draft/submit after reconnect.",
+  "Competition anti-cheat: device lock + focus/paste telemetry; draft blocked after FocusLoss≥5 or Paste≥3 (submit still allowed).",
 ];
 
 const quizAttemptFields = [
   ["Id", "Primary key."],
   ["QuizId", "Quiz definition being attempted."],
   ["StudentId", "Student taking the attempt."],
-  ["NumberOfQuestionAttempt", "Count of questions presented on this attempt (from the snapshot)."],
+  ["AttemptNumber", "1-based attempt ordinal for this student on this quiz (API name). Entity property AttemptNumber maps to DB column number_of_question_attempt (legacy name — not question count)."],
   ["StatusId", "QuizAttemptStatus: Started (80), InProgress (81), Submitted (82), AutoSubmitted (83), Expired (84), Reviewed (85). Start writes InProgress; overdue InProgress → Expired."],
   ["StartedDate", "When the attempt began / resumed."],
   ["SubmittedDate", "When submitted (or placeholder until submit)."],
@@ -308,6 +309,8 @@ const quizAttemptFields = [
   ["DeviceId", "Required non-empty device identifier."],
   ["IsOfflineAttempt", "True when the attempt was started/synced from an offline queue."],
   ["ClientSyncId", "Idempotency key for offline sync; unique per student when set."],
+  ["FocusLossCount", "Anti-cheat telemetry: browser focus/visibility losses."],
+  ["ClipboardPasteCount", "Anti-cheat telemetry: paste events into answers."],
   ["QuizReviewId", "Optional link to a quiz_reviews row when an attempt-level review record is used."],
   ["ObtainedMarks", "Scored / reviewed obtained marks."],
   ["Percentage", "Derived from obtained ÷ total marks."],
@@ -482,15 +485,15 @@ const scenarios = [
   ],
   [
     "QZ-15",
-    "CampusAdmin approval gap",
-    "CampusAdmin opens /admin/quiz-approvals and tries approve/reject.",
-    "UI may show the page; APIs require SchoolAdmin/PortalAdmin — CampusAdmin is denied.",
+    "CampusAdmin cannot approve quizzes",
+    "CampusAdmin opens /admin/quiz-approvals or tries approve/reject.",
+    "Route and overview card are SchoolAdmin/PortalAdmin only; APIs also require those roles — CampusAdmin is denied.",
   ],
   [
     "QZ-16",
     "Student only sees permitted audience",
-    "Student A is assigned (or Public catalog); Student B is neither assigned nor Public-eligible.",
-    "Student A sees the quiz. Student B does not. School/section/multi assign must not open catalog (AudienceScope stays Assigned).",
+    "Student A is assigned (or Public catalog in window); Student B is neither assigned nor Public-eligible.",
+    "Student A sees the quiz. Student B does not. School/section/multi assign must not open catalog (AudienceScope stays Assigned). Public catalog is window-filtered.",
   ],
   [
     "QZ-17",
@@ -548,10 +551,12 @@ const checklist = [
   "Cancel removes only future assignments.",
   "Archive sets Archived + Inactive; Not Assigned must be deleted.",
   "Duplicate creates Not Assigned + Pending copy with questions.",
-  "CampusAdmin has no quiz manage/approve API capability.",
+  "CampusAdmin has no quiz manage/approve capability (UI + API).",
   "Fill answers hidden from students before submission (attempt payload).",
   "Quiz notifications (submit/auto-submit/etc.) via in-app bell.",
   "Offline sync via ClientSyncId + POST .../sync (web + mobile).",
+  "Approve and reject both require Pending approval status.",
+  "RejectionReason is persisted on the quiz.",
   "Reports available to Teacher (own), SchoolAdmin (school), PortalAdmin (all).",
 ];
 
@@ -560,9 +565,8 @@ const knownGaps = [
   "Some assign modes may be uneven across Assign dialog role tabs (prefer API coverage as source of truth).",
   "Low-time warning is UI styling at ≤60s only (no dedicated modal/audio).",
   "Descriptive (104) authoring remains blocked; file / Matching / Ordering media types are Not Now.",
-  "CampusAdmin can open quiz-approvals UI; approve/reject APIs deny CampusAdmin.",
   "Teacher list API returns campus-active quizzes; \"mine only\" may still be a client-side filter.",
-  "Approve endpoint role attributes vs service-layer checks should stay aligned with reject.",
+  "Non-Competition quizzes keep focus/paste as monitor telemetry only (no auto-lockout).",
 ];
 
 function escapeHtml(value) {
@@ -664,7 +668,7 @@ const html = `<!doctype html>
     ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Parent", "Student"],
     permissions,
   )}
-  <p><em>*CampusAdmin:</em> no quiz manage/approve/attempt API access. The Web admin quiz-approvals route may render for CampusAdmin, but approve/reject APIs deny the role.</p>
+  <p><em>*CampusAdmin:</em> no quiz manage/approve/attempt API access. Quiz-approvals UI is hidden and route-guarded for SchoolAdmin/PortalAdmin only.</p>
   <div class="note"><strong>Ownership:</strong> manage actions require the caller to own the quiz (<code>CreatedBy</code> = user id). Teachers also need matching school + campus. Parents stamp school/campus from a linked child context.</div>
 
   <h2>7. Questions on a quiz</h2>
@@ -740,7 +744,7 @@ const html = `<!doctype html>
   ${htmlList([
     "Parent list = assignments of linked children ∪ quizzes they created.",
     "Parent may review/finalize only their own quizzes; may view linked-child results and quiz history.",
-    "Student sees assigned quizzes plus Public catalog (AudienceScope=Public only). School/section/multi assign stay Assigned — see §8.",
+    "Student sees assigned quizzes plus Public catalog (AudienceScope=Public and within audience window). School/section/multi assign stay Assigned — see §8.",
     "Results masked via shared QuizReviewDisplay.Resolve on submit and get-result while review is pending.",
     "Rankings / performance / summary: Teacher (own), SchoolAdmin (school), PortalAdmin (all) — not students/parents.",
   ])}
@@ -769,7 +773,7 @@ const html = `<!doctype html>
     "/quizzes/:id/monitoring — progress board.",
     "/quizzes/assignments — cross-quiz assignment board.",
     "/quizzes/reviews/pending and review workspace — mark + finalize.",
-    "/admin/quiz-approvals — SchoolAdmin/PortalAdmin (CampusAdmin UI-only gap).",
+    "/admin/quiz-approvals — SchoolAdmin/PortalAdmin only (CampusAdmin blocked in UI + API).",
     "/student/quizzes* — detail, attempt (timer auto-submit), result.",
     "/parent/quiz-dashboard, children history/result — parent flows.",
     "/reports — Teacher / SchoolAdmin / PortalAdmin analytics.",
@@ -907,7 +911,7 @@ const docChildren = [
     permissions,
   ),
   docParagraph(
-    "CampusAdmin has no quiz manage/approve API access. Ownership required for manage actions.",
+    "CampusAdmin has no quiz manage/approve access (UI + API). Ownership required for manage actions.",
     { run: { bold: true, color: "92400E" } },
   ),
 

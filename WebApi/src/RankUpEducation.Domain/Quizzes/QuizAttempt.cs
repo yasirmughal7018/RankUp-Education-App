@@ -13,18 +13,23 @@ public sealed class QuizAttempt : BaseEntity
         DeviceId = string.Empty;
     }
 
-    public QuizAttempt(long quizId, long studentId, short numberOfQuestionAttempt, short statusId, string deviceId)
+    public QuizAttempt(long quizId, long studentId, short attemptNumber, short statusId, string deviceId)
     {
         QuizId = quizId;
         StudentId = studentId;
-        NumberOfQuestionAttempt = numberOfQuestionAttempt;
+        AttemptNumber = attemptNumber;
         StatusId = statusId;
         DeviceId = deviceId.AsTrimmedString();
     }
 
     public long QuizId { get; private set; }
     public long StudentId { get; private set; }
-    public short NumberOfQuestionAttempt { get; private set; }
+
+    /// <summary>
+    /// 1-based attempt ordinal for this student on this quiz (not the question count).
+    /// Persisted as column <c>number_of_question_attempt</c> for historical schema compatibility.
+    /// </summary>
+    public short AttemptNumber { get; private set; }
     public short StatusId { get; private set; }
     public DateTimeOffset StartedDate { get; private set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset SubmittedDate { get; private set; } = DateTimeOffset.UtcNow;

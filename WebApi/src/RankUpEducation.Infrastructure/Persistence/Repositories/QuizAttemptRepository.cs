@@ -124,7 +124,7 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
             attempt.Id,
             attempt.QuizId,
             attempt.StudentId,
-            attempt.NumberOfQuestionAttempt,
+            attempt.AttemptNumber,
             attempt.StatusId,
             statusName,
             (short)totalMarks,
