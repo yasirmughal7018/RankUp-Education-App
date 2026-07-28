@@ -36,6 +36,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   Timer? _attemptTimer;
   Timer? _draftSaveTimer;
   DateTime? _attemptStartedAt;
+  final Map<int, int> _questionTimeSpent = {};
+  final Set<int> _expiredQuestionIndexes = {};
+  final Set<int> _autoAdvancedQuestionIndexes = {};
+  int? _questionRemainingSeconds;
 
   _QuizView _view = _QuizView.list;
   _QuizView _reviewReturnView = _QuizView.details;
@@ -50,6 +54,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   int _clipboardPasteCount = 0;
   int _focusLossDelta = 0;
   int _clipboardPasteDelta = 0;
+  bool _instructionsAcknowledged = false;
 
   static const _deviceId = 'rankup-mobile';
 
@@ -166,6 +171,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
             : _QuizDetailsView(
                 quiz: _selectedQuiz!,
                 isLoading: ref.watch(quizzesControllerProvider).isDetailLoading,
+                instructionsAcknowledged: _instructionsAcknowledged,
+                onInstructionsAcknowledgedChanged: (value) {
+                  setState(() => _instructionsAcknowledged = value);
+                },
                 onStart: () {
                   unawaited(_startAttempt());
                 },
@@ -187,6 +196,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
             textAnswers: _textAnswers,
             saveStatus: _saveStatus,
             remainingTime: _remainingTime,
+            questionRemainingSeconds: _questionRemainingSeconds,
+            questionLocked: _isCurrentQuestionLocked(),
             onOptionSelected: _answerOptionQuestion,
             onTextAnswerChanged: _answerTextQuestion,
             onShowHint: _showHint,
@@ -302,6 +313,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     setState(() {
       _selectedQuiz = detail;
       _reviewReturnView = _QuizView.details;
+      _instructionsAcknowledged = false;
       _view = _QuizView.details;
     });
   }
@@ -315,10 +327,24 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       return;
     }
 
+    final continueQuiz = studentQuizStatus(selectedQuiz) == 'In Progress';
+    final requiresInstructionsAck =
+        !continueQuiz && selectedQuiz.instructions.isNotEmpty;
+    if (requiresInstructionsAck && !_instructionsAcknowledged) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Acknowledge the quiz instructions before starting.'),
+        ),
+      );
+      return;
+    }
+
     final attempt =
         await ref.read(quizzesControllerProvider.notifier).startAttempt(
               quizId: selectedQuiz.id,
               deviceId: _deviceId,
+              instructionsAcknowledged:
+                  !requiresInstructionsAck || _instructionsAcknowledged,
             );
     if (!mounted) {
       return;
@@ -353,7 +379,11 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       _textAnswers.clear();
       _markedQuestions.clear();
       _revealedHints.clear();
+      _questionTimeSpent.clear();
+      _expiredQuestionIndexes.clear();
+      _autoAdvancedQuestionIndexes.clear();
       _hydrateSavedAnswers(attempt);
+      _hydrateQuestionTimers(attempt);
       _attemptStartedAt = attempt.startedAt;
       _focusLossCount = attempt.focusLossCount;
       _clipboardPasteCount = attempt.clipboardPasteCount;
@@ -369,16 +399,23 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       );
     });
 
-    if (remaining != null) {
-      if (remaining <= Duration.zero) {
+    final needsClock = remaining != null || attempt.enablePerQuestionTimer;
+    if (needsClock) {
+      if (remaining != null && remaining <= Duration.zero) {
         unawaited(_submitAttempt(autoSubmitted: true));
         return;
       }
 
       _attemptTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        final current = _remainingTime;
-        if (!mounted || _view != _QuizView.attempt || current == null) {
+        if (!mounted || _view != _QuizView.attempt) {
           _stopAttemptTimer();
+          return;
+        }
+
+        _tickQuestionTimer();
+
+        final current = _remainingTime;
+        if (current == null) {
           return;
         }
 
@@ -392,6 +429,99 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
           _remainingTime = current - const Duration(seconds: 1);
         });
       });
+    }
+  }
+
+  void _hydrateQuestionTimers(QuizAttemptSession attempt) {
+    for (var index = 0; index < attempt.questions.length; index++) {
+      final question = attempt.questions[index];
+      final spent = question.timeSpentSeconds < 0 ? 0 : question.timeSpentSeconds;
+      _questionTimeSpent[index] = spent;
+      if (attempt.enablePerQuestionTimer &&
+          question.estimatedTimeSeconds > 0 &&
+          spent >= question.estimatedTimeSeconds) {
+        _expiredQuestionIndexes.add(index);
+      }
+    }
+    _syncQuestionRemainingSeconds(attempt);
+  }
+
+  void _syncQuestionRemainingSeconds(QuizAttemptSession attempt) {
+    if (!attempt.enablePerQuestionTimer || attempt.questions.isEmpty) {
+      _questionRemainingSeconds = null;
+      return;
+    }
+
+    final index = _questionIndex.clamp(0, attempt.questions.length - 1);
+    final question = attempt.questions[index];
+    final estimated = question.estimatedTimeSeconds;
+    if (estimated <= 0) {
+      _questionRemainingSeconds = null;
+      return;
+    }
+
+    final spent = _questionTimeSpent[index] ?? 0;
+    _questionRemainingSeconds = (estimated - spent).clamp(0, estimated);
+  }
+
+  bool _isCurrentQuestionLocked() {
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    if (attempt == null ||
+        !attempt.enablePerQuestionTimer ||
+        attempt.questions.isEmpty) {
+      return false;
+    }
+
+    final index = _questionIndex.clamp(0, attempt.questions.length - 1);
+    final question = attempt.questions[index];
+    if (question.estimatedTimeSeconds <= 0) {
+      return false;
+    }
+
+    return _expiredQuestionIndexes.contains(index) ||
+        (_questionRemainingSeconds != null && _questionRemainingSeconds! <= 0);
+  }
+
+  void _tickQuestionTimer() {
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    if (attempt == null || attempt.questions.isEmpty) {
+      return;
+    }
+
+    final index = _questionIndex.clamp(0, attempt.questions.length - 1);
+    final question = attempt.questions[index];
+    final previous = _questionTimeSpent[index] ?? 0;
+    final enable = attempt.enablePerQuestionTimer;
+    final estimated = question.estimatedTimeSeconds;
+
+    var shouldAutoAdvance = false;
+    setState(() {
+      if (enable && estimated > 0) {
+        final spent = previous >= estimated ? estimated : previous + 1;
+        _questionTimeSpent[index] = spent;
+        final remaining = estimated - spent;
+        _questionRemainingSeconds = remaining;
+        if (remaining <= 0) {
+          _expiredQuestionIndexes.add(index);
+          if (!_autoAdvancedQuestionIndexes.contains(index)) {
+            _autoAdvancedQuestionIndexes.add(index);
+            shouldAutoAdvance = true;
+          }
+        }
+      } else {
+        _questionTimeSpent[index] = previous + 1;
+        _questionRemainingSeconds = null;
+      }
+    });
+
+    if (shouldAutoAdvance) {
+      unawaited(_saveDraftNow());
+      if (index < attempt.questions.length - 1) {
+        setState(() {
+          _questionIndex = index + 1;
+          _syncQuestionRemainingSeconds(attempt);
+        });
+      }
     }
   }
 
@@ -439,6 +569,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       return;
     }
 
+    // Flush latest drafts (including mark-for-review / per-question time) before submit.
+    await _saveDraftNow();
     _stopAttemptTimer();
     _cancelDraftSave();
 
@@ -501,6 +633,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
           : null,
       submittedText: textAnswer,
       isMarkedForReview: _markedQuestions.contains(index),
+      timeSpentSeconds: (_questionTimeSpent[index] ?? 0) > 0
+          ? _questionTimeSpent[index]
+          : null,
     );
   }
 
@@ -526,7 +661,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     final answers = <QuizAnswerSubmission>[
       for (var index = 0; index < attempt.questions.length; index++)
         if (_answeredQuestions.contains(index) ||
-            _markedQuestions.contains(index))
+            _markedQuestions.contains(index) ||
+            (_questionTimeSpent[index] ?? 0) > 0)
           _buildAnswerSubmission(attempt.questions[index], index),
     ];
     if (answers.isEmpty &&
@@ -584,6 +720,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   }
 
   void _answerOptionQuestion(String optionId, int questionTypeId) {
+    if (_isCurrentQuestionLocked()) {
+      return;
+    }
+
     setState(() {
       final selected = _selectedOptionIds.putIfAbsent(
         _questionIndex,
@@ -614,6 +754,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   }
 
   void _answerTextQuestion(String answer) {
+    if (_isCurrentQuestionLocked()) {
+      return;
+    }
+
     final previous = _textAnswers[_questionIndex] ?? '';
     final grewBy = answer.length - previous.length;
     if (grewBy > 8) {
@@ -640,6 +784,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     }
     setState(() {
       _questionIndex -= 1;
+      final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+      if (attempt != null) {
+        _syncQuestionRemainingSeconds(attempt);
+      }
     });
   }
 
@@ -656,6 +804,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     }
     setState(() {
       _questionIndex += 1;
+      if (attempt != null) {
+        _syncQuestionRemainingSeconds(attempt);
+      }
     });
   }
 
@@ -665,6 +816,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     }
     setState(() {
       _questionIndex = index;
+      final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+      if (attempt != null) {
+        _syncQuestionRemainingSeconds(attempt);
+      }
     });
   }
 
@@ -678,13 +833,19 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   }
 
   void _toggleMarkForReview() {
+    if (_isCurrentQuestionLocked()) {
+      return;
+    }
+
     setState(() {
       if (_markedQuestions.contains(_questionIndex)) {
         _markedQuestions.remove(_questionIndex);
       } else {
         _markedQuestions.add(_questionIndex);
       }
+      _saveStatus = 'Saving…';
     });
+    _scheduleDraftSave();
   }
 
   void _goBack() {
@@ -1331,6 +1492,8 @@ class _QuizDetailsView extends StatelessWidget {
   const _QuizDetailsView({
     required this.quiz,
     required this.isLoading,
+    required this.instructionsAcknowledged,
+    required this.onInstructionsAcknowledgedChanged,
     required this.onStart,
     required this.onReview,
     required this.onCancel,
@@ -1338,6 +1501,8 @@ class _QuizDetailsView extends StatelessWidget {
 
   final QuizSummary quiz;
   final bool isLoading;
+  final bool instructionsAcknowledged;
+  final ValueChanged<bool> onInstructionsAcknowledgedChanged;
   final VoidCallback onStart;
   final VoidCallback onReview;
   final VoidCallback onCancel;
@@ -1349,9 +1514,14 @@ class _QuizDetailsView extends StatelessWidget {
     }
 
     final studentStatus = studentQuizStatus(quiz);
+    final continueQuiz = studentStatus == 'In Progress';
     final canStart = studentStatus != 'Completed' &&
         studentStatus != 'Expired' &&
         quiz.status != QuizStatus.upcoming;
+    final requiresInstructionsAck =
+        canStart && !continueQuiz && quiz.instructions.isNotEmpty;
+    final canClickStart =
+        canStart && (!requiresInstructionsAck || instructionsAcknowledged);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -1424,6 +1594,18 @@ class _QuizDetailsView extends StatelessWidget {
                   ],
                 ),
               ),
+            if (requiresInstructionsAck)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: instructionsAcknowledged,
+                onChanged: (value) {
+                  onInstructionsAcknowledgedChanged(value ?? false);
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text(
+                  'I have read and understand these instructions and am ready to start the quiz.',
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1470,16 +1652,26 @@ class _QuizDetailsView extends StatelessWidget {
               _isReviewComplete(quiz) ? 'Review Answers' : 'View Review Status',
             ),
           )
-        else
+        else ...[
           FilledButton.icon(
-            onPressed: canStart ? onStart : null,
+            onPressed: canClickStart ? onStart : null,
             icon: const Icon(Icons.play_arrow),
             label: Text(
-              quiz.resultStatus == 'In Progress'
-                  ? 'Continue Quiz'
-                  : 'Start Quiz',
+              continueQuiz ? 'Continue Quiz' : 'Start Quiz',
             ),
           ),
+          if (requiresInstructionsAck && !instructionsAcknowledged)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Acknowledge the instructions above to start.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+        ],
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: onCancel,
@@ -1503,6 +1695,8 @@ class _QuizAttemptView extends StatelessWidget {
     required this.textAnswers,
     required this.saveStatus,
     required this.remainingTime,
+    required this.questionRemainingSeconds,
+    required this.questionLocked,
     required this.onOptionSelected,
     required this.onTextAnswerChanged,
     required this.onShowHint,
@@ -1523,6 +1717,8 @@ class _QuizAttemptView extends StatelessWidget {
   final Map<int, String> textAnswers;
   final String saveStatus;
   final Duration? remainingTime;
+  final int? questionRemainingSeconds;
+  final bool questionLocked;
   final void Function(String optionId, int questionTypeId) onOptionSelected;
   final ValueChanged<String> onTextAnswerChanged;
   final VoidCallback onShowHint;
@@ -1568,8 +1764,24 @@ class _QuizAttemptView extends StatelessWidget {
                         remainingTime: remainingTime,
                       ),
                     ),
+                    if (questionRemainingSeconds != null)
+                      _InfoChip(
+                        icon: Icons.hourglass_bottom,
+                        label:
+                            'Q ${_formatSeconds(questionRemainingSeconds!)}',
+                      ),
                   ],
                 ),
+                if (questionLocked) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Time is up for this question. Your last in-time answer is locked.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFFB45309),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 LinearProgressIndicator(value: progress),
                 const SizedBox(height: 8),
@@ -1621,42 +1833,54 @@ class _QuizAttemptView extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 14),
-                if (question.options.isEmpty)
-                  TextFormField(
-                    key: ValueKey(
-                      'text-answer-$questionIndex-${textAnswers[questionIndex] ?? ''}',
+                AbsorbPointer(
+                  absorbing: questionLocked,
+                  child: Opacity(
+                    opacity: questionLocked ? 0.65 : 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (question.options.isEmpty)
+                          TextFormField(
+                            key: ValueKey(
+                              'text-answer-$questionIndex-${textAnswers[questionIndex] ?? ''}',
+                            ),
+                            initialValue: textAnswers[questionIndex] ?? '',
+                            minLines: question.questionTypeId == 44 ? 4 : 1,
+                            maxLines: question.questionTypeId == 44 ? 6 : 1,
+                            decoration: InputDecoration(
+                              hintText: question.questionTypeId == 44
+                                  ? 'Write your descriptive answer'
+                                  : 'Type your answer',
+                              helperText:
+                                  'Model answer is hidden until after submission.',
+                            ),
+                            textInputAction: question.questionTypeId == 44
+                                ? TextInputAction.newline
+                                : TextInputAction.done,
+                            onChanged: onTextAnswerChanged,
+                          )
+                        else
+                          for (final option in question.options) ...[
+                            _AnswerOption(
+                              label: option.text,
+                              selected:
+                                  selectedOptionIds[questionIndex]?.contains(
+                                        option.id,
+                                      ) ??
+                                      false,
+                              multipleSelection: question.questionTypeId == 41,
+                              onTap: () => onOptionSelected(
+                                option.id,
+                                question.questionTypeId,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                      ],
                     ),
-                    initialValue: textAnswers[questionIndex] ?? '',
-                    minLines: question.questionTypeId == 44 ? 4 : 1,
-                    maxLines: question.questionTypeId == 44 ? 6 : 1,
-                    decoration: InputDecoration(
-                      hintText: question.questionTypeId == 44
-                          ? 'Write your descriptive answer'
-                          : 'Type your answer',
-                      helperText:
-                          'Model answer is hidden until after submission.',
-                    ),
-                    textInputAction: question.questionTypeId == 44
-                        ? TextInputAction.newline
-                        : TextInputAction.done,
-                    onChanged: onTextAnswerChanged,
-                  )
-                else
-                  for (final option in question.options) ...[
-                    _AnswerOption(
-                      label: option.text,
-                      selected: selectedOptionIds[questionIndex]?.contains(
-                            option.id,
-                          ) ??
-                          false,
-                      multipleSelection: question.questionTypeId == 41,
-                      onTap: () => onOptionSelected(
-                        option.id,
-                        question.questionTypeId,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                  ),
+                ),
                 if (quiz.hintsAllowed &&
                     (question.hint ?? '').isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -1703,7 +1927,7 @@ class _QuizAttemptView extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: onToggleMark,
+                onPressed: questionLocked ? null : onToggleMark,
                 icon: Icon(
                   markedQuestions.contains(questionIndex)
                       ? Icons.flag
@@ -3128,15 +3352,14 @@ String _attemptTimerLabel({
     return 'Time ended';
   }
 
-  final hours = remaining.inHours;
-  final minutes = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
-  final seconds = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '${_formatSeconds(remaining.inSeconds)} left';
+}
 
-  if (hours > 0) {
-    return '$hours:$minutes:$seconds left';
-  }
-
-  return '$minutes:$seconds left';
+String _formatSeconds(int totalSeconds) {
+  final safe = totalSeconds < 0 ? 0 : totalSeconds;
+  final minutes = (safe ~/ 60).toString().padLeft(2, '0');
+  final seconds = (safe % 60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
 }
 
 String _primaryActionLabel(QuizSummary quiz) {

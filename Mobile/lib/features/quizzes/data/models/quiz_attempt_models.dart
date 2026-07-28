@@ -82,6 +82,8 @@ class QuizQuestionModel extends QuizQuestion {
     required super.displayOrder,
     super.hint,
     super.options,
+    super.estimatedTimeSeconds,
+    super.timeSpentSeconds,
   });
 
   factory QuizQuestionModel.fromJson(Map<String, dynamic> json) {
@@ -99,6 +101,8 @@ class QuizQuestionModel extends QuizQuestion {
               .map(QuizOptionModel.fromJson)
               .toList()
           : const [],
+      estimatedTimeSeconds: _readInt(json, ['estimatedTimeSeconds']),
+      timeSpentSeconds: _readInt(json, ['timeSpentSeconds']),
     );
   }
 }

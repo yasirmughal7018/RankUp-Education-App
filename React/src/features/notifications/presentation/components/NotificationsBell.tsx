@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
+import { isAdminRole, type UserRole } from "@/core/api/types";
 import * as authApi from "@/features/authentication/data/authApi";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import * as notificationsApi from "@/features/notifications/data/notificationsApi";
 
 function formatCreatedAt(value: string): string {
@@ -41,7 +43,23 @@ function usernameFromPasswordResetTitle(title: string): string | null {
   return username.length > 0 ? username : null;
 }
 
-function hrefForCategory(category: string): string {
+function isVisibleCategory(category: string, role: UserRole | undefined): boolean {
+  const isQuiz = QUIZ_NOTIFICATION_CATEGORIES.has(category);
+  const isAdminCategory = ADMIN_NOTIFICATION_CATEGORIES.has(category);
+
+  if (!role) {
+    return isQuiz || isAdminCategory;
+  }
+
+  if (isAdminRole(role)) {
+    return isQuiz || isAdminCategory;
+  }
+
+  // Teachers, Parents, Students: quiz alerts only (API already scopes by recipient).
+  return isQuiz;
+}
+
+function hrefForCategory(category: string, role: UserRole | undefined): string {
   if (category === "SchoolChangeRequest") {
     return "/admin/directory/school-changes";
   }
@@ -51,7 +69,7 @@ function hrefForCategory(category: string): string {
   }
 
   if (category === "QuizAssigned" || category === "QuizReviewed") {
-    return "/student/quizzes";
+    return role === "Student" ? "/student/quizzes" : "/quizzes";
   }
 
   if (category === "QuizSubmitted" || category === "QuizAutoSubmitted") {
@@ -61,13 +79,38 @@ function hrefForCategory(category: string): string {
   return "/admin/registrations";
 }
 
-/** Admin notification dropdown with password-reset actions. */
+function headerCopy(role: UserRole | undefined): { title: string; subtitle: string } {
+  if (role && isAdminRole(role)) {
+    return {
+      title: "Notifications",
+      subtitle: "Admin requests and quiz alerts",
+    };
+  }
+
+  if (role === "Student") {
+    return {
+      title: "Notifications",
+      subtitle: "Quiz assignments and results",
+    };
+  }
+
+  return {
+    title: "Notifications",
+    subtitle: "Quiz submissions and reviews",
+  };
+}
+
+/** In-app notification dropdown for all authenticated roles. */
 export function NotificationsBell() {
+  const { user } = useAuth();
+  const role = user?.role;
+  const isAdmin = role != null && isAdminRole(role);
   const [open, setOpen] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);
   const [clearingUsername, setClearingUsername] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const { title, subtitle } = headerCopy(role);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: queryKeys.notifications(),
@@ -76,10 +119,8 @@ export function NotificationsBell() {
   });
 
   const items = data?.items ?? [];
-  const visibleItems = items.filter(
-    (item) =>
-      ADMIN_NOTIFICATION_CATEGORIES.has(item.category) ||
-      QUIZ_NOTIFICATION_CATEGORIES.has(item.category),
+  const visibleItems = items.filter((item) =>
+    isVisibleCategory(item.category, role),
   );
   const unreadCount = visibleItems.filter((item) => !item.isRead).length;
   const recentItems = visibleItems.slice(0, 8);
@@ -133,8 +174,7 @@ export function NotificationsBell() {
     setClearingUsername(username);
     try {
       await authApi.clearPasswordForReset(username);
-      // Mark only this notification (and any other unread resets for the same user).
-      const relatedIds = adminItems
+      const relatedIds = visibleItems
         .filter(
           (item) =>
             item.category === "PasswordResetRequest" &&
@@ -160,7 +200,7 @@ export function NotificationsBell() {
     <div className="relative" ref={containerRef}>
       <button
         type="button"
-        aria-label="Admin notifications"
+        aria-label="Notifications"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         className="relative rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
@@ -189,12 +229,8 @@ export function NotificationsBell() {
       {open ? (
         <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">
-              Admin requests
-            </p>
-            <p className="text-xs text-slate-500">
-              Registrations, school changes, and password resets
-            </p>
+            <p className="text-sm font-semibold text-slate-900">{title}</p>
+            <p className="text-xs text-slate-500">{subtitle}</p>
           </div>
 
           <div className="max-h-80 overflow-y-auto">
@@ -208,13 +244,13 @@ export function NotificationsBell() {
               </p>
             ) : recentItems.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-slate-500">
-                No admin notifications.
+                No notifications.
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {recentItems.map((item) => {
                   const resetUsername =
-                    item.category === "PasswordResetRequest"
+                    isAdmin && item.category === "PasswordResetRequest"
                       ? usernameFromPasswordResetTitle(item.title)
                       : null;
 
@@ -249,7 +285,7 @@ export function NotificationsBell() {
                   return (
                     <li key={item.id}>
                       <Link
-                        to={hrefForCategory(item.category)}
+                        to={hrefForCategory(item.category, role)}
                         onClick={() => {
                           setOpen(false);
                           void markCategoryRead(item.category);
@@ -282,28 +318,50 @@ export function NotificationsBell() {
             </p>
           ) : null}
 
-          <div className="flex flex-col gap-1 border-t border-slate-100 px-4 py-2">
-            <Link
-              to="/admin/registrations"
-              onClick={() => {
-                setOpen(false);
-                void markCategoryRead("RegistrationRequest");
-              }}
-              className="text-xs font-medium text-brand-700 hover:text-brand-800"
-            >
-              Registration approvals
-            </Link>
-            <Link
-              to="/admin/directory/school-changes"
-              onClick={() => {
-                setOpen(false);
-                void markCategoryRead("SchoolChangeRequest");
-              }}
-              className="text-xs font-medium text-brand-700 hover:text-brand-800"
-            >
-              School / campus changes
-            </Link>
-          </div>
+          {isAdmin ? (
+            <div className="flex flex-col gap-1 border-t border-slate-100 px-4 py-2">
+              <Link
+                to="/admin/registrations"
+                onClick={() => {
+                  setOpen(false);
+                  void markCategoryRead("RegistrationRequest");
+                }}
+                className="text-xs font-medium text-brand-700 hover:text-brand-800"
+              >
+                Registration approvals
+              </Link>
+              <Link
+                to="/admin/directory/school-changes"
+                onClick={() => {
+                  setOpen(false);
+                  void markCategoryRead("SchoolChangeRequest");
+                }}
+                className="text-xs font-medium text-brand-700 hover:text-brand-800"
+              >
+                School / campus changes
+              </Link>
+            </div>
+          ) : role === "Student" ? (
+            <div className="border-t border-slate-100 px-4 py-2">
+              <Link
+                to="/student/quizzes"
+                onClick={() => setOpen(false)}
+                className="text-xs font-medium text-brand-700 hover:text-brand-800"
+              >
+                My quizzes
+              </Link>
+            </div>
+          ) : (
+            <div className="border-t border-slate-100 px-4 py-2">
+              <Link
+                to="/quizzes/reviews/pending"
+                onClick={() => setOpen(false)}
+                className="text-xs font-medium text-brand-700 hover:text-brand-800"
+              >
+                Pending reviews
+              </Link>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

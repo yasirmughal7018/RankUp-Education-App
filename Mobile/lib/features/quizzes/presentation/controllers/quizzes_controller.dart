@@ -141,6 +141,7 @@ class QuizzesController extends StateNotifier<QuizzesState> {
   Future<QuizAttemptSession?> startAttempt({
     required String quizId,
     required String deviceId,
+    bool instructionsAcknowledged = false,
   }) async {
     state = state.copyWith(isAttemptLoading: true, clearActionError: true);
 
@@ -148,6 +149,7 @@ class QuizzesController extends StateNotifier<QuizzesState> {
       final attempt = await _repository.startAttempt(
         quizId: quizId,
         deviceId: deviceId,
+        instructionsAcknowledged: instructionsAcknowledged,
       );
       state = state.copyWith(
         activeAttempt: attempt,

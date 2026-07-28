@@ -268,12 +268,13 @@ public sealed class QuizAssignService : IQuizAssignService
         var extraAttempts = request.ExtraAttempts <= 0 ? (short)1 : request.ExtraAttempts;
         assignment.GrantRetry(extraAttempts);
 
-        var inProgressResultId = await _lookups.ResolveLookupIdAsync(
+        // Retry quota is open, but the student has not started the new attempt yet.
+        var notAttemptedResultId = await _lookups.ResolveLookupIdByNamesAsync(
             QuizLookupNames.QuizResultStatus,
-            "In Progress",
-            fallback: QuizLookupNames.QuizResultStatusIds.InProgress,
+            QuizLookupNames.AssignedResultNames,
+            QuizLookupNames.QuizResultStatusIds.NotAttempted,
             cancellationToken);
-        assignment.SetResultStatus(inProgressResultId);
+        assignment.SetResultStatus(notAttemptedResultId);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -321,12 +322,12 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("Quiz must contain at least one question before assignment.");
         }
 
-        if (scope.Role == UserRole.Teacher)
+        if (scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             if (!approvalName.Equals("Approved", StringComparison.OrdinalIgnoreCase))
             {
-                throw new BusinessRuleException("Teacher quizzes must be approved before assignment.");
+                throw new BusinessRuleException("Quizzes must be approved before assignment.");
             }
         }
 

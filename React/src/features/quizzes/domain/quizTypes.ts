@@ -162,11 +162,29 @@ export interface QuizAssignment {
   resultStatus: string;
 }
 
-export const QUIZ_MANAGER_ROLES: UserRole[] = ["Teacher", "Parent"];
+export const QUIZ_MANAGER_ROLES: UserRole[] = [
+  "Teacher",
+  "Parent",
+  "SchoolAdmin",
+  "PortalAdmin",
+];
 
-/** True for Teacher and Parent roles. */
+/** Roles that author/create quizzes (not school/platform assign-only admins). */
+export const QUIZ_AUTHOR_ROLES: UserRole[] = ["Teacher", "Parent"];
+
+/** True for Teacher, Parent, SchoolAdmin, and PortalAdmin. */
 export function canManageQuizzes(role: UserRole): boolean {
   return QUIZ_MANAGER_ROLES.includes(role);
+}
+
+/** True for Teacher and Parent — create / edit / publish authoring. */
+export function canAuthorQuizzes(role: UserRole): boolean {
+  return QUIZ_AUTHOR_ROLES.includes(role);
+}
+
+/** True for SchoolAdmin or PortalAdmin school/platform assign modes. */
+export function canAssignAdminAudiences(role: UserRole): boolean {
+  return role === "SchoolAdmin" || role === "PortalAdmin";
 }
 
 /** Initial editable lifecycle: deployed lookup uses "Not Assigned"; "Draft" is legacy. */

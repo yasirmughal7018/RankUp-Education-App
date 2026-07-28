@@ -31,8 +31,13 @@ class ApiQuizRepository implements QuizRepository {
   Future<QuizAttemptSession> startAttempt({
     required String quizId,
     required String deviceId,
+    bool instructionsAcknowledged = false,
   }) {
-    return _remoteDataSource.startAttempt(quizId: quizId, deviceId: deviceId);
+    return _remoteDataSource.startAttempt(
+      quizId: quizId,
+      deviceId: deviceId,
+      instructionsAcknowledged: instructionsAcknowledged,
+    );
   }
 
   @override

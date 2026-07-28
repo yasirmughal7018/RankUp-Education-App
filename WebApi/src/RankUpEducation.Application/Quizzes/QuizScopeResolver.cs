@@ -23,13 +23,16 @@ public sealed record QuizManageScope(
 /// </summary>
 public static class QuizScopeResolver
 {
-    /// <summary>Requires Parent or Teacher role; stamps school/campus for teachers.</summary>
+    /// <summary>
+    /// Requires Parent, Teacher, SchoolAdmin, or PortalAdmin for quiz manage/monitor/review.
+    /// Teachers are campus-scoped; school admins are school-scoped; portal admins are platform-scoped.
+    /// </summary>
     public static QuizManageScope RequireManageScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Teacher))
+        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
-            throw new ForbiddenAppException("Only parents and teachers can manage quizzes.");
+            throw new ForbiddenAppException("Your role cannot manage quizzes.");
         }
 
         var userId = currentUser.UserId
@@ -45,6 +48,18 @@ public static class QuizScopeResolver
                 ?? throw new ForbiddenAppException("Teacher campus context was not found.");
 
             return new QuizManageScope(role, userId, profileId, schoolId, campusId);
+        }
+
+        if (role == UserRole.SchoolAdmin)
+        {
+            var schoolId = currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School admin school context was not found.");
+            return new QuizManageScope(role, userId, profileId, schoolId, currentUser.CampusId);
+        }
+
+        if (role == UserRole.PortalAdmin)
+        {
+            return new QuizManageScope(role, userId, profileId, currentUser.SchoolId, currentUser.CampusId);
         }
 
         return new QuizManageScope(role, userId, profileId, null, null);

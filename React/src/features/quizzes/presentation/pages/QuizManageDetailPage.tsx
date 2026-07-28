@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { AddQuizQuestionDialog } from "@/features/quizzes/presentation/components/AddQuizQuestionDialog";
 import { AssignQuizDialog } from "@/features/quizzes/presentation/components/AssignQuizDialog";
 import {
+  canAuthorQuizzes,
   isDraftQuiz,
   type QuizQuestionItem,
 } from "@/features/quizzes/domain/quizTypes";
@@ -49,6 +51,8 @@ function canAllowRetry(assignment: {
 export function QuizManageDetailPage() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canAuthor = user != null && canAuthorQuizzes(user.role);
   const numericQuizId = Number(quizId);
 
   const {
@@ -164,12 +168,14 @@ export function QuizManageDetailPage() {
                 Monitor
               </Link>
             ) : null}
-            <Link
-              to={`/quizzes/${quiz.id}/edit`}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Edit settings
-            </Link>
+            {canAuthor ? (
+              <Link
+                to={`/quizzes/${quiz.id}/edit`}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Edit settings
+              </Link>
+            ) : null}
           </div>
         }
       />
@@ -235,7 +241,7 @@ export function QuizManageDetailPage() {
       </section>
 
       <section className="mb-6 flex flex-wrap gap-2">
-        {draft ? (
+        {draft && canAuthor ? (
           <>
             <button
               type="button"
@@ -281,29 +287,33 @@ export function QuizManageDetailPage() {
             >
               Assign
             </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() =>
-                void runAction(async () => {
-                  const duplicated = await duplicateQuiz.mutateAsync();
-                  navigate(`/quizzes/${duplicated.id}`);
-                }, "Quiz duplicated.")
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Duplicate
-            </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() =>
-                void runAction(() => archiveQuiz.mutateAsync(), "Quiz archived.")
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Archive
-            </button>
+            {canAuthor ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() =>
+                    void runAction(async () => {
+                      const duplicated = await duplicateQuiz.mutateAsync();
+                      navigate(`/quizzes/${duplicated.id}`);
+                    }, "Quiz duplicated.")
+                  }
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                >
+                  Duplicate
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() =>
+                    void runAction(() => archiveQuiz.mutateAsync(), "Quiz archived.")
+                  }
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                >
+                  Archive
+                </button>
+              </>
+            ) : null}
             {assignments.length > 0 ? (
               <button
                 type="button"
@@ -353,7 +363,7 @@ export function QuizManageDetailPage() {
                     </p>
                   </div>
 
-                  {draft ? (
+                  {draft && canAuthor ? (
                     <div className="flex gap-2">
                       <button
                         type="button"

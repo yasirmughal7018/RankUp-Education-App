@@ -23,6 +23,8 @@ class QuizQuestion {
     required this.displayOrder,
     this.hint,
     this.options = const [],
+    this.estimatedTimeSeconds = 0,
+    this.timeSpentSeconds = 0,
   });
 
   final String id;
@@ -32,6 +34,8 @@ class QuizQuestion {
   final int displayOrder;
   final String? hint;
   final List<QuizOption> options;
+  final int estimatedTimeSeconds;
+  final int timeSpentSeconds;
 
   int get questionTypeId => questionTypeIdFromName(questionType);
 

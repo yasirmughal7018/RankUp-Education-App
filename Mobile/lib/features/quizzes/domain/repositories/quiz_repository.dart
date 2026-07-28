@@ -14,6 +14,7 @@ abstract class QuizRepository {
   Future<QuizAttemptSession> startAttempt({
     required String quizId,
     required String deviceId,
+    bool instructionsAcknowledged = false,
   });
 
   Future<void> saveDraft({

@@ -46,11 +46,15 @@ class QuizRemoteDataSource {
   Future<QuizAttemptSessionModel> startAttempt({
     required String quizId,
     required String deviceId,
+    bool instructionsAcknowledged = false,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/quizzes/$quizId/attempts',
-        data: {'deviceId': deviceId},
+        data: {
+          'deviceId': deviceId,
+          'instructionsAcknowledged': instructionsAcknowledged,
+        },
       );
       return _readObject(response.data, QuizAttemptSessionModel.fromJson);
     } on DioException catch (error) {

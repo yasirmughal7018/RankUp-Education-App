@@ -50,7 +50,19 @@ export function AssignQuizDialog({
   const isParent = user?.role === "Parent";
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isPortalAdmin = user?.role === "PortalAdmin";
-  const [mode, setMode] = useState("selected");
+  const isAdminAssigner = isSchoolAdmin || isPortalAdmin;
+  const [mode, setMode] = useState(() => {
+    if (user?.role === "PortalAdmin") {
+      return "public";
+    }
+    if (user?.role === "SchoolAdmin") {
+      return "allinschool";
+    }
+    if (user?.role === "Parent") {
+      return "alllinked";
+    }
+    return "selected";
+  });
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -186,7 +198,9 @@ export function AssignQuizDialog({
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <h2 className="text-xl font-semibold text-slate-900">Assign quiz</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Choose students and set the assignment window.
+          {isAdminAssigner
+            ? "Choose a school-wide, multi-school, or public audience and set the window."
+            : "Choose students and set the assignment window."}
         </p>
 
         {error ? (
@@ -212,7 +226,7 @@ export function AssignQuizDialog({
             >
               <option value="one">One student</option>
               <option value="selected">Selected students</option>
-              <option value="group">Group</option>
+              {!isAdminAssigner ? <option value="group">Group</option> : null}
               {isTeacher ? <option value="allingrade">All in grade</option> : null}
               {isTeacher ? <option value="allinsection">All in section</option> : null}
               {isSchoolAdmin || isPortalAdmin ? (
@@ -381,6 +395,12 @@ export function AssignQuizDialog({
                 />
               </div>
             </div>
+          ) : null}
+
+          {mode === "allinschool" && isSchoolAdmin ? (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              Assigns to all active students in your school (all campuses).
+            </p>
           ) : null}
 
           {mode === "multischool" || (mode === "allinschool" && isPortalAdmin) ? (

@@ -102,11 +102,7 @@ export function AppLayout() {
     <div className="flex items-center gap-2">
       {isAuthenticated ? (
         <>
-          {user && isAdminRole(user.role) ? (
-            <div className="hidden sm:block">
-              <NotificationsBell />
-            </div>
-          ) : null}
+          <NotificationsBell />
           <UserMenu />
         </>
       ) : !isBootstrapping ? (

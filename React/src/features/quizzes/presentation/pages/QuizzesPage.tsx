@@ -6,13 +6,19 @@ import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
+import {
+  canAssignAdminAudiences,
+  canAuthorQuizzes,
+} from "@/features/quizzes/domain/quizTypes";
 import { useQuizzesQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
-/** Teacher/parent quiz list with search and mine-only filter. */
+/** Teacher/parent/admin quiz list with search and mine-only filter. */
 export function QuizzesPage() {
   const { user } = useAuth();
+  const isAdminAssigner = user != null && canAssignAdminAudiences(user.role);
+  const canAuthor = user != null && canAuthorQuizzes(user.role);
   const [search, setSearch] = useState("");
-  const [showMineOnly, setShowMineOnly] = useState(true);
+  const [showMineOnly, setShowMineOnly] = useState(!isAdminAssigner);
 
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     useQuizzesQuery(search);
@@ -25,7 +31,11 @@ export function QuizzesPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Quiz management"
-        description="Create, publish, and assign quizzes for students."
+        description={
+          isAdminAssigner
+            ? "Review school quizzes and assign by school, multi-school, or public catalog."
+            : "Create, publish, and assign quizzes for students."
+        }
         action={
           <div className="flex gap-2">
             <button
@@ -48,12 +58,14 @@ export function QuizzesPage() {
             >
               Pending reviews
             </Link>
-            <Link
-              to="/quizzes/new"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              New quiz
-            </Link>
+            {canAuthor ? (
+              <Link
+                to="/quizzes/new"
+                className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+              >
+                New quiz
+              </Link>
+            ) : null}
           </div>
         }
       />
@@ -66,14 +78,16 @@ export function QuizzesPage() {
           placeholder="Search quizzes..."
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
         />
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={showMineOnly}
-            onChange={(event) => setShowMineOnly(event.target.checked)}
-          />
-          Show only my quizzes
-        </label>
+        {canAuthor ? (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={showMineOnly}
+              onChange={(event) => setShowMineOnly(event.target.checked)}
+            />
+            Show only my quizzes
+          </label>
+        ) : null}
       </section>
 
       {error ? (
@@ -89,7 +103,9 @@ export function QuizzesPage() {
           </div>
         ) : visibleQuizzes.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No quizzes found.
+            {isAdminAssigner
+              ? "No quizzes available to assign yet. Approve teacher quizzes first, then open one to assign."
+              : "No quizzes found."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -144,7 +160,7 @@ export function QuizzesPage() {
                         to={`/quizzes/${quiz.id}`}
                         className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                       >
-                        Manage
+                        {isAdminAssigner ? "Open" : "Manage"}
                       </Link>
                     </td>
                   </tr>

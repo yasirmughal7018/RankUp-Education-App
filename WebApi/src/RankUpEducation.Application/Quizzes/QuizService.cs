@@ -268,10 +268,11 @@ public sealed class QuizService : IQuizService
                 "Not Attempted",
                 fallback: QuizLookupNames.QuizResultStatusIds.NotAttempted,
                 cancellationToken);
+            var assignedById = ResolvePublicCatalogAssignedById(quiz, studentId);
             var materialized = new QuizAssignment(
                 quizId,
                 studentId,
-                studentId,
+                assignedById,
                 access.StartDateTime,
                 access.EndDateTime,
                 access.AllowedAttempts,
@@ -827,7 +828,7 @@ public sealed class QuizService : IQuizService
         var quizTitle = (await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken))?.QuizTitle
             ?? "Quiz";
 
-        if (assignment is not null)
+        if (assignment is not null && assignment.AssignedById != studentId)
         {
             var category = request.IsAutoSubmit
                 ? QuizNotificationCategories.QuizAutoSubmitted
@@ -1353,6 +1354,29 @@ public sealed class QuizService : IQuizService
     {
         return _currentUser.ProfileId ?? _currentUser.UserId
             ?? throw new ForbiddenAppException("Student profile was not found.");
+    }
+
+    /// <summary>
+    /// Public catalog materialization must stamp the quiz owner (creator), not the student,
+    /// so submit notifications reach the teacher/parent/admin who owns the quiz.
+    /// </summary>
+    private static long ResolvePublicCatalogAssignedById(Quiz quiz, long studentId)
+    {
+        if (long.TryParse(quiz.CreatedByName, out var creatorId)
+            && creatorId > 0
+            && creatorId != studentId)
+        {
+            return creatorId;
+        }
+
+        if (long.TryParse(quiz.ApprovedBy, out var approverId)
+            && approverId > 0
+            && approverId != studentId)
+        {
+            return approverId;
+        }
+
+        return creatorId > 0 ? creatorId : studentId;
     }
 
     private async Task EnsureFillAiReviewAsync(

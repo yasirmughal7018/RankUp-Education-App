@@ -129,6 +129,8 @@ export interface QuizResultQuestion {
   selectedOptionId: number | null;
   correctOptionId: number | null;
   submittedText: string | null;
+  selectedOptionIds?: number[] | null;
+  correctOptionIds?: number[] | null;
 }
 
 export interface QuizAttemptResult {

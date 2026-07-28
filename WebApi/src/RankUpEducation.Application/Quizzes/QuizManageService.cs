@@ -230,9 +230,11 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        if (approvalName.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+        var isPending = QuizLookupNames.PendingApprovalStatusNames.Any(name =>
+            name.Equals(approvalName, StringComparison.OrdinalIgnoreCase));
+        if (!isPending)
         {
-            throw new BusinessRuleException("Quiz is already approved.");
+            throw new BusinessRuleException("Only pending quizzes can be approved.");
         }
 
         var approvedStatusId = await _guard.RequireLookupAsync(
