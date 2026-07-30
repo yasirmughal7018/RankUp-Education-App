@@ -233,7 +233,7 @@ export function QuestionForm({
 
       <section className="space-y-3">
         <RequiredLabel>Question type</RequiredLabel>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {QUESTION_TYPES_NOW.map((type) => {
             const meta = QUESTION_TYPE_META[type];
             const selected = normalizeQuestionType(values.questionType) === type;
@@ -266,6 +266,18 @@ export function QuestionForm({
         {normalizeQuestionType(values.questionType) === "Descriptive" ? (
           <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             Descriptive answers are free text and scored during teacher review.
+          </p>
+        ) : null}
+        {normalizeQuestionType(values.questionType) === "File Upload" ? (
+          <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Students paste a file link or path. Answers are scored during teacher
+            review.
+          </p>
+        ) : null}
+        {normalizeQuestionType(values.questionType) === "Matching" ? (
+          <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Add an even number of options: left column items first, then the
+            matching right-column items in the same order.
           </p>
         ) : null}
       </section>

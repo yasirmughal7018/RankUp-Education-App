@@ -16,7 +16,9 @@ import type {
   SubmitQuizAnswer,
 } from "@/features/student/domain/studentQuizTypes";
 import {
+  isMatchingQuestionType,
   isMultiSelectQuestionType,
+  isOrderingQuestionType,
   isTextQuestionType,
 } from "@/features/student/domain/studentQuizTypes";
 import {
@@ -115,6 +117,21 @@ function readStoredQuestionTimes(attemptId: number): Record<number, number> {
   }
 }
 
+function shuffleOptionIds(ids: number[]): number[] {
+  const next = [...ids];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  if (
+    next.length > 1 &&
+    next.every((id, index) => id === ids[index])
+  ) {
+    [next[0], next[1]] = [next[1], next[0]];
+  }
+  return next;
+}
+
 function hydrateAnswers(
   questions: StartQuizAttempt["questions"],
   savedAnswers: SavedQuizAnswer[] | undefined,
@@ -142,6 +159,26 @@ function hydrateAnswers(
   return Object.fromEntries(
     questions.map((question) => {
       const existing = stored[question.id] ?? fromSaved[question.id];
+      const isOrdering = isOrderingQuestionType(question.questionType);
+      const optionIds = question.options.map((option) => option.id);
+
+      if (
+        isOrdering &&
+        (!existing ||
+          (existing.selectedOptionIds?.filter((id) => id > 0).length ?? 0) ===
+            0)
+      ) {
+        const shuffled = shuffleOptionIds(optionIds);
+        return [
+          question.id,
+          {
+            selectedOptionId: shuffled[0] ?? null,
+            selectedOptionIds: shuffled,
+            submittedText: existing?.submittedText ?? "",
+          },
+        ];
+      }
+
       if (!existing) {
         return [
           question.id,
@@ -214,8 +251,9 @@ function isAnswered(answer: AnswerState | undefined): boolean {
     return false;
   }
 
+  const selectedIds = (answer.selectedOptionIds ?? []).filter((id) => id > 0);
   return (
-    (answer.selectedOptionIds?.length ?? 0) > 0 ||
+    selectedIds.length > 0 ||
     answer.selectedOptionId != null ||
     Boolean(answer.submittedText.trim())
   );
@@ -227,7 +265,9 @@ function toSubmitAnswer(
   isMarkedForReview?: boolean,
   timeSpentSeconds?: number,
 ): SubmitQuizAnswer {
-  const selectedOptionIds = answer?.selectedOptionIds ?? [];
+  const selectedOptionIds = (answer?.selectedOptionIds ?? []).filter(
+    (id) => id > 0,
+  );
   const selectedOptionId =
     selectedOptionIds[0] ?? answer?.selectedOptionId ?? null;
   const submittedText = answer?.submittedText?.trim()
@@ -1067,8 +1107,167 @@ export function StudentQuizAttemptPage() {
               }
               onPaste={currentQuestionLocked ? undefined : handleAnswerPaste}
               className={inputClassName}
-              placeholder="Type your answer..."
+              placeholder={
+                currentQuestion.questionType.toLowerCase().includes("file")
+                  ? "Paste a file link or path..."
+                  : "Type your answer..."
+              }
             />
+          ) : isMatchingQuestionType(currentQuestion.questionType) ? (
+            (() => {
+              const options = currentQuestion.options;
+              const half = Math.floor(options.length / 2);
+              const lefts = options.slice(0, half);
+              const rights = options.slice(half);
+              const selectedIds = currentAnswer?.selectedOptionIds ?? [];
+              return (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500">
+                    Match each left item to a right item.
+                  </p>
+                  {lefts.map((left, index) => {
+                    const selectedRightId = selectedIds[index] ?? null;
+                    const usedRights = new Set(
+                      selectedIds.filter(
+                        (id, rightIndex) =>
+                          rightIndex !== index && id != null && id > 0,
+                      ),
+                    );
+                    return (
+                      <div
+                        key={left.id}
+                        className="flex flex-col gap-2 rounded-lg border border-slate-200 px-3 py-2 sm:flex-row sm:items-center"
+                      >
+                        <span className="min-w-0 flex-1 text-sm font-medium text-slate-800">
+                          {left.text}
+                        </span>
+                        <select
+                          className={inputClassName}
+                          disabled={currentQuestionLocked}
+                          value={selectedRightId ?? ""}
+                          onChange={(event) => {
+                            if (currentQuestionLocked) {
+                              return;
+                            }
+                            const next = Array.from(
+                              { length: lefts.length },
+                              (_, slot) => selectedIds[slot] ?? 0,
+                            );
+                            next[index] = Number(event.target.value) || 0;
+                            updateCurrentAnswer({
+                              selectedOptionId:
+                                next.find((id) => id > 0) ?? null,
+                              selectedOptionIds: next,
+                              submittedText: "",
+                            });
+                          }}
+                        >
+                          <option value="">Select match…</option>
+                          {rights.map((right) => (
+                            <option
+                              key={right.id}
+                              value={right.id}
+                              disabled={
+                                usedRights.has(right.id) &&
+                                selectedRightId !== right.id
+                              }
+                            >
+                              {right.text}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
+          ) : isOrderingQuestionType(currentQuestion.questionType) ? (
+            (() => {
+              const options = currentQuestion.options;
+              const orderedIds =
+                currentAnswer?.selectedOptionIds &&
+                currentAnswer.selectedOptionIds.length === options.length
+                  ? currentAnswer.selectedOptionIds
+                  : options.map((option) => option.id);
+              const byId = new Map(options.map((option) => [option.id, option]));
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-500">
+                    Arrange items in the correct order (top = first).
+                  </p>
+                  {orderedIds.map((optionId, index) => {
+                    const option = byId.get(optionId);
+                    if (!option) {
+                      return null;
+                    }
+                    return (
+                      <div
+                        key={optionId}
+                        className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
+                      >
+                        <span className="w-6 text-xs font-semibold text-slate-500">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 text-sm text-slate-700">
+                          {option.text}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={currentQuestionLocked || index === 0}
+                          className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40"
+                          onClick={() => {
+                            if (currentQuestionLocked || index === 0) {
+                              return;
+                            }
+                            const next = [...orderedIds];
+                            [next[index - 1], next[index]] = [
+                              next[index],
+                              next[index - 1],
+                            ];
+                            updateCurrentAnswer({
+                              selectedOptionId: next[0] ?? null,
+                              selectedOptionIds: next,
+                              submittedText: "",
+                            });
+                          }}
+                        >
+                          Up
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            currentQuestionLocked ||
+                            index === orderedIds.length - 1
+                          }
+                          className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40"
+                          onClick={() => {
+                            if (
+                              currentQuestionLocked ||
+                              index === orderedIds.length - 1
+                            ) {
+                              return;
+                            }
+                            const next = [...orderedIds];
+                            [next[index], next[index + 1]] = [
+                              next[index + 1],
+                              next[index],
+                            ];
+                            updateCurrentAnswer({
+                              selectedOptionId: next[0] ?? null,
+                              selectedOptionIds: next,
+                              submittedText: "",
+                            });
+                          }}
+                        >
+                          Down
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
           ) : (
             <div className="space-y-2">
               {currentQuestion.options.map((option) => {

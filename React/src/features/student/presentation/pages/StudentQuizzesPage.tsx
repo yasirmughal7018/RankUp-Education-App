@@ -22,6 +22,55 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+function startOfDay(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function isSameDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function isWithinPastDays(date: Date, now: Date, days: number): boolean {
+  const start = startOfDay(now);
+  start.setDate(start.getDate() - (days - 1));
+  const tomorrow = startOfDay(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return date >= start && date < tomorrow;
+}
+
+function matchesStudentDateFilter(
+  quiz: { startAt: string | null; dueAt: string | null; resultStatus: string },
+  filter: string,
+  now: Date,
+): boolean {
+  const startAt = quiz.startAt ? new Date(quiz.startAt) : null;
+  const dueAt = quiz.dueAt ? new Date(quiz.dueAt) : null;
+  const anchor = dueAt ?? startAt;
+  const completed =
+    quiz.resultStatus.toLowerCase().includes("review") ||
+    quiz.resultStatus.toLowerCase().includes("completed") ||
+    quiz.resultStatus.toLowerCase() === "reviewed";
+
+  switch (filter) {
+    case "Today":
+      return anchor != null && isSameDay(anchor, now);
+    case "Upcoming":
+      return startAt != null && startAt > now;
+    case "Overdue":
+      return dueAt != null && dueAt < now && !completed;
+    case "Last 7 Days":
+      return anchor != null && isWithinPastDays(anchor, now, 7);
+    case "Last 15 Days":
+      return anchor != null && isWithinPastDays(anchor, now, 15);
+    default:
+      return true;
+  }
+}
+
 export function StudentQuizzesPage() {
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     useStudentQuizzesQuery();
@@ -29,6 +78,7 @@ export function StudentQuizzesPage() {
   const [search, setSearch] = useState("");
   const [quizTypeFilter, setQuizTypeFilter] = useState("");
   const [resultStatusFilter, setResultStatusFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
 
   const quizTypeOptions = useMemo(
     () =>
@@ -48,6 +98,7 @@ export function StudentQuizzesPage() {
 
   const filteredQuizzes = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const now = new Date();
 
     return quizzes.filter((quiz) => {
       if (quizTypeFilter && quiz.quizType !== quizTypeFilter) {
@@ -55,6 +106,10 @@ export function StudentQuizzesPage() {
       }
 
       if (resultStatusFilter && quiz.resultStatus !== resultStatusFilter) {
+        return false;
+      }
+
+      if (dateFilter && !matchesStudentDateFilter(quiz, dateFilter, now)) {
         return false;
       }
 
@@ -76,7 +131,7 @@ export function StudentQuizzesPage() {
 
       return haystack.includes(needle);
     });
-  }, [quizzes, search, quizTypeFilter, resultStatusFilter]);
+  }, [quizzes, search, quizTypeFilter, resultStatusFilter, dateFilter]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -95,8 +150,8 @@ export function StudentQuizzesPage() {
         }
       />
 
-      <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-3">
-        <div className="md:col-span-1">
+      <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-4">
+        <div>
           <FieldLabel htmlFor="student-quiz-search" optional>
             Search
           </FieldLabel>
@@ -145,6 +200,25 @@ export function StudentQuizzesPage() {
                 {status}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="student-quiz-date" optional>
+            Date
+          </FieldLabel>
+          <select
+            id="student-quiz-date"
+            value={dateFilter}
+            onChange={(event) => setDateFilter(event.target.value)}
+            className={inputClassName}
+          >
+            <option value="">All dates</option>
+            <option value="Today">Today</option>
+            <option value="Upcoming">Upcoming</option>
+            <option value="Overdue">Overdue</option>
+            <option value="Last 7 Days">Last 7 Days</option>
+            <option value="Last 15 Days">Last 15 Days</option>
           </select>
         </div>
       </section>

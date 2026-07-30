@@ -87,6 +87,10 @@ public static class QuizLookupNames
         public const short TrueFalse = 102;
         public const short FillInTheBlanks = 103;
         public const short Descriptive = 104;
+        public const short FileUpload = 105;
+        public const short Matching = 106;
+        public const short Ordering = 107;
+        public const short Media = 108;
     }
 
     /// <summary>Canonical DifficultyLevel lookup IDs (seeded / preferred for writes).</summary>
@@ -158,6 +162,34 @@ public static class QuizLookupNames
         "Descriptive",
         "Short Answer",
         "ShortAnswer"
+    ];
+
+    public static readonly string[] FileUploadQuestionTypeNames =
+    [
+        "File Upload",
+        "File",
+        "File Answer",
+        "FileUpload"
+    ];
+
+    public static readonly string[] MatchingQuestionTypeNames =
+    [
+        "Matching",
+        "Match"
+    ];
+
+    public static readonly string[] OrderingQuestionTypeNames =
+    [
+        "Ordering",
+        "Order",
+        "Sequence"
+    ];
+
+    public static readonly string[] MediaQuestionTypeNames =
+    [
+        "Media",
+        "Media Question",
+        "Image Choice"
     ];
 
     /// <summary>Legacy alias — single-choice style MCQ names.</summary>

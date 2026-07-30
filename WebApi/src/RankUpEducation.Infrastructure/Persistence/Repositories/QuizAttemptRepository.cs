@@ -170,6 +170,7 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                 {
                     snapshotOptions = legacyOptions
                         .Where(option => option.QuestionId == item.QuestionId)
+                        .OrderBy(option => option.Id)
                         .Select(option => new QuizQuestionOptionItem(
                             option.Id,
                             option.OptionText,

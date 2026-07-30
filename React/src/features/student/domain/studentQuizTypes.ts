@@ -188,7 +188,7 @@ export function canTakeStudentQuizzes(role: string): boolean {
   return role === "Student";
 }
 
-/** Question requires free-text answer (Fill / Descriptive / essay-style). */
+/** Question requires free-text answer (Fill / Descriptive / File / essay-style). */
 export function isTextQuestionType(questionType: string): boolean {
   const normalized = questionType.toLowerCase().replace(/\s+/g, "");
   return (
@@ -198,7 +198,8 @@ export function isTextQuestionType(questionType: string): boolean {
     normalized.includes("short") ||
     normalized.includes("long") ||
     normalized.includes("essay") ||
-    normalized.includes("descriptive")
+    normalized.includes("descriptive") ||
+    normalized.includes("file")
   );
 }
 
@@ -209,6 +210,22 @@ export function isMultiSelectQuestionType(questionType: string): boolean {
     normalized.includes("multiplechoice") ||
     normalized.includes("multiselect") ||
     normalized === "multiple"
+  );
+}
+
+/** Matching — left items paired to right items. */
+export function isMatchingQuestionType(questionType: string): boolean {
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
+  return normalized === "matching" || normalized === "match";
+}
+
+/** Ordering — rearrange items into the correct sequence. */
+export function isOrderingQuestionType(questionType: string): boolean {
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
+  return (
+    normalized === "ordering" ||
+    normalized === "order" ||
+    normalized === "sequence"
   );
 }
 

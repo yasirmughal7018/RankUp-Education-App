@@ -2,6 +2,8 @@ import { Check, Trash2 } from "lucide-react";
 import type { QuestionOptionInput } from "@/features/questions/domain/questionTypes";
 import {
   isFillBlankType,
+  isMatchingType,
+  isOrderingType,
   isSingleChoiceType,
   isTrueFalseType,
   normalizeQuestionType,
@@ -60,7 +62,28 @@ function CorrectToggle({
   );
 }
 
-/** Editable answer options for MCQ / True-False; also accepted answers for Fill (quiz inline). */
+function optionPlaceholder(
+  type: string,
+  index: number,
+  fillBlank: boolean,
+  optionCount: number,
+): string {
+  if (fillBlank) {
+    return `Accepted answer ${index + 1}`;
+  }
+  if (isMatchingType(type)) {
+    const half = Math.max(2, Math.floor(optionCount / 2));
+    return index < half
+      ? `Left item ${index + 1}`
+      : `Right item ${index - half + 1}`;
+  }
+  if (isOrderingType(type)) {
+    return `Item ${index + 1} (correct order)`;
+  }
+  return `Option ${String.fromCharCode(65 + index)}`;
+}
+
+/** Editable answer options for MCQ / True-False / Matching / Ordering; Fill uses accepted answers. */
 export function QuestionOptionsEditor({
   questionType,
   options,
@@ -71,6 +94,9 @@ export function QuestionOptionsEditor({
   const singleSelect = isSingleChoiceType(type) || isTrueFalseType(type);
   const fillBlank = isFillBlankType(type);
   const trueFalse = isTrueFalseType(type);
+  const matching = isMatchingType(type);
+  const ordering = isOrderingType(type);
+  const hideCorrect = fillBlank || matching || ordering;
 
   function updateOption(index: number, patch: Partial<QuestionOptionInput>) {
     if (patch.isCorrect === true && singleSelect) {
@@ -98,7 +124,7 @@ export function QuestionOptionsEditor({
   }
 
   function removeOption(index: number) {
-    const minCount = fillBlank ? 1 : 2;
+    const minCount = matching ? 4 : fillBlank ? 1 : 2;
     if (options.length <= minCount) {
       return;
     }
@@ -109,15 +135,24 @@ export function QuestionOptionsEditor({
     ? "Accepted answers"
     : trueFalse
       ? "True / False"
-      : "Answer options";
+      : matching
+        ? "Matching pairs"
+        : ordering
+          ? "Correct order"
+          : "Answer options";
 
   const helper = fillBlank
     ? "Students type an answer. Add every accepted spelling or wording."
-    : singleSelect
-      ? "Students can select only one option. Mark exactly one as correct."
-      : "Students can select multiple options. Mark every correct option.";
+    : matching
+      ? "Enter left items first, then the matching right items in the same order (even count)."
+      : ordering
+        ? "List items top-to-bottom in the correct sequence. Students will rearrange them."
+        : singleSelect
+          ? "Students can select only one option. Mark exactly one as correct."
+          : "Students can select multiple options. Mark every correct option.";
 
-  const minCount = fillBlank ? 1 : 2;
+  const minCount = matching ? 4 : fillBlank ? 1 : 2;
+  const half = matching ? Math.floor(options.length / 2) : 0;
 
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4 sm:p-5">
@@ -135,7 +170,13 @@ export function QuestionOptionsEditor({
             onClick={addOption}
             className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted disabled:opacity-70"
           >
-            {fillBlank ? "Add accepted answer" : "Add option"}
+            {fillBlank
+              ? "Add accepted answer"
+              : matching
+                ? "Add pair row"
+                : ordering
+                  ? "Add item"
+                  : "Add option"}
           </button>
         ) : null}
       </div>
@@ -143,13 +184,19 @@ export function QuestionOptionsEditor({
       <div className="space-y-2.5 sm:space-y-3">
         {options.map((option, index) => {
           const canRemove = !disabled && options.length > minCount;
+          const matchLabel =
+            matching && options.length >= 2
+              ? index < half
+                ? `Left ${index + 1}`
+                : `Right ${index - half + 1}`
+              : null;
 
           return (
             <div
               key={`option-${index}`}
               className={cn(
                 "rounded-2xl border p-3 transition sm:p-4",
-                option.isCorrect
+                !hideCorrect && option.isCorrect
                   ? "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)]/70"
                   : "border-border bg-card",
               )}
@@ -171,6 +218,11 @@ export function QuestionOptionsEditor({
                 </div>
               ) : (
                 <div className="flex items-center gap-2 sm:gap-3">
+                  {matchLabel || ordering ? (
+                    <span className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-[11px] font-semibold text-muted-foreground">
+                      {matchLabel ?? index + 1}
+                    </span>
+                  ) : null}
                   <input
                     type="text"
                     value={option.optionText}
@@ -179,21 +231,24 @@ export function QuestionOptionsEditor({
                       updateOption(index, { optionText: event.target.value })
                     }
                     className={cn(inputClassName, "min-w-0 flex-1")}
-                    placeholder={
-                      fillBlank
-                        ? `Accepted answer ${index + 1}`
-                        : `Option ${String.fromCharCode(65 + index)}`
-                    }
+                    placeholder={optionPlaceholder(
+                      type,
+                      index,
+                      fillBlank,
+                      options.length,
+                    )}
                   />
-                  <CorrectToggle
-                    checked={option.isCorrect}
-                    disabled={disabled || fillBlank}
-                    singleSelect={singleSelect}
-                    label={fillBlank ? "Accepted" : "Correct"}
-                    onToggle={(next) =>
-                      updateOption(index, { isCorrect: next })
-                    }
-                  />
+                  {!hideCorrect ? (
+                    <CorrectToggle
+                      checked={option.isCorrect}
+                      disabled={disabled}
+                      singleSelect={singleSelect}
+                      label="Correct"
+                      onToggle={(next) =>
+                        updateOption(index, { isCorrect: next })
+                      }
+                    />
+                  ) : null}
                   <button
                     type="button"
                     disabled={!canRemove}

@@ -33,7 +33,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   final _searchController = TextEditingController();
   final Set<int> _answeredQuestions = {};
   final Set<int> _markedQuestions = {};
-  final Map<int, Set<String>> _selectedOptionIds = {};
+  final Map<int, List<String>> _selectedOptionIds = {};
   final Map<int, String> _textAnswers = {};
   final Set<int> _revealedHints = {};
   Timer? _attemptTimer;
@@ -224,6 +224,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
             offlineSubmitQueued:
                 ref.watch(quizzesControllerProvider).offlineSubmitQueued,
             onOptionSelected: _answerOptionQuestion,
+            onMatchingSelected: _setMatchingSelection,
+            onOrderingMoved: _moveOrderingItem,
             onTextAnswerChanged: _answerTextQuestion,
             onShowHint: _showHint,
             onPrevious: _previousQuestion,
@@ -455,6 +457,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       _expiredQuestionIndexes.clear();
       _autoAdvancedQuestionIndexes.clear();
       _hydrateSavedAnswers(attempt);
+      _seedOrderingPresentations(attempt);
       _hydrateQuestionTimers(attempt);
       _attemptStartedAt = attempt.startedAt;
       _focusLossCount = attempt.focusLossCount;
@@ -655,10 +658,12 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         continue;
       }
 
-      final optionIds = <String>{
+      final optionIds = <String>[
         ...saved.selectedOptionIds,
-        if (saved.selectedOptionId != null) saved.selectedOptionId!,
-      };
+        if (saved.selectedOptionId != null &&
+            !saved.selectedOptionIds.contains(saved.selectedOptionId))
+          saved.selectedOptionId!,
+      ];
       if (optionIds.isNotEmpty) {
         _selectedOptionIds[index] = optionIds;
         _answeredQuestions.add(index);
@@ -739,16 +744,19 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     QuizQuestion question,
     int index,
   ) {
-    final selectedIds = _selectedOptionIds[index] ?? const <String>{};
+    final selectedIds = _selectedOptionIds[index] ?? const <String>[];
     final textAnswer = _textAnswers[index];
-    final isMultiSelect = question.questionTypeId == 41;
+    final typeId = question.questionTypeId;
+    final usesOrderedIds = typeId == 41 || typeId == 46 || typeId == 47;
+    final cleanedIds =
+        selectedIds.where((id) => id.trim().isNotEmpty).toList(growable: false);
 
     return QuizAnswerSubmission(
       questionId: question.id,
       selectedOptionId:
-          isMultiSelect || selectedIds.isEmpty ? null : selectedIds.first,
-      selectedOptionIds: isMultiSelect && selectedIds.isNotEmpty
-          ? selectedIds.toList(growable: false)
+          usesOrderedIds || cleanedIds.isEmpty ? null : cleanedIds.first,
+      selectedOptionIds: usesOrderedIds && cleanedIds.isNotEmpty
+          ? cleanedIds
           : null,
       submittedText: textAnswer,
       isMarkedForReview: _markedQuestions.contains(index),
@@ -756,6 +764,31 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
           ? _questionTimeSpent[index]
           : null,
     );
+  }
+
+  void _seedOrderingPresentations(QuizAttemptSession attempt) {
+    for (var index = 0; index < attempt.questions.length; index++) {
+      final question = attempt.questions[index];
+      if (question.questionTypeId != 47) {
+        continue;
+      }
+      final existing = _selectedOptionIds[index];
+      if (existing != null && existing.isNotEmpty) {
+        continue;
+      }
+      final original = question.options.map((option) => option.id).toList();
+      final ids = List<String>.from(original)..shuffle();
+      if (ids.length > 1 &&
+          ids.length == original.length &&
+          List.generate(ids.length, (i) => ids[i] == original[i])
+              .every((same) => same)) {
+        final first = ids[0];
+        ids[0] = ids[1];
+        ids[1] = first;
+      }
+      _selectedOptionIds[index] = ids;
+      _answeredQuestions.add(index);
+    }
   }
 
   void _scheduleDraftSave() {
@@ -856,7 +889,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     setState(() {
       final selected = _selectedOptionIds.putIfAbsent(
         _questionIndex,
-        () => <String>{},
+        () => <String>[],
       );
 
       if (questionTypeId == 41) {
@@ -877,6 +910,64 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         _answeredQuestions.add(_questionIndex);
       }
 
+      _saveStatus = 'Saving…';
+    });
+    _scheduleDraftSave();
+  }
+
+  void _setMatchingSelection(int leftIndex, String? rightId) {
+    if (_isCurrentQuestionLocked()) {
+      return;
+    }
+    final attempt = ref.read(quizzesControllerProvider).activeAttempt;
+    if (attempt == null) {
+      return;
+    }
+    final question = attempt.questions[_questionIndex];
+    final half = question.options.length ~/ 2;
+    setState(() {
+      final selected = List<String>.generate(
+        half,
+        (slot) {
+          final current = _selectedOptionIds[_questionIndex];
+          if (current == null || slot >= current.length) {
+            return '';
+          }
+          return current[slot];
+        },
+      );
+      selected[leftIndex] = rightId ?? '';
+      _selectedOptionIds[_questionIndex] = selected;
+      if (selected.any((id) => id.isNotEmpty)) {
+        _answeredQuestions.add(_questionIndex);
+      } else {
+        _answeredQuestions.remove(_questionIndex);
+      }
+      _saveStatus = 'Saving…';
+    });
+    _scheduleDraftSave();
+  }
+
+  void _moveOrderingItem(int index, int delta) {
+    if (_isCurrentQuestionLocked()) {
+      return;
+    }
+    setState(() {
+      final selected = List<String>.from(
+        _selectedOptionIds[_questionIndex] ?? const <String>[],
+      );
+      final target = index + delta;
+      if (index < 0 ||
+          target < 0 ||
+          index >= selected.length ||
+          target >= selected.length) {
+        return;
+      }
+      final temp = selected[index];
+      selected[index] = selected[target];
+      selected[target] = temp;
+      _selectedOptionIds[_questionIndex] = selected;
+      _answeredQuestions.add(_questionIndex);
       _saveStatus = 'Saving…';
     });
     _scheduleDraftSave();
@@ -1201,7 +1292,8 @@ class _FilterPanelState extends State<_FilterPanel> {
                       values: const [
                         '',
                         'Today',
-                        'Yesterday',
+                        'Upcoming',
+                        'Overdue',
                         'Last 7 Days',
                         'Last 15 Days',
                       ],
@@ -1830,6 +1922,8 @@ class _QuizAttemptView extends StatelessWidget {
     required this.pendingOfflineCount,
     required this.offlineSubmitQueued,
     required this.onOptionSelected,
+    required this.onMatchingSelected,
+    required this.onOrderingMoved,
     required this.onTextAnswerChanged,
     required this.onShowHint,
     required this.onPrevious,
@@ -1843,7 +1937,7 @@ class _QuizAttemptView extends StatelessWidget {
   final int questionIndex;
   final List<QuizQuestion> questions;
   final Set<int> answeredQuestions;
-  final Map<int, Set<String>> selectedOptionIds;
+  final Map<int, List<String>> selectedOptionIds;
   final Set<int> markedQuestions;
   final Set<int> revealedHints;
   final Map<int, String> textAnswers;
@@ -1855,6 +1949,8 @@ class _QuizAttemptView extends StatelessWidget {
   final int pendingOfflineCount;
   final bool offlineSubmitQueued;
   final void Function(String optionId, int questionTypeId) onOptionSelected;
+  final void Function(int leftIndex, String? rightId) onMatchingSelected;
+  final void Function(int index, int delta) onOrderingMoved;
   final ValueChanged<String> onTextAnswerChanged;
   final VoidCallback onShowHint;
   final VoidCallback onPrevious;
@@ -1996,27 +2092,131 @@ class _QuizAttemptView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (question.options.isEmpty)
+                        if (question.options.isEmpty ||
+                            question.questionTypeId == 44 ||
+                            question.questionTypeId == 45)
                           TextFormField(
                             key: ValueKey(
                               'text-answer-$questionIndex-${textAnswers[questionIndex] ?? ''}',
                             ),
                             initialValue: textAnswers[questionIndex] ?? '',
-                            minLines: question.questionTypeId == 44 ? 4 : 1,
-                            maxLines: question.questionTypeId == 44 ? 6 : 1,
+                            minLines: question.questionTypeId == 44 ||
+                                    question.questionTypeId == 45
+                                ? 4
+                                : 1,
+                            maxLines: question.questionTypeId == 44 ||
+                                    question.questionTypeId == 45
+                                ? 6
+                                : 1,
                             decoration: InputDecoration(
-                              hintText: question.questionTypeId == 44
-                                  ? 'Write your descriptive answer'
-                                  : 'Type your answer',
+                              hintText: question.questionTypeId == 45
+                                  ? 'Paste a file link or path'
+                                  : question.questionTypeId == 44
+                                      ? 'Write your descriptive answer'
+                                      : 'Type your answer',
                               helperText:
                                   'Model answer is hidden until after submission.',
                             ),
-                            textInputAction: question.questionTypeId == 44
+                            textInputAction: question.questionTypeId == 44 ||
+                                    question.questionTypeId == 45
                                 ? TextInputAction.newline
                                 : TextInputAction.done,
                             onChanged: onTextAnswerChanged,
                           )
-                        else
+                        else if (question.questionTypeId == 46) ...[
+                          const Text(
+                            'Match each left item to a right item.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                          ...() {
+                            final half = question.options.length ~/ 2;
+                            final lefts = question.options.take(half).toList();
+                            final rights = question.options.skip(half).toList();
+                            final selected =
+                                selectedOptionIds[questionIndex] ??
+                                    const <String>[];
+                            return [
+                              for (var i = 0; i < lefts.length; i++) ...[
+                                Text(
+                                  lefts[i].text,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                DropdownButtonFormField<String>(
+                                  value: i < selected.length &&
+                                          selected[i].isNotEmpty
+                                      ? selected[i]
+                                      : null,
+                                  items: [
+                                    for (final right in rights)
+                                      DropdownMenuItem(
+                                        value: right.id,
+                                        child: Text(right.text),
+                                      ),
+                                  ],
+                                  onChanged: questionLocked
+                                      ? null
+                                      : (value) =>
+                                          onMatchingSelected(i, value),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Select match',
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                              ],
+                            ];
+                          }(),
+                        ] else if (question.questionTypeId == 47) ...[
+                          const Text(
+                            'Arrange items in the correct order (top = first).',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                          ...() {
+                            final orderedIds =
+                                selectedOptionIds[questionIndex] ??
+                                    question.options
+                                        .map((option) => option.id)
+                                        .toList();
+                            final byId = {
+                              for (final option in question.options)
+                                option.id: option,
+                            };
+                            return [
+                              for (var i = 0; i < orderedIds.length; i++)
+                                Card(
+                                  child: ListTile(
+                                    leading: Text('${i + 1}'),
+                                    title: Text(
+                                      byId[orderedIds[i]]?.text ?? '',
+                                    ),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          onPressed: questionLocked || i == 0
+                                              ? null
+                                              : () => onOrderingMoved(i, -1),
+                                          icon: const Icon(Icons.arrow_upward),
+                                        ),
+                                        IconButton(
+                                          onPressed: questionLocked ||
+                                                  i == orderedIds.length - 1
+                                              ? null
+                                              : () => onOrderingMoved(i, 1),
+                                          icon:
+                                              const Icon(Icons.arrow_downward),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ];
+                          }(),
+                        ] else
                           for (final option in question.options) ...[
                             _AnswerOption(
                               label: option.text,

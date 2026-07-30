@@ -81,7 +81,7 @@ internal sealed class QuizManageGuard
     {
         var normalized = questionType.AsTrimmedString();
 
-        // Accept canonical IDs (100–104) when callers pass numeric values (e.g. Excel).
+        // Accept canonical IDs (100–108) when callers pass numeric values (e.g. Excel).
         if (short.TryParse(normalized, out var typedId))
         {
             var byId = await _lookups.GetByIdAndTypeAsync(
@@ -99,7 +99,12 @@ internal sealed class QuizManageGuard
             (QuizLookupNames.QuestionTypeIds.SingleChoice, QuizLookupNames.SingleChoiceQuestionTypeNames),
             (QuizLookupNames.QuestionTypeIds.MultipleChoice, QuizLookupNames.MultiSelectQuestionTypeNames),
             (QuizLookupNames.QuestionTypeIds.TrueFalse, QuizLookupNames.TrueFalseQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.FillInTheBlanks, QuizLookupNames.FillBlankQuestionTypeNames)
+            (QuizLookupNames.QuestionTypeIds.FillInTheBlanks, QuizLookupNames.FillBlankQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.Descriptive, QuizLookupNames.DescriptiveQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.FileUpload, QuizLookupNames.FileUploadQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.Matching, QuizLookupNames.MatchingQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.Ordering, QuizLookupNames.OrderingQuestionTypeNames),
+            (QuizLookupNames.QuestionTypeIds.Media, QuizLookupNames.MediaQuestionTypeNames)
         ];
 
         foreach (var (preferredId, group) in candidateGroups)
@@ -179,10 +184,14 @@ internal sealed class QuizManageGuard
             && !QuizQuestionHelper.IsMultiSelectType(resolvedName)
             && !QuizQuestionHelper.IsTrueFalseType(resolvedName)
             && !QuizQuestionHelper.IsFillBlankType(resolvedName)
-            && !QuizQuestionHelper.IsDescriptiveType(resolvedName))
+            && !QuizQuestionHelper.IsDescriptiveType(resolvedName)
+            && !QuizQuestionHelper.IsFileUploadType(resolvedName)
+            && !QuizQuestionHelper.IsMatchingType(resolvedName)
+            && !QuizQuestionHelper.IsOrderingType(resolvedName)
+            && !QuizQuestionHelper.IsMediaType(resolvedName))
         {
             throw new ValidationAppException([
-                $"Question type '{resolvedName}' is not available yet. Use Single Choice, Multiple Choice, True/False, Fill in the Blanks, or Descriptive."
+                $"Question type '{resolvedName}' is not supported."
             ]);
         }
 

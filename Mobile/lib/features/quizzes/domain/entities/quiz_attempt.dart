@@ -231,8 +231,22 @@ int questionTypeIdFromName(String questionType) {
   }
   if (normalized.contains('descriptive') ||
       normalized.contains('shortanswer') ||
-      normalized.contains('short')) {
+      (normalized.contains('short') && !normalized.contains('file'))) {
     return 44;
+  }
+  if (normalized.contains('file')) {
+    return 45;
+  }
+  if (normalized == 'matching' || normalized == 'match') {
+    return 46;
+  }
+  if (normalized == 'ordering' ||
+      normalized == 'order' ||
+      normalized == 'sequence') {
+    return 47;
+  }
+  if (normalized.contains('media') || normalized.contains('imagechoice')) {
+    return 48;
   }
 
   return 40;

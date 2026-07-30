@@ -209,8 +209,11 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             {
                 attemptQuestion.Id,
                 attemptQuestion.QuestionId,
-                question.QuestionText,
+                QuestionText = string.IsNullOrWhiteSpace(attemptQuestion.QuestionText)
+                    ? question.QuestionText
+                    : attemptQuestion.QuestionText,
                 question.QuestionTypeId,
+                AttemptQuestionTypeName = attemptQuestion.QuestionTypeName,
                 attemptQuestion.QuizReviewId,
                 attemptQuestion.Marks
             }).ToListAsync(cancellationToken);
@@ -225,8 +228,13 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             .ToListAsync(cancellationToken);
 
         var fillQuestionIds = attemptQuestions
-            .Where(item => QuizQuestionHelper.IsFillBlankType(
-                typeNames.GetValueOrDefault(item.QuestionTypeId, string.Empty)))
+            .Where(item =>
+            {
+                var typeName = !string.IsNullOrWhiteSpace(item.AttemptQuestionTypeName)
+                    ? item.AttemptQuestionTypeName
+                    : typeNames.GetValueOrDefault(item.QuestionTypeId, string.Empty);
+                return QuizQuestionHelper.IsFillBlankType(typeName);
+            })
             .Select(item => item.QuestionId)
             .ToArray();
 
@@ -295,9 +303,12 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 var primaryAnswer = questionAnswers.FirstOrDefault();
                 var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
                     ?? primaryAnswer;
-                var typeName = typeNames.GetValueOrDefault(item.QuestionTypeId, "Multiple Choice");
+                var typeName = !string.IsNullOrWhiteSpace(item.AttemptQuestionTypeName)
+                    ? item.AttemptQuestionTypeName
+                    : typeNames.GetValueOrDefault(item.QuestionTypeId, "Multiple Choice");
                 var isFillBlank = QuizQuestionHelper.IsFillBlankType(typeName);
                 var requiresReview = QuizQuestionHelper.IsDescriptiveType(typeName)
+                    || QuizQuestionHelper.IsFileUploadType(typeName)
                     || (isFillBlank
                         && teacherReviewFlags.GetValueOrDefault(item.QuestionId)
                         && !string.IsNullOrWhiteSpace(primaryAnswer?.SubmittedText));

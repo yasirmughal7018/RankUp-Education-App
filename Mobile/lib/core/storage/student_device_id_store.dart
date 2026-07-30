@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Persists a stable per-install device id for Competition attempt lock.
+/// Persists a stable per-install device id for quiz attempt device lock.
 final studentDeviceIdStoreProvider = Provider<StudentDeviceIdStore>(
   (ref) => const SecureStudentDeviceIdStore(FlutterSecureStorage()),
 );

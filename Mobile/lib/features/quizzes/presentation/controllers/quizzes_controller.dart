@@ -510,6 +510,11 @@ List<QuizSummary> _applyLocalFilters(
     final matchesStatus = status.isEmpty || _studentStatus(quiz, now) == status;
     final matchesDate = switch (selectedDateFilter) {
       'Today' => _isSameDay(date, now),
+      'Upcoming' => quiz.startAt != null && quiz.startAt!.isAfter(now),
+      'Overdue' =>
+        quiz.dueAt != null &&
+            quiz.dueAt!.isBefore(now) &&
+            _studentStatus(quiz, now) != 'Completed',
       'Yesterday' => _isSameDay(date, now.subtract(const Duration(days: 1))),
       'Last 7 Days' => _isWithinPastDays(date, now, 7),
       'Last 15 Days' => _isWithinPastDays(date, now, 15),

@@ -104,9 +104,10 @@ internal static class QuestionBankGuard
         var errors = new List<string>();
         var type = questionType.Trim();
 
-        if (QuizQuestionHelper.IsDescriptiveType(type))
+        if (QuizQuestionHelper.IsDescriptiveType(type)
+            || QuizQuestionHelper.IsFileUploadType(type))
         {
-            // Open text — no options or accepted-answer rows required.
+            // Open text / file link — no options required.
             return errors;
         }
 
@@ -114,11 +115,14 @@ internal static class QuestionBankGuard
         var isMulti = QuizQuestionHelper.IsMultiSelectType(type);
         var isTrueFalse = QuizQuestionHelper.IsTrueFalseType(type);
         var isFill = QuizQuestionHelper.IsFillBlankType(type);
+        var isMatching = QuizQuestionHelper.IsMatchingType(type);
+        var isOrdering = QuizQuestionHelper.IsOrderingType(type);
+        var isMedia = QuizQuestionHelper.IsMediaType(type);
 
-        if (!isSingle && !isMulti && !isTrueFalse && !isFill)
+        if (!isSingle && !isMulti && !isTrueFalse && !isFill && !isMatching && !isOrdering && !isMedia)
         {
             errors.Add(
-                $"Question type '{questionType}' is not available yet. Use Single Choice, Multiple Choice, True/False, Fill in the Blanks, or Descriptive.");
+                $"Question type '{questionType}' is not supported.");
             return errors;
         }
 
@@ -152,6 +156,26 @@ internal static class QuestionBankGuard
 
         var correctCount = filled.Count(option => option.IsCorrect);
 
+        if (isMatching)
+        {
+            if (filled.Length < 4 || filled.Length % 2 != 0)
+            {
+                errors.Add("Matching needs an even number of options (left items first, then matching right items).");
+            }
+
+            return errors;
+        }
+
+        if (isOrdering)
+        {
+            if (filled.Length < 2)
+            {
+                errors.Add("Ordering needs at least two items.");
+            }
+
+            return errors;
+        }
+
         if (isTrueFalse)
         {
             if (filled.Length != 2)
@@ -167,16 +191,16 @@ internal static class QuestionBankGuard
             return errors;
         }
 
-        if (isSingle)
+        if (isSingle || isMedia)
         {
             if (filled.Length < 2)
             {
-                errors.Add("Single Choice needs at least two options.");
+                errors.Add($"{(isMedia ? "Media" : "Single Choice")} needs at least two options.");
             }
 
             if (correctCount != 1)
             {
-                errors.Add("Single Choice must have exactly one correct option.");
+                errors.Add($"{(isMedia ? "Media" : "Single Choice")} must have exactly one correct option.");
             }
 
             return errors;

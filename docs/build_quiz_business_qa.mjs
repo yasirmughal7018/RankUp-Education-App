@@ -111,7 +111,7 @@ const assignmentStatusConflicts = [
 const quizTypes = [
   ["1", "Practice", "Teacher", "Learning-oriented school quiz. Admin approval before assign. Intended: flexible attempts / optional time / answers may show after submit (type-specific UX still soft)."],
   ["2", "Assessment", "Teacher", "Assigned assessment with due window; may have limited time; visible to selected audience after assign. Admin approval before assign."],
-  ["3", "Competition", "Teacher", "Class/school/inter-school competition intent: fixed schedule, strict attempts. Device lock (Competition-only) + FocusLoss≥5 / Paste≥3 draft lockout (all types). Admin approval before assign."],
+  ["3", "Competition", "Teacher", "Class/school/inter-school competition intent: fixed schedule, strict attempts. Device lock (all quiz types) + FocusLoss≥5 / Paste≥3 draft lockout (all types). Admin approval before assign."],
   ["4", "Surprise", "Teacher", "Hidden from students until StartDateTime (no advance notice); availability window ≤24h; StartAt ≤ now+24h; ≤1 attempt. Assign notifications deferred until the window opens. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
   ["5", "ParentPrivate", "Parent", "Private parent quiz. Auto-approved on publish; excluded from admin queue; assign only to linked children / parent groups."],
 ];
@@ -146,7 +146,7 @@ const questionRules = [
   ["Attach from bank", "Requires Active + Approved status + ApprovedBy + Visibility=Public + class/subject match + not already linked + marks > 0."],
   ["Edit question on quiz", "Caller must own the quiz AND be the question CreatedBy. Recalculates totals."],
   ["Remove from quiz", "Deletes QuizQuestion link; if caller created the question, deactivates it. Recalculates totals."],
-  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103), Descriptive (104). File answers / Matching / Ordering / media types are Not Now."],
+  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103), Descriptive (104), File Upload (105), Matching (106), Ordering (107), Media (108)."],
   ["Shuffle", "Quiz-level ShuffleQuestions / ShuffleOptions. At attempt start, options shuffle when quiz.ShuffleOptions AND link.ShuffleOptions are both true (per-question can opt out)."],
 ];
 
@@ -160,7 +160,7 @@ const importantBusinessRules = [
   ["Random/shuffled quizzes store exact questions shown", "Yes", "QuizAttemptQuestion freezes QuestionId, DisplayOrder, Marks, QuestionText; options snapshotted on QuizAttemptQuestionOption."],
   ["Student answers stored per attempt", "Yes", "QuizAttemptAnswer rows hang off QuizAttemptQuestion."],
   ["Multiple-choice selected answers stored separately", "Yes", "Each selected option is a QuizAttemptAnswer with QuestionOptionId; free text uses SubmittedText."],
-  ["Descriptive / file answers may need teacher or AI review", "Covered", "Descriptive + Fill with AllowTeacherReview / AllowAiReview. File answers are Not Now."],
+  ["Descriptive / file answers may need teacher or AI review", "Covered", "Descriptive + File Upload always require teacher/parent review when answered. Fill with AllowTeacherReview / AllowAiReview. AI suggestions apply to Fill when AllowAiReview."],
 ];
 
 const quizQuestionFields = [
@@ -292,7 +292,7 @@ const attemptRules = [
   "Submit scores then MarkSubmitted (Submitted or AutoSubmitted). Cannot resubmit.",
   "Subjective review finalizes to Reviewed; do not use Under Teacher/AI Review as attempt StatusId values.",
   "Offline: ClientSyncId + IsOfflineAttempt; POST .../attempts/{id}/sync replays queued draft/submit after reconnect.",
-  "Anti-cheat: Competition device lock; all quiz types block further drafts after FocusLoss≥5 or Paste≥3 (submit still allowed).",
+  "Anti-cheat: Device lock on all quiz types; all types block further drafts after FocusLoss≥5 or Paste≥3 (submit still allowed).",
 ];
 
 const quizAttemptFields = [
@@ -304,7 +304,7 @@ const quizAttemptFields = [
   ["StartedDate", "When the attempt began / resumed."],
   ["SubmittedDate", "When submitted (or placeholder until submit)."],
   ["TimeSpentSeconds", "Elapsed time recorded on the attempt."],
-  ["DeviceId", "Required non-empty device identifier. Web and mobile persist a stable per-install id (not a shared platform constant) so Competition device lock separates browsers/devices."],
+  ["DeviceId", "Required non-empty device identifier. Web and mobile persist a stable per-install id (not a shared platform constant) so device lock separates browsers/devices for every quiz type."],
   ["IsOfflineAttempt", "True when the attempt was started/synced from an offline queue."],
   ["ClientSyncId", "Idempotency key for offline sync; unique per student when set."],
   ["FocusLossCount", "Anti-cheat telemetry: browser focus/visibility losses."],
@@ -358,11 +358,15 @@ const scoring = [
   ["Multiple Choice", "Exact set match of correct option IDs → full marks; else 0."],
   ["Fill in the Blanks", "Match any accepted answer (case / partial / min-max length) OR correct option text (case-insensitive). If AllowTeacherReview → subjective for review masking. If AllowAiReview → OpenAI or heuristic suggestion."],
   ["Descriptive / free text", "Marks 0 on auto-score; treated as subjective if present."],
+  ["File Upload", "Marks 0 on auto-score; RequiresReview like Descriptive when a link/text answer is present."],
+  ["Matching", "selectedOptionIds = right option ids in left order; exact sequence match awards full marks."],
+  ["Ordering", "selectedOptionIds = option ids in correct order; exact sequence match awards full marks."],
+  ["Media", "Scored like Single Choice (one correct option)."],
 ];
 
 const reviewRules = [
   "Pending reviews: owned quizzes with IsReviewRequired, assignment not review-done, attempt Submitted/AutoSubmitted.",
-  "RequiresReview per question: Descriptive OR (Fill + AllowTeacherReview + submitted text).",
+  "RequiresReview per question: Descriptive OR File Upload OR (Fill + AllowTeacherReview + submitted text).",
   "Mark answers: awarded marks in [0, MaxMarks]; not if already finalized.",
   "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true.",
   "Score masking uses the same QuizReviewDisplay.Resolve on submit and get-result (ReviewDisplayMode + IsReviewRequired + IsReviewDone + HasSubjectiveAnswersRequiringReview).",
@@ -537,7 +541,7 @@ const checklist = [
   "Editable only Not Assigned/Published, not Archived, and no started assignment (Edit settings + /edit route gated).",
   "Bank attach requires Public + Active + Approved + ApprovedBy + class/subject match.",
   "Inline questions are Approved+Campus+Active and usable on that quiz only for bank eligibility rules.",
-  "Descriptive type authoring enabled (104); file / Matching / Ordering / media remain Not Now.",
+  "Descriptive (104), File Upload (105), Matching (106), Ordering (107), and Media (108) authoring enabled.",
   "Student attempts require assignment (or Public window), active quiz, window, DeviceId, attempt quota, and instructions ack when set.",
   "InProgress resumes; TimeLimitMinutes enforced client + server; AutoSubmitted on IsAutoSubmit.",
   "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time modal/audio at ≤60s.",
@@ -562,8 +566,7 @@ const checklist = [
 ];
 
 const knownGaps = [
-  "File / Matching / Ordering / media question types remain Not Now.",
-  "Competition device lock remains Competition-only (focus/paste draft lockout applies to all types).",
+  "Matching MVP uses even option counts (lefts first, then rights); option shuffle is disabled for Matching/Ordering.",
 ];
 
 function escapeHtml(value) {

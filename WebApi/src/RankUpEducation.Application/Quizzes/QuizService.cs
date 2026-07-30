@@ -305,7 +305,7 @@ public sealed class QuizService : IQuizService
 
         if (existingInProgress is not null)
         {
-            await EnsureCompetitionDeviceLockAsync(quiz, existingInProgress, cancellationToken, request.DeviceId);
+            await EnsureDeviceLockAsync(quiz, existingInProgress, cancellationToken, request.DeviceId);
             return await BuildAttemptPayloadAsync(
                 quiz,
                 existingInProgress,
@@ -371,6 +371,8 @@ public sealed class QuizService : IQuizService
             var shouldShuffleOptions = quiz.ShuffleOptions
                 && source.ShuffleOptions
                 && !QuizQuestionHelper.IsFillBlankType(source.QuestionTypeName)
+                && !QuizQuestionHelper.IsMatchingType(source.QuestionTypeName)
+                && !QuizQuestionHelper.IsOrderingType(source.QuestionTypeName)
                 && options.Count > 1;
             if (shouldShuffleOptions)
             {
@@ -478,7 +480,7 @@ public sealed class QuizService : IQuizService
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
-        await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
+        await EnsureDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
         QuizIntegrityRules.EnsureDraftAllowed(attempt);
         EnsureAttemptTimeBudget(
             quiz.TimeLimitMinutes,
@@ -632,7 +634,7 @@ public sealed class QuizService : IQuizService
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
-        await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
+        await EnsureDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
         // Auto-submit after client timer expiry may arrive slightly late; give a wider grace than manual submit.
         // Offline reconnect gets additional skew room on top of auto-submit grace.
         var graceSeconds = request.IsAutoSubmit ? 90 : 15;
@@ -768,14 +770,45 @@ public sealed class QuizService : IQuizService
             var typeName = attemptQuestion.QuestionTypeName;
             var isMultiSelect = QuizQuestionHelper.IsMultiSelectType(typeName);
             var isFillBlank = QuizQuestionHelper.IsFillBlankType(typeName);
+            var isMatching = QuizQuestionHelper.IsMatchingType(typeName);
+            var isOrdering = QuizQuestionHelper.IsOrderingType(typeName);
+            var isFileUpload = QuizQuestionHelper.IsFileUploadType(typeName);
             var isDescriptive = QuizQuestionHelper.IsDescriptiveType(typeName)
+                || isFileUpload
                 || (!isFillBlank
+                    && !isMatching
+                    && !isOrdering
                     && selectedOptionIds.Count == 0
                     && submittedText.HasTrimmedText());
             var acceptedAnswers = attemptQuestion.AcceptedAnswers
                 ?? Array.Empty<QuestionAcceptedAnswerScoreItem>();
 
-            if (isMultiSelect && selectedOptionIds.Count > 0)
+            // Matching/Ordering options are frozen in bank DisplayOrder (never shuffled).
+            // Matching: first half = lefts, second half = rights; answer = right ids in left order.
+            // Ordering: answer = option ids in correct sequence.
+            if (isMatching && selectedOptionIds.Count > 0)
+            {
+                var orderedOptions = attemptQuestion.Options.ToArray();
+                if (orderedOptions.Length >= 4 && orderedOptions.Length % 2 == 0)
+                {
+                    var half = orderedOptions.Length / 2;
+                    var correctRights = orderedOptions.Skip(half).Select(option => option.OptionId).ToArray();
+                    isCorrect = selectedOptionIds.Count == half
+                        && selectedOptionIds.SequenceEqual(correctRights);
+                }
+
+                awardedMarks = isCorrect ? questionMarks : (short)0;
+                obtainedMarks += awardedMarks;
+            }
+            else if (isOrdering && selectedOptionIds.Count > 0)
+            {
+                var correctOrder = attemptQuestion.Options.Select(option => option.OptionId).ToArray();
+                isCorrect = selectedOptionIds.Count == correctOrder.Length
+                    && selectedOptionIds.SequenceEqual(correctOrder);
+                awardedMarks = isCorrect ? questionMarks : (short)0;
+                obtainedMarks += awardedMarks;
+            }
+            else if (isMultiSelect && selectedOptionIds.Count > 0)
             {
                 var correctOptionIds = attemptQuestion.Options
                     .Where(option => option.IsCorrect)
@@ -1063,8 +1096,6 @@ public sealed class QuizService : IQuizService
         var attemptDetail = await _attempts.GetAttemptDetailAsync(attempt.Id, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
-        var isCompetition = quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase);
         var enablePerQuestionTimer = attemptDetail.Questions.Any(question => question.EstimatedTimeSeconds > 0);
 
         var questions = attemptDetail.Questions
@@ -1120,7 +1151,7 @@ public sealed class QuizService : IQuizService
             questions,
             savedAnswers,
             string.IsNullOrWhiteSpace(quiz.NavigationMode) ? "Free" : quiz.NavigationMode,
-            EnforceDeviceLock: isCompetition,
+            EnforceDeviceLock: true,
             FocusLossCount: attempt.FocusLossCount,
             ClipboardPasteCount: attempt.ClipboardPasteCount,
             EnablePerQuestionTimer: enablePerQuestionTimer);
@@ -1340,24 +1371,20 @@ public sealed class QuizService : IQuizService
         return reportedSpentSeconds is short spent && spent > estimatedTimeSeconds;
     }
 
-    private async Task EnsureCompetitionDeviceLockAsync(
-        Quiz quiz,
+    private async Task EnsureDeviceLockAsync(
+        Quiz _,
         QuizAttempt attempt,
         CancellationToken cancellationToken,
         string? deviceId = null)
     {
-        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
-        if (!quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
+        // Device lock applies to every quiz type (Competition included).
         if (!deviceId.HasTrimmedText())
         {
-            throw new ValidationAppException(["Device id is required for competition attempts."]);
+            throw new ValidationAppException(["Device id is required for this attempt."]);
         }
 
         attempt.EnsureSameDevice(deviceId!);
+        await Task.CompletedTask;
     }
 
     private static void ValidateDeviceId(string deviceId)

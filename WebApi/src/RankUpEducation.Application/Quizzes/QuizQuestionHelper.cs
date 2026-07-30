@@ -11,6 +11,22 @@ public static class QuizQuestionHelper
         return MatchesAny(questionTypeName, QuizLookupNames.DescriptiveQuestionTypeNames);
     }
 
+    /// <summary>File-upload answers — always teacher-reviewed.</summary>
+    public static bool IsFileUploadType(string questionTypeName)
+        => MatchesAny(questionTypeName, QuizLookupNames.FileUploadQuestionTypeNames);
+
+    /// <summary>Left/right matching (even option count: first half left, second half right).</summary>
+    public static bool IsMatchingType(string questionTypeName)
+        => MatchesAny(questionTypeName, QuizLookupNames.MatchingQuestionTypeNames);
+
+    /// <summary>Put options into the correct sequence (DisplayOrder).</summary>
+    public static bool IsOrderingType(string questionTypeName)
+        => MatchesAny(questionTypeName, QuizLookupNames.OrderingQuestionTypeNames);
+
+    /// <summary>Image/media choice — scored like single choice.</summary>
+    public static bool IsMediaType(string questionTypeName)
+        => MatchesAny(questionTypeName, QuizLookupNames.MediaQuestionTypeNames);
+
     /// <summary>Fill-in-the-blank items scored against accepted answers or correct option text.</summary>
     public static bool IsFillBlankType(string questionTypeName)
     {
@@ -51,12 +67,16 @@ public static class QuizQuestionHelper
         if (IsMultiSelectType(questionTypeName)
             || IsTrueFalseType(questionTypeName)
             || IsFillBlankType(questionTypeName)
-            || IsDescriptiveType(questionTypeName))
+            || IsDescriptiveType(questionTypeName)
+            || IsFileUploadType(questionTypeName)
+            || IsMatchingType(questionTypeName)
+            || IsOrderingType(questionTypeName))
         {
             return false;
         }
 
         return MatchesAny(questionTypeName, QuizLookupNames.SingleChoiceQuestionTypeNames)
+            || MatchesAny(questionTypeName, QuizLookupNames.MediaQuestionTypeNames)
             || string.Equals(questionTypeName, "MCQ", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -93,15 +113,18 @@ public static class QuizQuestionHelper
         return MatchesAny(questionTypeName, QuizLookupNames.MultiSelectQuestionTypeNames);
     }
 
-    /// <summary>Whether the type presents selectable options (excludes fill-blank and descriptive).</summary>
+    /// <summary>Whether the type presents selectable options (excludes fill-blank, descriptive, and file).</summary>
     public static bool UsesOptions(string questionTypeName)
         => IsSingleChoiceType(questionTypeName)
             || IsMultiSelectType(questionTypeName)
-            || IsTrueFalseType(questionTypeName);
+            || IsTrueFalseType(questionTypeName)
+            || IsMatchingType(questionTypeName)
+            || IsOrderingType(questionTypeName)
+            || IsMediaType(questionTypeName);
 
     /// <summary>
     /// True when submitted answers include subjective items that need teacher/parent review
-    /// (descriptive text, or fill-blank with AllowTeacherReview).
+    /// (descriptive / file upload, or fill-blank with AllowTeacherReview).
     /// </summary>
     public static bool HasSubjectiveAnswersRequiringReview(
         IEnumerable<QuizAttemptQuestionItem> questions)
@@ -127,6 +150,7 @@ public static class QuizQuestionHelper
             }
 
             if (IsDescriptiveType(typeName)
+                || IsFileUploadType(typeName)
                 || (question.SelectedOptionIds.Count == 0 && question.SelectedOptionId is null))
             {
                 return true;

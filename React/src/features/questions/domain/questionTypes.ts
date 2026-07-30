@@ -146,6 +146,10 @@ export const QUESTION_TYPES_NOW = [
   "True/False",
   "Fill in the Blanks",
   "Descriptive",
+  "File Upload",
+  "Matching",
+  "Ordering",
+  "Media",
 ] as const;
 
 /** Includes legacy aliases; Descriptive is also creatable via QUESTION_TYPES_NOW. */
@@ -190,6 +194,26 @@ export const QUESTION_TYPE_META: Record<
     label: "Descriptive",
     shortLabel: "Essay",
     description: "Open written answer; marked by a teacher.",
+  },
+  "File Upload": {
+    label: "File Upload",
+    shortLabel: "File",
+    description: "Student submits a file link or path; teacher reviews.",
+  },
+  Matching: {
+    label: "Matching",
+    shortLabel: "Match",
+    description: "Left items first, then right items in matching order.",
+  },
+  Ordering: {
+    label: "Ordering",
+    shortLabel: "Order",
+    description: "List items in the correct sequence (top to bottom).",
+  },
+  Media: {
+    label: "Media",
+    shortLabel: "Media",
+    description: "Image/media choice; student picks one correct option.",
   },
 };
 
@@ -464,11 +488,41 @@ export function normalizeQuestionType(type: string): QuestionType {
     return "Descriptive";
   }
 
+  if (
+    value === "file upload" ||
+    value === "fileupload" ||
+    value === "file" ||
+    value === "file answer"
+  ) {
+    return "File Upload";
+  }
+
+  if (value === "matching" || value === "match") {
+    return "Matching";
+  }
+
+  if (
+    value === "ordering" ||
+    value === "order" ||
+    value === "sequence"
+  ) {
+    return "Ordering";
+  }
+
+  if (
+    value === "media" ||
+    value === "media question" ||
+    value === "image choice"
+  ) {
+    return "Media";
+  }
+
   return "Single Choice";
 }
 
 export function isSingleChoiceType(type: string): boolean {
-  return normalizeQuestionType(type) === "Single Choice";
+  const normalized = normalizeQuestionType(type);
+  return normalized === "Single Choice" || normalized === "Media";
 }
 
 export function isMultipleChoiceType(type: string): boolean {
@@ -487,13 +541,32 @@ export function isDescriptiveType(type: string): boolean {
   return normalizeQuestionType(type) === "Descriptive";
 }
 
+export function isFileUploadType(type: string): boolean {
+  return normalizeQuestionType(type) === "File Upload";
+}
+
+export function isMatchingType(type: string): boolean {
+  return normalizeQuestionType(type) === "Matching";
+}
+
+export function isOrderingType(type: string): boolean {
+  return normalizeQuestionType(type) === "Ordering";
+}
+
+export function isMediaType(type: string): boolean {
+  return normalizeQuestionType(type) === "Media";
+}
+
 /** MCQ-style types that store discrete option rows. */
 export function usesAnswerOptions(type: string): boolean {
   const normalized = normalizeQuestionType(type);
   return (
     normalized === "Single Choice" ||
     normalized === "Multiple Choice" ||
-    normalized === "True/False"
+    normalized === "True/False" ||
+    normalized === "Matching" ||
+    normalized === "Ordering" ||
+    normalized === "Media"
   );
 }
 
@@ -533,7 +606,21 @@ export function defaultOptionsForType(type: string): QuestionOptionInput[] {
       ];
     case "Fill in the Blanks":
     case "Descriptive":
+    case "File Upload":
       return [];
+    case "Matching":
+      return [
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+      ];
+    case "Ordering":
+      return [
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+        { optionText: "", isCorrect: false },
+      ];
     case "Multiple Choice":
       return [
         { optionText: "", isCorrect: true },
@@ -541,6 +628,7 @@ export function defaultOptionsForType(type: string): QuestionOptionInput[] {
         { optionText: "", isCorrect: false },
         { optionText: "", isCorrect: false },
       ];
+    case "Media":
     case "Single Choice":
     default:
       return [
@@ -618,7 +706,7 @@ export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
     estimatedTimeSeconds: detail.estimatedTimeSeconds,
     hint: detail.hint ?? "",
     explanation: detail.explanation ?? "",
-    options: isFillBlankType(questionType)
+    options: isFillBlankType(questionType) || isFileUploadType(questionType)
       ? []
       : detail.options.length > 0
         ? detail.options.map((option) => ({
@@ -709,10 +797,10 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
   const questionType = normalizeQuestionType(values.questionType);
 
   if (!isCreatableQuestionType(questionType)) {
-    return "File, Matching, Ordering, and media question types are not available yet. Choose Single Choice, Multiple Choice, True/False, Fill in the Blanks, or Descriptive.";
+    return "Choose a supported question type.";
   }
 
-  if (isDescriptiveType(questionType)) {
+  if (isDescriptiveType(questionType) || isFileUploadType(questionType)) {
     return null;
   }
 
@@ -721,9 +809,9 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
     answer.answerText.trim(),
   );
 
-  if (questionType === "Single Choice") {
+  if (questionType === "Single Choice" || questionType === "Media") {
     if (options.length < 2) {
-      return "Single Choice needs at least two options.";
+      return `${questionType} needs at least two options.`;
     }
     if (options.filter((option) => option.isCorrect).length !== 1) {
       return "Mark exactly one option as correct.";
@@ -751,6 +839,18 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
   if (questionType === "Fill in the Blanks") {
     if (acceptedAnswers.length < 1) {
       return "Add at least one accepted answer.";
+    }
+  }
+
+  if (questionType === "Matching") {
+    if (options.length < 4 || options.length % 2 !== 0) {
+      return "Matching needs an even number of options (left items first, then matching right items).";
+    }
+  }
+
+  if (questionType === "Ordering") {
+    if (options.length < 2) {
+      return "Ordering needs at least two items.";
     }
   }
 

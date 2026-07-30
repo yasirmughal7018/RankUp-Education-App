@@ -385,7 +385,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 """;
 
     private const string QuestionTypeLookupSql = """
-        -- Canonical QuestionType IDs 100–104.
+        -- Canonical QuestionType IDs 100–108.
         INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
         SELECT v.id, v.name, 'QuestionType', v.ord, TRUE, NULL
         FROM (
@@ -394,7 +394,11 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (101, 'Multiple Choice', 2),
                 (102, 'True/False', 3),
                 (103, 'Fill in the Blanks', 4),
-                (104, 'Descriptive', 5)
+                (104, 'Descriptive', 5),
+                (105, 'File Upload', 6),
+                (106, 'Matching', 7),
+                (107, 'Ordering', 8),
+                (108, 'Media', 9)
         ) AS v(id, name, ord)
         WHERE NOT EXISTS (
             SELECT 1 FROM public.lookups existing WHERE existing.id = v.id
@@ -410,6 +414,14 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         WHERE id = 103 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Fill in the Blanks';
         UPDATE public.lookups SET name = 'Descriptive', order_by = 5, is_active = TRUE
         WHERE id = 104 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Descriptive';
+        UPDATE public.lookups SET name = 'File Upload', order_by = 6, is_active = TRUE
+        WHERE id = 105 AND type = 'QuestionType' AND name IS DISTINCT FROM 'File Upload';
+        UPDATE public.lookups SET name = 'Matching', order_by = 7, is_active = TRUE
+        WHERE id = 106 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Matching';
+        UPDATE public.lookups SET name = 'Ordering', order_by = 8, is_active = TRUE
+        WHERE id = 107 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Ordering';
+        UPDATE public.lookups SET name = 'Media', order_by = 9, is_active = TRUE
+        WHERE id = 108 AND type = 'QuestionType' AND name IS DISTINCT FROM 'Media';
 
         -- Remap questions from legacy type names onto canonical IDs.
         UPDATE public.questions q
