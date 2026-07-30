@@ -47,6 +47,10 @@ interface QuizFormProps {
   submitLabel: string;
   isSubmitting?: boolean;
   showContextStudentId?: boolean;
+  /** PortalAdmin must pick school + campus; SchoolAdmin may pick campus when missing on account. */
+  showSchoolCampusFields?: boolean;
+  requireCampusId?: boolean;
+  requireSchoolId?: boolean;
   /** When true, quiz type is required (create). Edit hides the field because API update omits type. */
   requireQuizType?: boolean;
   suggestedTimeMinutes?: number | null;
@@ -62,6 +66,9 @@ export function QuizForm({
   submitLabel,
   isSubmitting = false,
   showContextStudentId = false,
+  showSchoolCampusFields = false,
+  requireCampusId = false,
+  requireSchoolId = false,
   requireQuizType = false,
   suggestedTimeMinutes = null,
   onSubmit,
@@ -76,6 +83,16 @@ export function QuizForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
+    if (requireSchoolId && (values.schoolId == null || values.schoolId <= 0)) {
+      setError("School is required.");
+      return;
+    }
+
+    if (requireCampusId && (values.campusId == null || values.campusId <= 0)) {
+      setError("Campus is required.");
+      return;
+    }
 
     const validationError = validateQuizForm(values, requireQuizType);
     if (validationError) {
@@ -238,6 +255,53 @@ export function QuizForm({
               min={1}
             />
           </div>
+        ) : null}
+
+        {showSchoolCampusFields ? (
+          <>
+            <div>
+              <FieldLabel htmlFor="schoolId" required={requireSchoolId}>
+                School ID
+              </FieldLabel>
+              <input
+                id="schoolId"
+                type="number"
+                value={values.schoolId ?? ""}
+                disabled={isSubmitting || !requireSchoolId}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    schoolId: event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  }))
+                }
+                className={inputClassName}
+                min={1}
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="campusId" required={requireCampusId}>
+                Campus ID
+              </FieldLabel>
+              <input
+                id="campusId"
+                type="number"
+                value={values.campusId ?? ""}
+                disabled={isSubmitting}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    campusId: event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  }))
+                }
+                className={inputClassName}
+                min={1}
+              />
+            </div>
+          </>
         ) : null}
       </div>
 

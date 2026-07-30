@@ -207,8 +207,11 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>Teacher publish: moves to Published lifecycle while approval remains pending.</summary>
-    public void SubmitForApproval(short lifecycleStatusId)
+    /// <summary>
+    /// Teacher publish: moves to Published lifecycle and (re)queues approval as Pending.
+    /// Clears prior rejection so the quiz reappears in the admin approval queue.
+    /// </summary>
+    public void SubmitForApproval(short lifecycleStatusId, short pendingApprovalStatusId)
     {
         if (TotalQuestions <= 0)
         {
@@ -216,6 +219,9 @@ public sealed class Quiz : SoftDeleteEntity
         }
 
         LifecycleStatusId = lifecycleStatusId;
+        ApprovalStatusId = pendingApprovalStatusId;
+        ApprovedBy = null;
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

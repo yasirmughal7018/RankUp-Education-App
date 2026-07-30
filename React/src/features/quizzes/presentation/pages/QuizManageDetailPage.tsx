@@ -7,6 +7,7 @@ import { AssignQuizDialog } from "@/features/quizzes/presentation/components/Ass
 import {
   canAuthorQuizzes,
   isDraftQuiz,
+  isQuizMetadataEditable,
   type QuizQuestionItem,
 } from "@/features/quizzes/domain/quizTypes";
 import {
@@ -150,6 +151,13 @@ export function QuizManageDetailPage() {
   const published =
     quiz.lifecycleStatus.toLowerCase() === "published" ||
     quiz.lifecycleStatus.toLowerCase() === "assigned";
+  const approvalRejected =
+    quiz.approvalStatus.trim().toLowerCase() === "rejected" ||
+    quiz.approvalStatus.trim().toLowerCase() === "declined";
+  const settingsEditable =
+    canAuthor &&
+    isQuizMetadataEditable(quiz.lifecycleStatus, assignments);
+  const questionsEditable = settingsEditable;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -168,7 +176,7 @@ export function QuizManageDetailPage() {
                 Monitor
               </Link>
             ) : null}
-            {canAuthor ? (
+            {settingsEditable ? (
               <Link
                 to={`/quizzes/${quiz.id}/edit`}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
@@ -225,8 +233,22 @@ export function QuizManageDetailPage() {
             label={quiz.lifecycleStatus}
             tone={getQuestionStatusTone(quiz.lifecycleStatus, true)}
           />
+          <StatusBadge
+            label={quiz.approvalStatus}
+            tone={getQuestionStatusTone(quiz.approvalStatus, true)}
+          />
           <StatusBadge label={quiz.quizType} />
         </div>
+
+        {approvalRejected && quiz.rejectionReason ? (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            Rejected: {quiz.rejectionReason}
+          </div>
+        ) : approvalRejected ? (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            This quiz was rejected. Edit if needed, then resubmit for approval.
+          </div>
+        ) : null}
 
         <p className="text-sm leading-6 text-slate-700">{quiz.description}</p>
 
@@ -241,7 +263,7 @@ export function QuizManageDetailPage() {
       </section>
 
       <section className="mb-6 flex flex-wrap gap-2">
-        {draft && canAuthor ? (
+        {questionsEditable ? (
           <>
             <button
               type="button"
@@ -251,6 +273,8 @@ export function QuizManageDetailPage() {
             >
               Add question
             </button>
+            {draft ? (
+              <>
             <button
               type="button"
               disabled={isSubmitting || quiz.questionCount === 0}
@@ -274,6 +298,23 @@ export function QuizManageDetailPage() {
             >
               Delete
             </button>
+              </>
+            ) : null}
+            {approvalRejected && canAuthor ? (
+              <button
+                type="button"
+                disabled={isSubmitting || quiz.questionCount === 0}
+                onClick={() =>
+                  void runAction(
+                    () => publishQuiz.mutateAsync(),
+                    "Resubmitted for approval.",
+                  )
+                }
+                className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-50 disabled:opacity-70"
+              >
+                Resubmit for approval
+              </button>
+            ) : null}
           </>
         ) : null}
 
@@ -363,7 +404,7 @@ export function QuizManageDetailPage() {
                     </p>
                   </div>
 
-                  {draft && canAuthor ? (
+                  {questionsEditable ? (
                     <div className="flex gap-2">
                       <button
                         type="button"

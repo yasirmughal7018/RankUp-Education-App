@@ -20,6 +20,8 @@ internal static class QuizManageMapping
             detail.QuizTypeName,
             detail.DifficultyName,
             detail.LifecycleStatusName,
+            detail.ApprovalStatus,
+            detail.RejectionReason,
             detail.ClassId,
             detail.SubjectId,
             detail.TopicId,

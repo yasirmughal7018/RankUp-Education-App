@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type {
   QuizNavigationMode,
   SavedQuizAnswer,
@@ -308,6 +316,7 @@ export function StudentQuizAttemptPage() {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeWarning, setTimeWarning] = useState<string | null>(null);
+  const [showLowTimeDialog, setShowLowTimeDialog] = useState(false);
   const [focusLossCount, setFocusLossCount] = useState(
     () =>
       attemptFromNavigation?.focusLossCount ??
@@ -543,6 +552,28 @@ export function StudentQuizAttemptPage() {
     if (remainingSeconds <= 60 && !warnedAt60Ref.current) {
       warnedAt60Ref.current = true;
       setTimeWarning("Less than 1 minute remaining. Submit soon — auto-submit is imminent.");
+      setShowLowTimeDialog(true);
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        const ctx = new AudioCtx();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = 880;
+        gain.gain.value = 0.05;
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        window.setTimeout(() => {
+          oscillator.stop();
+          void ctx.close();
+        }, 180);
+      } catch {
+        // Audio is best-effort; visual modal remains.
+      }
     }
   }, [remainingSeconds]);
 
@@ -830,15 +861,18 @@ export function StudentQuizAttemptPage() {
   const canGoPrevious = navigationMode !== "Locked" && currentIndex > 0;
   const canGoNext =
     currentIndex < orderedQuestions.length - 1 &&
-    (navigationMode !== "Locked" || currentAnswered);
+    (navigationMode === "Free" || currentAnswered);
   const showIntegrity =
     focusLossCount > 0 || clipboardPasteCount > 0;
+  const integrityLocked =
+    focusLossCount >= 5 || clipboardPasteCount >= 3;
   const currentQuestionLocked =
-    Boolean(enablePerQuestionTimer) &&
+    integrityLocked ||
+    (Boolean(enablePerQuestionTimer) &&
     Boolean(currentQuestion) &&
     (currentQuestion?.estimatedTimeSeconds ?? 0) > 0 &&
     (expiredQuestionIds.has(currentQuestion!.id) ||
-      (questionRemainingSeconds != null && questionRemainingSeconds <= 0));
+      (questionRemainingSeconds != null && questionRemainingSeconds <= 0)));
 
   function updateCurrentAnswer(next: AnswerState) {
     if (!currentQuestion || currentQuestionLocked) {
@@ -899,6 +933,13 @@ export function StudentQuizAttemptPage() {
         }
       />
 
+      {integrityLocked ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Integrity limit exceeded (too many focus losses or paste events).
+          Answers are locked — submit your attempt now.
+        </div>
+      ) : null}
+
       {timeWarning ? (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span>{timeWarning}</span>
@@ -911,6 +952,26 @@ export function StudentQuizAttemptPage() {
           </button>
         </div>
       ) : null}
+
+      <Dialog open={showLowTimeDialog} onOpenChange={setShowLowTimeDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Less than one minute left</DialogTitle>
+            <DialogDescription>
+              Submit soon — the quiz will auto-submit when time runs out.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setShowLowTimeDialog(false)}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+            >
+              Continue
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {submitAttempt.error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

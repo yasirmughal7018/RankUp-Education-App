@@ -27,7 +27,7 @@ public sealed record QuizListItem(
     string? LifecycleStatusName = null,
     string? QuizResultStatusName = null);
 
-/// <summary>Quiz awaiting school-admin approval (teacher-created, non–parent-private).</summary>
+/// <summary>Quiz awaiting school-admin approval (Pending or Rejected).</summary>
 public sealed record PendingQuizApprovalItem(
     long QuizId,
     string Title,
@@ -39,7 +39,8 @@ public sealed record PendingQuizApprovalItem(
     string ApprovalStatus,
     string LifecycleStatus,
     short TotalQuestions,
-    DateOnly ModifiedDate);
+    DateOnly ModifiedDate,
+    string? RejectionReason = null);
 
 /// <summary>Full quiz detail including shuffle/review flags and lifecycle ids for manage views.</summary>
 public sealed record QuizDetailItem(
@@ -75,7 +76,9 @@ public sealed record QuizDetailItem(
     short LifecycleStatusId,
     string LifecycleStatusName,
     string? QuizResultStatusName = null,
-    string ReviewDisplayMode = "ScoreOnly");
+    string ReviewDisplayMode = "ScoreOnly",
+    string ApprovalStatus = "Pending",
+    string? RejectionReason = null);
 
 /// <summary>School and campus resolved from a linked student when a parent creates a quiz.</summary>
 public sealed record StudentSchoolContext(

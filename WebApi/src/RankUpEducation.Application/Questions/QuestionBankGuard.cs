@@ -6,8 +6,7 @@ namespace RankUpEducation.Application.Questions;
 
 /// <summary>
 /// Validates question-bank payloads by type.
-/// NOW types: Single Choice, Multiple Choice, True/False, Fill in the Blanks.
-/// Descriptive and future types are rejected until enabled.
+/// NOW types: Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive.
 /// Fill answers use <see cref="QuestionAcceptedAnswerRequest"/>; choice types use options.
 /// </summary>
 internal static class QuestionBankGuard
@@ -107,8 +106,7 @@ internal static class QuestionBankGuard
 
         if (QuizQuestionHelper.IsDescriptiveType(type))
         {
-            errors.Add(
-                "Descriptive questions are not available yet. Use Single Choice, Multiple Choice, True/False, or Fill in the Blanks.");
+            // Open text — no options or accepted-answer rows required.
             return errors;
         }
 
@@ -120,7 +118,7 @@ internal static class QuestionBankGuard
         if (!isSingle && !isMulti && !isTrueFalse && !isFill)
         {
             errors.Add(
-                $"Question type '{questionType}' is not available yet. Use Single Choice, Multiple Choice, True/False, or Fill in the Blanks.");
+                $"Question type '{questionType}' is not available yet. Use Single Choice, Multiple Choice, True/False, Fill in the Blanks, or Descriptive.");
             return errors;
         }
 

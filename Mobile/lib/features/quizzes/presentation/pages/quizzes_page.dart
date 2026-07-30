@@ -50,6 +50,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   int _questionIndex = 0;
   String _saveStatus = 'All answers saved';
   Duration? _remainingTime;
+  bool _warnedLowTime = false;
   int _focusLossCount = 0;
   int _clipboardPasteCount = 0;
   int _focusLossDelta = 0;
@@ -198,6 +199,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
             remainingTime: _remainingTime,
             questionRemainingSeconds: _questionRemainingSeconds,
             questionLocked: _isCurrentQuestionLocked(),
+            integrityLocked: _integrityLocked,
             onOptionSelected: _answerOptionQuestion,
             onTextAnswerChanged: _answerTextQuestion,
             onShowHint: _showHint,
@@ -393,6 +395,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
           ? 'Resumed — previous answers restored'
           : 'Attempt started';
       _remainingTime = remaining;
+      _warnedLowTime = remaining != null && remaining <= const Duration(seconds: 60);
       _view = _QuizView.attempt;
       _selectedQuiz = selectedQuiz.copyWith(
         navigationMode: normalizeQuizNavigationMode(attempt.navigationMode),
@@ -428,6 +431,32 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         setState(() {
           _remainingTime = current - const Duration(seconds: 1);
         });
+
+        final next = current - const Duration(seconds: 1);
+        if (!_warnedLowTime &&
+            next <= const Duration(seconds: 60) &&
+            next > Duration.zero) {
+          _warnedLowTime = true;
+          if (mounted) {
+            unawaited(
+              showDialog<void>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Less than one minute left'),
+                  content: const Text(
+                    'Submit soon — the quiz will auto-submit when time runs out.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text('Continue'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        }
       });
     }
   }
@@ -464,7 +493,14 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     _questionRemainingSeconds = (estimated - spent).clamp(0, estimated);
   }
 
+  bool get _integrityLocked =>
+      _focusLossCount >= 5 || _clipboardPasteCount >= 3;
+
   bool _isCurrentQuestionLocked() {
+    if (_integrityLocked) {
+      return true;
+    }
+
     final attempt = ref.read(quizzesControllerProvider).activeAttempt;
     if (attempt == null ||
         !attempt.enablePerQuestionTimer ||
@@ -798,7 +834,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     if (quiz == null || _questionIndex >= maxIndex) {
       return;
     }
-    if (_activeNavigationMode == quizNavigationLocked &&
+    if (quizNavigationRequiresAnswerBeforeNext(_activeNavigationMode) &&
         !_answeredQuestions.contains(_questionIndex)) {
       return;
     }
@@ -1697,6 +1733,7 @@ class _QuizAttemptView extends StatelessWidget {
     required this.remainingTime,
     required this.questionRemainingSeconds,
     required this.questionLocked,
+    required this.integrityLocked,
     required this.onOptionSelected,
     required this.onTextAnswerChanged,
     required this.onShowHint,
@@ -1719,6 +1756,7 @@ class _QuizAttemptView extends StatelessWidget {
   final Duration? remainingTime;
   final int? questionRemainingSeconds;
   final bool questionLocked;
+  final bool integrityLocked;
   final void Function(String optionId, int questionTypeId) onOptionSelected;
   final ValueChanged<String> onTextAnswerChanged;
   final VoidCallback onShowHint;
@@ -1772,7 +1810,16 @@ class _QuizAttemptView extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (questionLocked) ...[
+                if (integrityLocked) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Integrity limit exceeded. Answers are locked — submit your attempt now.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFFB91C1C),
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ] else if (questionLocked) ...[
                   const SizedBox(height: 8),
                   Text(
                     'Time is up for this question. Your last in-time answer is locked.',
@@ -1941,8 +1988,8 @@ class _QuizAttemptView extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: questionIndex == questions.length - 1
                     ? onSubmit
-                    : (normalizeQuizNavigationMode(quiz.navigationMode) ==
-                                quizNavigationLocked &&
+                    : (quizNavigationRequiresAnswerBeforeNext(
+                                quiz.navigationMode) &&
                             !answeredQuestions.contains(questionIndex)
                         ? null
                         : onNext),
@@ -3352,7 +3399,12 @@ String _attemptTimerLabel({
     return 'Time ended';
   }
 
-  return '${_formatSeconds(remaining.inSeconds)} left';
+  final label = '${_formatSeconds(remaining.inSeconds)} left';
+  if (remaining <= const Duration(seconds: 60)) {
+    return '⚠ $label';
+  }
+
+  return label;
 }
 
 String _formatSeconds(int totalSeconds) {

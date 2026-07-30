@@ -68,6 +68,8 @@ export interface ManageQuiz {
   quizType: string;
   difficulty: string;
   lifecycleStatus: string;
+  approvalStatus: string;
+  rejectionReason: string | null;
   classId: number;
   subjectId: number;
   topicId: number;
@@ -104,6 +106,10 @@ export interface QuizFormValues {
   navigationMode: QuizNavigationMode;
   reviewDisplayMode: QuizReviewDisplayMode;
   contextStudentId: number | null;
+  /** PortalAdmin create: target school. SchoolAdmin uses token school. */
+  schoolId: number | null;
+  /** PortalAdmin / SchoolAdmin create when campus not on token. */
+  campusId: number | null;
 }
 
 export interface AddQuizQuestionInput {
@@ -135,6 +141,7 @@ export interface PendingQuizApproval {
   lifecycleStatus: string;
   totalQuestions: number;
   modifiedDate: string;
+  rejectionReason?: string | null;
 }
 
 export interface AssignQuizInput {
@@ -169,15 +176,20 @@ export const QUIZ_MANAGER_ROLES: UserRole[] = [
   "PortalAdmin",
 ];
 
-/** Roles that author/create quizzes (not school/platform assign-only admins). */
-export const QUIZ_AUTHOR_ROLES: UserRole[] = ["Teacher", "Parent"];
+/** Roles that author/create quizzes (Teacher, Parent, and school/platform admins). */
+export const QUIZ_AUTHOR_ROLES: UserRole[] = [
+  "Teacher",
+  "Parent",
+  "SchoolAdmin",
+  "PortalAdmin",
+];
 
 /** True for Teacher, Parent, SchoolAdmin, and PortalAdmin. */
 export function canManageQuizzes(role: UserRole): boolean {
   return QUIZ_MANAGER_ROLES.includes(role);
 }
 
-/** True for Teacher and Parent — create / edit / publish authoring. */
+/** True for roles that may create / edit / publish quizzes. */
 export function canAuthorQuizzes(role: UserRole): boolean {
   return QUIZ_AUTHOR_ROLES.includes(role);
 }
@@ -187,15 +199,106 @@ export function canAssignAdminAudiences(role: UserRole): boolean {
   return role === "SchoolAdmin" || role === "PortalAdmin";
 }
 
-/** True for roles that may approve/reject teacher quizzes. */
-export function canApproveQuizzes(role: UserRole): boolean {
-  return role === "SchoolAdmin" || role === "PortalAdmin";
+/** Assign modes supported by API for the given role (canonical source for Assign dialog). */
+export function assignModesForRole(role: UserRole): Array<{
+  value: string;
+  label: string;
+  group: string;
+}> {
+  const studentModes = [
+    { value: "one", label: "One student", group: "Students" },
+    { value: "selected", label: "Selected students", group: "Students" },
+  ];
+
+  if (role === "Parent") {
+    return [
+      ...studentModes,
+      { value: "group", label: "Group", group: "Groups" },
+      {
+        value: "alllinked",
+        label: "All linked children",
+        group: "Parent",
+      },
+    ];
+  }
+
+  if (role === "SchoolAdmin") {
+    return [
+      ...studentModes,
+      {
+        value: "allinschool",
+        label: "All in school",
+        group: "School",
+      },
+    ];
+  }
+
+  if (role === "PortalAdmin") {
+    return [
+      ...studentModes,
+      {
+        value: "allinschool",
+        label: "All in school",
+        group: "School",
+      },
+      {
+        value: "multischool",
+        label: "Multiple schools",
+        group: "Platform",
+      },
+      {
+        value: "public",
+        label: "Public (catalog)",
+        group: "Platform",
+      },
+    ];
+  }
+
+  // Teacher (default)
+  return [
+    ...studentModes,
+    { value: "group", label: "Group", group: "Groups" },
+    { value: "allingrade", label: "All in grade", group: "Class" },
+    { value: "allinsection", label: "All in section", group: "Class" },
+  ];
 }
 
 /** Initial editable lifecycle: deployed lookup uses "Not Assigned"; "Draft" is legacy. */
 export function isDraftQuiz(status: string): boolean {
   const normalized = status.trim().toLowerCase();
   return normalized === "not assigned" || normalized === "draft";
+}
+
+/** True when an assignment window has opened or any attempt exists (mirrors API HasStartedAssignments). */
+export function hasQuizAssignmentStarted(
+  assignments: Array<{ startAt: string; attemptCount: number }>,
+  now: number = Date.now(),
+): boolean {
+  return assignments.some(
+    (assignment) =>
+      new Date(assignment.startAt).getTime() <= now ||
+      assignment.attemptCount > 0,
+  );
+}
+
+/**
+ * Metadata/questions may change only while Not Assigned/Draft or Published,
+ * and no assignment has started — matches QuizManageGuard.EnsureEditableLifecycle.
+ */
+export function isQuizMetadataEditable(
+  lifecycleStatus: string,
+  assignments: Array<{ startAt: string; attemptCount: number }> = [],
+): boolean {
+  const normalized = lifecycleStatus.trim().toLowerCase();
+  if (isDraftQuiz(normalized)) {
+    return true;
+  }
+
+  if (normalized === "published") {
+    return !hasQuizAssignmentStarted(assignments);
+  }
+
+  return false;
 }
 
 /** Normalize API/form navigation mode to a known value. */
@@ -248,6 +351,8 @@ export function createEmptyQuizForm(): QuizFormValues {
     navigationMode: "Free",
     reviewDisplayMode: "ScoreOnly",
     contextStudentId: null,
+    schoolId: null,
+    campusId: null,
   };
 }
 
@@ -343,6 +448,8 @@ export function mapManageQuizToForm(quiz: ManageQuiz): QuizFormValues {
     navigationMode: normalizeQuizNavigationMode(quiz.navigationMode),
     reviewDisplayMode: normalizeQuizReviewDisplayMode(quiz.reviewDisplayMode),
     contextStudentId: null,
+    schoolId: null,
+    campusId: null,
   };
 }
 
@@ -365,6 +472,8 @@ export function buildQuizPayload(values: QuizFormValues) {
     navigationMode: normalizeQuizNavigationMode(values.navigationMode),
     reviewDisplayMode: normalizeQuizReviewDisplayMode(values.reviewDisplayMode),
     contextStudentId: values.contextStudentId,
+    schoolId: values.schoolId,
+    campusId: values.campusId,
   };
 }
 

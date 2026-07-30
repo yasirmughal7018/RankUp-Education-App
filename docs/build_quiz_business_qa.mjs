@@ -111,7 +111,7 @@ const assignmentStatusConflicts = [
 const quizTypes = [
   ["1", "Practice", "Teacher", "Learning-oriented school quiz. Admin approval before assign. Intended: flexible attempts / optional time / answers may show after submit (type-specific UX still soft)."],
   ["2", "Assessment", "Teacher", "Assigned assessment with due window; may have limited time; visible to selected audience after assign. Admin approval before assign."],
-  ["3", "Competition", "Teacher", "Class/school/inter-school competition intent: fixed schedule, strict attempts, anti-cheat later. Admin approval before assign."],
+  ["3", "Competition", "Teacher", "Class/school/inter-school competition intent: fixed schedule, strict attempts. Device lock (Competition-only) + FocusLoss≥5 / Paste≥3 draft lockout (all types). Admin approval before assign."],
   ["4", "Surprise", "Teacher", "Short availability window / limited advance notice intent. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
   ["5", "ParentPrivate", "Parent", "Private parent quiz. Auto-approved on publish; excluded from admin queue; assign only to linked children / parent groups."],
 ];
@@ -121,8 +121,8 @@ const lifecycle = [
   ["Update metadata / questions", "Unchanged", "Only Not Assigned or Published, not Archived, and no started assignment (StartDateTime ≤ now or any attempt exists)."],
   ["Publish (Teacher)", "Published (Approval stays Pending)", "≥1 question required. Does not auto-approve."],
   ["Publish (Parent)", "Published + Approved", "≥1 question. Auto-approves; ApprovedBy = parent user."],
-  ["Approve (SchoolAdmin / PortalAdmin)", "Approval=Approved", "Not parent-private; not already Approved. SchoolAdmin limited to own school."],
-  ["Reject (SchoolAdmin / PortalAdmin)", "Approval=Rejected", "Must be pending; not parent-private. Reason returned in API but not persisted."],
+  ["Approve (SchoolAdmin / PortalAdmin)", "Approval=Approved", "Must be Pending or Rejected; not parent-private. SchoolAdmin limited to own school. Approving Rejected clears RejectionReason."],
+  ["Reject (SchoolAdmin / PortalAdmin)", "Approval=Rejected", "Must be Pending; not parent-private. RejectionReason persisted on the quiz (max 1000) and returned in the API."],
   ["Assign", "Assigned", "Lifecycle Published or Assigned; not Archived; ≥1 question; Teacher quizzes must be Approved."],
   ["Cancel upcoming", "Cancelled", "Deletes only assignments with StartDateTime > now. Fails if none upcoming."],
   ["Archive", "Archived + Inactive", "From Published / Assigned / Cancelled. Not Assigned quizzes must be deleted instead."],
@@ -131,9 +131,9 @@ const lifecycle = [
 ];
 
 const permissions = [
-  ["Create / edit / publish / duplicate / archive own quizzes", "No", "No", "No", "Own", "Own", "No"],
-  ["Delete own Not Assigned (no assignments)", "No", "No", "No", "Own", "Own", "No"],
-  ["Assign / cancel / allow-retry / monitor / review", "No", "No", "No", "Own", "Own", "No"],
+  ["Create / edit / publish / duplicate / archive own quizzes", "Yes*", "Yes*", "No", "Own", "Own", "No"],
+  ["Delete own Not Assigned (no assignments)", "Yes*", "Yes*", "No", "Own", "Own", "No"],
+  ["Assign / cancel / allow-retry / monitor / review", "Yes", "School", "No", "Own", "Own", "No"],
   ["Approve / reject teacher quizzes", "Yes", "Own school", "No*", "No", "No", "No"],
   ["List pending-approval queue", "Yes", "Yes", "No*", "No", "No", "No"],
   ["Take attempts / save draft / submit", "No", "No", "No", "No", "No", "Yes"],
@@ -146,7 +146,7 @@ const questionRules = [
   ["Attach from bank", "Requires Active + Approved status + ApprovedBy + Visibility=Public + class/subject match + not already linked + marks > 0."],
   ["Edit question on quiz", "Caller must own the quiz AND be the question CreatedBy. Recalculates totals."],
   ["Remove from quiz", "Deletes QuizQuestion link; if caller created the question, deactivates it. Recalculates totals."],
-  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103). Descriptive (104) blocked for authoring now. File answers / Matching / Ordering / media types are Not Now."],
+  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103), Descriptive (104). File answers / Matching / Ordering / media types are Not Now."],
   ["Shuffle", "Quiz-level ShuffleQuestions / ShuffleOptions. At attempt start, options shuffle when quiz.ShuffleOptions AND link.ShuffleOptions are both true (per-question can opt out)."],
 ];
 
@@ -160,7 +160,7 @@ const importantBusinessRules = [
   ["Random/shuffled quizzes store exact questions shown", "Yes", "QuizAttemptQuestion freezes QuestionId, DisplayOrder, Marks, QuestionText; options snapshotted on QuizAttemptQuestionOption."],
   ["Student answers stored per attempt", "Yes", "QuizAttemptAnswer rows hang off QuizAttemptQuestion."],
   ["Multiple-choice selected answers stored separately", "Yes", "Each selected option is a QuizAttemptAnswer with QuestionOptionId; free text uses SubmittedText."],
-  ["Descriptive / file answers may need teacher or AI review", "Partial", "Fill + AllowTeacherReview / AllowAiReview live (OpenAI or heuristic). Descriptive authoring blocked; file answers are Not Now."],
+  ["Descriptive / file answers may need teacher or AI review", "Covered", "Descriptive + Fill with AllowTeacherReview / AllowAiReview. File answers are Not Now."],
 ];
 
 const quizQuestionFields = [
@@ -251,13 +251,13 @@ const studentAttemptFlow = [
   ["5", "Attempt start time is recorded", "Covered", "QuizAttempt.StartedDate set on Begin."],
   ["6", "Questions are displayed", "Covered", "From the QuizAttemptQuestion snapshot in DisplayOrder (shuffled at start when enabled); content + marks frozen."],
   ["7", "Answers are saved automatically", "Covered", "Web: debounce + interval + visibility/pagehide autosave via draft endpoint; flush before submit/cancel. Mobile mirrors draft saves."],
-  ["8", "Student moves between questions where permitted", "Covered", "Quiz.NavigationMode Free / Sequential / Locked enforced in web + mobile UI and on server draft/submit (Sequential: earlier answered first; Locked: no edit after advancing)."],
+  ["8", "Student moves between questions where permitted", "Covered", "Free: no order constraints. Sequential + Locked: web/mobile require current question answered before Next; server also enforces Sequential/Locked on draft/submit (Locked additionally blocks editing earlier answers after advancing)."],
   ["9", "Student may mark questions for review", "Covered", "IsMarkedForReview on draft/submit; navigator groups marked questions."],
   ["10", "Student submits manually", "Covered", "POST .../attempts/{id}/submit auto-scores then MarkSubmitted; resubmission blocked."],
   ["11", "System auto-submits when time expires", "Covered", "Client auto-submit with IsAutoSubmit=true → AutoSubmitted (83). Server rejects over-budget submits (grace for auto-submit)."],
   ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83) → Reviewed (85) after finalize. Expired (84) via overdue job."],
   ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse first option; Multiple exact set; Fill accepted-answer rules."],
-  ["14", "Descriptive answers go to AI or teacher review", "Partial", "Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic). Descriptive authoring still blocked."],
+  ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive authoring enabled; Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic). Teacher finalizes when required."],
   ["15", "Student sees the permitted review screen", "Covered", "Quiz.ReviewDisplayMode (Full / CorrectAnswers / ScoreOnly / Withheld) + shared QuizReviewDisplay.Resolve on submit and get-result."],
   ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true. AI suggests; teacher confirms when required."],
 ];
@@ -271,15 +271,13 @@ const timeManagementModes = [
 
 const timeManagementAppBehaviors = [
   ["Show remaining time", "Covered", "Student attempt page countdown from TimeLimitMinutes × 60 minus elapsed since StartedDate."],
-  ["Warn when time is low", "Partial", "UI applies urgent styling when remainingSeconds ≤ 60. No dedicated audio modal."],
+  ["Warn when time is low", "Covered", "At ≤60s: urgent countdown styling, modal dialog, and short beep (web); mobile shows warning dialog + urgent timer chip."],
   ["Auto-submit on expiry", "Covered", "Client submits with IsAutoSubmit=true → AutoSubmitted (83). Server enforces TimeLimitMinutes with grace for auto-submit path."],
   ["Save answers before auto-submission", "Covered", "Autosave flush runs before submit/auto-submit on web."],
   ["Prevent reopening after expiry unless allowed", "Covered", "Assignment window expiry blocks/expires attempts. Allow Retry grants ExtraAttempts after review; does not reopen EndDateTime by itself."],
 ];
 
-const timeManagementGaps = [
-  "Low-time warning is UI styling at ≤60s only (no dedicated modal/audio).",
-];
+const timeManagementGaps = [];
 
 const attemptRules = [
   "Student role only for start / draft / submit.",
@@ -289,12 +287,12 @@ const attemptRules = [
   "DeviceId required (non-empty).",
   "Time limit returned to client; UI countdown + auto-submit. Server enforces TimeLimitMinutes (with grace for IsAutoSubmit) and assignment EndDateTime.",
   "On start: create QuizAttempt and snapshot QuizAttemptQuestion rows (text, marks, options; shuffled order when ShuffleQuestions is on).",
-  "Draft save: InProgress only; answers stored on QuizAttemptAnswer linked to QuizAttemptQuestion; last answer wins per question; IsMarkedForReview supported; NavigationMode + Competition integrity enforced.",
+  "Draft save: InProgress only; answers stored on QuizAttemptAnswer linked to QuizAttemptQuestion; last answer wins per question; IsMarkedForReview supported; NavigationMode + integrity thresholds enforced.",
   "Multiple-choice selections are stored as separate answer rows (QuestionOptionId), not only as free text.",
   "Submit scores then MarkSubmitted (Submitted or AutoSubmitted). Cannot resubmit.",
   "Subjective review finalizes to Reviewed; do not use Under Teacher/AI Review as attempt StatusId values.",
   "Offline: ClientSyncId + IsOfflineAttempt; POST .../attempts/{id}/sync replays queued draft/submit after reconnect.",
-  "Competition anti-cheat: device lock + focus/paste telemetry; draft blocked after FocusLoss≥5 or Paste≥3 (submit still allowed).",
+  "Anti-cheat: Competition device lock; all quiz types block further drafts after FocusLoss≥5 or Paste≥3 (submit still allowed).",
 ];
 
 const quizAttemptFields = [
@@ -536,13 +534,13 @@ const checklist = [
   "QuizAssignment is one row per student with AssignedById, optional StudentGroupId, window, AllowedAttempts, QuizResultStatus, IsReviewDone.",
   "QuizResultStatus is per student (Up Coming / Not Attempted / In Progress / Under Review / Expired / Completed) — student list prefers DB name over calculator.",
   "Assign with StartAt > now writes Up Coming; overdue job promotes Upcoming → Not Attempted and expires past-window rows / InProgress attempts.",
-  "Editable only Not Assigned/Published, not Archived, and no started assignment.",
+  "Editable only Not Assigned/Published, not Archived, and no started assignment (Edit settings + /edit route gated).",
   "Bank attach requires Public + Active + Approved + ApprovedBy + class/subject match.",
   "Inline questions are Approved+Campus+Active and usable on that quiz only for bank eligibility rules.",
-  "Descriptive type blocked for authoring.",
+  "Descriptive type authoring enabled (104); file / Matching / Ordering / media remain Not Now.",
   "Student attempts require assignment (or Public window), active quiz, window, DeviceId, attempt quota, and instructions ack when set.",
   "InProgress resumes; TimeLimitMinutes enforced client + server; AutoSubmitted on IsAutoSubmit.",
-  "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time UI warn ≤60s.",
+  "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time modal/audio at ≤60s.",
   "On attempt start, QuizAttemptQuestion freezes text/marks/options/order; answers store per attempt.",
   "Scoring: single/TF one correct; multi exact set; Fill accepted-answer rules.",
   "ReviewDisplayMode + shared mask on submit and get-result until finalize when required.",
@@ -552,21 +550,20 @@ const checklist = [
   "Archive sets Archived + Inactive; Not Assigned must be deleted.",
   "Duplicate creates Not Assigned + Pending copy with questions.",
   "CampusAdmin has no quiz manage/approve capability (UI + API).",
+  "SchoolAdmin/PortalAdmin may create quizzes; admin publish auto-approves.",
+  "Approve accepts Pending or Rejected (re-approve clears RejectionReason). Teacher re-publish resets Rejected → Pending.",
+  "Teacher list API returns own quizzes (CreatedBy); client mine toggle remains for admins.",
   "Fill answers hidden from students before submission (attempt payload).",
   "Quiz notifications (submit/auto-submit/etc.) via in-app bell.",
   "Offline sync via ClientSyncId + POST .../sync (web + mobile).",
-  "Approve and reject both require Pending approval status.",
-  "RejectionReason is persisted on the quiz.",
+  "RejectionReason is persisted and returned on manage detail + approval queue.",
+  "Integrity draft lockout freezes further answer mutations on submit (score last saved draft).",
   "Reports available to Teacher (own), SchoolAdmin (school), PortalAdmin (all).",
 ];
 
 const knownGaps = [
-  "UI question add/edit/remove may still be restricted more tightly in manage UI than API (Published until assignment starts).",
-  "Some assign modes may be uneven across Assign dialog role tabs (prefer API coverage as source of truth).",
-  "Low-time warning is UI styling at ≤60s only (no dedicated modal/audio).",
-  "Descriptive (104) authoring remains blocked; file / Matching / Ordering media types are Not Now.",
-  "Teacher list API returns campus-active quizzes; \"mine only\" may still be a client-side filter.",
-  "Non-Competition quizzes keep focus/paste as monitor telemetry only (no auto-lockout).",
+  "File / Matching / Ordering / media question types remain Not Now.",
+  "Competition device lock remains Competition-only (focus/paste draft lockout applies to all types).",
 ];
 
 function escapeHtml(value) {
@@ -637,7 +634,7 @@ const html = `<!doctype html>
     </div>
   </header>
 
-  <div class="ok"><strong>Canonical model:</strong> Quizzes are owned by <strong>Teacher</strong> or <strong>Parent</strong>. Teachers create school quizzes (Practice / Assessment / Competition / Surprise) that publish into a pending-approval queue; only after <strong>SchoolAdmin</strong> or <strong>PortalAdmin</strong> approve can they be assigned. Parents create <strong>ParentPrivate</strong> quizzes that auto-approve on publish and assign to linked children. Students take attempts only through assignments. Subjective answers can require teacher/parent review before scores are released.</div>
+  <div class="ok"><strong>Canonical model:</strong> Quizzes are owned by <strong>Teacher</strong> or <strong>Parent</strong>. Teachers create school quizzes (Practice / Assessment / Competition / Surprise) that publish into a pending-approval queue; only after <strong>SchoolAdmin</strong> or <strong>PortalAdmin</strong> approve can they be assigned. Those admins may also assign school / multi-school / public audiences. Parents create <strong>ParentPrivate</strong> quizzes that auto-approve on publish and assign to linked children. Students take attempts via assignment rows and/or <strong>Public</strong> catalog quizzes inside the audience window (start may materialize an assignment). Subjective answers can require teacher/parent review before scores are released.</div>
 
   <div class="note"><strong>Clean two-dimension model:</strong> a quiz has exactly two stored statuses — <strong>Lifecycle</strong> (what state the quiz definition is in: Not Assigned → Published → Assigned → Cancelled / Archived) and <strong>Approval</strong> (the school gate: Pending → Approved / Rejected). Per-student progress is never stored on the quiz row; it lives on attempts (InProgress 81 / Submitted 82 / AutoSubmitted 83 / Expired 84 / Reviewed 85) and assignment QuizResultStatus (20–25). The initializer renames approval 40 'Draft' → 'Pending', seeds ParentPrivate (5), Rejected (45), Cancelled (65), Archived (66), and deactivates the overlapping legacy rows (41, 42, 43, 63, 64).</div>
   <div class="note"><strong>Terminology:</strong> code and UI may still say “draft quiz” as a shorthand for the editable lifecycle state. The stored lookup name is <strong>Not Assigned (60)</strong>. Approval never uses the word Draft — the pending gate is <strong>Pending (40)</strong>.</div>
@@ -669,7 +666,8 @@ const html = `<!doctype html>
     permissions,
   )}
   <p><em>*CampusAdmin:</em> no quiz manage/approve/attempt API access. Quiz-approvals UI is hidden and route-guarded for SchoolAdmin/PortalAdmin only.</p>
-  <div class="note"><strong>Ownership:</strong> manage actions require the caller to own the quiz (<code>CreatedBy</code> = user id). Teachers also need matching school + campus. Parents stamp school/campus from a linked child context.</div>
+  <p><em>*Admin create:</em> SchoolAdmin/PortalAdmin may create quizzes (PortalAdmin requires schoolId+campusId; SchoolAdmin uses school token + campus). Admin publish auto-approves.</p>
+  <div class="note"><strong>Ownership / scope:</strong> Teacher and Parent manage actions require owning the quiz (<code>CreatedBy</code> = user id). SchoolAdmin may manage/assign quizzes in their school; PortalAdmin may manage/assign platform-wide (including public catalog). Teachers also need matching school + campus. Parents stamp school/campus from a linked child context.</div>
 
   <h2>7. Questions on a quiz</h2>
   ${htmlTable(["Topic", "Rule"], questionRules)}
@@ -869,7 +867,7 @@ const docChildren = [
     run: { italics: true, color: "475569" },
   }),
   docParagraph(
-    "Canonical model: Quizzes are owned by Teacher or Parent. Teachers create school quizzes that publish into a pending-approval queue; only after SchoolAdmin or PortalAdmin approve can they be assigned. Parents create ParentPrivate quizzes that auto-approve on publish and assign to linked children. Students take attempts only through assignments. Subjective answers can require teacher/parent review before scores are released.",
+    "Canonical model: Quizzes are owned by Teacher or Parent. Teachers create school quizzes that publish into a pending-approval queue; only after SchoolAdmin or PortalAdmin approve can they be assigned. Those admins may also assign school / multi-school / public audiences. Parents create ParentPrivate quizzes that auto-approve on publish and assign to linked children. Students take attempts via assignment rows and/or Public catalog quizzes inside the audience window (start may materialize an assignment). Subjective answers can require teacher/parent review before scores are released.",
     { run: { bold: true, color: "166534" } },
   ),
   docParagraph(
@@ -911,7 +909,7 @@ const docChildren = [
     permissions,
   ),
   docParagraph(
-    "CampusAdmin has no quiz manage/approve access (UI + API). Ownership required for manage actions.",
+    "CampusAdmin has no quiz manage/approve access (UI + API). Teacher/Parent manage requires ownership; SchoolAdmin = school scope; PortalAdmin = platform. SchoolAdmin/PortalAdmin may create quizzes.",
     { run: { bold: true, color: "92400E" } },
   ),
 
@@ -925,7 +923,7 @@ const docChildren = [
     "Single Choice: ≥2 options; exactly 1 correct.",
     "Multiple Choice: ≥2 options; ≥1 correct.",
     "True/False: exactly 2 options; exactly 1 correct.",
-    "Fill: ≥1 accepted answer; Descriptive blocked.",
+    "Fill: ≥1 accepted answer; Descriptive: free text (no options).",
     "Totals recalculated after mutations.",
   ].map(docBullet),
 

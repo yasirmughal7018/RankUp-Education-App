@@ -60,7 +60,7 @@ export function AdminQuizApprovalsPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Quiz approvals"
-        description="Review and approve teacher quizzes submitted for school approval."
+        description="Review Pending and Rejected teacher quizzes for school approval."
         action={
           <button
             type="button"
@@ -92,7 +92,7 @@ export function AdminQuizApprovalsPage() {
           </div>
         ) : quizzes.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No quizzes pending approval.
+            No quizzes pending or rejected for approval.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -136,6 +136,11 @@ export function AdminQuizApprovalsPage() {
                           true,
                         )}
                       />
+                      {quiz.rejectionReason ? (
+                        <p className="mt-1 max-w-xs text-xs text-red-700">
+                          {quiz.rejectionReason}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {rejectingQuizId === quiz.quizId ? (
@@ -182,17 +187,22 @@ export function AdminQuizApprovalsPage() {
                           >
                             Approve
                           </button>
-                          <button
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => {
-                              setRejectingQuizId(quiz.quizId);
-                              setRejectReason("");
-                            }}
-                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                          >
-                            Reject
-                          </button>
+                          {quiz.approvalStatus.trim().toLowerCase() ===
+                            "rejected" ||
+                          quiz.approvalStatus.trim().toLowerCase() ===
+                            "declined" ? null : (
+                            <button
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => {
+                                setRejectingQuizId(quiz.quizId);
+                                setRejectReason("");
+                              }}
+                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+                            >
+                              Reject
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>

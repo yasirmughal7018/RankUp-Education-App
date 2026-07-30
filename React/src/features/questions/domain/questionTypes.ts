@@ -145,18 +145,18 @@ export const QUESTION_TYPES_NOW = [
   "Multiple Choice",
   "True/False",
   "Fill in the Blanks",
+  "Descriptive",
 ] as const;
 
-/** Includes NOT NOW types for display/normalization of legacy rows only. */
+/** Includes legacy aliases; Descriptive is also creatable via QUESTION_TYPES_NOW. */
 export const QUESTION_TYPES = [
   ...QUESTION_TYPES_NOW,
-  "Descriptive",
 ] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type QuestionTypeNow = (typeof QUESTION_TYPES_NOW)[number];
 
-/** True when the type can be created via the current UI (excludes Descriptive). */
+/** True when the type can be created via the current UI. */
 export function isCreatableQuestionType(type: string): boolean {
   const normalized = normalizeQuestionType(type);
   return (QUESTION_TYPES_NOW as readonly string[]).includes(normalized);
@@ -709,7 +709,11 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
   const questionType = normalizeQuestionType(values.questionType);
 
   if (!isCreatableQuestionType(questionType)) {
-    return "Descriptive and other future question types are not available yet. Choose Single Choice, Multiple Choice, True/False, or Fill in the Blanks.";
+    return "File, Matching, Ordering, and media question types are not available yet. Choose Single Choice, Multiple Choice, True/False, Fill in the Blanks, or Descriptive.";
+  }
+
+  if (isDescriptiveType(questionType)) {
+    return null;
   }
 
   const options = values.options.filter((option) => option.optionText.trim());

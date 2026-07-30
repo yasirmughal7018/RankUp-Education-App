@@ -2,7 +2,11 @@ using RankUpEducation.Contracts.QuizQuestions;
 
 namespace RankUpEducation.Contracts.Quizzes;
 
-/// <summary>Payload for creating a draft quiz; parents may pass <see cref="ContextStudentId"/> for school/campus scope.</summary>
+/// <summary>
+/// Payload for creating a draft quiz.
+/// Parents may pass <see cref="ContextStudentId"/> for school/campus scope.
+/// PortalAdmin must pass <see cref="SchoolId"/> and <see cref="CampusId"/>; SchoolAdmin may pass CampusId when not on the token.
+/// </summary>
 public sealed record CreateQuizRequest(
     string Title,
     string Description,
@@ -19,7 +23,9 @@ public sealed record CreateQuizRequest(
     long? ContextStudentId,
     short? QuizTypeId = null,
     string? NavigationMode = null,
-    string? ReviewDisplayMode = null);
+    string? ReviewDisplayMode = null,
+    int? SchoolId = null,
+    int? CampusId = null);
 
 /// <summary>Editable quiz metadata (blocked after assignment window starts).</summary>
 public sealed record UpdateQuizRequest(
@@ -49,6 +55,8 @@ public sealed record ManageQuizResponse(
     string QuizType,
     string Difficulty,
     string LifecycleStatus,
+    string ApprovalStatus,
+    string? RejectionReason,
     short ClassId,
     short SubjectId,
     short TopicId,
@@ -151,7 +159,7 @@ public sealed record RejectQuizResponse(
 
 public sealed record PendingQuizApprovalListResponse(IReadOnlyList<PendingQuizApprovalItemResponse> Items);
 
-/// <summary>Teacher quiz awaiting school-admin approval.</summary>
+/// <summary>Teacher quiz awaiting school-admin approval (Pending or Rejected awaiting re-review).</summary>
 public sealed record PendingQuizApprovalItemResponse(
     long QuizId,
     string Title,
@@ -163,4 +171,5 @@ public sealed record PendingQuizApprovalItemResponse(
     string ApprovalStatus,
     string LifecycleStatus,
     short TotalQuestions,
-    DateOnly ModifiedDate);
+    DateOnly ModifiedDate,
+    string? RejectionReason = null);

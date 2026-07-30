@@ -132,9 +132,11 @@ public sealed class QuizRepository : IQuizRepository
         string? grade,
         CancellationToken cancellationToken)
     {
+        var creatorKey = teacherUserId.ToString();
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => quiz.SchoolId == schoolId
                 && quiz.SchoolCampusId == campusId
+                && quiz.CreatedByName == creatorKey
                 && quiz.IsActive
                 && !quiz.IsDeleted);
 
@@ -212,8 +214,14 @@ public sealed class QuizRepository : IQuizRepository
             QuizLookupNames.QuizApprovalStatus,
             QuizLookupNames.PendingApprovalStatusNames,
             cancellationToken);
+        var rejectedIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+            _dbContext,
+            QuizLookupNames.QuizApprovalStatus,
+            QuizLookupNames.RejectedApprovalStatusNames,
+            cancellationToken);
+        var approvalQueueIds = pendingIds.Concat(rejectedIds).Distinct().ToArray();
 
-        if (pendingIds.Count == 0)
+        if (approvalQueueIds.Length == 0)
         {
             return Array.Empty<PendingQuizApprovalItem>();
         }
@@ -228,7 +236,7 @@ public sealed class QuizRepository : IQuizRepository
             .Where(quiz =>
                 quiz.IsActive &&
                 !quiz.IsDeleted &&
-                pendingIds.Contains(quiz.ApprovalStatusId));
+                approvalQueueIds.Contains(quiz.ApprovalStatusId));
 
         if (schoolId is not null)
         {
@@ -272,7 +280,8 @@ public sealed class QuizRepository : IQuizRepository
                 approvalNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"),
                 lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
                 quiz.TotalQuestions,
-                quiz.ModifiedDate ?? DateOnly.FromDateTime(DateTime.UtcNow)))
+                quiz.ModifiedDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                quiz.RejectionReason))
             .ToArray();
     }
 
@@ -460,8 +469,29 @@ public sealed class QuizRepository : IQuizRepository
             return null;
         }
 
+        return await MapManageDetailAsync(quiz, cancellationToken);
+    }
+
+    public async Task<QuizDetailItem?> GetDetailForManageAsync(
+        long quizId,
+        CancellationToken cancellationToken)
+    {
+        var quiz = await _dbContext.Quizzes.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == quizId && !item.IsDeleted, cancellationToken);
+
+        if (quiz is null)
+        {
+            return null;
+        }
+
+        return await MapManageDetailAsync(quiz, cancellationToken);
+    }
+
+    private async Task<QuizDetailItem> MapManageDetailAsync(Quiz quiz, CancellationToken cancellationToken)
+    {
         var lookupNames = await QuizQueryHelper.LoadLookupNamesAsync(_dbContext, [quiz], cancellationToken);
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
         var schools = await QuizQueryHelper.LoadSchoolNamesAsync(_dbContext, [quiz.SchoolId], cancellationToken);
 
         return new QuizDetailItem(
@@ -496,7 +526,9 @@ public sealed class QuizRepository : IQuizRepository
             quiz.DifficultyLevelId,
             quiz.LifecycleStatusId,
             lifecycleName,
-            ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode);
+            ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
+            ApprovalStatus: approvalName,
+            RejectionReason: quiz.RejectionReason);
     }
 
     public async Task<bool> IsParentPrivateQuizTypeAsync(short quizTypeId, CancellationToken cancellationToken)

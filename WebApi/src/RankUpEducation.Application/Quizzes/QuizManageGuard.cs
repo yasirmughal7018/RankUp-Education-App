@@ -175,14 +175,14 @@ internal sealed class QuizManageGuard
 
     private static short EnsureSupportedQuestionTypeId(short typeId, string resolvedName)
     {
-        if (QuizQuestionHelper.IsDescriptiveType(resolvedName)
-            || (!QuizQuestionHelper.IsSingleChoiceType(resolvedName)
-                && !QuizQuestionHelper.IsMultiSelectType(resolvedName)
-                && !QuizQuestionHelper.IsTrueFalseType(resolvedName)
-                && !QuizQuestionHelper.IsFillBlankType(resolvedName)))
+        if (!QuizQuestionHelper.IsSingleChoiceType(resolvedName)
+            && !QuizQuestionHelper.IsMultiSelectType(resolvedName)
+            && !QuizQuestionHelper.IsTrueFalseType(resolvedName)
+            && !QuizQuestionHelper.IsFillBlankType(resolvedName)
+            && !QuizQuestionHelper.IsDescriptiveType(resolvedName))
         {
             throw new ValidationAppException([
-                $"Question type '{resolvedName}' is not available yet. Use Single Choice, Multiple Choice, True/False, or Fill in the Blanks."
+                $"Question type '{resolvedName}' is not available yet. Use Single Choice, Multiple Choice, True/False, Fill in the Blanks, or Descriptive."
             ]);
         }
 

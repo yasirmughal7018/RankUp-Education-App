@@ -25,6 +25,13 @@ String quizNavigationDisplayLabel(String mode) {
   };
 }
 
+/// Sequential and Locked require the current question answered before Next.
+bool quizNavigationRequiresAnswerBeforeNext(String? mode) {
+  final normalized = normalizeQuizNavigationMode(mode);
+  return normalized == quizNavigationSequential ||
+      normalized == quizNavigationLocked;
+}
+
 String quizNavigationMessage(String mode) {
   return switch (normalizeQuizNavigationMode(mode)) {
     quizNavigationSequential =>

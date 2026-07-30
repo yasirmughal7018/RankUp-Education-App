@@ -88,7 +88,12 @@ public sealed class QuizManageService : IQuizManageService
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
         ValidateCreateRequest(request);
 
-        var schoolContext = await ResolveSchoolContextAsync(scope, request.ContextStudentId, cancellationToken);
+        var schoolContext = await ResolveSchoolContextAsync(
+            scope,
+            request.ContextStudentId,
+            request.SchoolId,
+            request.CampusId,
+            cancellationToken);
         var draftStatusId = await _guard.RequireLookupAsync(
             QuizLookupNames.QuizLifecycleStatus,
             QuizLookupNames.DraftLifecycleNames,
@@ -192,8 +197,12 @@ public sealed class QuizManageService : IQuizManageService
 
         if (scope.Role == UserRole.Teacher)
         {
-            // Teacher publish leaves approval pending for school admin review.
-            quiz.SubmitForApproval(publishedStatusId);
+            // Teacher publish (re)queues Pending approval — also recovers Rejected quizzes.
+            var pendingApprovalStatusId = await _guard.RequireLookupAsync(
+                QuizLookupNames.QuizApprovalStatus,
+                QuizLookupNames.PendingApprovalStatusNames,
+                cancellationToken);
+            quiz.SubmitForApproval(publishedStatusId, pendingApprovalStatusId);
         }
         else
         {
@@ -232,9 +241,11 @@ public sealed class QuizManageService : IQuizManageService
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
         var isPending = QuizLookupNames.PendingApprovalStatusNames.Any(name =>
             name.Equals(approvalName, StringComparison.OrdinalIgnoreCase));
-        if (!isPending)
+        var isRejected = QuizLookupNames.RejectedApprovalStatusNames.Any(name =>
+            name.Equals(approvalName, StringComparison.OrdinalIgnoreCase));
+        if (!isPending && !isRejected)
         {
-            throw new BusinessRuleException("Only pending quizzes can be approved.");
+            throw new BusinessRuleException("Only pending or rejected quizzes can be approved.");
         }
 
         var approvedStatusId = await _guard.RequireLookupAsync(
@@ -310,7 +321,8 @@ public sealed class QuizManageService : IQuizManageService
                 item.ApprovalStatus,
                 item.LifecycleStatus,
                 item.TotalQuestions,
-                item.ModifiedDate)).ToArray());
+                item.ModifiedDate,
+                item.RejectionReason)).ToArray());
     }
 
     public async Task<ManageQuizResponse> GetManageDetailAsync(long quizId, CancellationToken cancellationToken)
@@ -503,8 +515,7 @@ public sealed class QuizManageService : IQuizManageService
 
     private async Task<ManageQuizResponse> BuildManageResponseAsync(long quizId, CancellationToken cancellationToken)
     {
-        var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
-        var detail = await _quizzes.GetDetailForCreatorAsync(quizId, scope.UserId, cancellationToken)
+        var detail = await _quizzes.GetDetailForManageAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
         var questions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
@@ -514,6 +525,8 @@ public sealed class QuizManageService : IQuizManageService
     private async Task<StudentSchoolContext> ResolveSchoolContextAsync(
         QuizManageScope scope,
         long? contextStudentId,
+        int? requestSchoolId,
+        int? requestCampusId,
         CancellationToken cancellationToken)
     {
         if (scope.Role == UserRole.Parent)
@@ -544,6 +557,27 @@ public sealed class QuizManageService : IQuizManageService
             return new StudentSchoolContext(schoolId, campusId, 0);
         }
 
+        if (scope.Role == UserRole.SchoolAdmin)
+        {
+            var schoolId = scope.SchoolId ?? throw new ForbiddenAppException("School admin school context was not found.");
+            var campusId = requestCampusId
+                ?? scope.CampusId
+                ?? throw new ForbiddenAppException(
+                    "Campus context is required to create a quiz. Set campus on your account or pass campusId.");
+
+            return new StudentSchoolContext(schoolId, campusId, 0);
+        }
+
+        if (scope.Role == UserRole.PortalAdmin)
+        {
+            var schoolId = requestSchoolId
+                ?? throw new ValidationAppException(["schoolId is required when PortalAdmin creates a quiz."]);
+            var campusId = requestCampusId
+                ?? throw new ValidationAppException(["campusId is required when PortalAdmin creates a quiz."]);
+
+            return new StudentSchoolContext(schoolId, campusId, 0);
+        }
+
         throw new ForbiddenAppException("School context is not available for this role yet.");
     }
 
@@ -564,7 +598,7 @@ public sealed class QuizManageService : IQuizManageService
         {
             if (await _quizzes.IsParentPrivateQuizTypeAsync(requestedQuizTypeId.Value, cancellationToken))
             {
-                throw new ValidationAppException(["Teachers cannot create parent private quizzes."]);
+                throw new ValidationAppException(["Only parents can create parent private quizzes."]);
             }
 
             return requestedQuizTypeId.Value;

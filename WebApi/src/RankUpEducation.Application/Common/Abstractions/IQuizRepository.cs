@@ -56,6 +56,9 @@ public interface IQuizRepository
 
     Task<QuizDetailItem?> GetDetailForCreatorAsync(long quizId, long creatorUserId, CancellationToken cancellationToken);
 
+    /// <summary>Manage detail by quiz id (ownership already checked by the service).</summary>
+    Task<QuizDetailItem?> GetDetailForManageAsync(long quizId, CancellationToken cancellationToken);
+
     Task<bool> HasStartedAssignmentsAsync(long quizId, DateTimeOffset now, CancellationToken cancellationToken);
 
     Task<bool> HasAnyAssignmentsAsync(long quizId, CancellationToken cancellationToken);

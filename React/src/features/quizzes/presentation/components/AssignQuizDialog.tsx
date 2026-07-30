@@ -6,6 +6,7 @@ import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { useDirectoryStudentsQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import type { AssignQuizInput } from "@/features/quizzes/domain/quizTypes";
+import { assignModesForRole } from "@/features/quizzes/domain/quizTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 interface AssignQuizDialogProps {
@@ -46,11 +47,22 @@ export function AssignQuizDialog({
   onSubmit,
 }: AssignQuizDialogProps) {
   const { user } = useAuth();
-  const isTeacher = user?.role === "Teacher";
-  const isParent = user?.role === "Parent";
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isPortalAdmin = user?.role === "PortalAdmin";
   const isAdminAssigner = isSchoolAdmin || isPortalAdmin;
+  const modeOptions = useMemo(
+    () => (user ? assignModesForRole(user.role) : assignModesForRole("Teacher")),
+    [user],
+  );
+  const modeGroups = useMemo(() => {
+    const groups = new Map<string, Array<{ value: string; label: string }>>();
+    for (const option of modeOptions) {
+      const list = groups.get(option.group) ?? [];
+      list.push({ value: option.value, label: option.label });
+      groups.set(option.group, list);
+    }
+    return [...groups.entries()];
+  }, [modeOptions]);
   const [mode, setMode] = useState(() => {
     if (user?.role === "PortalAdmin") {
       return "public";
@@ -224,17 +236,15 @@ export function AssignQuizDialog({
               }}
               className={inputClassName}
             >
-              <option value="one">One student</option>
-              <option value="selected">Selected students</option>
-              {!isAdminAssigner ? <option value="group">Group</option> : null}
-              {isTeacher ? <option value="allingrade">All in grade</option> : null}
-              {isTeacher ? <option value="allinsection">All in section</option> : null}
-              {isSchoolAdmin || isPortalAdmin ? (
-                <option value="allinschool">All in school</option>
-              ) : null}
-              {isPortalAdmin ? <option value="multischool">Multiple schools</option> : null}
-              {isPortalAdmin ? <option value="public">Public (catalog)</option> : null}
-              {isParent ? <option value="alllinked">All linked children</option> : null}
+              {modeGroups.map(([group, options]) => (
+                <optgroup key={group} label={group}>
+                  {options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </div>
 

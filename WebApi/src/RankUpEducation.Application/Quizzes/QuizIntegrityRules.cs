@@ -3,31 +3,33 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
-/// <summary>Competition integrity thresholds beyond device lock (focus / paste telemetry).</summary>
+/// <summary>Attempt integrity thresholds beyond Competition device lock (focus / paste telemetry).</summary>
 public static class QuizIntegrityRules
 {
-    public const short CompetitionMaxFocusLoss = 5;
-    public const short CompetitionMaxClipboardPaste = 3;
+    public const short MaxFocusLoss = 5;
+    public const short MaxClipboardPaste = 3;
 
-    public static bool IsCompetitionBreached(QuizAttempt attempt)
-        => attempt.FocusLossCount >= CompetitionMaxFocusLoss
-            || attempt.ClipboardPasteCount >= CompetitionMaxClipboardPaste;
+    public static bool IsBreached(QuizAttempt attempt)
+        => attempt.FocusLossCount >= MaxFocusLoss
+            || attempt.ClipboardPasteCount >= MaxClipboardPaste;
+
+    /// <summary>Backward-compatible alias for <see cref="IsBreached"/>.</summary>
+    public static bool IsCompetitionBreached(QuizAttempt attempt) => IsBreached(attempt);
 
     /// <summary>
-    /// Blocks further draft answer changes once Competition integrity limits are exceeded.
-    /// Submit remains allowed so the student can finish.
+    /// Blocks further draft answer changes once focus/paste integrity limits are exceeded.
+    /// Submit remains allowed so the student can finish. Applies to all quiz types.
     /// </summary>
-    public static void EnsureCompetitionDraftAllowed(string quizTypeName, QuizAttempt attempt)
+    public static void EnsureDraftAllowed(QuizAttempt attempt)
     {
-        if (!quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        if (IsCompetitionBreached(attempt))
+        if (IsBreached(attempt))
         {
             throw new BusinessRuleException(
-                "Competition integrity limit exceeded (too many focus losses or paste events). Submit your attempt now.");
+                "Integrity limit exceeded (too many focus losses or paste events). Submit your attempt now.");
         }
     }
+
+    /// <summary>Backward-compatible alias; quiz type is ignored (lockout is type-agnostic).</summary>
+    public static void EnsureCompetitionDraftAllowed(string quizTypeName, QuizAttempt attempt)
+        => EnsureDraftAllowed(attempt);
 }

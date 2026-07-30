@@ -475,8 +475,7 @@ public sealed class QuizService : IQuizService
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
         await EnsureCompetitionDeviceLockAsync(quiz, attempt, cancellationToken, request.DeviceId);
-        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
-        QuizIntegrityRules.EnsureCompetitionDraftAllowed(quizTypeName, attempt);
+        QuizIntegrityRules.EnsureDraftAllowed(attempt);
         EnsureAttemptTimeBudget(
             quiz.TimeLimitMinutes,
             attempt.StartedDate,
@@ -505,12 +504,11 @@ public sealed class QuizService : IQuizService
             }
         }
 
-        if (QuizIntegrityRules.IsCompetitionBreached(attempt)
-            && quizTypeName.Equals("Competition", StringComparison.OrdinalIgnoreCase))
+        if (QuizIntegrityRules.IsBreached(attempt))
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             throw new BusinessRuleException(
-                "Competition integrity limit exceeded (too many focus losses or paste events). Submit your attempt now.");
+                "Integrity limit exceeded (too many focus losses or paste events). Submit your attempt now.");
         }
 
         var answers = request.Answers ?? Array.Empty<SubmitQuizAnswerRequest>();
@@ -697,6 +695,9 @@ public sealed class QuizService : IQuizService
             navItems,
             navUpdates);
 
+        // After integrity breach, submit may finish but must not accept answer mutations.
+        var freezeAnswersForIntegrity = QuizIntegrityRules.IsBreached(attempt);
+
         var hasSubjectiveAnswers = false;
 
         foreach (var attemptQuestion in attemptDetail.Questions)
@@ -717,9 +718,11 @@ public sealed class QuizService : IQuizService
                     submitted.TimeSpentSeconds,
                     attemptQuestion.TimeSpentSeconds);
 
+            var useDraftSnapshot = rejectLateAnswer || freezeAnswersForIntegrity;
+
             if (attemptQuestionEntity is not null)
             {
-                if (!rejectLateAnswer && submitted.IsMarkedForReview is bool marked)
+                if (!useDraftSnapshot && submitted.IsMarkedForReview is bool marked)
                 {
                     attemptQuestionEntity.SetMarkedForReview(marked);
                 }
@@ -737,10 +740,10 @@ public sealed class QuizService : IQuizService
                 }
             }
 
-            // Late answers are ignored; score from the last in-budget draft snapshot.
+            // Late / integrity-frozen answers use the last in-budget draft snapshot.
             IReadOnlyList<long> selectedOptionIds;
             string? submittedText;
-            if (rejectLateAnswer)
+            if (useDraftSnapshot)
             {
                 selectedOptionIds = attemptQuestion.SelectedOptionIds.Count > 0
                     ? attemptQuestion.SelectedOptionIds

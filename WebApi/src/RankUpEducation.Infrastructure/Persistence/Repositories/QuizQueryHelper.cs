@@ -159,7 +159,9 @@ internal static class QuizQueryHelper
             lifecycleStatusId,
             lifecycleStatusName,
             quizResultStatusName ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus),
-            string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode);
+            string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
+            lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"),
+            quiz.RejectionReason);
     }
 
     public static async Task<IReadOnlyDictionary<short, string>> LoadLifecycleNamesAsync(
@@ -186,7 +188,8 @@ internal static class QuizQueryHelper
                 quiz.TopicId,
                 quiz.QuizTypeId,
                 quiz.DifficultyLevelId,
-                quiz.LifecycleStatusId
+                quiz.LifecycleStatusId,
+                quiz.ApprovalStatusId
             })
             .Distinct()
             .ToArray();

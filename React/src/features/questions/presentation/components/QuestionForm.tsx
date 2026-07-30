@@ -264,9 +264,8 @@ export function QuestionForm({
           })}
         </div>
         {normalizeQuestionType(values.questionType) === "Descriptive" ? (
-          <p className="rounded-xl border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-xs text-[var(--status-pending-text)]">
-            This question is Descriptive (not available for new creates). Choose
-            a NOW type above to continue editing, or cancel.
+          <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Descriptive answers are free text and scored during teacher review.
           </p>
         ) : null}
       </section>
