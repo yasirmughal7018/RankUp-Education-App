@@ -15,8 +15,13 @@ public interface IQuizAssignmentRepository
 
     Task<bool> AssignmentExistsAsync(long quizId, long studentId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardForCreatorAsync(
-        long creatorUserId,
+    /// <summary>
+    /// Cross-quiz assignment board. Pass creatorUserId for Teacher/Parent ownership,
+    /// schoolId for SchoolAdmin, or neither for PortalAdmin (platform-wide).
+    /// </summary>
+    Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardAsync(
+        long? creatorUserId,
+        int? schoolId,
         long? studentId,
         CancellationToken cancellationToken);
 
@@ -40,6 +45,9 @@ public interface IQuizAssignmentRepository
     /// <summary>
     /// Promotes due Upcoming assignments to Not Attempted, expires unattempted past-window
     /// assignments, and marks overdue in-progress attempts as Expired (84).
+    /// Newly opened Surprise rows are returned so callers can notify students without advance notice.
     /// </summary>
-    Task<int> ExpireOverdueUnattemptedAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<QuizAssignmentLifecycleMaintenanceResult> ExpireOverdueUnattemptedAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken);
 }

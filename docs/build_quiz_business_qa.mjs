@@ -112,7 +112,7 @@ const quizTypes = [
   ["1", "Practice", "Teacher", "Learning-oriented school quiz. Admin approval before assign. Intended: flexible attempts / optional time / answers may show after submit (type-specific UX still soft)."],
   ["2", "Assessment", "Teacher", "Assigned assessment with due window; may have limited time; visible to selected audience after assign. Admin approval before assign."],
   ["3", "Competition", "Teacher", "Class/school/inter-school competition intent: fixed schedule, strict attempts. Device lock (Competition-only) + FocusLoss≥5 / Paste≥3 draft lockout (all types). Admin approval before assign."],
-  ["4", "Surprise", "Teacher", "Short availability window / limited advance notice intent. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
+  ["4", "Surprise", "Teacher", "Hidden from students until StartDateTime (no advance notice); availability window ≤24h; StartAt ≤ now+24h; ≤1 attempt. Assign notifications deferred until the window opens. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
   ["5", "ParentPrivate", "Parent", "Private parent quiz. Auto-approved on publish; excluded from admin queue; assign only to linked children / parent groups."],
 ];
 
@@ -304,7 +304,7 @@ const quizAttemptFields = [
   ["StartedDate", "When the attempt began / resumed."],
   ["SubmittedDate", "When submitted (or placeholder until submit)."],
   ["TimeSpentSeconds", "Elapsed time recorded on the attempt."],
-  ["DeviceId", "Required non-empty device identifier."],
+  ["DeviceId", "Required non-empty device identifier. Web and mobile persist a stable per-install id (not a shared platform constant) so Competition device lock separates browsers/devices."],
   ["IsOfflineAttempt", "True when the attempt was started/synced from an offline queue."],
   ["ClientSyncId", "Idempotency key for offline sync; unique per student when set."],
   ["FocusLossCount", "Anti-cheat telemetry: browser focus/visibility losses."],

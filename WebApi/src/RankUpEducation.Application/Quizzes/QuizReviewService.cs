@@ -15,7 +15,7 @@ namespace RankUpEducation.Application.Quizzes;
 /// </summary>
 public interface IQuizReviewService
 {
-    /// <summary>Lists submitted attempts awaiting review for quizzes owned by the caller.</summary>
+    /// <summary>Lists submitted attempts awaiting review for quizzes in the caller's manage scope.</summary>
     Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken);
 
     /// <summary>Returns attempt answers, auto-scores, and existing feedback for manual review.</summary>
@@ -76,7 +76,8 @@ public sealed class QuizReviewService : IQuizReviewService
     public async Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var items = await _reviews.ListPendingReviewsForCreatorAsync(scope.UserId, cancellationToken);
+        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+        var items = await _reviews.ListPendingReviewsAsync(creatorUserId, schoolId, cancellationToken);
 
         return new PendingReviewListResponse(items.Select(item => new PendingReviewItemResponse(
             item.QuizId,

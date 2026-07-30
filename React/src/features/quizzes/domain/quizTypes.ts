@@ -199,6 +199,11 @@ export function canAssignAdminAudiences(role: UserRole): boolean {
   return role === "SchoolAdmin" || role === "PortalAdmin";
 }
 
+/** True for roles that may approve/reject teacher quizzes (not CampusAdmin). */
+export function canApproveQuizzes(role: UserRole): boolean {
+  return role === "SchoolAdmin" || role === "PortalAdmin";
+}
+
 /** Assign modes supported by API for the given role (canonical source for Assign dialog). */
 export function assignModesForRole(role: UserRole): Array<{
   value: string;

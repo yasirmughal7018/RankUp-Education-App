@@ -23,8 +23,9 @@ import {
   clearOfflineQuizSyncQueue,
   enqueueOfflineQuizSync,
   isBrowserOffline,
+  isOfflineQueueableError,
 } from "@/features/student/domain/offlineQuizSyncQueue";
-import { STUDENT_DEVICE_ID } from "@/features/student/domain/studentQuizTypes";
+import { getStudentDeviceId } from "@/features/student/domain/studentQuizTypes";
 import {
   useSubmitQuizAttemptMutation,
 } from "@/features/student/presentation/hooks/useStudentQuizQueries";
@@ -779,7 +780,7 @@ export function StudentQuizAttemptPage() {
         attemptId: numericAttemptId,
         answers: payload,
         timeSpentSeconds,
-        deviceId: STUDENT_DEVICE_ID,
+        deviceId: getStudentDeviceId(),
         submit: true,
         isAutoSubmit: isAuto,
         focusLossDelta: null,
@@ -807,19 +808,22 @@ export function StudentQuizAttemptPage() {
         `/student/quizzes/${numericQuizId}/attempts/${result.attemptId}/result`,
         { state: isAuto ? { autoSubmitted: true } : undefined },
       );
-    } catch {
-      enqueueOfflineQuizSync({
-        quizId: numericQuizId,
-        attemptId: numericAttemptId,
-        answers: payload,
-        timeSpentSeconds,
-        deviceId: STUDENT_DEVICE_ID,
-        submit: true,
-        isAutoSubmit: isAuto,
-        focusLossDelta: null,
-        clipboardPasteDelta: null,
-      });
-      setOfflineSubmitQueued(true);
+    } catch (error) {
+      if (isOfflineQueueableError(error)) {
+        enqueueOfflineQuizSync({
+          quizId: numericQuizId,
+          attemptId: numericAttemptId,
+          answers: payload,
+          timeSpentSeconds,
+          deviceId: getStudentDeviceId(),
+          submit: true,
+          isAutoSubmit: isAuto,
+          focusLossDelta: null,
+          clipboardPasteDelta: null,
+        });
+        setOfflineSubmitQueued(true);
+      }
+      // Non-network failures (integrity/validation) surface via submitAttempt.error.
     }
   }
 

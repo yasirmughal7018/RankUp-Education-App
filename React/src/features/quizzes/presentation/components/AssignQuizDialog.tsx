@@ -12,6 +12,8 @@ import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 interface AssignQuizDialogProps {
   isSubmitting: boolean;
   defaultGrade?: string;
+  /** When Surprise, defaults to open-now / short window and clamps attempts. */
+  quizType?: string;
   onClose: () => void;
   onSubmit: (input: AssignQuizInput) => Promise<void>;
 }
@@ -23,6 +25,16 @@ function defaultDateTime(offsetHours: number): string {
   date.setHours(date.getHours() + offsetHours);
   date.setMinutes(0, 0, 0);
   return date.toISOString().slice(0, 16);
+}
+
+function defaultDateTimeMinutesFromNow(minutes: number): string {
+  const date = new Date(Date.now() + minutes * 60_000);
+  date.setSeconds(0, 0);
+  return date.toISOString().slice(0, 16);
+}
+
+function isSurpriseQuizType(quizType?: string): boolean {
+  return (quizType ?? "").trim().toLowerCase() === "surprise";
 }
 
 function parseGradeNumber(grade?: string): number | null {
@@ -43,6 +55,7 @@ function parseGradeNumber(grade?: string): number | null {
 export function AssignQuizDialog({
   isSubmitting,
   defaultGrade,
+  quizType,
   onClose,
   onSubmit,
 }: AssignQuizDialogProps) {
@@ -50,6 +63,7 @@ export function AssignQuizDialog({
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isPortalAdmin = user?.role === "PortalAdmin";
   const isAdminAssigner = isSchoolAdmin || isPortalAdmin;
+  const surprise = isSurpriseQuizType(quizType);
   const modeOptions = useMemo(
     () => (user ? assignModesForRole(user.role) : assignModesForRole("Teacher")),
     [user],
@@ -85,8 +99,12 @@ export function AssignQuizDialog({
   const [gradeFilter, setGradeFilter] = useState<number | "">(
     () => parseGradeNumber(defaultGrade) ?? "",
   );
-  const [startAt, setStartAt] = useState(defaultDateTime(1));
-  const [endAt, setEndAt] = useState(defaultDateTime(24));
+  const [startAt, setStartAt] = useState(() =>
+    surprise ? defaultDateTimeMinutesFromNow(0) : defaultDateTime(1),
+  );
+  const [endAt, setEndAt] = useState(() =>
+    surprise ? defaultDateTimeMinutesFromNow(2 * 60) : defaultDateTime(24),
+  );
   const [allowedAttempts, setAllowedAttempts] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
@@ -179,6 +197,34 @@ export function AssignQuizDialog({
       return;
     }
 
+    const startDate = new Date(startAt);
+    const endDate = new Date(endAt);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      setError("Start and end times must be valid.");
+      return;
+    }
+    if (endDate <= startDate) {
+      setError("End time must be after start time.");
+      return;
+    }
+    if (surprise) {
+      const windowMs = endDate.getTime() - startDate.getTime();
+      const advanceMs = startDate.getTime() - Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      if (windowMs > dayMs) {
+        setError("Surprise quizzes must use an availability window of 24 hours or less.");
+        return;
+      }
+      if (advanceMs > dayMs) {
+        setError("Surprise quizzes cannot be scheduled more than 24 hours in advance.");
+        return;
+      }
+      if (allowedAttempts > 1) {
+        setError("Surprise quizzes allow at most one attempt.");
+        return;
+      }
+    }
+
     const schoolIds =
       mode === "multischool" || mode === "allinschool"
         ? schoolIdsText
@@ -192,9 +238,9 @@ export function AssignQuizDialog({
         mode,
         studentIds: selectedStudentIds,
         groupId: groupId ? Number(groupId) : null,
-        startAt: new Date(startAt).toISOString(),
-        endAt: new Date(endAt).toISOString(),
-        allowedAttempts,
+        startAt: startDate.toISOString(),
+        endAt: endDate.toISOString(),
+        allowedAttempts: surprise ? 1 : allowedAttempts,
         gradeId: gradeId === "" ? null : gradeId,
         section: mode === "allinsection" ? section.trim() : null,
         schoolIds,
@@ -214,6 +260,12 @@ export function AssignQuizDialog({
             ? "Choose a school-wide, multi-school, or public audience and set the window."
             : "Choose students and set the assignment window."}
         </p>
+        {surprise ? (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Surprise quizzes stay hidden from students until Start. Keep the window ≤24h
+            and schedule Start no more than 24h ahead. Students are notified when it opens.
+          </p>
+        ) : null}
 
         {error ? (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

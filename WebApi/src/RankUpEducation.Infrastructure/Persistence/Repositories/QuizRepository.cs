@@ -35,6 +35,15 @@ public sealed class QuizRepository : IQuizRepository
             cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
+        assigned = assigned
+            .Where(item =>
+                item.StartDateTime is null
+                || !QuizTypeBehavior.IsHiddenFromStudentUntilStart(
+                    item.QuizTypeName,
+                    item.StartDateTime.Value,
+                    now))
+            .ToArray();
+
         var audienceQuizzes = await _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => quiz.IsActive
                 && !quiz.IsDeleted
@@ -310,6 +319,18 @@ public sealed class QuizRepository : IQuizRepository
                 && quiz.AudienceEndAt >= DateTimeOffset.UtcNow;
             if (!canAudience)
             {
+                return null;
+            }
+        }
+        else
+        {
+            var typeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+            if (QuizTypeBehavior.IsHiddenFromStudentUntilStart(
+                    typeName,
+                    assignment.StartDateTime,
+                    DateTimeOffset.UtcNow))
+            {
+                // No advance notice: treat as not found until the window opens.
                 return null;
             }
         }

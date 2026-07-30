@@ -12,11 +12,12 @@ import type {
   SaveQuizDraftResult,
   SubmitQuizAnswer,
 } from "@/features/student/domain/studentQuizTypes";
-import { STUDENT_DEVICE_ID } from "@/features/student/domain/studentQuizTypes";
+import { getStudentDeviceId } from "@/features/student/domain/studentQuizTypes";
 import {
   countOfflineQuizSyncQueue,
   enqueueOfflineQuizSync,
   isBrowserOffline,
+  isOfflineQueueableError,
   listOfflineQuizSyncQueue,
   removeOfflineQuizSyncItem,
 } from "@/features/student/domain/offlineQuizSyncQueue";
@@ -184,7 +185,7 @@ export function useQuizAttemptAutosave({
           attemptId,
           answers,
           timeSpentSeconds,
-          deviceId: STUDENT_DEVICE_ID,
+          deviceId: getStudentDeviceId(),
           submit: false,
           isAutoSubmit: false,
           focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
@@ -214,7 +215,7 @@ export function useQuizAttemptAutosave({
           focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
           clipboardPasteDelta:
             clipboardPasteDelta > 0 ? clipboardPasteDelta : null,
-          deviceId: STUDENT_DEVICE_ID,
+          deviceId: getStudentDeviceId(),
         },
       );
       lastSnapshotRef.current = JSON.stringify({
@@ -233,25 +234,31 @@ export function useQuizAttemptAutosave({
       onSavedRef.current?.(result);
       succeeded = true;
       return true;
-    } catch {
-      // Network failure mid-flight — queue for reconnect sync.
-      enqueueOfflineQuizSync({
-        quizId,
-        attemptId,
-        answers,
-        timeSpentSeconds,
-        deviceId: STUDENT_DEVICE_ID,
-        submit: false,
-        isAutoSubmit: false,
-        focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
-        clipboardPasteDelta:
-          clipboardPasteDelta > 0 ? clipboardPasteDelta : null,
-      });
-      setPendingOfflineCount(countOfflineQuizSyncQueue(attemptId));
+    } catch (error) {
       focusLossDeltaRef.current += focusLossDelta;
       clipboardPasteDeltaRef.current += clipboardPasteDelta;
       dirtyRef.current = true;
-      setStatus(isBrowserOffline() ? "offline" : "error");
+
+      if (isOfflineQueueableError(error)) {
+        // Network / transient failure mid-flight — queue for reconnect sync.
+        enqueueOfflineQuizSync({
+          quizId,
+          attemptId,
+          answers,
+          timeSpentSeconds,
+          deviceId: getStudentDeviceId(),
+          submit: false,
+          isAutoSubmit: false,
+          focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
+          clipboardPasteDelta:
+            clipboardPasteDelta > 0 ? clipboardPasteDelta : null,
+        });
+        setPendingOfflineCount(countOfflineQuizSyncQueue(attemptId));
+        setStatus(isBrowserOffline() ? "offline" : "error");
+      } else {
+        // Integrity/validation/business errors must not be treated as offline.
+        setStatus("error");
+      }
       return false;
     } finally {
       savingRef.current = false;
@@ -311,7 +318,7 @@ export function useQuizAttemptAutosave({
         attemptId,
         answers,
         timeSpentSeconds,
-        deviceId: STUDENT_DEVICE_ID,
+        deviceId: getStudentDeviceId(),
         submit: false,
         isAutoSubmit: false,
         focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
@@ -339,7 +346,7 @@ export function useQuizAttemptAutosave({
           focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
           clipboardPasteDelta:
             clipboardPasteDelta > 0 ? clipboardPasteDelta : null,
-          deviceId: STUDENT_DEVICE_ID,
+          deviceId: getStudentDeviceId(),
         },
         { keepalive: true },
       )
@@ -354,24 +361,27 @@ export function useQuizAttemptAutosave({
         setStatus("saved");
         onSavedRef.current?.(result);
       })
-      .catch(() => {
-        enqueueOfflineQuizSync({
-          quizId,
-          attemptId,
-          answers,
-          timeSpentSeconds,
-          deviceId: STUDENT_DEVICE_ID,
-          submit: false,
-          isAutoSubmit: false,
-          focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
-          clipboardPasteDelta:
-            clipboardPasteDelta > 0 ? clipboardPasteDelta : null,
-        });
-        setPendingOfflineCount(countOfflineQuizSyncQueue(attemptId));
+      .catch((error: unknown) => {
         focusLossDeltaRef.current += focusLossDelta;
         clipboardPasteDeltaRef.current += clipboardPasteDelta;
         dirtyRef.current = true;
-        setStatus("error");
+
+        if (isOfflineQueueableError(error)) {
+          enqueueOfflineQuizSync({
+            quizId,
+            attemptId,
+            answers,
+            timeSpentSeconds,
+            deviceId: getStudentDeviceId(),
+            submit: false,
+            isAutoSubmit: false,
+            focusLossDelta: focusLossDelta > 0 ? focusLossDelta : null,
+            clipboardPasteDelta:
+              clipboardPasteDelta > 0 ? clipboardPasteDelta : null,
+          });
+          setPendingOfflineCount(countOfflineQuizSyncQueue(attemptId));
+        }
+        setStatus(isBrowserOffline() ? "offline" : "error");
       });
   }, [attemptId, clipboardPasteDeltaRef, focusLossDeltaRef, quizId]);
 
@@ -409,7 +419,14 @@ export function useQuizAttemptAutosave({
         if (result.submitted && result.result) {
           onOfflineSubmitSyncedRef.current?.(result.result);
         }
-      } catch {
+      } catch (error) {
+        if (!isOfflineQueueableError(error)) {
+          // Drop stale integrity/validation payloads so they cannot block the queue.
+          removeOfflineQuizSyncItem(attemptId, item.id);
+          setPendingOfflineCount(countOfflineQuizSyncQueue(attemptId));
+          setStatus("error");
+          continue;
+        }
         setStatus("error");
         setPendingOfflineCount(countOfflineQuizSyncQueue(attemptId));
         return;
@@ -512,7 +529,9 @@ export function useQuizAttemptAutosave({
         ? "Syncing offline answers…"
         : "Saving…"
       : status === "error"
-        ? "Draft save failed — will retry"
+        ? pendingOfflineCount > 0
+          ? "Draft save failed — will retry"
+          : "Draft save failed"
         : status === "offline" || isOffline
           ? pendingOfflineCount > 0
             ? `Offline — ${pendingOfflineCount} pending sync`

@@ -40,6 +40,37 @@ abstract class QuizRepository {
     required String quizId,
     required String attemptId,
   });
+
+  /// Replays a queued offline draft or submit (`POST .../sync`).
+  Future<OfflineQuizSyncResult> syncOfflineAttempt({
+    required String quizId,
+    required String attemptId,
+    required String clientSyncId,
+    required List<QuizAnswerSubmission> answers,
+    required int timeSpentSeconds,
+    required String deviceId,
+    bool submit = false,
+    bool isAutoSubmit = false,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+  });
+}
+
+/// Result of [QuizRepository.syncOfflineAttempt].
+class OfflineQuizSyncResult {
+  const OfflineQuizSyncResult({
+    required this.attemptId,
+    required this.alreadySynced,
+    required this.submitted,
+    required this.clientSyncId,
+    this.result,
+  });
+
+  final String attemptId;
+  final bool alreadySynced;
+  final bool submitted;
+  final String clientSyncId;
+  final QuizAttemptResult? result;
 }
 
 /// Answer payload sent when saving or submitting an attempt.

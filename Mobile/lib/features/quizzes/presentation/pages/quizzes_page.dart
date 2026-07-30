@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:rankup_education/core/network/connectivity_service.dart';
+import 'package:rankup_education/core/storage/student_device_id_store.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
@@ -56,8 +59,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   int _focusLossDelta = 0;
   int _clipboardPasteDelta = 0;
   bool _instructionsAcknowledged = false;
-
-  static const _deviceId = 'rankup-mobile';
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _flushingOffline = false;
+  String? _deviceId;
 
   bool get _isTeacher =>
       ref.watch(authControllerProvider).user?.role == UserRole.teacher;
@@ -73,12 +77,24 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Future<void>.microtask(_load);
+    Future<void>.microtask(() async {
+      _deviceId =
+          await ref.read(studentDeviceIdStoreProvider).getOrCreate();
+      await _load();
+      _connectivitySub =
+          ref.read(connectivityServiceProvider).changes.listen((results) {
+        final online = !results.contains(ConnectivityResult.none);
+        if (online) {
+          unawaited(_flushPendingOffline());
+        }
+      });
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_connectivitySub?.cancel() ?? Future<void>.value());
     _attemptTimer?.cancel();
     _draftSaveTimer?.cancel();
     _searchController.dispose();
@@ -87,6 +103,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_flushPendingOffline());
+    }
     if (_view != _QuizView.attempt) {
       return;
     }
@@ -200,6 +219,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
             questionRemainingSeconds: _questionRemainingSeconds,
             questionLocked: _isCurrentQuestionLocked(),
             integrityLocked: _integrityLocked,
+            pendingOfflineCount:
+                ref.watch(quizzesControllerProvider).pendingOfflineCount,
+            offlineSubmitQueued:
+                ref.watch(quizzesControllerProvider).offlineSubmitQueued,
             onOptionSelected: _answerOptionQuestion,
             onTextAnswerChanged: _answerTextQuestion,
             onShowHint: _showHint,
@@ -283,6 +306,53 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         );
   }
 
+  Future<void> _flushPendingOffline() async {
+    if (_flushingOffline) {
+      return;
+    }
+    _flushingOffline = true;
+    try {
+      final result = await ref
+          .read(quizzesControllerProvider.notifier)
+          .flushPendingOfflineQueue();
+      if (!mounted || result == null) {
+        return;
+      }
+      _completeAttemptFromResult(result, offlineSynced: true);
+    } finally {
+      _flushingOffline = false;
+    }
+  }
+
+  void _completeAttemptFromResult(
+    QuizAttemptResult result, {
+    bool autoSubmitted = false,
+    bool offlineSynced = false,
+  }) {
+    final quiz = _selectedQuiz;
+    if (quiz == null || !mounted) {
+      return;
+    }
+
+    _stopAttemptTimer();
+    _cancelDraftSave();
+    setState(() {
+      _selectedQuiz = quiz.copyWith(
+        status: QuizStatus.completed,
+        resultStatus: result.resultStatus,
+        resultPercent: result.percentage,
+        completedAt: DateTime.now(),
+        reviewAvailable: result.reviewAvailable,
+      );
+      _saveStatus = offlineSynced
+          ? 'Offline submit synced'
+          : autoSubmitted
+              ? 'Time ended. Quiz submitted automatically.'
+              : 'Quiz submitted';
+      _view = _QuizView.submitted;
+    });
+  }
+
   void _resetFilters() {
     setState(() {
       _searchController.clear();
@@ -344,7 +414,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     final attempt =
         await ref.read(quizzesControllerProvider.notifier).startAttempt(
               quizId: selectedQuiz.id,
-              deviceId: _deviceId,
+              deviceId: _deviceId ?? '',
               instructionsAcknowledged:
                   !requiresInstructionsAck || _instructionsAcknowledged,
             );
@@ -401,6 +471,14 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         navigationMode: normalizeQuizNavigationMode(attempt.navigationMode),
       );
     });
+
+    unawaited(
+      ref.read(quizzesControllerProvider.notifier).refreshOfflineStatus(
+            quizId: selectedQuiz.id,
+            attemptId: attempt.attemptId,
+          ),
+    );
+    unawaited(_flushPendingOffline());
 
     final needsClock = remaining != null || attempt.enablePerQuestionTimer;
     if (needsClock) {
@@ -604,6 +682,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     if (quiz == null || attempt == null) {
       return;
     }
+    if (ref.read(quizzesControllerProvider).offlineSubmitQueued) {
+      return;
+    }
 
     // Flush latest drafts (including mark-for-review / per-question time) before submit.
     await _saveDraftNow();
@@ -624,32 +705,34 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
               answers: answers,
               timeSpentSeconds: timeSpentSeconds,
               isAutoSubmit: autoSubmitted,
-              deviceId: _deviceId,
+              deviceId: _deviceId ?? '',
             );
     if (!mounted) {
       return;
     }
     if (result == null) {
-      final message = ref.read(quizzesControllerProvider).actionError ??
-          'Could not submit the quiz attempt.';
+      final state = ref.read(quizzesControllerProvider);
+      if (state.offlineSubmitQueued) {
+        setState(() {
+          _saveStatus =
+              'Submit queued offline — will sync when you are back online';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Submit is queued on this device and will sync when online.',
+            ),
+          ),
+        );
+        return;
+      }
+      final message = state.actionError ?? 'Could not submit the quiz attempt.';
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
-    setState(() {
-      _selectedQuiz = quiz.copyWith(
-        status: QuizStatus.completed,
-        resultStatus: result.resultStatus,
-        resultPercent: result.percentage,
-        completedAt: DateTime.now(),
-        reviewAvailable: result.reviewAvailable,
-      );
-      _saveStatus = autoSubmitted
-          ? 'Time ended. Quiz submitted automatically.'
-          : 'Quiz submitted';
-      _view = _QuizView.submitted;
-    });
+    _completeAttemptFromResult(result, autoSubmitted: autoSubmitted);
   }
 
   QuizAnswerSubmission _buildAnswerSubmission(
@@ -716,31 +799,41 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
 
     setState(() => _saveStatus = 'Saving…');
 
-    final ok = await ref.read(quizzesControllerProvider.notifier).saveDraft(
-          quizId: quiz.id,
-          attemptId: attempt.attemptId,
-          answers: answers,
-          timeSpentSeconds: timeSpentSeconds,
-          focusLossDelta: focusDelta > 0 ? focusDelta : null,
-          clipboardPasteDelta: pasteDelta > 0 ? pasteDelta : null,
-          deviceId: _deviceId,
-        );
+    final outcome =
+        await ref.read(quizzesControllerProvider.notifier).saveDraft(
+              quizId: quiz.id,
+              attemptId: attempt.attemptId,
+              answers: answers,
+              timeSpentSeconds: timeSpentSeconds,
+              focusLossDelta: focusDelta > 0 ? focusDelta : null,
+              clipboardPasteDelta: pasteDelta > 0 ? pasteDelta : null,
+              deviceId: _deviceId ?? '',
+            );
     if (!mounted || _view != _QuizView.attempt) {
       return;
     }
 
-    if (!ok) {
+    if (outcome == QuizDraftSaveOutcome.failed) {
       _focusLossDelta += focusDelta;
       _clipboardPasteDelta += pasteDelta;
     }
 
+    final pending =
+        ref.read(quizzesControllerProvider).pendingOfflineCount;
     setState(() {
-      _saveStatus = ok
-          ? (_focusLossCount > 0 || _clipboardPasteCount > 0
-              ? 'Draft saved · Focus $_focusLossCount · Paste $_clipboardPasteCount'
-              : 'Draft saved')
-          : (ref.read(quizzesControllerProvider).actionError ??
-              'Draft save failed');
+      _saveStatus = switch (outcome) {
+        QuizDraftSaveOutcome.queuedOffline => pending > 0
+            ? 'Offline — $pending pending sync'
+            : 'Offline — answers saved on this device',
+        QuizDraftSaveOutcome.saved => pending > 0
+            ? 'Saved · $pending pending sync'
+            : (_focusLossCount > 0 || _clipboardPasteCount > 0
+                ? 'Draft saved · Focus $_focusLossCount · Paste $_clipboardPasteCount'
+                : 'Draft saved'),
+        QuizDraftSaveOutcome.failed =>
+          ref.read(quizzesControllerProvider).actionError ??
+              'Draft save failed',
+      };
     });
   }
 
@@ -1734,6 +1827,8 @@ class _QuizAttemptView extends StatelessWidget {
     required this.questionRemainingSeconds,
     required this.questionLocked,
     required this.integrityLocked,
+    required this.pendingOfflineCount,
+    required this.offlineSubmitQueued,
     required this.onOptionSelected,
     required this.onTextAnswerChanged,
     required this.onShowHint,
@@ -1757,6 +1852,8 @@ class _QuizAttemptView extends StatelessWidget {
   final int? questionRemainingSeconds;
   final bool questionLocked;
   final bool integrityLocked;
+  final int pendingOfflineCount;
+  final bool offlineSubmitQueued;
   final void Function(String optionId, int questionTypeId) onOptionSelected;
   final ValueChanged<String> onTextAnswerChanged;
   final VoidCallback onShowHint;
@@ -1825,6 +1922,18 @@ class _QuizAttemptView extends StatelessWidget {
                     'Time is up for this question. Your last in-time answer is locked.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: const Color(0xFFB45309),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+                if (offlineSubmitQueued || pendingOfflineCount > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    offlineSubmitQueued
+                        ? 'Submit is queued on this device. It will sync automatically when you are back online.'
+                        : '$pendingOfflineCount change(s) waiting to sync.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF92400E),
                           fontWeight: FontWeight.w600,
                         ),
                   ),
@@ -1987,9 +2096,10 @@ class _QuizAttemptView extends StatelessWidget {
             Expanded(
               child: FilledButton.icon(
                 onPressed: questionIndex == questions.length - 1
-                    ? onSubmit
+                    ? (offlineSubmitQueued ? null : onSubmit)
                     : (quizNavigationRequiresAnswerBeforeNext(
-                                quiz.navigationMode) &&
+                                quiz.navigationMode,
+                              ) &&
                             !answeredQuestions.contains(questionIndex)
                         ? null
                         : onNext),
@@ -1999,7 +2109,9 @@ class _QuizAttemptView extends StatelessWidget {
                       : Icons.chevron_right,
                 ),
                 label: Text(
-                  questionIndex == questions.length - 1 ? 'Submit' : 'Next',
+                  questionIndex == questions.length - 1
+                      ? (offlineSubmitQueued ? 'Queued' : 'Submit')
+                      : 'Next',
                 ),
               ),
             ),
@@ -3189,26 +3301,57 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-class _OfflineSyncTile extends StatelessWidget {
+class _OfflineSyncTile extends ConsumerWidget {
   const _OfflineSyncTile();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(quizzesControllerProvider);
+    final pending = state.pendingOfflineCount;
+    final queuedSubmit = state.offlineSubmitQueued;
+    final icon = queuedSubmit || pending > 0
+        ? Icons.cloud_upload_outlined
+        : Icons.cloud_done_outlined;
+    final message = queuedSubmit
+        ? 'Submit queued offline — will sync when online.'
+        : pending > 0
+            ? '$pending change(s) waiting to sync when online.'
+            : 'Online. Answers autosave during attempts; offline drafts sync here.';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
             Icon(
-              Icons.cloud_done_outlined,
+              icon,
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Online. Answers autosave during attempts and offline sync status will appear here.',
+            Expanded(child: Text(message)),
+            if (pending > 0 || queuedSubmit)
+              TextButton(
+                onPressed: () async {
+                  final result = await ref
+                      .read(quizzesControllerProvider.notifier)
+                      .flushPendingOfflineQueue();
+                  if (!context.mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        result != null
+                            ? 'Offline submit synced successfully.'
+                            : pending > 0
+                                ? 'Sync attempted. Remaining items will retry when online.'
+                                : 'Nothing pending to sync.',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Sync now'),
               ),
-            ),
           ],
         ),
       ),

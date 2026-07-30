@@ -4,10 +4,10 @@ using RankUpEducation.Contracts.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
-/// <summary>Assignment board and per-quiz monitoring for quiz owners (teachers/parents).</summary>
+/// <summary>Assignment board and per-quiz monitoring for quiz owners and school/platform admins.</summary>
 public interface IQuizMonitorService
 {
-    /// <summary>Lists assignments across owned quizzes with live monitor status.</summary>
+    /// <summary>Lists assignments across scoped quizzes with live monitor status.</summary>
     Task<QuizAssignmentBoardResponse> ListAssignmentsAsync(
         long? studentId,
         CancellationToken cancellationToken);
@@ -44,7 +44,12 @@ public sealed class QuizMonitorService : IQuizMonitorService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var items = await _assignments.ListAssignmentBoardForCreatorAsync(scope.UserId, studentId, cancellationToken);
+        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+        var items = await _assignments.ListAssignmentBoardAsync(
+            creatorUserId,
+            schoolId,
+            studentId,
+            cancellationToken);
         var now = _dateTimeProvider.UtcNow;
 
         return new QuizAssignmentBoardResponse(items.Select(item => new QuizAssignmentBoardItemResponse(
@@ -71,10 +76,16 @@ public sealed class QuizMonitorService : IQuizMonitorService
     public async Task<QuizMonitoringResponse> GetMonitoringAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var quiz = await _quizzes.GetDetailForCreatorAsync(quizId, scope.UserId, cancellationToken)
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
+        QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
 
-        var students = await _reviews.ListMonitoringForQuizAsync(quizId, scope.UserId, cancellationToken);
+        if (!quiz.IsActive || quiz.IsDeleted)
+        {
+            throw new NotFoundAppException("Quiz was not found.");
+        }
+
+        var students = await _reviews.ListMonitoringForQuizAsync(quizId, cancellationToken);
         var now = _dateTimeProvider.UtcNow;
 
         var studentResponses = students.Select(item => new QuizMonitoringStudentResponse(
@@ -96,7 +107,7 @@ public sealed class QuizMonitorService : IQuizMonitorService
             item.ClipboardPasteCount)).ToArray();
 
         return new QuizMonitoringResponse(
-            quiz.QuizId,
+            quiz.Id,
             quiz.QuizTitle,
             (short)studentResponses.Length,
             (short)studentResponses.Count(item => item.LastSubmittedAt is not null),

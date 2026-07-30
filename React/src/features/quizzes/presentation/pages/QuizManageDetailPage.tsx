@@ -577,6 +577,7 @@ export function QuizManageDetailPage() {
         <AssignQuizDialog
           isSubmitting={assignQuiz.isPending}
           defaultGrade={quiz.grade}
+          quizType={quiz.quizType}
           onClose={() => setShowAssignDialog(false)}
           onSubmit={async (input) => {
             setActionError(null);

@@ -90,4 +90,31 @@ class ApiQuizRepository implements QuizRepository {
       attemptId: attemptId,
     );
   }
+
+  @override
+  Future<OfflineQuizSyncResult> syncOfflineAttempt({
+    required String quizId,
+    required String attemptId,
+    required String clientSyncId,
+    required List<QuizAnswerSubmission> answers,
+    required int timeSpentSeconds,
+    required String deviceId,
+    bool submit = false,
+    bool isAutoSubmit = false,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+  }) {
+    return _remoteDataSource.syncOfflineAttempt(
+      quizId: quizId,
+      attemptId: attemptId,
+      clientSyncId: clientSyncId,
+      answers: answers,
+      timeSpentSeconds: timeSpentSeconds,
+      deviceId: deviceId,
+      submit: submit,
+      isAutoSubmit: isAutoSubmit,
+      focusLossDelta: focusLossDelta,
+      clipboardPasteDelta: clipboardPasteDelta,
+    );
+  }
 }

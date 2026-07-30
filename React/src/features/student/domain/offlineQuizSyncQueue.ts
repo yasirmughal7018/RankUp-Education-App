@@ -54,6 +54,37 @@ export function isBrowserOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
+/**
+ * True when a failed draft/submit should be queued for offline replay.
+ * Validation, integrity lockouts, and other 4xx business errors must not be queued.
+ */
+export function isOfflineQueueableError(error: unknown): boolean {
+  if (isBrowserOffline()) {
+    return true;
+  }
+
+  if (error == null || typeof error !== "object") {
+    // Fetch/network throws (TypeError, etc.) have no HTTP status.
+    return true;
+  }
+
+  const status =
+    "status" in error && typeof (error as { status?: unknown }).status === "number"
+      ? (error as { status: number }).status
+      : undefined;
+
+  if (status == null || status === 0) {
+    return true;
+  }
+
+  // Transient server/gateway failures — safe to retry via sync.
+  if (status >= 500) {
+    return true;
+  }
+
+  return false;
+}
+
 export function createClientSyncId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

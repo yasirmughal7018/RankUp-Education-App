@@ -89,17 +89,28 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             .AnyAsync(assignment => assignment.QuizId == quizId && assignment.StudentId == studentId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardForCreatorAsync(
-        long creatorUserId,
+    public async Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardAsync(
+        long? creatorUserId,
+        int? schoolId,
         long? studentId,
         CancellationToken cancellationToken)
     {
-        var creatorKey = creatorUserId.ToString();
         var query =
             from assignment in _dbContext.QuizAssignments.AsNoTracking()
             join quiz in _dbContext.Quizzes.AsNoTracking() on assignment.QuizId equals quiz.Id
-            where quiz.CreatedByName == creatorKey && quiz.IsActive && !quiz.IsDeleted
+            where quiz.IsActive && !quiz.IsDeleted
             select new { assignment, quiz };
+
+        if (creatorUserId is not null)
+        {
+            var creatorKey = creatorUserId.Value.ToString();
+            query = query.Where(row => row.quiz.CreatedByName == creatorKey);
+        }
+
+        if (schoolId is not null)
+        {
+            query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
+        }
 
         if (studentId is not null)
         {
@@ -234,23 +245,35 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<int> ExpireOverdueUnattemptedAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<QuizAssignmentLifecycleMaintenanceResult> ExpireOverdueUnattemptedAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         var changed = 0;
+        var newlyOpenedSurprise = new List<QuizAssignmentOpenedNotice>();
 
-        var dueUpcoming = await _dbContext.QuizAssignments
-            .Where(assignment =>
-                assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Upcoming
+        var dueUpcoming = await (
+            from assignment in _dbContext.QuizAssignments
+            join quiz in _dbContext.Quizzes on assignment.QuizId equals quiz.Id
+            where assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Upcoming
                 && assignment.StartDateTime <= now
                 && assignment.EndDateTime >= now
                 && !_dbContext.QuizAttempts.Any(attempt =>
-                    attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId))
-            .ToListAsync(cancellationToken);
+                    attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId)
+            select new { assignment, quiz }).ToListAsync(cancellationToken);
 
-        foreach (var assignment in dueUpcoming)
+        foreach (var row in dueUpcoming)
         {
-            assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.NotAttempted);
+            row.assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.NotAttempted);
             changed++;
+
+            if (row.quiz.QuizTypeId == QuizLookupNames.QuizTypeIds.Surprise)
+            {
+                newlyOpenedSurprise.Add(new QuizAssignmentOpenedNotice(
+                    row.quiz.Id,
+                    row.quiz.QuizTitle,
+                    row.assignment.StudentId));
+            }
         }
 
         var overdueUnattempted = await _dbContext.QuizAssignments
@@ -290,6 +313,6 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             changed++;
         }
 
-        return changed;
+        return new QuizAssignmentLifecycleMaintenanceResult(changed, newlyOpenedSurprise);
     }
 }

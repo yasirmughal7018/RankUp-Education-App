@@ -277,3 +277,15 @@ public sealed record QuizAssignmentReviewState(
     long AssignmentId,
     bool IsReviewDone,
     bool IsReviewRequired);
+
+/// <summary>Surprise assignment that just became visible to a student (Upcoming → open).</summary>
+public sealed record QuizAssignmentOpenedNotice(
+    long QuizId,
+    string QuizTitle,
+    long StudentId);
+
+/// <summary>Result of promoting/expiring assignment windows.</summary>
+public sealed record QuizAssignmentLifecycleMaintenanceResult(
+    int ChangedCount,
+    IReadOnlyList<QuizAssignmentOpenedNotice> NewlyOpenedSurpriseAssignments);
+

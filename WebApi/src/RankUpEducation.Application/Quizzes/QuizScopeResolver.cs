@@ -151,6 +151,20 @@ public static class QuizScopeResolver
         => string.Equals(quiz.CreatedByName, scope.UserId.ToString(), StringComparison.Ordinal);
 
     /// <summary>
+    /// List filters for assignment board / pending reviews / reports-style boards.
+    /// Teacher/Parent: own quizzes; SchoolAdmin: school; PortalAdmin: platform.
+    /// </summary>
+    public static (long? CreatorUserId, int? SchoolId) ResolveOwnerListFilter(QuizManageScope scope)
+    {
+        return scope.Role switch
+        {
+            UserRole.SchoolAdmin => (null, scope.SchoolId),
+            UserRole.PortalAdmin => (null, null),
+            _ => (scope.UserId, null),
+        };
+    }
+
+    /// <summary>
     /// Parents may only target linked children; teachers may only target students in their campus.
     /// </summary>
     public static async Task EnsureCanAccessStudentAsync(

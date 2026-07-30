@@ -10,14 +10,14 @@ import type {
   SyncOfflineQuizAttemptInput,
   SyncOfflineQuizAttemptResult,
 } from "@/features/student/domain/studentQuizTypes";
-import { STUDENT_DEVICE_ID } from "@/features/student/domain/studentQuizTypes";
+import { getStudentDeviceId } from "@/features/student/domain/studentQuizTypes";
 
 /** Quiz overview before starting an attempt. */
 export async function getQuizDetail(quizId: number): Promise<QuizDetail> {
   return apiRequest<QuizDetail>(`/quizzes/${quizId}`);
 }
 
-/** Start or resume attempt (sends web device id). */
+/** Start or resume attempt (sends stable per-browser device id). */
 export async function startQuizAttempt(
   quizId: number,
   options?: { instructionsAcknowledged?: boolean },
@@ -25,7 +25,7 @@ export async function startQuizAttempt(
   return apiRequest<StartQuizAttempt>(`/quizzes/${quizId}/attempts`, {
     method: "POST",
     body: {
-      deviceId: STUDENT_DEVICE_ID,
+      deviceId: getStudentDeviceId(),
       instructionsAcknowledged: options?.instructionsAcknowledged ?? false,
     },
   });
@@ -48,7 +48,7 @@ export async function saveQuizAttemptDraft(
         timeSpentSeconds: input.timeSpentSeconds ?? null,
         focusLossDelta: input.focusLossDelta ?? null,
         clipboardPasteDelta: input.clipboardPasteDelta ?? null,
-        deviceId: input.deviceId ?? STUDENT_DEVICE_ID,
+        deviceId: input.deviceId ?? getStudentDeviceId(),
         isOfflineSync: input.isOfflineSync ?? false,
         clientSyncId: input.clientSyncId ?? null,
       },
@@ -73,7 +73,7 @@ export async function submitQuizAttempt(
         answers,
         timeSpentSeconds,
         isAutoSubmit,
-        deviceId: STUDENT_DEVICE_ID,
+        deviceId: getStudentDeviceId(),
         isOfflineSync: options?.isOfflineSync ?? false,
         clientSyncId: options?.clientSyncId ?? null,
       },
@@ -95,7 +95,7 @@ export async function syncOfflineQuizAttempt(
         clientSyncId: input.clientSyncId,
         answers: input.answers,
         timeSpentSeconds: input.timeSpentSeconds,
-        deviceId: input.deviceId ?? STUDENT_DEVICE_ID,
+        deviceId: input.deviceId ?? getStudentDeviceId(),
         submit: input.submit ?? false,
         isAutoSubmit: input.isAutoSubmit ?? false,
         focusLossDelta: input.focusLossDelta ?? null,

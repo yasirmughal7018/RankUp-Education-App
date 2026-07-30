@@ -99,7 +99,8 @@ public sealed class QuizAssignService : IQuizAssignService
             quiz.TimeLimitMinutes,
             request.AllowedAttempts,
             request.StartAt,
-            request.EndAt);
+            request.EndAt,
+            _dateTimeProvider.UtcNow);
 
         var mode = request.Mode.AsLowercase();
         if (mode == "public")
@@ -179,12 +180,16 @@ public sealed class QuizAssignService : IQuizAssignService
         quiz.SetLifecycleStatus(assignedLifecycleId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        await _notifications.CreateAsync(
-            studentIds,
-            "New quiz assigned",
-            $"\"{quiz.QuizTitle}\" has been assigned to you. Open My Quizzes to start.",
-            QuizNotificationCategories.QuizAssigned,
-            cancellationToken);
+        // Surprise quizzes stay hidden until StartAt — notify only when the window is already open.
+        if (!QuizTypeBehavior.IsSurprise(quizTypeName) || request.StartAt <= now)
+        {
+            await _notifications.CreateAsync(
+                studentIds,
+                "New quiz assigned",
+                $"\"{quiz.QuizTitle}\" has been assigned to you. Open My Quizzes to start.",
+                QuizNotificationCategories.QuizAssigned,
+                cancellationToken);
+        }
 
         var createdAssignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
         var assignedLifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
@@ -204,9 +209,13 @@ public sealed class QuizAssignService : IQuizAssignService
         await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
 
         var expired = await _assignments.ExpireOverdueUnattemptedAsync(_dateTimeProvider.UtcNow, cancellationToken);
-        if (expired > 0)
+        if (expired.ChangedCount > 0)
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await QuizSurpriseNotifications.NotifyNewlyOpenedAsync(
+                _notifications,
+                expired.NewlyOpenedSurpriseAssignments,
+                cancellationToken);
         }
 
         var assignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);

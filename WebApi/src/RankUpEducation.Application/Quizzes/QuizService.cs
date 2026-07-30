@@ -122,9 +122,13 @@ public sealed class QuizService : IQuizService
         if (role is UserRole.Student or UserRole.Parent or UserRole.Teacher)
         {
             var expired = await _assignments.ExpireOverdueUnattemptedAsync(now, cancellationToken);
-            if (expired > 0)
+            if (expired.ChangedCount > 0)
             {
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await QuizSurpriseNotifications.NotifyNewlyOpenedAsync(
+                    _notifications,
+                    expired.NewlyOpenedSurpriseAssignments,
+                    cancellationToken);
             }
         }
 

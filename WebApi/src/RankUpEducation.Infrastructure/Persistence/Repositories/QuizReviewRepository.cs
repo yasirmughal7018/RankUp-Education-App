@@ -20,13 +20,11 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
 
     public async Task<IReadOnlyList<QuizMonitoringStudentItem>> ListMonitoringForQuizAsync(
         long quizId,
-        long creatorUserId,
         CancellationToken cancellationToken)
     {
-        var creatorKey = creatorUserId.ToString();
         var quizExists = await _dbContext.Quizzes.AsNoTracking()
             .AnyAsync(
-                quiz => quiz.Id == quizId && quiz.CreatedByName == creatorKey && quiz.IsActive && !quiz.IsDeleted,
+                quiz => quiz.Id == quizId && quiz.IsActive && !quiz.IsDeleted,
                 cancellationToken);
 
         if (!quizExists)
@@ -89,11 +87,11 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
         return items;
     }
 
-    public async Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsForCreatorAsync(
-        long creatorUserId,
+    public async Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsAsync(
+        long? creatorUserId,
+        int? schoolId,
         CancellationToken cancellationToken)
     {
-        var creatorKey = creatorUserId.ToString();
         var submittedStatusIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
             "QuizAttemptStatus",
@@ -105,29 +103,43 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             return Array.Empty<PendingReviewItem>();
         }
 
-        var rows = await (
+        var query =
             from attempt in _dbContext.QuizAttempts.AsNoTracking()
             join quiz in _dbContext.Quizzes.AsNoTracking() on attempt.QuizId equals quiz.Id
             join assignment in _dbContext.QuizAssignments.AsNoTracking()
                 on new { attempt.QuizId, attempt.StudentId } equals new { assignment.QuizId, assignment.StudentId }
-            where quiz.CreatedByName == creatorKey
-                && quiz.IsActive
+            where quiz.IsActive
                 && !quiz.IsDeleted
                 && quiz.IsReviewRequired
                 && !assignment.IsReviewDone
                 && submittedStatusIds.Contains(attempt.StatusId)
                 && attempt.SubmittedDate != default
-            orderby attempt.SubmittedDate descending
-            select new
+            select new { attempt, quiz };
+
+        if (creatorUserId is not null)
+        {
+            var creatorKey = creatorUserId.Value.ToString();
+            query = query.Where(row => row.quiz.CreatedByName == creatorKey);
+        }
+
+        if (schoolId is not null)
+        {
+            query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
+        }
+
+        var rows = await query
+            .OrderByDescending(row => row.attempt.SubmittedDate)
+            .Select(row => new
             {
-                QuizId = quiz.Id,
-                quiz.QuizTitle,
-                AttemptId = attempt.Id,
-                attempt.StudentId,
-                attempt.AttemptNumber,
-                attempt.SubmittedDate,
-                attempt.ObtainedMarks
-            }).ToListAsync(cancellationToken);
+                QuizId = row.quiz.Id,
+                row.quiz.QuizTitle,
+                AttemptId = row.attempt.Id,
+                row.attempt.StudentId,
+                row.attempt.AttemptNumber,
+                row.attempt.SubmittedDate,
+                row.attempt.ObtainedMarks
+            })
+            .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
         {

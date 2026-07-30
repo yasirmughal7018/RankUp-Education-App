@@ -4,11 +4,17 @@ using RankUpEducation.Domain.Quizzes;
 namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>
-/// Type-specific behavioral defaults and soft enforcement for Practice / Assessment /
+/// Type-specific behavioral defaults and enforcement for Practice / Assessment /
 /// Competition / Surprise / ParentPrivate quizzes.
 /// </summary>
 public static class QuizTypeBehavior
 {
+    /// <summary>Maximum Surprise availability window (End − Start).</summary>
+    public static readonly TimeSpan SurpriseMaxAvailabilityWindow = TimeSpan.FromHours(24);
+
+    /// <summary>Maximum how far ahead a Surprise StartAt may be scheduled from now.</summary>
+    public static readonly TimeSpan SurpriseMaxAdvanceNotice = TimeSpan.FromHours(24);
+
     public sealed record TypeDefaults(
         short? AllowedAttempts,
         short? TimeLimitMinutes,
@@ -17,6 +23,20 @@ public static class QuizTypeBehavior
         bool IsReviewRequired,
         string NavigationMode,
         string ReviewDisplayMode);
+
+    public static bool IsSurprise(string? quizTypeName)
+        => !string.IsNullOrWhiteSpace(quizTypeName)
+           && quizTypeName.Trim().Equals("Surprise", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Surprise quizzes must not appear to students before the assignment window opens
+    /// (no advance notice in list/detail).
+    /// </summary>
+    public static bool IsHiddenFromStudentUntilStart(
+        string? quizTypeName,
+        DateTimeOffset startAt,
+        DateTimeOffset now)
+        => IsSurprise(quizTypeName) && startAt > now;
 
     public static TypeDefaults ResolveDefaults(string quizTypeName)
     {
@@ -31,7 +51,7 @@ public static class QuizTypeBehavior
             return new TypeDefaults(1, 30, true, true, false, "Locked", QuizReviewDisplay.Withheld);
         }
 
-        if (name.Equals("Surprise", StringComparison.OrdinalIgnoreCase))
+        if (IsSurprise(name))
         {
             return new TypeDefaults(1, 15, true, true, false, "Sequential", QuizReviewDisplay.Withheld);
         }
@@ -86,7 +106,8 @@ public static class QuizTypeBehavior
         short? timeLimitMinutes,
         short allowedAttempts,
         DateTimeOffset startAt,
-        DateTimeOffset endAt)
+        DateTimeOffset endAt,
+        DateTimeOffset now)
     {
         var name = quizTypeName.Trim();
 
@@ -103,11 +124,18 @@ public static class QuizTypeBehavior
             }
         }
 
-        if (name.Equals("Surprise", StringComparison.OrdinalIgnoreCase))
+        if (IsSurprise(name))
         {
-            if (endAt - startAt > TimeSpan.FromHours(24))
+            if (endAt - startAt > SurpriseMaxAvailabilityWindow)
             {
-                throw new BusinessRuleException("Surprise quizzes must use an availability window of 24 hours or less.");
+                throw new BusinessRuleException(
+                    "Surprise quizzes must use an availability window of 24 hours or less.");
+            }
+
+            if (startAt - now > SurpriseMaxAdvanceNotice)
+            {
+                throw new BusinessRuleException(
+                    "Surprise quizzes cannot be scheduled more than 24 hours in advance.");
             }
 
             if (allowedAttempts > 1)

@@ -132,6 +132,54 @@ class QuizRemoteDataSource {
     }
   }
 
+  Future<OfflineQuizSyncResult> syncOfflineAttempt({
+    required String quizId,
+    required String attemptId,
+    required String clientSyncId,
+    required List<QuizAnswerSubmission> answers,
+    required int timeSpentSeconds,
+    required String deviceId,
+    bool submit = false,
+    bool isAutoSubmit = false,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/quizzes/$quizId/attempts/$attemptId/sync',
+        data: {
+          'clientSyncId': clientSyncId,
+          'answers': [
+            for (final answer in answers) _answerPayload(answer),
+          ],
+          'timeSpentSeconds': timeSpentSeconds,
+          'deviceId': deviceId,
+          'submit': submit,
+          'isAutoSubmit': isAutoSubmit,
+          if (focusLossDelta != null && focusLossDelta > 0)
+            'focusLossDelta': focusLossDelta,
+          if (clipboardPasteDelta != null && clipboardPasteDelta > 0)
+            'clipboardPasteDelta': clipboardPasteDelta,
+        },
+      );
+
+      return _readObject(response.data, (json) {
+        final resultJson = json['result'];
+        return OfflineQuizSyncResult(
+          attemptId: json['attemptId']?.toString() ?? attemptId,
+          alreadySynced: json['alreadySynced'] == true,
+          submitted: json['submitted'] == true,
+          clientSyncId: json['clientSyncId']?.toString() ?? clientSyncId,
+          result: resultJson is Map<String, dynamic>
+              ? QuizAttemptResultModel.fromJson(resultJson)
+              : null,
+        );
+      });
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
   Map<String, dynamic> _answerPayload(QuizAnswerSubmission answer) {
     final selectedIds = answer.selectedOptionIds ??
         (answer.selectedOptionId == null

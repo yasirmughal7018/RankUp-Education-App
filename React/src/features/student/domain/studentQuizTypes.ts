@@ -149,7 +149,39 @@ export interface QuizAttemptResult {
   questions: QuizResultQuestion[];
 }
 
-export const STUDENT_DEVICE_ID = "rankup-web";
+export const STUDENT_DEVICE_ID_STORAGE_KEY = "rankup-student-device-id";
+const DEVICE_ID_MAX_LENGTH = 100;
+
+function createWebDeviceId(): string {
+  const uuid =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `web-${uuid}`.slice(0, DEVICE_ID_MAX_LENGTH);
+}
+
+/**
+ * Stable per-browser device id for Competition attempt lock.
+ * Persisted in localStorage so resume/submit on another browser/profile is blocked.
+ */
+export function getStudentDeviceId(): string {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return createWebDeviceId();
+  }
+
+  try {
+    const existing = localStorage.getItem(STUDENT_DEVICE_ID_STORAGE_KEY)?.trim();
+    if (existing) {
+      return existing.slice(0, DEVICE_ID_MAX_LENGTH);
+    }
+
+    const created = createWebDeviceId();
+    localStorage.setItem(STUDENT_DEVICE_ID_STORAGE_KEY, created);
+    return created;
+  } catch {
+    return createWebDeviceId();
+  }
+}
 
 /** True only for Student role. */
 export function canTakeStudentQuizzes(role: string): boolean {
