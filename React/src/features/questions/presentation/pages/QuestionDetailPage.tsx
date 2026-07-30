@@ -403,7 +403,16 @@ export function QuestionDetailPage() {
                     : "flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground"
                 }
               >
-                <span className="min-w-0 flex-1">{option.optionText}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block">{option.optionText || "Image option"}</span>
+                  {option.optionImageUrl ? (
+                    <img
+                      src={option.optionImageUrl}
+                      alt=""
+                      className="mt-2 max-h-32 rounded-lg border border-border object-contain"
+                    />
+                  ) : null}
+                </span>
                 {option.isCorrect ? (
                   <StatusBadge label="Correct" status="approved" />
                 ) : null}

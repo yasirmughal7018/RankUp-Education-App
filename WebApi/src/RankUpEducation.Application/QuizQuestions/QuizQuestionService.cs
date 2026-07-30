@@ -2,6 +2,7 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Questions;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Contracts.Questions;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Approvals;
@@ -153,7 +154,12 @@ public sealed class QuizQuestionService : IQuizQuestionService
             cancellationToken);
 
         _questions.DetachQuestion(question);
-        await ReplaceAnswersAsync(question.Id, request.QuestionType, request.Options, cancellationToken);
+        await ReplaceAnswersAsync(
+            question.Id,
+            request.QuestionType,
+            request.Options,
+            request.AcceptedAnswers,
+            cancellationToken);
 
         var existingQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
         var displayOrder = (short)(existingQuestions.Count + 1);
@@ -285,7 +291,12 @@ public sealed class QuizQuestionService : IQuizQuestionService
             request.Hint,
             request.Explanation);
 
-        await ReplaceAnswersAsync(questionId, request.QuestionType, request.Options, cancellationToken);
+        await ReplaceAnswersAsync(
+            questionId,
+            request.QuestionType,
+            request.Options,
+            request.AcceptedAnswers,
+            cancellationToken);
         link.SetMarks(request.Marks);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _questions.AddApprovalEventAsync(
@@ -331,6 +342,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         long questionId,
         string questionType,
         IReadOnlyList<QuizQuestionOptionRequest> options,
+        IReadOnlyList<QuestionAcceptedAnswerRequest>? acceptedAnswers,
         CancellationToken cancellationToken)
     {
         await _questions.RemoveQuestionOptionsAsync(questionId, cancellationToken);
@@ -338,10 +350,26 @@ public sealed class QuizQuestionService : IQuizQuestionService
 
         if (QuizQuestionHelper.IsFillBlankType(questionType))
         {
-            var answers = options
-                .Where(option => !string.IsNullOrWhiteSpace(option.OptionText))
-                .Select(option => new QuestionAcceptedAnswer(questionId, option.OptionText.Trim()))
+            var fromAccepted = (acceptedAnswers ?? Array.Empty<QuestionAcceptedAnswerRequest>())
+                .Where(answer => !string.IsNullOrWhiteSpace(answer.AnswerText))
+                .Select(answer => new QuestionAcceptedAnswer(
+                    questionId,
+                    answer.AnswerText.Trim(),
+                    answer.IsCaseSensitive,
+                    answer.AllowPartialMatch,
+                    answer.MinimumLength,
+                    answer.MaximumLength,
+                    answer.AllowAiReview,
+                    answer.AllowTeacherReview))
                 .ToArray();
+
+            // Legacy: Fill answers sent as options (flags default off).
+            var answers = fromAccepted.Length > 0
+                ? fromAccepted
+                : options
+                    .Where(option => !string.IsNullOrWhiteSpace(option.OptionText))
+                    .Select(option => new QuestionAcceptedAnswer(questionId, option.OptionText.Trim()))
+                    .ToArray();
 
             if (answers.Length > 0)
             {
@@ -359,7 +387,11 @@ public sealed class QuizQuestionService : IQuizQuestionService
         }
 
         var entities = options
-            .Select(option => new QuestionOption(questionId, option.OptionText, option.IsCorrect))
+            .Select(option => new QuestionOption(
+                questionId,
+                option.OptionText,
+                option.IsCorrect,
+                option.OptionImageUrl))
             .ToArray();
         await _questions.AddQuestionOptionsAsync(entities, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

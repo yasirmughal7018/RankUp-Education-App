@@ -52,6 +52,7 @@ import { StudentRoute } from "@/features/student/presentation/components/Student
 import { StudentDashboardPage } from "@/features/student/presentation/pages/StudentDashboardPage";
 import { StudentQuizAttemptPage } from "@/features/student/presentation/pages/StudentQuizAttemptPage";
 import { StudentQuizDetailPage } from "@/features/student/presentation/pages/StudentQuizDetailPage";
+import { StudentQuizHistoryPage } from "@/features/student/presentation/pages/StudentQuizHistoryPage";
 import { StudentQuizResultPage } from "@/features/student/presentation/pages/StudentQuizResultPage";
 import { StudentQuizzesPage } from "@/features/student/presentation/pages/StudentQuizzesPage";
 
@@ -176,6 +177,7 @@ export function AppRouter() {
             <Route element={<StudentRoute />}>
               <Route path="student/dashboard" element={<StudentDashboardPage />} />
               <Route path="student/quizzes" element={<StudentQuizzesPage />} />
+              <Route path="student/history" element={<StudentQuizHistoryPage />} />
               <Route
                 path="student/quizzes/:quizId"
                 element={<StudentQuizDetailPage />}

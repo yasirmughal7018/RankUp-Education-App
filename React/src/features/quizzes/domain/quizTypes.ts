@@ -1,5 +1,7 @@
 import type { UserRole } from "@/core/api/types";
 import {
+  createEmptyAcceptedAnswer,
+  defaultAcceptedAnswersForType,
   defaultOptionsForType,
   isFillBlankType,
   normalizeQuestionType,
@@ -36,6 +38,18 @@ export interface QuizQuestionOption {
   optionId: number;
   optionText: string;
   isCorrect: boolean;
+  optionImageUrl?: string | null;
+}
+
+export interface QuizQuestionAcceptedAnswer {
+  acceptedAnswerId: number;
+  answerText: string;
+  isCaseSensitive: boolean;
+  allowPartialMatch: boolean;
+  minimumLength: number;
+  maximumLength: number;
+  allowAiReview: boolean;
+  allowTeacherReview: boolean;
 }
 
 export interface QuizQuestionItem {
@@ -47,6 +61,7 @@ export interface QuizQuestionItem {
   hint: string | null;
   estimatedTimeSeconds: number;
   options: QuizQuestionOption[];
+  acceptedAnswers?: QuizQuestionAcceptedAnswer[];
 }
 
 export type QuizNavigationMode = "Free" | "Sequential" | "Locked";
@@ -119,7 +134,20 @@ export interface AddQuizQuestionInput {
   estimatedTimeSeconds: number;
   hint: string;
   explanation: string;
-  options: Array<{ optionText: string; isCorrect: boolean }>;
+  options: Array<{
+    optionText: string;
+    isCorrect: boolean;
+    optionImageUrl?: string | null;
+  }>;
+  acceptedAnswers: Array<{
+    answerText: string;
+    isCaseSensitive: boolean;
+    allowPartialMatch: boolean;
+    minimumLength: number;
+    maximumLength: number;
+    allowAiReview: boolean;
+    allowTeacherReview: boolean;
+  }>;
 }
 
 export type UpdateQuizQuestionInput = AddQuizQuestionInput;
@@ -536,6 +564,7 @@ export function createEmptyQuizQuestionInput(): AddQuizQuestionInput {
       { optionText: "", isCorrect: false },
       { optionText: "", isCorrect: false },
     ],
+    acceptedAnswers: [],
   };
 }
 
@@ -544,25 +573,41 @@ export function mapQuizQuestionToInput(
   question: QuizQuestionItem,
 ): AddQuizQuestionInput {
   const questionType = normalizeQuestionType(question.questionType);
-  const canUseOptions =
-    usesAnswerOptions(questionType) || isFillBlankType(questionType);
+  const acceptedFromApi = question.acceptedAnswers ?? [];
 
   return {
     questionText: question.questionText,
     questionType,
     marks: question.marks,
-    estimatedTimeSeconds: 60,
+    estimatedTimeSeconds: question.estimatedTimeSeconds || 60,
     hint: question.hint ?? "",
     explanation: "",
-    options: canUseOptions
+    options: usesAnswerOptions(questionType)
       ? question.options.length > 0
         ? question.options.map((option) => ({
             optionText: option.optionText,
-            isCorrect: option.isCorrect || isFillBlankType(questionType),
+            isCorrect: option.isCorrect,
+            optionImageUrl: option.optionImageUrl ?? "",
           }))
-        : isFillBlankType(questionType)
-          ? [{ optionText: "", isCorrect: true }]
-          : defaultOptionsForType(questionType)
+        : defaultOptionsForType(questionType)
+      : [],
+    acceptedAnswers: isFillBlankType(questionType)
+      ? acceptedFromApi.length > 0
+        ? acceptedFromApi.map((answer) => ({
+            answerText: answer.answerText,
+            isCaseSensitive: answer.isCaseSensitive,
+            allowPartialMatch: answer.allowPartialMatch,
+            minimumLength: answer.minimumLength,
+            maximumLength: answer.maximumLength,
+            allowAiReview: answer.allowAiReview,
+            allowTeacherReview: answer.allowTeacherReview,
+          }))
+        : question.options.length > 0
+          ? question.options.map((option) => ({
+              ...createEmptyAcceptedAnswer(),
+              answerText: option.optionText,
+            }))
+          : defaultAcceptedAnswersForType(questionType)
       : [],
   };
 }
@@ -571,10 +616,26 @@ export function mapQuizQuestionToInput(
 export function buildQuizQuestionPayload(input: AddQuizQuestionInput) {
   const questionType = normalizeQuestionType(input.questionType);
   const filledOptions = input.options
-    .filter((option) => option.optionText.trim())
+    .filter(
+      (option) =>
+        option.optionText.trim() || Boolean(option.optionImageUrl?.trim()),
+    )
     .map((option) => ({
       optionText: option.optionText.trim(),
-      isCorrect: isFillBlankType(questionType) ? true : option.isCorrect,
+      isCorrect: option.isCorrect,
+      optionImageUrl: option.optionImageUrl?.trim() || null,
+    }));
+
+  const filledAccepted = input.acceptedAnswers
+    .filter((answer) => answer.answerText.trim())
+    .map((answer) => ({
+      answerText: answer.answerText.trim(),
+      isCaseSensitive: answer.isCaseSensitive,
+      allowPartialMatch: answer.allowPartialMatch,
+      minimumLength: answer.minimumLength,
+      maximumLength: answer.maximumLength,
+      allowAiReview: answer.allowAiReview,
+      allowTeacherReview: answer.allowTeacherReview,
     }));
 
   return {
@@ -584,10 +645,7 @@ export function buildQuizQuestionPayload(input: AddQuizQuestionInput) {
     estimatedTimeSeconds: input.estimatedTimeSeconds,
     hint: input.hint.trim() || null,
     explanation: input.explanation.trim() || null,
-    // Choice types send options; Fill sends accepted answers as options (API converts).
-    options:
-      usesAnswerOptions(questionType) || isFillBlankType(questionType)
-        ? filledOptions
-        : [],
+    options: usesAnswerOptions(questionType) ? filledOptions : [],
+    acceptedAnswers: isFillBlankType(questionType) ? filledAccepted : [],
   };
 }

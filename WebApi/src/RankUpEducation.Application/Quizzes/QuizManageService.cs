@@ -447,7 +447,11 @@ public sealed class QuizManageService : IQuizManageService
             if (sourceQuestion.Options.Count > 0)
             {
                 var options = sourceQuestion.Options
-                    .Select(option => new QuestionOption(question.Id, option.OptionText, option.IsCorrect))
+                    .Select(option => new QuestionOption(
+                        question.Id,
+                        option.OptionText,
+                        option.IsCorrect,
+                        option.OptionImageUrl))
                     .ToArray();
                 await _questions.AddQuestionOptionsAsync(options, cancellationToken);
             }

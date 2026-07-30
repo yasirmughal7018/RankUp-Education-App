@@ -10,13 +10,27 @@ final questionRemoteDataSourceProvider =
 });
 
 /// Loads the question-bank list for the current session (auto-disposed).
-///
-/// Calls [QuestionRemoteDataSource.getQuestions] with no filters. Server-side
-/// scope already applies role + (when present) Campus/School/Public visibility;
-/// Mobile UI should eventually surface [QuestionSummaryModel.visibility],
-/// [QuestionSummaryModel.schoolId], and [QuestionSummaryModel.campusId] rather
-/// than treating approval as PortalAdmin-only / binary.
 final questionsListProvider =
     FutureProvider.autoDispose<List<QuestionSummaryModel>>((ref) {
   return ref.watch(questionRemoteDataSourceProvider).getQuestions();
+});
+
+/// Quiz-eligible bank questions only (Public + Active on the server).
+final eligibleBankQuestionsProvider =
+    FutureProvider.autoDispose<List<QuestionSummaryModel>>((ref) {
+  return ref.watch(questionRemoteDataSourceProvider).getQuestions(
+        eligibleForQuizOnly: true,
+      );
+});
+
+/// Pending question approval queue for Campus/School/Portal admins.
+final pendingQuestionApprovalsProvider =
+    FutureProvider.autoDispose<List<QuestionSummaryModel>>((ref) {
+  return ref.watch(questionRemoteDataSourceProvider).listPendingApproval();
+});
+
+/// Single bank question detail.
+final questionDetailProvider =
+    FutureProvider.autoDispose.family<QuestionSummaryModel, String>((ref, id) {
+  return ref.watch(questionRemoteDataSourceProvider).getQuestion(id);
 });

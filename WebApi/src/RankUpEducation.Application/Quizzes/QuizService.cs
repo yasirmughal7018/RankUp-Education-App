@@ -850,7 +850,7 @@ public sealed class QuizService : IQuizService
 
                 if (allowAiReview && !rejectLateAnswer)
                 {
-                    await EnsureFillAiReviewAsync(
+                    await EnsureAiReviewAsync(
                         attemptId,
                         attemptQuestion.QuestionId,
                         bankQuestionText: attemptQuestion.QuestionText,
@@ -884,6 +884,24 @@ public sealed class QuizService : IQuizService
                 awardedMarks,
                 isCorrect,
                 cancellationToken);
+
+            // Descriptive always gets an AI suggestion when answered (teacher still finalizes).
+            if (!rejectLateAnswer
+                && !freezeAnswersForIntegrity
+                && QuizQuestionHelper.IsDescriptiveType(typeName)
+                && submittedText.HasTrimmedText())
+            {
+                await EnsureAiReviewAsync(
+                    attemptId,
+                    attemptQuestion.QuestionId,
+                    bankQuestionText: attemptQuestion.QuestionText,
+                    submittedText: submittedText ?? string.Empty,
+                    isCorrect,
+                    awardedMarks,
+                    questionMarks,
+                    Array.Empty<string>(),
+                    cancellationToken);
+            }
         }
 
         attempt.MarkSubmitted(
@@ -1474,7 +1492,7 @@ public sealed class QuizService : IQuizService
         return creatorId > 0 ? creatorId : studentId;
     }
 
-    private async Task EnsureFillAiReviewAsync(
+    private async Task EnsureAiReviewAsync(
         long attemptId,
         long questionId,
         string bankQuestionText,

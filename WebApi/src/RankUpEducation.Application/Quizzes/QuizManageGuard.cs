@@ -2,6 +2,7 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Questions;
 using RankUpEducation.Common.Utilities;
+using RankUpEducation.Contracts.Questions;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Quizzes;
@@ -232,11 +233,16 @@ internal sealed class QuizManageGuard
         }
         else
         {
-            errors.AddRange(QuestionBankGuard.ValidateTypeAndOptions(
+            var optionRequests = request.Options
+                .Select(option => new QuestionOptionRequest(
+                    option.OptionText,
+                    option.IsCorrect,
+                    option.OptionImageUrl))
+                .ToArray();
+            errors.AddRange(QuestionBankGuard.ValidateTypeAndAnswersPublic(
                 request.QuestionType,
-                request.Options
-                    .Select(option => (option.OptionText, option.IsCorrect))
-                    .ToArray()));
+                optionRequests,
+                request.AcceptedAnswers));
         }
 
         if (errors.Count > 0)
@@ -253,7 +259,8 @@ internal sealed class QuizManageGuard
             request.EstimatedTimeSeconds,
             request.Hint,
             request.Explanation,
-            request.Options));
+            request.Options,
+            request.AcceptedAnswers));
 
     private async Task EnsureEditableLifecycleAsync(Quiz quiz, CancellationToken cancellationToken)
     {

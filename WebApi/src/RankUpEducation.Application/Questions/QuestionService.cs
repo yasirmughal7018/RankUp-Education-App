@@ -755,7 +755,11 @@ public sealed class QuestionService : IQuestionService
         }
 
         var entities = options
-            .Select(option => new QuestionOption(questionId, option.OptionText, option.IsCorrect))
+            .Select(option => new QuestionOption(
+                questionId,
+                option.OptionText,
+                option.IsCorrect,
+                option.OptionImageUrl))
             .ToArray();
         await _questions.AddQuestionOptionsAsync(entities, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

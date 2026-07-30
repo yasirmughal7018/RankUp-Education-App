@@ -31,6 +31,55 @@ bool canManageQuestions(UserRole role) {
       role == UserRole.parent;
 }
 
+/// SchoolAdmin / PortalAdmin may approve teacher quizzes (not CampusAdmin).
+bool canApproveQuizzes(UserRole role) {
+  return role == UserRole.schoolAdmin || role == UserRole.portalAdmin;
+}
+
+/// Roles that may endorse or publish bank questions.
+bool canApproveQuestions(UserRole role) {
+  return role == UserRole.portalAdmin ||
+      role == UserRole.schoolAdmin ||
+      role == UserRole.campusAdmin;
+}
+
+/// PortalAdmin alone publishes (Public + Active) and runs bank lifecycle.
+bool canPublishQuestions(UserRole role) {
+  return role == UserRole.portalAdmin;
+}
+
+/// Assign mode options for the signed-in role (mirrors web assignModesForRole).
+List<({String value, String label})> assignModesForRole(UserRole role) {
+  const studentModes = [
+    (value: 'one', label: 'One student'),
+    (value: 'selected', label: 'Selected students'),
+  ];
+
+  return switch (role) {
+    UserRole.parent => [
+        ...studentModes,
+        (value: 'group', label: 'Group'),
+        (value: 'alllinked', label: 'All linked children'),
+      ],
+    UserRole.schoolAdmin => [
+        ...studentModes,
+        (value: 'allinschool', label: 'All in school'),
+      ],
+    UserRole.portalAdmin => [
+        ...studentModes,
+        (value: 'allinschool', label: 'All in school'),
+        (value: 'multischool', label: 'Multiple schools'),
+        (value: 'public', label: 'Public (catalog)'),
+      ],
+    _ => [
+        ...studentModes,
+        (value: 'group', label: 'Group'),
+        (value: 'allingrade', label: 'All in grade'),
+        (value: 'allinsection', label: 'All in section'),
+      ],
+  };
+}
+
 extension UserRoleLabel on UserRole {
   String get label {
     return switch (this) {

@@ -27,6 +27,11 @@ import {
   isBrowserOffline,
   isOfflineQueueableError,
 } from "@/features/student/domain/offlineQuizSyncQueue";
+import {
+  clearOfflineAttemptSession,
+  persistOfflineAttemptSession,
+  readStoredAttemptShell,
+} from "@/features/student/domain/offlineAttemptSession";
 import { getStudentDeviceId } from "@/features/student/domain/studentQuizTypes";
 import {
   useSubmitQuizAttemptMutation,
@@ -42,7 +47,6 @@ type AnswerState = {
   submittedText: string;
 };
 
-const attemptStorageKey = (attemptId: number) => `rankup-quiz-attempt-${attemptId}`;
 const answersStorageKey = (attemptId: number) =>
   `rankup-quiz-answers-${attemptId}`;
 const startedAtStorageKey = (attemptId: number) =>
@@ -66,16 +70,7 @@ function normalizeNavigationMode(
 }
 
 function readStoredAttempt(attemptId: number): StartQuizAttempt | null {
-  const raw = sessionStorage.getItem(attemptStorageKey(attemptId));
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw) as StartQuizAttempt;
-  } catch {
-    return null;
-  }
+  return readStoredAttemptShell(attemptId);
 }
 
 function readStoredAnswers(attemptId: number): Record<number, AnswerState> {
@@ -450,10 +445,7 @@ export function StudentQuizAttemptPage() {
 
   useEffect(() => {
     if (attemptFromNavigation) {
-      sessionStorage.setItem(
-        attemptStorageKey(attemptFromNavigation.attemptId),
-        JSON.stringify(attemptFromNavigation),
-      );
+      persistOfflineAttemptSession(attemptFromNavigation);
       setAttempt(attemptFromNavigation);
       setFocusLossCount(attemptFromNavigation.focusLossCount ?? 0);
       setClipboardPasteCount(attemptFromNavigation.clipboardPasteCount ?? 0);
@@ -722,7 +714,7 @@ export function StudentQuizAttemptPage() {
     },
     onOfflineSubmitSynced: (result) => {
       clearOfflineQuizSyncQueue(numericAttemptId);
-      sessionStorage.removeItem(attemptStorageKey(numericAttemptId));
+      clearOfflineAttemptSession(numericQuizId, numericAttemptId);
       sessionStorage.removeItem(answersStorageKey(numericAttemptId));
       sessionStorage.removeItem(startedAtStorageKey(numericAttemptId));
       sessionStorage.removeItem(reviewStorageKey(numericAttemptId));
@@ -839,7 +831,7 @@ export function StudentQuizAttemptPage() {
         isAutoSubmit: isAuto,
       });
       clearOfflineQuizSyncQueue(numericAttemptId);
-      sessionStorage.removeItem(attemptStorageKey(numericAttemptId));
+      clearOfflineAttemptSession(numericQuizId, numericAttemptId);
       sessionStorage.removeItem(answersStorageKey(numericAttemptId));
       sessionStorage.removeItem(startedAtStorageKey(numericAttemptId));
       sessionStorage.removeItem(reviewStorageKey(numericAttemptId));
@@ -1109,7 +1101,7 @@ export function StudentQuizAttemptPage() {
               className={inputClassName}
               placeholder={
                 currentQuestion.questionType.toLowerCase().includes("file")
-                  ? "Paste a file link or path..."
+                  ? "Paste a file link or path (e.g. Drive/OneDrive URL)..."
                   : "Type your answer..."
               }
             />

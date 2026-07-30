@@ -105,6 +105,29 @@ class QuizQuestionModel extends QuizQuestion {
       timeSpentSeconds: _readInt(json, ['timeSpentSeconds']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'questionId': id,
+        'text': text,
+        'questionText': text,
+        'questionType': questionType,
+        'marks': marks,
+        'displayOrder': displayOrder,
+        if (hint != null) 'hint': hint,
+        'options': [
+          for (final option in options)
+            option is QuizOptionModel
+                ? option.toJson()
+                : QuizOptionModel(
+                    id: option.id,
+                    text: option.text,
+                    imageUrl: option.imageUrl,
+                  ).toJson(),
+        ],
+        'estimatedTimeSeconds': estimatedTimeSeconds,
+        'timeSpentSeconds': timeSpentSeconds,
+      };
 }
 
 /// JSON model for [QuizOption].
@@ -122,6 +145,14 @@ class QuizOptionModel extends QuizOption {
       imageUrl: _readNullableString(json, ['imageUrl']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'optionId': id,
+        'text': text,
+        'optionText': text,
+        if (imageUrl != null) 'imageUrl': imageUrl,
+      };
 }
 
 /// JSON model for [SavedQuizAnswer].
@@ -154,6 +185,14 @@ class SavedQuizAnswerModel extends SavedQuizAnswer {
       isMarkedForReview: _readBool(json, ['isMarkedForReview']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'questionId': questionId,
+        if (selectedOptionId != null) 'selectedOptionId': selectedOptionId,
+        'selectedOptionIds': selectedOptionIds,
+        if (submittedText != null) 'submittedText': submittedText,
+        'isMarkedForReview': isMarkedForReview,
+      };
 }
 
 /// JSON model for [QuizAttemptSession].
@@ -203,6 +242,91 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
       focusLossCount: _readInt(json, ['focusLossCount']),
       clipboardPasteCount: _readInt(json, ['clipboardPasteCount']),
       enablePerQuestionTimer: _readBool(json, ['enablePerQuestionTimer']),
+    );
+  }
+
+  /// Persist for offline resume after an online start.
+  Map<String, dynamic> toJson() => {
+        'attemptId': attemptId,
+        'quizId': quizId,
+        'attemptNumber': attemptNumber,
+        'startedAt': startedAt.toUtc().toIso8601String(),
+        'timeLimitMinutes': timeLimitMinutes,
+        'resumed': resumed,
+        'questions': [
+          for (final question in questions)
+            question is QuizQuestionModel
+                ? question.toJson()
+                : QuizQuestionModel(
+                    id: question.id,
+                    text: question.text,
+                    questionType: question.questionType,
+                    marks: question.marks,
+                    displayOrder: question.displayOrder,
+                    hint: question.hint,
+                    options: question.options,
+                    estimatedTimeSeconds: question.estimatedTimeSeconds,
+                    timeSpentSeconds: question.timeSpentSeconds,
+                  ).toJson(),
+        ],
+        'savedAnswers': [
+          for (final answer in savedAnswers)
+            answer is SavedQuizAnswerModel
+                ? answer.toJson()
+                : SavedQuizAnswerModel(
+                    questionId: answer.questionId,
+                    selectedOptionId: answer.selectedOptionId,
+                    selectedOptionIds: answer.selectedOptionIds,
+                    submittedText: answer.submittedText,
+                    isMarkedForReview: answer.isMarkedForReview,
+                  ).toJson(),
+        ],
+        'navigationMode': navigationMode,
+        'enforceDeviceLock': enforceDeviceLock,
+        'focusLossCount': focusLossCount,
+        'clipboardPasteCount': clipboardPasteCount,
+        'enablePerQuestionTimer': enablePerQuestionTimer,
+      };
+
+  static QuizAttemptSessionModel fromSession(QuizAttemptSession session) {
+    if (session is QuizAttemptSessionModel) {
+      return session;
+    }
+    return QuizAttemptSessionModel(
+      attemptId: session.attemptId,
+      quizId: session.quizId,
+      attemptNumber: session.attemptNumber,
+      startedAt: session.startedAt,
+      questions: session.questions,
+      timeLimitMinutes: session.timeLimitMinutes,
+      resumed: session.resumed,
+      savedAnswers: session.savedAnswers,
+      navigationMode: session.navigationMode,
+      enforceDeviceLock: session.enforceDeviceLock,
+      focusLossCount: session.focusLossCount,
+      clipboardPasteCount: session.clipboardPasteCount,
+      enablePerQuestionTimer: session.enablePerQuestionTimer,
+    );
+  }
+
+  QuizAttemptSessionModel copyWithResumed({
+    bool resumed = true,
+    List<SavedQuizAnswer>? savedAnswers,
+  }) {
+    return QuizAttemptSessionModel(
+      attemptId: attemptId,
+      quizId: quizId,
+      attemptNumber: attemptNumber,
+      startedAt: startedAt,
+      questions: questions,
+      timeLimitMinutes: timeLimitMinutes,
+      resumed: resumed,
+      savedAnswers: savedAnswers ?? this.savedAnswers,
+      navigationMode: navigationMode,
+      enforceDeviceLock: enforceDeviceLock,
+      focusLossCount: focusLossCount,
+      clipboardPasteCount: clipboardPasteCount,
+      enablePerQuestionTimer: enablePerQuestionTimer,
     );
   }
 }

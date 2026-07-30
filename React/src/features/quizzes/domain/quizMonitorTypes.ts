@@ -59,6 +59,7 @@ export interface AttemptReviewQuestion {
   submittedText: string | null;
   parentFeedback: string | null;
   requiresReview: boolean;
+  aiFeedback?: string | null;
 }
 
 export interface AttemptReview {

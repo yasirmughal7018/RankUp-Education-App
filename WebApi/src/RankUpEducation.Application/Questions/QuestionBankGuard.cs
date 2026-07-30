@@ -6,7 +6,8 @@ namespace RankUpEducation.Application.Questions;
 
 /// <summary>
 /// Validates question-bank payloads by type.
-/// NOW types: Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive.
+/// Supported: Single Choice, Multiple Choice, True/False, Fill in the Blanks,
+/// Descriptive, File Upload (link/path MVP), Matching, Ordering, Media.
 /// Fill answers use <see cref="QuestionAcceptedAnswerRequest"/>; choice types use options.
 /// </summary>
 internal static class QuestionBankGuard
@@ -92,9 +93,25 @@ internal static class QuestionBankGuard
         IReadOnlyList<(string OptionText, bool IsCorrect)> options)
         => ValidateTypeAndAnswers(questionType, options, Array.Empty<string>());
 
+    /// <summary>Quiz-inline options may include image URLs (Media).</summary>
+    public static IReadOnlyList<string> ValidateTypeAndOptions(
+        string questionType,
+        IReadOnlyList<QuestionOptionRequest> options)
+        => ValidateTypeAndAnswers(questionType, options, Array.Empty<QuestionAcceptedAnswerRequest>());
+
+    /// <summary>Public wrapper for quiz-inline Fill validation with accepted-answer flags.</summary>
+    public static IReadOnlyList<string> ValidateTypeAndAnswersPublic(
+        string questionType,
+        IReadOnlyList<QuestionOptionRequest> options,
+        IReadOnlyList<QuestionAcceptedAnswerRequest>? acceptedAnswers)
+        => ValidateTypeAndAnswers(questionType, options, acceptedAnswers);
+
     /// <summary>
     /// Type-specific answer rules: Fill needs ≥1 accepted answer (options fallback for legacy);
-    /// True/False exactly 2 options / 1 correct; Single ≥2 / 1 correct; Multi ≥2 / ≥1 correct.
+    /// True/False exactly 2 options / 1 correct; Single ≥2 / 1 correct; Multi ≥2 / ≥1 correct;
+    /// Descriptive / File Upload need no options (File is link/path MVP via attempt SubmittedText);
+    /// Matching even count ≥4 (lefts then rights); Ordering ≥2 items;
+    /// Media ≥2 options each with an image URL / 1 correct.
     /// </summary>
     private static IReadOnlyList<string> ValidateTypeAndAnswers(
         string questionType,
@@ -111,13 +128,13 @@ internal static class QuestionBankGuard
             return errors;
         }
 
-        var isSingle = QuizQuestionHelper.IsSingleChoiceType(type);
         var isMulti = QuizQuestionHelper.IsMultiSelectType(type);
         var isTrueFalse = QuizQuestionHelper.IsTrueFalseType(type);
         var isFill = QuizQuestionHelper.IsFillBlankType(type);
         var isMatching = QuizQuestionHelper.IsMatchingType(type);
         var isOrdering = QuizQuestionHelper.IsOrderingType(type);
         var isMedia = QuizQuestionHelper.IsMediaType(type);
+        var isSingle = QuizQuestionHelper.IsSingleChoiceType(type) && !isMedia;
 
         if (!isSingle && !isMulti && !isTrueFalse && !isFill && !isMatching && !isOrdering && !isMedia)
         {
@@ -144,6 +161,32 @@ internal static class QuestionBankGuard
             if (filledAnswers.Length < 1)
             {
                 errors.Add("Fill in the Blanks requires at least one accepted answer.");
+            }
+
+            return errors;
+        }
+
+        if (isMedia)
+        {
+            var mediaOptions = options
+                .Where(option =>
+                    !string.IsNullOrWhiteSpace(option.OptionText)
+                    || !string.IsNullOrWhiteSpace(option.OptionImageUrl))
+                .ToArray();
+
+            if (mediaOptions.Length < 2)
+            {
+                errors.Add("Media needs at least two options.");
+            }
+
+            if (mediaOptions.Any(option => string.IsNullOrWhiteSpace(option.OptionImageUrl)))
+            {
+                errors.Add("Each Media option needs an image URL.");
+            }
+
+            if (mediaOptions.Count(option => option.IsCorrect) != 1)
+            {
+                errors.Add("Media must have exactly one correct option.");
             }
 
             return errors;
@@ -191,16 +234,16 @@ internal static class QuestionBankGuard
             return errors;
         }
 
-        if (isSingle || isMedia)
+        if (isSingle)
         {
             if (filled.Length < 2)
             {
-                errors.Add($"{(isMedia ? "Media" : "Single Choice")} needs at least two options.");
+                errors.Add("Single Choice needs at least two options.");
             }
 
             if (correctCount != 1)
             {
-                errors.Add($"{(isMedia ? "Media" : "Single Choice")} must have exactly one correct option.");
+                errors.Add("Single Choice must have exactly one correct option.");
             }
 
             return errors;

@@ -77,10 +77,15 @@ class QuestionSummaryModel {
   final int? campusId;
 
   /// Audience after approval: `None` | `Campus` | `School` | `Public`.
-  ///
-  /// Set by WebApi from who approved (3-tier). Mobile list UI does not yet
-  /// filter or label by this; consumers should respect it when present.
   final String? visibility;
+
+  /// True when the question can be attached to quizzes (Public + Active).
+  bool get isQuizReady {
+    final approved = approvedBy != null && approvedBy!.trim().isNotEmpty;
+    final visibilityPublic =
+        (visibility ?? '').trim().toLowerCase() == 'public';
+    return isActive && approved && visibilityPublic;
+  }
 }
 
 String _readString(

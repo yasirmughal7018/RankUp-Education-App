@@ -29,7 +29,8 @@ internal static class QuizReviewMapping
                 question.SubmittedText,
                 question.ParentFeedback,
                 question.RequiresReview,
-                question.SelectedOptionIds)).ToArray(),
+                question.SelectedOptionIds,
+                question.AiFeedback)).ToArray(),
             detail.FocusLossCount,
             detail.ClipboardPasteCount);
 }

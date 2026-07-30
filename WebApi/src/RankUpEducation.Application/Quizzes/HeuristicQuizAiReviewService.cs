@@ -30,11 +30,33 @@ public sealed class HeuristicQuizAiReviewService : IQuizAiReviewService
 
         if (accepted.Length == 0)
         {
-            // Fall back to auto-score when no accepted answers are available.
+            // Descriptive / free-text: length heuristic when no accepted answers exist.
+            var wordCount = submitted
+                .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Length;
+            if (wordCount >= 40)
+            {
+                var high = (short)Math.Max(1, (request.MaxMarks * 3) / 4);
+                return Task.FromResult(new QuizAiReviewSuggestion(
+                    false,
+                    high,
+                    $"AI heuristic: substantial free-text answer (~{wordCount} words) — suggested {high}/{request.MaxMarks}. Teacher should confirm."));
+            }
+
+            if (wordCount >= 12)
+            {
+                var mid = (short)Math.Max(1, request.MaxMarks / 2);
+                return Task.FromResult(new QuizAiReviewSuggestion(
+                    false,
+                    mid,
+                    $"AI heuristic: moderate free-text answer (~{wordCount} words) — suggested {mid}/{request.MaxMarks}. Teacher should confirm."));
+            }
+
+            var low = (short)Math.Max(0, request.MaxMarks / 4);
             return Task.FromResult(new QuizAiReviewSuggestion(
-                request.AutoScoreIsCorrect,
-                request.AutoAwardedMarks,
-                $"AI heuristic: no accepted answers configured; kept auto-score {request.AutoAwardedMarks}/{request.MaxMarks}."));
+                false,
+                low,
+                $"AI heuristic: short free-text answer (~{wordCount} words) — suggested {low}/{request.MaxMarks}. Teacher should confirm."));
         }
 
         if (accepted.Any(answer => string.Equals(answer, submitted, StringComparison.Ordinal)))

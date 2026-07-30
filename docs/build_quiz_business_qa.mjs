@@ -146,7 +146,7 @@ const questionRules = [
   ["Attach from bank", "Requires Active + Approved status + ApprovedBy + Visibility=Public + class/subject match + not already linked + marks > 0."],
   ["Edit question on quiz", "Caller must own the quiz AND be the question CreatedBy. Recalculates totals."],
   ["Remove from quiz", "Deletes QuizQuestion link; if caller created the question, deactivates it. Recalculates totals."],
-  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103), Descriptive (104), File Upload (105), Matching (106), Ordering (107), Media (108)."],
+  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103), Descriptive (104), File Upload (105), Matching (106), Ordering (107), Media (108). File Upload MVP stores a pasted link/path in SubmittedText (no binary blob upload yet)."],
   ["Shuffle", "Quiz-level ShuffleQuestions / ShuffleOptions. At attempt start, options shuffle when quiz.ShuffleOptions AND link.ShuffleOptions are both true (per-question can opt out)."],
 ];
 
@@ -160,7 +160,7 @@ const importantBusinessRules = [
   ["Random/shuffled quizzes store exact questions shown", "Yes", "QuizAttemptQuestion freezes QuestionId, DisplayOrder, Marks, QuestionText; options snapshotted on QuizAttemptQuestionOption."],
   ["Student answers stored per attempt", "Yes", "QuizAttemptAnswer rows hang off QuizAttemptQuestion."],
   ["Multiple-choice selected answers stored separately", "Yes", "Each selected option is a QuizAttemptAnswer with QuestionOptionId; free text uses SubmittedText."],
-  ["Descriptive / file answers may need teacher or AI review", "Covered", "Descriptive + File Upload always require teacher/parent review when answered. Fill with AllowTeacherReview / AllowAiReview. AI suggestions apply to Fill when AllowAiReview."],
+  ["Descriptive / file answers may need teacher or AI review", "Covered", "Descriptive always gets an AI suggestion on submit (shown on review UI) and requires teacher/parent finalize when answered. File Upload (link/path MVP) requires teacher review. Fill with AllowTeacherReview / AllowAiReview. Binary file storage/upload is not built yet."],
 ];
 
 const quizQuestionFields = [
@@ -257,9 +257,10 @@ const studentAttemptFlow = [
   ["11", "System auto-submits when time expires", "Covered", "Client auto-submit with IsAutoSubmit=true → AutoSubmitted (83). Server rejects over-budget submits (grace for auto-submit)."],
   ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83) → Reviewed (85) after finalize. Expired (84) via overdue job."],
   ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse first option; Multiple exact set; Fill accepted-answer rules."],
-  ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive authoring enabled; Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic). Teacher finalizes when required."],
+  ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive: AI suggestion on submit + teacher finalize when answered. File Upload (link/path) requires teacher review. Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic)."],
   ["15", "Student sees the permitted review screen", "Covered", "Quiz.ReviewDisplayMode (Full / CorrectAnswers / ScoreOnly / Withheld) + shared QuizReviewDisplay.Resolve on submit and get-result."],
   ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true. AI suggests; teacher confirms when required."],
+  ["17", "Student views own quiz history", "Covered", "/student/history (web) and Mobile /reports or Quizzes history; GET /reports/students/{id}/quiz-history scoped to own profileId (History self — not full analytics)."],
 ];
 
 const timeManagementModes = [
@@ -271,9 +272,9 @@ const timeManagementModes = [
 
 const timeManagementAppBehaviors = [
   ["Show remaining time", "Covered", "Student attempt page countdown from TimeLimitMinutes × 60 minus elapsed since StartedDate."],
-  ["Warn when time is low", "Covered", "At ≤60s: urgent countdown styling, modal dialog, and short beep (web); mobile shows warning dialog + urgent timer chip."],
+  ["Warn when time is low", "Covered", "At ≤5 min: dismissible banner. At ≤60s: urgent (red) countdown chip, modal dialog, and short alert (web beep; mobile system sound + haptic). Per-question timer turns amber at ≤10s. Autosave: 1.2s debounce + 15s interval + Save now (web + mobile)."],
   ["Auto-submit on expiry", "Covered", "Client submits with IsAutoSubmit=true → AutoSubmitted (83). Server enforces TimeLimitMinutes with grace for auto-submit path."],
-  ["Save answers before auto-submission", "Covered", "Autosave flush runs before submit/auto-submit on web."],
+  ["Save answers before auto-submission", "Covered", "Autosave flush runs before submit/auto-submit (web + mobile)."],
   ["Prevent reopening after expiry unless allowed", "Covered", "Assignment window expiry blocks/expires attempts. Allow Retry grants ExtraAttempts after review; does not reopen EndDateTime by itself."],
 ];
 
@@ -291,7 +292,7 @@ const attemptRules = [
   "Multiple-choice selections are stored as separate answer rows (QuestionOptionId), not only as free text.",
   "Submit scores then MarkSubmitted (Submitted or AutoSubmitted). Cannot resubmit.",
   "Subjective review finalizes to Reviewed; do not use Under Teacher/AI Review as attempt StatusId values.",
-  "Offline: ClientSyncId + IsOfflineAttempt; POST .../attempts/{id}/sync replays queued draft/submit after reconnect.",
+  "Offline: ClientSyncId + IsOfflineAttempt; POST .../attempts/{id}/sync replays queued draft/submit after reconnect. Start/resume: clients persist the InProgress attempt shell after an online start so students can reopen offline; new starts still require the network. On reconnect, clients re-hit POST .../attempts (resume) then flush the draft/submit queue.",
   "Anti-cheat: Device lock on all quiz types; all types block further drafts after FocusLoss≥5 or Paste≥3 (submit still allowed).",
 ];
 
@@ -357,11 +358,11 @@ const scoring = [
   ["Single Choice / TrueFalse", "First selected option; full marks if IsCorrect, else 0."],
   ["Multiple Choice", "Exact set match of correct option IDs → full marks; else 0."],
   ["Fill in the Blanks", "Match any accepted answer (case / partial / min-max length) OR correct option text (case-insensitive). If AllowTeacherReview → subjective for review masking. If AllowAiReview → OpenAI or heuristic suggestion."],
-  ["Descriptive / free text", "Marks 0 on auto-score; treated as subjective if present."],
-  ["File Upload", "Marks 0 on auto-score; RequiresReview like Descriptive when a link/text answer is present."],
-  ["Matching", "selectedOptionIds = right option ids in left order; exact sequence match awards full marks."],
+  ["Descriptive / free text", "Marks 0 on auto-score; always subjective when answered; AI suggestion written to QuizReview.AiReviewComment on submit; teacher finalize required."],
+  ["File Upload", "MVP: student pastes a file URL/path into SubmittedText (no binary blob upload/storage). Marks 0 on auto-score; RequiresReview like Descriptive when answered."],
+  ["Matching", "selectedOptionIds = right option ids in left order; exact sequence match awards full marks. Authoring UI edits pairs; storage remains lefts-then-rights (even count ≥4). Option shuffle disabled."],
   ["Ordering", "selectedOptionIds = option ids in correct order; exact sequence match awards full marks."],
-  ["Media", "Scored like Single Choice (one correct option)."],
+  ["Media", "Scored like Single Choice. Each option requires OptionImageUrl (caption text optional); image snapped onto QuizAttemptQuestionOption."],
 ];
 
 const reviewRules = [
@@ -371,7 +372,7 @@ const reviewRules = [
   "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true.",
   "Score masking uses the same QuizReviewDisplay.Resolve on submit and get-result (ReviewDisplayMode + IsReviewRequired + IsReviewDone + HasSubjectiveAnswersRequiringReview).",
   "Modes: Full, CorrectAnswers, ScoreOnly, Withheld — owner-configured on the quiz (type defaults via ApplyCreateDefaults; bools never OR’d with defaults).",
-  "AI review: OpenAI when configured, else heuristic suggestion; teacher still finalizes when AllowTeacherReview.",
+  "AI review: Descriptive always; Fill when AllowAiReview. OpenAI when configured, else heuristic. AI comment shown on teacher review screen; teacher still finalizes when required.",
 ];
 
 const apiMap = [
@@ -541,10 +542,10 @@ const checklist = [
   "Editable only Not Assigned/Published, not Archived, and no started assignment (Edit settings + /edit route gated).",
   "Bank attach requires Public + Active + Approved + ApprovedBy + class/subject match.",
   "Inline questions are Approved+Campus+Active and usable on that quiz only for bank eligibility rules.",
-  "Descriptive (104), File Upload (105), Matching (106), Ordering (107), and Media (108) authoring enabled.",
+  "Descriptive (104), File Upload (105, link/path MVP), Matching (106), Ordering (107), and Media (108) authoring enabled on web and mobile (bank + quiz inline).",
   "Student attempts require assignment (or Public window), active quiz, window, DeviceId, attempt quota, and instructions ack when set.",
   "InProgress resumes; TimeLimitMinutes enforced client + server; AutoSubmitted on IsAutoSubmit.",
-  "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time modal/audio at ≤60s.",
+  "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time banner (≤5m) + modal/audio at ≤60s (web + mobile).",
   "On attempt start, QuizAttemptQuestion freezes text/marks/options/order; answers store per attempt.",
   "Scoring: single/TF one correct; multi exact set; Fill accepted-answer rules.",
   "ReviewDisplayMode + shared mask on submit and get-result until finalize when required.",
@@ -562,11 +563,16 @@ const checklist = [
   "Offline sync via ClientSyncId + POST .../sync (web + mobile).",
   "RejectionReason is persisted and returned on manage detail + approval queue.",
   "Integrity draft lockout freezes further answer mutations on submit (score last saved draft).",
-  "Reports available to Teacher (own), SchoolAdmin (school), PortalAdmin (all).",
+  "Reports available to Teacher (own), SchoolAdmin (school), PortalAdmin (all). Students get History self via /student/history (web) and /reports or Quizzes history (mobile) — not full summary/rankings/performance.",
 ];
 
 const knownGaps = [
-  "Matching MVP uses even option counts (lefts first, then rights); option shuffle is disabled for Matching/Ordering.",
+  "Matching MVP: pair-row authoring UI (web); mobile uses labeled L/R option slots. Storage is even option counts (lefts first, then rights). Option shuffle is disabled for Matching/Ordering.",
+  "File Upload (105) is link/path MVP via SubmittedText — binary blob upload, storage, and review download are not built yet.",
+  "Practice post-submit teaching UX remains soft (type defaults only; no Practice-specific post-submit flow).",
+  "Surprise PortalAdmin/AI-only authorship is future policy — teachers may still create Surprise quizzes today.",
+  "Random question subset selection is not built (ShuffleQuestions/options exist; per-student N-of-M pools do not).",
+  "AI review uses OpenAI when configured; otherwise heuristic fallback (not a required OpenAI path).",
 ];
 
 function escapeHtml(value) {
@@ -683,7 +689,7 @@ const html = `<!doctype html>
     "Single Choice: ≥2 options; exactly 1 correct.",
     "Multiple Choice: ≥2 options; ≥1 correct.",
     "True/False: exactly True and False; exactly 1 correct.",
-    "Fill in the Blanks: ≥1 accepted answer (inline option texts become accepted answers with case-insensitive, non-partial defaults).",
+    "Fill in the Blanks: ≥1 accepted answer with optional AllowAiReview / AllowTeacherReview (inline authoring uses the same accepted-answer editor as the bank; legacy option-text payloads still convert with flags off).",
     "Marks must be > 0; question text required.",
     "Totals recalculated after add / attach / update / remove / duplicate.",
   ])}
@@ -776,8 +782,13 @@ const html = `<!doctype html>
     "/quizzes/reviews/pending and review workspace — mark + finalize.",
     "/admin/quiz-approvals — SchoolAdmin/PortalAdmin only (CampusAdmin blocked in UI + API).",
     "/student/quizzes* — detail, attempt (timer auto-submit), result.",
+    "/student/history — student self quiz history (Reports API; History self only — not full analytics).",
     "/parent/quiz-dashboard, children history/result — parent flows.",
     "/reports — Teacher / SchoolAdmin / PortalAdmin analytics.",
+    "Mobile /quizzes (Teacher/Parent) — create, manage (inline types including Multi/File/Matching/Ordering/Media + Public+Active bank attach), publish, assign (role modes: section/grade/group/school/multi/public), duplicate/archive/cancel/allow-retry, pending reviews, mark + finalize.",
+    "Mobile /quizzes/approvals — SchoolAdmin/PortalAdmin pending quiz approvals.",
+    "Mobile /quizzes/monitoring/:quizId — assignment progress board.",
+    "Mobile /reports (Student) + Quizzes history — GET /reports/students/{id}/quiz-history (History self).",
   ])}
 
   <h2>16. QA scenarios</h2>
@@ -926,7 +937,7 @@ const docChildren = [
     "Single Choice: ≥2 options; exactly 1 correct.",
     "Multiple Choice: ≥2 options; ≥1 correct.",
     "True/False: exactly 2 options; exactly 1 correct.",
-    "Fill: ≥1 accepted answer; Descriptive: free text (no options).",
+    "Fill: ≥1 accepted answer (AllowAiReview / AllowTeacherReview configurable); Descriptive: free text (no options).",
     "Totals recalculated after mutations.",
   ].map(docBullet),
 
@@ -1025,8 +1036,12 @@ const docChildren = [
     "/quizzes manage routes for Teacher/Parent.",
     "/admin/quiz-approvals for SchoolAdmin/PortalAdmin.",
     "/student/quizzes* for attempts and results.",
+    "/student/history for student self quiz history (History self).",
     "/parent/quiz-dashboard and child history/result.",
-    "/reports for analytics.",
+    "/reports for Teacher/SchoolAdmin/PortalAdmin analytics.",
+    "Mobile /quizzes (Teacher/Parent): create, manage (full inline types + Public+Active bank attach), publish, role-scoped assign modes, duplicate/archive/cancel/allow-retry, pending reviews, mark + finalize.",
+    "Mobile /quizzes/approvals and /quizzes/monitoring/:quizId for admin approval and monitoring.",
+    "Mobile /reports (Student) + Quizzes history: student self quiz history.",
   ].map(docBullet),
 
   docHeading("16. QA scenarios"),

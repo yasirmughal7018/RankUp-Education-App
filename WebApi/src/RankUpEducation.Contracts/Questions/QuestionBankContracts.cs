@@ -3,20 +3,15 @@ namespace RankUpEducation.Contracts.Questions;
 
 
 public sealed record QuestionOptionRequest(
-
     string OptionText,
-
-    bool IsCorrect);
-
-
+    bool IsCorrect,
+    string? OptionImageUrl = null);
 
 public sealed record QuestionOptionResponse(
-
     long OptionId,
-
     string OptionText,
-
-    bool IsCorrect);
+    bool IsCorrect,
+    string? OptionImageUrl = null);
 
 
 

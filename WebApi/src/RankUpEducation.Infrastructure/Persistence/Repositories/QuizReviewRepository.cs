@@ -254,7 +254,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             .ToArray();
 
         var reviews = reviewIds.Length == 0
-            ? new Dictionary<long, (string Feedback, bool HasHumanFeedback)>()
+            ? new Dictionary<long, (string Feedback, string? AiFeedback, bool HasHumanFeedback)>()
             : await _dbContext.QuizReviews.AsNoTracking()
                 .Where(review => reviewIds.Contains(review.Id))
                 .ToDictionaryAsync(
@@ -268,7 +268,10 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                             || !string.IsNullOrWhiteSpace(review.ParentReviewComment)
                             || review.TeacherReviewStatus is not null
                             || review.ParentReviewStatus is not null;
-                        return (Feedback: feedback, HasHumanFeedback: hasHuman);
+                        return (
+                            Feedback: feedback,
+                            AiFeedback: review.AiReviewComment,
+                            HasHumanFeedback: hasHuman);
                     },
                     cancellationToken);
 
@@ -314,11 +317,13 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                         && !string.IsNullOrWhiteSpace(primaryAnswer?.SubmittedText));
 
                 string? feedback = null;
+                string? aiFeedback = null;
                 var hasHumanReviewFeedback = false;
                 if (item.QuizReviewId is not null
                     && reviews.TryGetValue(item.QuizReviewId.Value, out var reviewInfo))
                 {
                     feedback = reviewInfo.Feedback.AsTrimmedOrNull();
+                    aiFeedback = reviewInfo.AiFeedback.AsTrimmedOrNull();
                     hasHumanReviewFeedback = reviewInfo.HasHumanFeedback;
                 }
 
@@ -340,7 +345,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     requiresReview,
                     item.QuizReviewId,
                     selectedOptionIds,
-                    hasHumanReviewFeedback);
+                    hasHumanReviewFeedback,
+                    aiFeedback);
             }).ToArray(),
             attempt.FocusLossCount,
             attempt.ClipboardPasteCount);

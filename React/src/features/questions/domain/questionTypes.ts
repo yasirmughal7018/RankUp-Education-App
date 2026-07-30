@@ -10,6 +10,7 @@ import type { UserRole } from "@/core/api/types";
 export interface QuestionOptionInput {
   optionText: string;
   isCorrect: boolean;
+  optionImageUrl?: string | null;
 }
 
 export interface QuestionOption extends QuestionOptionInput {
@@ -139,7 +140,7 @@ export interface QuestionScopeValues {
   difficultyLevel: number;
 }
 
-/** Types available on the create form today. */
+/** Types available on the create form today (100–108). File Upload is link/path MVP. */
 export const QUESTION_TYPES_NOW = [
   "Single Choice",
   "Multiple Choice",
@@ -198,12 +199,14 @@ export const QUESTION_TYPE_META: Record<
   "File Upload": {
     label: "File Upload",
     shortLabel: "File",
-    description: "Student submits a file link or path; teacher reviews.",
+    description:
+      "Student pastes a file link or path (MVP — no binary upload yet); teacher reviews.",
   },
   Matching: {
     label: "Matching",
     shortLabel: "Match",
-    description: "Left items first, then right items in matching order.",
+    description:
+      "Author pairs (left ↔ right). Stored as lefts first, then rights; students match each left to a right.",
   },
   Ordering: {
     label: "Ordering",
@@ -594,6 +597,57 @@ export function defaultAcceptedAnswersForType(
   return isFillBlankType(type) ? [createEmptyAcceptedAnswer()] : [];
 }
 
+/** Matching storage layout: [lefts…, rights…] with equal counts; pair i = lefts[i] ↔ rights[i]. */
+export function matchingPairCount(options: QuestionOptionInput[]): number {
+  return Math.floor(options.length / 2);
+}
+
+/** Append one left + one right, preserving lefts-then-rights order. */
+export function addMatchingPair(
+  options: QuestionOptionInput[],
+): QuestionOptionInput[] {
+  const half = matchingPairCount(options);
+  const lefts = options.slice(0, half);
+  const rights = options.slice(half, half * 2);
+  const blank: QuestionOptionInput = { optionText: "", isCorrect: false };
+  return [...lefts, blank, ...rights, { ...blank }];
+}
+
+/** Remove pair at index while keeping even lefts-then-rights layout (min 2 pairs). */
+export function removeMatchingPair(
+  options: QuestionOptionInput[],
+  pairIndex: number,
+): QuestionOptionInput[] {
+  const half = matchingPairCount(options);
+  if (half <= 2 || pairIndex < 0 || pairIndex >= half) {
+    return options;
+  }
+
+  const lefts = options.slice(0, half).filter((_, index) => index !== pairIndex);
+  const rights = options
+    .slice(half, half * 2)
+    .filter((_, index) => index !== pairIndex);
+  return [...lefts, ...rights];
+}
+
+/** Update left or right text for one matching pair. */
+export function updateMatchingPairSide(
+  options: QuestionOptionInput[],
+  pairIndex: number,
+  side: "left" | "right",
+  optionText: string,
+): QuestionOptionInput[] {
+  const half = matchingPairCount(options);
+  if (pairIndex < 0 || pairIndex >= half) {
+    return options;
+  }
+
+  const index = side === "left" ? pairIndex : half + pairIndex;
+  return options.map((option, currentIndex) =>
+    currentIndex === index ? { ...option, optionText } : option,
+  );
+}
+
 /** Default option rows (or none) for the given question type. */
 export function defaultOptionsForType(type: string): QuestionOptionInput[] {
   const normalized = normalizeQuestionType(type);
@@ -629,6 +683,12 @@ export function defaultOptionsForType(type: string): QuestionOptionInput[] {
         { optionText: "", isCorrect: false },
       ];
     case "Media":
+      return [
+        { optionText: "", isCorrect: true, optionImageUrl: "" },
+        { optionText: "", isCorrect: false, optionImageUrl: "" },
+        { optionText: "", isCorrect: false, optionImageUrl: "" },
+        { optionText: "", isCorrect: false, optionImageUrl: "" },
+      ];
     case "Single Choice":
     default:
       return [
@@ -712,6 +772,7 @@ export function mapDetailToForm(detail: QuestionDetail): QuestionFormValues {
         ? detail.options.map((option) => ({
             optionText: option.optionText,
             isCorrect: option.isCorrect,
+            optionImageUrl: option.optionImageUrl ?? "",
           }))
         : defaultOptionsForType(questionType),
     acceptedAnswers: isFillBlankType(questionType)
@@ -754,10 +815,15 @@ export function buildQuestionPayload(values: QuestionFormValues) {
     explanation: values.explanation.trim() || null,
     options: withOptions
       ? values.options
-          .filter((option) => option.optionText.trim())
+          .filter(
+            (option) =>
+              option.optionText.trim() ||
+              Boolean(option.optionImageUrl?.trim()),
+          )
           .map((option) => ({
             optionText: option.optionText.trim(),
             isCorrect: option.isCorrect,
+            optionImageUrl: option.optionImageUrl?.trim() || null,
           }))
       : [],
     acceptedAnswers: withAccepted
@@ -804,14 +870,29 @@ export function validateQuestionForm(values: QuestionFormValues): string | null 
     return null;
   }
 
-  const options = values.options.filter((option) => option.optionText.trim());
+  const options = values.options.filter(
+    (option) =>
+      option.optionText.trim() || Boolean(option.optionImageUrl?.trim()),
+  );
   const acceptedAnswers = values.acceptedAnswers.filter((answer) =>
     answer.answerText.trim(),
   );
 
-  if (questionType === "Single Choice" || questionType === "Media") {
+  if (questionType === "Single Choice") {
     if (options.length < 2) {
-      return `${questionType} needs at least two options.`;
+      return "Single Choice needs at least two options.";
+    }
+    if (options.filter((option) => option.isCorrect).length !== 1) {
+      return "Mark exactly one option as correct.";
+    }
+  }
+
+  if (questionType === "Media") {
+    if (options.length < 2) {
+      return "Media needs at least two options.";
+    }
+    if (options.some((option) => !option.optionImageUrl?.trim())) {
+      return "Each Media option needs an image URL.";
     }
     if (options.filter((option) => option.isCorrect).length !== 1) {
       return "Mark exactly one option as correct.";

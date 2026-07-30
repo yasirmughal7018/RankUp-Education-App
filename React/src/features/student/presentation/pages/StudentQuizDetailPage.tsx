@@ -5,6 +5,11 @@ import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
+import {
+  isBrowserOffline,
+  loadOfflineAttemptSession,
+  persistOfflineAttemptSession,
+} from "@/features/student/domain/offlineAttemptSession";
 import { hasInProgressAttempt } from "@/features/student/domain/studentQuizTypes";
 import {
   useStartQuizAttemptMutation,
@@ -27,14 +32,69 @@ export function StudentQuizDetailPage() {
   const navigate = useNavigate();
   const numericQuizId = Number(quizId);
   const [instructionsAcknowledged, setInstructionsAcknowledged] = useState(false);
+  const [offlineStartError, setOfflineStartError] = useState<string | null>(null);
 
   const { data: quiz, isLoading, error } = useStudentQuizDetailQuery(numericQuizId);
   const startAttempt = useStartQuizAttemptMutation(numericQuizId);
+
+  function hydrateLocalAnswers(attempt: {
+    attemptId: number;
+    resumed: boolean;
+    startedAt: string;
+    savedAnswers: Array<{
+      questionId: number;
+      selectedOptionId: number | null;
+      selectedOptionIds?: number[] | null;
+      submittedText: string | null;
+    }>;
+  }) {
+    if (!attempt.resumed) {
+      sessionStorage.setItem(
+        `rankup-quiz-started-${attempt.attemptId}`,
+        String(Date.now()),
+      );
+    } else if (
+      !sessionStorage.getItem(`rankup-quiz-started-${attempt.attemptId}`)
+    ) {
+      const startedMs = Date.parse(attempt.startedAt);
+      sessionStorage.setItem(
+        `rankup-quiz-started-${attempt.attemptId}`,
+        String(Number.isNaN(startedMs) ? Date.now() : startedMs),
+      );
+    }
+
+    if (attempt.savedAnswers.length > 0) {
+      const hydrated = Object.fromEntries(
+        attempt.savedAnswers.map((answer) => {
+          const selectedOptionIds =
+            answer.selectedOptionIds && answer.selectedOptionIds.length > 0
+              ? answer.selectedOptionIds
+              : answer.selectedOptionId != null
+                ? [answer.selectedOptionId]
+                : [];
+          return [
+            answer.questionId,
+            {
+              selectedOptionId: selectedOptionIds[0] ?? null,
+              selectedOptionIds,
+              submittedText: answer.submittedText ?? "",
+            },
+          ];
+        }),
+      );
+      sessionStorage.setItem(
+        `rankup-quiz-answers-${attempt.attemptId}`,
+        JSON.stringify(hydrated),
+      );
+    }
+  }
 
   async function handleStartAttempt() {
     if (!quiz) {
       return;
     }
+
+    setOfflineStartError(null);
 
     try {
       const requiresAck =
@@ -43,59 +103,49 @@ export function StudentQuizDetailPage() {
         return;
       }
 
+      if (isBrowserOffline()) {
+        const cached = loadOfflineAttemptSession(numericQuizId);
+        if (cached && hasInProgressAttempt(quiz)) {
+          persistOfflineAttemptSession(cached);
+          hydrateLocalAnswers(cached);
+          navigate(
+            `/student/quizzes/${numericQuizId}/attempts/${cached.attemptId}`,
+            { state: { attempt: cached, offlineResume: true } },
+          );
+          return;
+        }
+
+        setOfflineStartError(
+          cached
+            ? "This quiz is not marked In Progress. Connect to start or continue."
+            : "Connect to the internet to start a new quiz. You can resume offline only after starting on this device.",
+        );
+        return;
+      }
+
       const attempt = await startAttempt.mutateAsync({
         instructionsAcknowledged: requiresAck ? instructionsAcknowledged : true,
       });
-      sessionStorage.setItem(
-        `rankup-quiz-attempt-${attempt.attemptId}`,
-        JSON.stringify(attempt),
-      );
-
-      if (!attempt.resumed) {
-        sessionStorage.setItem(
-          `rankup-quiz-started-${attempt.attemptId}`,
-          String(Date.now()),
-        );
-      } else if (
-        !sessionStorage.getItem(`rankup-quiz-started-${attempt.attemptId}`)
-      ) {
-        const startedMs = Date.parse(attempt.startedAt);
-        sessionStorage.setItem(
-          `rankup-quiz-started-${attempt.attemptId}`,
-          String(Number.isNaN(startedMs) ? Date.now() : startedMs),
-        );
-      }
-
-      if (attempt.savedAnswers.length > 0) {
-        const hydrated = Object.fromEntries(
-          attempt.savedAnswers.map((answer) => {
-            const selectedOptionIds =
-              answer.selectedOptionIds && answer.selectedOptionIds.length > 0
-                ? answer.selectedOptionIds
-                : answer.selectedOptionId != null
-                  ? [answer.selectedOptionId]
-                  : [];
-            return [
-              answer.questionId,
-              {
-                selectedOptionId: selectedOptionIds[0] ?? null,
-                selectedOptionIds,
-                submittedText: answer.submittedText ?? "",
-              },
-            ];
-          }),
-        );
-        sessionStorage.setItem(
-          `rankup-quiz-answers-${attempt.attemptId}`,
-          JSON.stringify(hydrated),
-        );
-      }
+      persistOfflineAttemptSession(attempt);
+      hydrateLocalAnswers(attempt);
 
       navigate(`/student/quizzes/${numericQuizId}/attempts/${attempt.attemptId}`, {
         state: { attempt },
       });
     } catch {
-      // Error surfaced via mutation state
+      // Error surfaced via mutation state — try cached resume as fallback.
+      if (hasInProgressAttempt(quiz)) {
+        const cached = loadOfflineAttemptSession(numericQuizId);
+        if (cached) {
+          persistOfflineAttemptSession(cached);
+          hydrateLocalAnswers(cached);
+          navigate(
+            `/student/quizzes/${numericQuizId}/attempts/${cached.attemptId}`,
+            { state: { attempt: cached, offlineResume: true } },
+          );
+          return;
+        }
+      }
     }
   }
 
@@ -144,6 +194,12 @@ export function StudentQuizDetailPage() {
       {startAttempt.error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {startAttempt.error.message}
+        </div>
+      ) : null}
+
+      {offlineStartError ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {offlineStartError}
         </div>
       ) : null}
 

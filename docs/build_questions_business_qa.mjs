@@ -170,8 +170,32 @@ const questionTypes = [
   [
     "104",
     "Descriptive",
-    "Not now",
-    "Retained as a lookup/legacy type but hidden and rejected by create/import.",
+    "Now",
+    "Open text; no options required. Teacher/AI review on quiz attempts (see Quizzes QA).",
+  ],
+  [
+    "105",
+    "File Upload",
+    "Now (link/path MVP)",
+    "Student pastes a file URL/path into SubmittedText — no binary blob upload/storage yet. No options required; teacher review on quiz attempts.",
+  ],
+  [
+    "106",
+    "Matching",
+    "Now",
+    "Even option count (≥4); lefts first, then matching rights. Authoring uses pair rows (left ↔ right). Option shuffle disabled.",
+  ],
+  [
+    "107",
+    "Ordering",
+    "Now",
+    "At least 2 ordered items (top to bottom). Option shuffle disabled.",
+  ],
+  [
+    "108",
+    "Media",
+    "Now",
+    "At least 2 options; each needs an image URL; exactly 1 correct.",
   ],
 ];
 
@@ -317,8 +341,8 @@ const checklist = [
   "Archived and inactive are not interchangeable: Archived is status; inactive is a flag.",
   "Quiz eligibility requires Approved + Public + IsActive + ApprovedBy (published by PortalAdmin).",
   "Question bank excludes Students; students receive questions only through quiz attempts.",
-  "Single/Multi/True-False/Fill validation rules are enforced on create/update/import.",
-  "Descriptive remains unavailable.",
+  "Single/Multi/True-False/Fill/Descriptive/File/Matching/Ordering/Media validation rules are enforced on create/update/import (QuestionBankGuard).",
+  "File Upload is a link/path MVP (SubmittedText) — binary blob upload, storage, and review download are not built yet.",
   "Accepted answers are hidden from students before attempt submission.",
   "Deleting a quiz-linked question is blocked.",
   "Every workflow action (create, submit, endorse, publish, reject, modify, activate, deactivate, archive, unarchive) appends an Approval history row with actor name + role + timestamp, for every role.",
@@ -447,17 +471,18 @@ const html = `<!doctype html>
   <p>Endorsed (Campus/School) questions are NOT quiz-usable until PortalAdmin publishes them. PortalAdmin can deactivate a Published question: Status stays Approved, Activity shows Inactive, and it is removed from new quiz selection. Archiving changes status to Archived and forces Inactive.</p>
 
   <h2>7. Question types</h2>
+  <p>Authoring is validated by <code>QuestionBankGuard</code> for bank create/update/import and quiz-inline questions. All types below are creatable in the web and mobile UIs.</p>
   ${htmlTable(["ID", "Type", "Availability", "Validation"], questionTypes)}
 
   <h2>8. Excel import</h2>
   ${htmlList([
-    "Web-only UI at /questions/import; available to question-managing roles.",
+    "Import UI: web at /questions/import; mobile Question Bank upload action. Available to question-managing roles.",
     "Import is limited to 200 rows per file; row 1 is the header.",
     "Dry run validates the workbook and returns all row errors.",
     "Confirm import creates valid rows as PendingReview only.",
     "A Status column cannot approve a question; import never creates Approved.",
     "Class, Subject, Topic, Type, and Difficulty accept supported names or canonical IDs.",
-    "Choice types accept IsCorrectN and/or CorrectOption; Fill uses accepted-answer fields.",
+    "Choice types accept IsCorrectN and/or CorrectOption; Fill uses accepted-answer fields; Descriptive/File need no options; Media needs OptionImageUrl per option.",
   ])}
 
   <h2>9. API transition map</h2>
@@ -480,7 +505,7 @@ const html = `<!doctype html>
     "Approved uses green; Active uses blue; Pending uses amber; Rejected uses red; Archived/Inactive use slate.",
     "When both are needed, show two concepts separately: e.g. Status=Approved and Activity=Inactive for a PortalAdmin-deactivated Approved question.",
     "Question-list rows navigate to detail; mutation and workflow actions live on the question detail page.",
-    "The list shows a Time sec column (estimated seconds); mobile combines Marks / Time / Visibility in one line.",
+    "The list shows a Time sec column (estimated seconds); on narrow viewports the React web list combines Marks / Time / Visibility in one line.",
     "The Subjects / Classes / Difficulties filter panel is hidden by default and toggled on demand.",
     "Detail shows metadata (status badges, class/subject/topic, marks, time, creator/approver names, visibility, org) before the question text; Created by / Approved by show display names, not IDs.",
     "Detail shows Endorsed and Quiz ready badges where applicable, and always shows the Approval history panel.",
@@ -504,7 +529,9 @@ const html = `<!doctype html>
     "IsAiApproved is a legacy compatibility field, not a second approval gate.",
     "created_by / approved_by are bigint FKs to app_users; the API returns CreatedByName / ApprovedByName for display.",
     "Delete remains blocked while a question is linked to a quiz; guided unlink-then-delete is optional.",
-    "External AI grading for Fill is future work; current AllowAiReview behavior is a review stub.",
+    "File Upload binary blob upload/storage/download remains optional future work; current MVP is paste link/path into SubmittedText.",
+    "Mobile Question Bank supports create (all types), import, endorse/reject, activate/deactivate/archive, and Public+Active quiz-ready filtering; richer pair-row Matching editors remain web-first.",
+    "External AI grading for Fill is future work; current AllowAiReview behavior is OpenAI when configured, else heuristic.",
   ])}
 
   <footer>Generated by docs/build_questions_business_qa.mjs. Edit the generator and rerun <code>npm run build:questions-qa</code>.</footer>
@@ -642,15 +669,19 @@ const docChildren = [
   ].map(docBullet),
 
   docHeading("7. Question types"),
+  docParagraph(
+    "Authoring is validated by QuestionBankGuard for bank create/update/import and quiz-inline questions. All types below are creatable in the web and mobile UIs.",
+  ),
   docTable(["ID", "Type", "Availability", "Validation"], questionTypes),
 
   docHeading("8. Excel import"),
   ...[
-    "Web-only UI at /questions/import.",
+    "Import UI: web at /questions/import; mobile Question Bank upload action.",
     "Import is limited to 200 rows per file; row 1 is the header.",
     "Dry run returns all row errors.",
     "Confirm creates valid rows as PendingReview only; import never approves.",
     "Lookup names or canonical IDs are accepted where documented.",
+    "Choice types use IsCorrectN/CorrectOption; Fill uses accepted answers; Descriptive/File need no options; Media needs OptionImageUrl.",
   ].map(docBullet),
 
   docHeading("9. API transition map"),
@@ -675,7 +706,7 @@ const docChildren = [
     "Approved=green; Active=blue; Pending=amber; Rejected=red; Archived/Inactive=slate.",
     "Show Status=Approved and Activity=Inactive when PortalAdmin deactivates an Approved question.",
     "List rows open detail; actions live on the detail page.",
-    "List shows a Time sec column; mobile combines Marks / Time / Visibility.",
+    "List shows a Time sec column; on narrow React viewports Marks / Time / Visibility share one line.",
     "Subjects / Classes / Difficulties filter panel is hidden by default.",
     "Detail shows metadata before the question text; Created by / Approved by show display names.",
     "Detail always shows the Approval history panel; Archived questions offer Unarchive (PortalAdmin).",
@@ -697,7 +728,9 @@ const docChildren = [
     "IsAiApproved is a legacy field, not a second gate.",
     "created_by / approved_by are bigint FKs to app_users; the API returns display names.",
     "Delete is blocked while quiz-linked; guided unlink is optional.",
-    "External AI grading is future work.",
+    "File Upload binary blob upload/storage/download remains optional; MVP is paste link/path into SubmittedText.",
+    "Mobile Question Bank supports create/import/endorse/publish lifecycle and Public+Active quiz-ready filtering; richer Matching pair-row editors remain web-first.",
+    "External AI grading for Fill is future work; AllowAiReview uses OpenAI when configured, else heuristic.",
   ].map(docBullet),
 ];
 

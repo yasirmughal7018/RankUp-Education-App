@@ -3,17 +3,19 @@ import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import {
   QUESTION_TYPES_NOW,
+  defaultAcceptedAnswersForType,
   defaultOptionsForType,
-  isFillBlankType,
   normalizeQuestionType,
   usesAcceptedAnswers,
   usesAnswerOptions,
   validateQuestionForm,
 } from "@/features/questions/domain/questionTypes";
+import { QuestionAcceptedAnswersEditor } from "@/features/questions/presentation/components/QuestionAcceptedAnswersEditor";
 import { QuestionOptionsEditor } from "@/features/questions/presentation/components/QuestionOptionsEditor";
 import { useQuestionsQuery } from "@/features/questions/presentation/hooks/useQuestionQueries";
 import {
   createEmptyQuizQuestionInput,
+  mapQuizQuestionToInput,
   type AddQuizQuestionInput,
   type AttachBankQuestionInput,
   type QuizQuestionItem,
@@ -37,33 +39,6 @@ interface AddQuizQuestionDialogProps {
 
 const inputClassName = FORM_FIELD_CLASS;
 
-/** Seed options for quiz inline create (Fill options become accepted answers on the API). */
-function optionsForQuizType(questionType: string): AddQuizQuestionInput["options"] {
-  if (isFillBlankType(questionType)) {
-    return [{ optionText: "", isCorrect: true }];
-  }
-  return defaultOptionsForType(questionType);
-}
-
-function mapQuestionToInput(question: QuizQuestionItem): AddQuizQuestionInput {
-  const questionType = normalizeQuestionType(question.questionType);
-  return {
-    questionText: question.questionText,
-    questionType,
-    marks: question.marks,
-    estimatedTimeSeconds: 60,
-    hint: question.hint ?? "",
-    explanation: "",
-    options:
-      question.options.length > 0
-        ? question.options.map((option) => ({
-            optionText: option.optionText,
-            isCorrect: option.isCorrect || isFillBlankType(questionType),
-          }))
-        : optionsForQuizType(questionType),
-  };
-}
-
 /** Modal to add an inline question or attach one from the question bank. */
 export function AddQuizQuestionDialog({
   isSubmitting,
@@ -81,7 +56,7 @@ export function AddQuizQuestionDialog({
   const [mode, setMode] = useState<DialogMode>("create");
   const [values, setValues] = useState(() =>
     initialQuestion
-      ? mapQuestionToInput(initialQuestion)
+      ? mapQuizQuestionToInput(initialQuestion)
       : createEmptyQuizQuestionInput(),
   );
   const [error, setError] = useState<string | null>(null);
@@ -132,9 +107,8 @@ export function AddQuizQuestionDialog({
     });
   }, [bankQuestions, bankSearch, excludedIds]);
 
-  const showOptions =
-    usesAnswerOptions(values.questionType) ||
-    usesAcceptedAnswers(values.questionType);
+  const showOptions = usesAnswerOptions(values.questionType);
+  const showAcceptedAnswers = usesAcceptedAnswers(values.questionType);
   const showBankTab = !isEdit && Boolean(onAttachFromBank);
 
   useEffect(() => {
@@ -181,19 +155,6 @@ export function AddQuizQuestionDialog({
     }
 
     const questionType = normalizeQuestionType(values.questionType);
-    const fillAnswers = isFillBlankType(questionType)
-      ? values.options
-          .filter((option) => option.optionText.trim())
-          .map((option) => ({
-            answerText: option.optionText.trim(),
-            isCaseSensitive: false,
-            allowPartialMatch: false,
-            minimumLength: 0,
-            maximumLength: 1000,
-            allowAiReview: false,
-            allowTeacherReview: false,
-          }))
-      : [];
 
     const validationError = validateQuestionForm({
       questionText: values.questionText,
@@ -207,7 +168,9 @@ export function AddQuizQuestionDialog({
       hint: values.hint,
       explanation: values.explanation,
       options: usesAnswerOptions(questionType) ? values.options : [],
-      acceptedAnswers: fillAnswers,
+      acceptedAnswers: usesAcceptedAnswers(questionType)
+        ? values.acceptedAnswers
+        : [],
     });
     if (
       validationError &&
@@ -222,14 +185,27 @@ export function AddQuizQuestionDialog({
       await onSubmit({
         ...values,
         questionType,
-        options: isFillBlankType(questionType)
+        options: usesAnswerOptions(questionType)
           ? values.options
-              .filter((option) => option.optionText.trim())
+              .filter(
+                (option) =>
+                  option.optionText.trim() ||
+                  Boolean(option.optionImageUrl?.trim()),
+              )
               .map((option) => ({
                 optionText: option.optionText.trim(),
-                isCorrect: true,
+                isCorrect: option.isCorrect,
+                optionImageUrl: option.optionImageUrl?.trim() || null,
               }))
-          : values.options,
+          : [],
+        acceptedAnswers: usesAcceptedAnswers(questionType)
+          ? values.acceptedAnswers
+              .filter((answer) => answer.answerText.trim())
+              .map((answer) => ({
+                ...answer,
+                answerText: answer.answerText.trim(),
+              }))
+          : [],
       });
     } catch (caught) {
       const apiError = caught as ApiError;
@@ -433,7 +409,8 @@ export function AddQuizQuestionDialog({
                       setValues((current) => ({
                         ...current,
                         questionType: nextType,
-                        options: optionsForQuizType(nextType),
+                        options: defaultOptionsForType(nextType),
+                        acceptedAnswers: defaultAcceptedAnswersForType(nextType),
                       }));
                     }}
                     className={inputClassName}
@@ -498,6 +475,19 @@ export function AddQuizQuestionDialog({
                     setValues((current) => ({
                       ...current,
                       options,
+                    }))
+                  }
+                />
+              ) : null}
+
+              {showAcceptedAnswers ? (
+                <QuestionAcceptedAnswersEditor
+                  answers={values.acceptedAnswers}
+                  disabled={isSubmitting}
+                  onChange={(acceptedAnswers) =>
+                    setValues((current) => ({
+                      ...current,
+                      acceptedAnswers,
                     }))
                   }
                 />

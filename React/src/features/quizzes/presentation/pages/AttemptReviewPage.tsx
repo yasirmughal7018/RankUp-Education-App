@@ -199,7 +199,6 @@ export function AttemptReviewPage() {
             />
           ) : null}
         </div>
-        </div>
 
         <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
           <p>Submitted: {formatDateTime(review.submittedAt)}</p>
@@ -237,6 +236,35 @@ export function AttemptReviewPage() {
                   Student answer
                 </p>
                 {question.submittedText}
+              </div>
+            ) : null}
+
+            {question.aiFeedback?.trim() ? (
+              <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase text-sky-700">
+                    AI suggestion
+                  </p>
+                  {!review.isReviewDone ? (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() =>
+                        setFeedback((current) => ({
+                          ...current,
+                          [question.questionId]: question.aiFeedback!.trim(),
+                        }))
+                      }
+                      className="rounded border border-sky-300 bg-white px-2 py-0.5 text-[11px] font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-60"
+                    >
+                      Use as feedback
+                    </button>
+                  ) : null}
+                </div>
+                <p className="whitespace-pre-wrap">{question.aiFeedback}</p>
+                <p className="mt-2 text-[11px] text-sky-700/80">
+                  Suggestion only — confirm marks and feedback before finalizing.
+                </p>
               </div>
             ) : null}
 

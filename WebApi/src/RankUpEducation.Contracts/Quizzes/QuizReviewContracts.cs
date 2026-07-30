@@ -44,7 +44,8 @@ public sealed record AttemptReviewQuestionResponse(
     string? SubmittedText,
     string? ParentFeedback,
     bool RequiresReview,
-    IReadOnlyList<long>? SelectedOptionIds = null);
+    IReadOnlyList<long>? SelectedOptionIds = null,
+    string? AiFeedback = null);
 
 /// <summary>Manual mark and optional feedback for one question during review.</summary>
 public sealed record MarkAttemptAnswerRequest(

@@ -124,7 +124,9 @@ internal static class QuestionMapping
 
                 option.OptionText,
 
-                option.IsCorrect)).ToArray(),
+                option.IsCorrect,
+
+                option.OptionImageUrl)).ToArray(),
 
             item.AcceptedAnswers.Select(answer => new QuestionAcceptedAnswerResponse(
 

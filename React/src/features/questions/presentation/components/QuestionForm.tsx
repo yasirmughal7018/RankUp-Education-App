@@ -270,14 +270,20 @@ export function QuestionForm({
         ) : null}
         {normalizeQuestionType(values.questionType) === "File Upload" ? (
           <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            Students paste a file link or path. Answers are scored during teacher
-            review.
+            Students paste a file link or path (link MVP — binary upload is not
+            available yet). Answers are scored during teacher review.
           </p>
         ) : null}
         {normalizeQuestionType(values.questionType) === "Matching" ? (
           <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            Add an even number of options: left column items first, then the
-            matching right-column items in the same order.
+            Add pairs in the editor (left ↔ right). The bank stores lefts first,
+            then rights; option shuffle is disabled for Matching.
+          </p>
+        ) : null}
+        {normalizeQuestionType(values.questionType) === "Media" ? (
+          <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Media options use image URLs (captions optional). Students pick one
+            correct image.
           </p>
         ) : null}
       </section>

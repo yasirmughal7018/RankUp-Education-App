@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   FileCheck2,
   BarChart3,
+  History,
   ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -101,6 +102,7 @@ function quickLinksForRole(
     return [
       { label: "Learning", href: "/student/dashboard", icon: GraduationCap, hint: "Today’s focus" },
       { label: "My quizzes", href: "/student/quizzes", icon: ClipboardList, hint: "Assigned work" },
+      { label: "History", href: "/student/history", icon: History, hint: "Past attempts" },
     ];
   }
   return [{ label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Browse" }];

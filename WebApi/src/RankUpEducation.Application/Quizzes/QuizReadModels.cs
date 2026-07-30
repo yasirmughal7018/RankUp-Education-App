@@ -252,7 +252,8 @@ public sealed record AttemptReviewQuestionItem(
     bool RequiresReview,
     long? QuizReviewId,
     IReadOnlyList<long> SelectedOptionIds,
-    bool HasHumanReviewFeedback = false);
+    bool HasHumanReviewFeedback = false,
+    string? AiFeedback = null);
 
 /// <summary>Source question snapshot used when duplicating a quiz (deep copy).</summary>
 public sealed record QuizQuestionCopyItem(
