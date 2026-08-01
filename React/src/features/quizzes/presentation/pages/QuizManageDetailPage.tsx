@@ -330,6 +330,11 @@ export function QuizManageDetailPage() {
                   onClick={() =>
                     void runAction(async () => {
                       const duplicated = await duplicateQuiz.mutateAsync();
+                      if (!duplicated?.id) {
+                        throw new Error(
+                          "Quiz was duplicated but the new quiz id was missing.",
+                        );
+                      }
                       navigate(`/quizzes/${duplicated.id}`);
                     }, "Quiz duplicated.")
                   }

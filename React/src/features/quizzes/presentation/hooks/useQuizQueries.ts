@@ -119,8 +119,11 @@ export function useDuplicateQuizMutation(quizId: number) {
 
   return useMutation({
     mutationFn: () => quizApi.duplicateQuiz(quizId),
-    onSuccess: () => {
+    onSuccess: (quiz) => {
       void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      if (quiz?.id > 0) {
+        queryClient.setQueryData(queryKeys.manageQuiz(quiz.id), quiz);
+      }
     },
   });
 }

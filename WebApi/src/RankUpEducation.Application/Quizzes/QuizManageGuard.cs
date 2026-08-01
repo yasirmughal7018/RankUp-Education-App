@@ -29,8 +29,16 @@ internal sealed class QuizManageGuard
         QuizManageScope scope,
         CancellationToken cancellationToken)
     {
-        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
-            ?? throw new NotFoundAppException("Quiz was not found.");
+        if (quizId <= 0)
+        {
+            throw new NotFoundAppException("Quiz was not found.");
+        }
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        if (quiz is null)
+        {
+            throw new NotFoundAppException($"Quiz #{quizId} was not found.");
+        }
 
         QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
         return quiz;

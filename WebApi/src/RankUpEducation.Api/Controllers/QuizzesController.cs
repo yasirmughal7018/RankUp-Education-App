@@ -283,13 +283,15 @@ public sealed class QuizzesController : ControllerBase
     }
 
     /// <summary>Deep-copies quiz and questions into a new draft.</summary>
+    /// <summary>Clones quiz metadata and reuses bank questions; returns the new draft manage payload.</summary>
     [HttpPost("{quizId:long}/duplicate")]
-    public async Task<ActionResult<ApiResponse<DuplicateQuizResponse>>> DuplicateAsync(
+    public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> DuplicateAsync(
         long quizId,
         CancellationToken cancellationToken)
     {
         var response = await _quizManageService.DuplicateAsync(quizId, cancellationToken);
-        return Ok(ApiResponse<DuplicateQuizResponse>.Ok(response, "Quiz duplicated."));
+        // Return the new quiz directly so clients navigate with response.id (not nested .quiz).
+        return Ok(ApiResponse<ManageQuizResponse>.Ok(response.Quiz, "Quiz duplicated."));
     }
 
     /// <summary>Archives a published or assigned quiz.</summary>

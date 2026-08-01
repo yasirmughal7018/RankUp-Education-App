@@ -394,6 +394,10 @@ public sealed class QuizManageService : IQuizManageService
 
         await _quizzes.AddQuizAsync(copy, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        if (copy.Id <= 0)
+        {
+            throw new InvalidOperationException("Duplicated quiz was not assigned a database id.");
+        }
 
         var sourceQuestions = await _quizQuestions.GetQuizQuestionsForCopyAsync(quizId, cancellationToken);
         if (sourceQuestions.Count == 0)
