@@ -82,8 +82,8 @@ public sealed record QuizDetailItem(
 
 /// <summary>School and campus resolved from a linked student when a parent creates a quiz.</summary>
 public sealed record StudentSchoolContext(
-    int SchoolId,
-    int CampusId,
+    int? SchoolId,
+    int? CampusId,
     short Grade);
 
 /// <summary>Assignment row with student display name and attempt count for manage UI.</summary>

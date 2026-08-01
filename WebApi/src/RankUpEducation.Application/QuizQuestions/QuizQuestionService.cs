@@ -107,7 +107,9 @@ public sealed class QuizQuestionService : IQuizQuestionService
             quiz.ClassId,
             quiz.SubjectId,
             quiz.TopicId,
-            quiz.DifficultyLevelId,
+            quiz.DifficultyLevelId is > 0
+                ? quiz.DifficultyLevelId.Value
+                : QuizLookupNames.DifficultyLevelIds.Medium,
             questionStatusId,
             scope.UserId,
             scope.Role,
@@ -120,7 +122,9 @@ public sealed class QuizQuestionService : IQuizQuestionService
             quiz.ClassId,
             quiz.SubjectId,
             quiz.TopicId,
-            quiz.DifficultyLevelId,
+            quiz.DifficultyLevelId is > 0
+                ? quiz.DifficultyLevelId.Value
+                : QuizLookupNames.DifficultyLevelIds.Medium,
             request.EstimatedTimeSeconds,
             request.Marks,
             request.Hint,

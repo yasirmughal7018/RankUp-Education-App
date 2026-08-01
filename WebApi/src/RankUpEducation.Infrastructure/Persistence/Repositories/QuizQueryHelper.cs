@@ -6,6 +6,22 @@ namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
 internal static class QuizQueryHelper
 {
+    internal static string ResolveLookupName(
+        IReadOnlyDictionary<short, string> lookupNames,
+        short? id,
+        string whenMissing,
+        string whenUnset = "—")
+        => id is short value
+            ? lookupNames.GetValueOrDefault(value, whenMissing)
+            : whenUnset;
+
+    internal static string ResolveSchoolName(
+        IReadOnlyDictionary<int, string> schoolNames,
+        int? schoolId)
+        => schoolId is int id
+            ? schoolNames.GetValueOrDefault(id, "School")
+            : "—";
+
     public static bool MatchesFilters(QuizListItem item, string? search, string? subject, string? grade)
     {
         if (!string.IsNullOrWhiteSpace(search)
@@ -63,12 +79,12 @@ internal static class QuizQueryHelper
             assignment.StartDateTime,
             assignment.EndDateTime,
             quiz.CreatedByName,
-            schoolNames.GetValueOrDefault(quiz.SchoolId, "School"),
+            ResolveSchoolName(schoolNames, quiz.SchoolId),
             lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
             lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
-            lookupNames.GetValueOrDefault(quiz.TopicId, "Topic"),
+            ResolveLookupName(lookupNames, quiz.TopicId, "Topic"),
             lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
-            lookupNames.GetValueOrDefault(quiz.DifficultyLevelId, "Medium"),
+            ResolveLookupName(lookupNames, quiz.DifficultyLevelId, "Medium"),
             quiz.Instructions,
             quiz.IsReviewRequired,
             stats.AttemptCount,
@@ -100,12 +116,12 @@ internal static class QuizQueryHelper
             null,
             null,
             quiz.CreatedByName,
-            schoolNames.GetValueOrDefault(quiz.SchoolId, "School"),
+            ResolveSchoolName(schoolNames, quiz.SchoolId),
             lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
             lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
-            lookupNames.GetValueOrDefault(quiz.TopicId, "Topic"),
+            ResolveLookupName(lookupNames, quiz.TopicId, "Topic"),
             lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
-            lookupNames.GetValueOrDefault(quiz.DifficultyLevelId, "Medium"),
+            ResolveLookupName(lookupNames, quiz.DifficultyLevelId, "Medium"),
             quiz.Instructions,
             quiz.IsReviewRequired,
             attemptCount,
@@ -138,12 +154,12 @@ internal static class QuizQueryHelper
             assignment.StartDateTime,
             assignment.EndDateTime,
             quiz.CreatedByName,
-            schoolNames.GetValueOrDefault(quiz.SchoolId, "School"),
+            ResolveSchoolName(schoolNames, quiz.SchoolId),
             lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
             lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
-            lookupNames.GetValueOrDefault(quiz.TopicId, "Topic"),
+            ResolveLookupName(lookupNames, quiz.TopicId, "Topic"),
             lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
-            lookupNames.GetValueOrDefault(quiz.DifficultyLevelId, "Medium"),
+            ResolveLookupName(lookupNames, quiz.DifficultyLevelId, "Medium"),
             quiz.Instructions,
             quiz.ShuffleQuestions,
             quiz.ShuffleOptions,
@@ -154,8 +170,8 @@ internal static class QuizQueryHelper
             lastSubmittedAt,
             quiz.ClassId,
             quiz.SubjectId,
-            quiz.TopicId,
-            quiz.DifficultyLevelId,
+            quiz.TopicId ?? 0,
+            quiz.DifficultyLevelId ?? 0,
             lifecycleStatusId,
             lifecycleStatusName,
             quizResultStatusName ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus),
@@ -181,7 +197,7 @@ internal static class QuizQueryHelper
         CancellationToken cancellationToken)
     {
         var ids = quizzes
-            .SelectMany(quiz => new short[]
+            .SelectMany(quiz => new short?[]
             {
                 quiz.SubjectId,
                 quiz.ClassId,
@@ -191,6 +207,8 @@ internal static class QuizQueryHelper
                 quiz.LifecycleStatusId,
                 quiz.ApprovalStatusId
             })
+            .Where(id => id is > 0)
+            .Select(id => id!.Value)
             .Distinct()
             .ToArray();
 
@@ -201,10 +219,24 @@ internal static class QuizQueryHelper
 
     public static async Task<IReadOnlyDictionary<int, string>> LoadSchoolNamesAsync(
         RankUpDbContext dbContext,
+        IEnumerable<int?> schoolIds,
+        CancellationToken cancellationToken)
+        => await LoadSchoolNamesAsync(
+            dbContext,
+            schoolIds.Where(id => id is > 0).Select(id => id!.Value),
+            cancellationToken);
+
+    public static async Task<IReadOnlyDictionary<int, string>> LoadSchoolNamesAsync(
+        RankUpDbContext dbContext,
         IEnumerable<int> schoolIds,
         CancellationToken cancellationToken)
     {
         var ids = schoolIds.Distinct().Select(id => (long)id).ToArray();
+        if (ids.Length == 0)
+        {
+            return new Dictionary<int, string>();
+        }
+
         return await dbContext.Schools.AsNoTracking()
             .Where(school => ids.Contains(school.Id))
             .ToDictionaryAsync(school => (int)school.Id, school => school.Name, cancellationToken);

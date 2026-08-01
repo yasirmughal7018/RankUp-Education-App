@@ -19,15 +19,15 @@ public sealed class Quiz : SoftDeleteEntity
 
     /// <summary>Creates a quiz with zero questions; totals are set when questions are attached.</summary>
     public Quiz(
-        int schoolId,
-        int schoolCampusId,
+        int? schoolId,
+        int? schoolCampusId,
         string quizTitle,
         string description,
         short quizTypeId,
         short classId,
         short subjectId,
-        short topicId,
-        short difficultyLevelId,
+        short? topicId,
+        short? difficultyLevelId,
         short totalQuestions,
         string instructions,
         string createdBy,
@@ -50,15 +50,15 @@ public sealed class Quiz : SoftDeleteEntity
         LifecycleStatusId = lifecycleStatusId;
     }
 
-    public int SchoolId { get; private set; }
-    public int SchoolCampusId { get; private set; }
+    public int? SchoolId { get; private set; }
+    public int? SchoolCampusId { get; private set; }
     public string QuizTitle { get; private set; }
     public string Description { get; private set; }
     public short QuizTypeId { get; private set; }
     public short ClassId { get; private set; }
     public short SubjectId { get; private set; }
-    public short TopicId { get; private set; }
-    public short DifficultyLevelId { get; private set; }
+    public short? TopicId { get; private set; }
+    public short? DifficultyLevelId { get; private set; }
     public short TotalQuestions { get; private set; }
     public short? TotalMarks { get; private set; }
     public short? TimeLimitMinutes { get; private set; }
@@ -99,8 +99,8 @@ public sealed class Quiz : SoftDeleteEntity
         string description,
         short classId,
         short subjectId,
-        short topicId,
-        short difficultyLevelId,
+        short? topicId,
+        short? difficultyLevelId,
         string instructions,
         short? timeLimitMinutes,
         short? allowedAttempts,

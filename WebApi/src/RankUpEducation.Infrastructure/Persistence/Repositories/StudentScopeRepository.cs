@@ -48,7 +48,7 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             from student in _dbContext.Students.AsNoTracking()
             join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
             where student.Id == studentId
-            select new StudentSchoolContext(user.SchoolId ?? 0, user.CampusId ?? 0, student.Grade))
+            select new StudentSchoolContext(user.SchoolId, user.CampusId, student.Grade))
             .FirstOrDefaultAsync(cancellationToken);
     }
 

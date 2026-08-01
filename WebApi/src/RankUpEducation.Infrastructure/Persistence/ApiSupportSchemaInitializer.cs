@@ -40,6 +40,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuizLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizAttemptQuestionMarksSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizRejectionReasonSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizOptionalScopeLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizNavigationAndMarkReviewSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizReviewDisplayModeSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizOfflineSyncSupportSql, cancellationToken);
@@ -616,6 +617,24 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
     private const string QuizRejectionReasonSupportSql = """
         ALTER TABLE public.quizzes
             ADD COLUMN IF NOT EXISTS rejection_reason varchar(1000) NULL;
+        """;
+
+    /// <summary>
+    /// PortalAdmin/SchoolAdmin may omit school/campus; all roles may omit topic/difficulty.
+    /// Persist NULL (not 0) so FK constraints to schools/campuses/lookups remain valid.
+    /// </summary>
+    private const string QuizOptionalScopeLookupSupportSql = """
+        ALTER TABLE public.quizzes
+            ALTER COLUMN school_id DROP NOT NULL;
+
+        ALTER TABLE public.quizzes
+            ALTER COLUMN school_campus_id DROP NOT NULL;
+
+        ALTER TABLE public.quizzes
+            ALTER COLUMN topic_id DROP NOT NULL;
+
+        ALTER TABLE public.quizzes
+            ALTER COLUMN difficulty_level_id DROP NOT NULL;
         """;
 
     private const string QuizNavigationAndMarkReviewSupportSql = """

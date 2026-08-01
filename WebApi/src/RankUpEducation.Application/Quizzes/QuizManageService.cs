@@ -111,8 +111,8 @@ public sealed class QuizManageService : IQuizManageService
             quizTypeId,
             request.ClassId,
             request.SubjectId,
-            request.TopicId,
-            request.DifficultyLevelId,
+            OptionalLookupId(request.TopicId),
+            OptionalLookupId(request.DifficultyLevelId),
             0,
             request.Instructions,
             scope.UserId.ToString(),
@@ -124,8 +124,8 @@ public sealed class QuizManageService : IQuizManageService
             request.Description,
             request.ClassId,
             request.SubjectId,
-            request.TopicId,
-            request.DifficultyLevelId,
+            OptionalLookupId(request.TopicId),
+            OptionalLookupId(request.DifficultyLevelId),
             request.Instructions,
             null,
             request.AllowedAttempts,
@@ -158,8 +158,8 @@ public sealed class QuizManageService : IQuizManageService
             request.Description,
             request.ClassId,
             request.SubjectId,
-            request.TopicId,
-            request.DifficultyLevelId,
+            OptionalLookupId(request.TopicId),
+            OptionalLookupId(request.DifficultyLevelId),
             request.Instructions,
             quiz.TimeLimitMinutes,
             request.AllowedAttempts,
@@ -508,6 +508,11 @@ public sealed class QuizManageService : IQuizManageService
             var context = await _studentScope.GetStudentSchoolContextAsync(studentId, cancellationToken)
                 ?? throw new BusinessRuleException("Student school context was not found.");
 
+            if (context.SchoolId is not > 0)
+            {
+                throw new BusinessRuleException("Student school context was not found.");
+            }
+
             return context;
         }
 
@@ -522,17 +527,19 @@ public sealed class QuizManageService : IQuizManageService
         if (scope.Role == UserRole.SchoolAdmin)
         {
             var schoolId = scope.SchoolId ?? throw new ForbiddenAppException("School admin school context was not found.");
-            // Campus is optional on create — unset stores 0 until set later / via assign context.
-            var campusId = requestCampusId ?? scope.CampusId ?? 0;
+            // Campus is optional on create.
+            var campusId = requestCampusId is > 0
+                ? requestCampusId
+                : scope.CampusId is > 0 ? scope.CampusId : null;
 
             return new StudentSchoolContext(schoolId, campusId, 0);
         }
 
         if (scope.Role == UserRole.PortalAdmin)
         {
-            // School and campus are optional on create — unset stores 0.
-            var schoolId = requestSchoolId is > 0 ? requestSchoolId.Value : 0;
-            var campusId = requestCampusId is > 0 ? requestCampusId.Value : 0;
+            // School and campus are optional on create.
+            var schoolId = requestSchoolId is > 0 ? requestSchoolId : null;
+            var campusId = requestCampusId is > 0 ? requestCampusId : null;
 
             return new StudentSchoolContext(schoolId, campusId, 0);
         }
@@ -597,6 +604,9 @@ public sealed class QuizManageService : IQuizManageService
             throw new ValidationAppException(errors);
         }
     }
+
+    /// <summary>Maps unset/0 lookup ids to null so optional FK columns are not violated.</summary>
+    private static short? OptionalLookupId(short value) => value > 0 ? value : null;
 
     private static bool IsDraftLifecycle(string lifecycleName)
         => QuizLookupNames.DraftLifecycleNames.Any(
