@@ -96,19 +96,20 @@ export async function publishQuiz(quizId: number): Promise<ManageQuiz> {
 /** Clone quiz as a new draft; returns the new quiz manage payload. */
 export async function duplicateQuiz(quizId: number): Promise<ManageQuiz> {
   const response = await apiRequest<
-    ManageQuiz & { quiz?: ManageQuiz; sourceQuizId?: number }
+    ManageQuiz & { quiz?: ManageQuiz; sourceQuizId?: number; Id?: number }
   >(`/quizzes/${quizId}/duplicate`, { method: "POST" });
 
   // Prefer nested quiz when older API shape is still returned; otherwise use top-level manage payload.
   const quiz = response.quiz ?? response;
-  if (!quiz?.id || quiz.id <= 0) {
+  const id = quiz.id ?? quiz.Id ?? 0;
+  if (id <= 0) {
     throw {
       message: "Quiz was duplicated but the new quiz id was missing.",
       status: 500,
     };
   }
 
-  return quiz;
+  return { ...quiz, id };
 }
 
 /** Soft-archive a published quiz. */

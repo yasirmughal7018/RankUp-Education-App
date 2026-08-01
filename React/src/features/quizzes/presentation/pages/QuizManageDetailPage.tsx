@@ -64,8 +64,12 @@ export function QuizManageDetailPage() {
     data: quiz,
     isLoading,
     error,
+    isSuccess: quizLoaded,
   } = useManageQuizQuery(numericQuizId);
-  const { data: assignments = [] } = useQuizAssignmentsQuery(numericQuizId);
+  const { data: assignments = [] } = useQuizAssignmentsQuery(
+    numericQuizId,
+    quizLoaded,
+  );
 
   const publishQuiz = usePublishQuizMutation(numericQuizId);
   const deleteQuiz = useDeleteQuizMutation(numericQuizId);
@@ -156,7 +160,7 @@ export function QuizManageDetailPage() {
           <div className="flex gap-2">
             {!draft ? (
               <Link
-                to={`/quizzes/${quiz.id}/monitoring`}
+                to={`/quizzes/${numericQuizId}/monitoring`}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Monitor
@@ -164,7 +168,7 @@ export function QuizManageDetailPage() {
             ) : null}
             {settingsEditable ? (
               <Link
-                to={`/quizzes/${quiz.id}/edit`}
+                to={`/quizzes/${numericQuizId}/edit`}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Edit settings

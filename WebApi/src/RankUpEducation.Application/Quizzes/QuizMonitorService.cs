@@ -76,14 +76,21 @@ public sealed class QuizMonitorService : IQuizMonitorService
     public async Task<QuizMonitoringResponse> GetMonitoringAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
-            ?? throw new NotFoundAppException("Quiz was not found.");
-        QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
-
-        if (!quiz.IsActive || quiz.IsDeleted)
+        if (quizId <= 0)
         {
             throw new NotFoundAppException("Quiz was not found.");
         }
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        if (quiz is null)
+        {
+            throw new NotFoundAppException($"Quiz #{quizId} was not found.");
+        }
+
+        QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
+
+        // Allow monitoring for inactive/archived quizzes so owners can still review past attempts.
+        // Soft-deleted quizzes are already excluded by GetQuizEntityAsync.
 
         var students = await _reviews.ListMonitoringForQuizAsync(quizId, cancellationToken);
         var now = _dateTimeProvider.UtcNow;

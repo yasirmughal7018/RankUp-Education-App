@@ -24,7 +24,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
     {
         var quizExists = await _dbContext.Quizzes.AsNoTracking()
             .AnyAsync(
-                quiz => quiz.Id == quizId && quiz.IsActive && !quiz.IsDeleted,
+                quiz => quiz.Id == quizId && !quiz.IsDeleted,
                 cancellationToken);
 
         if (!quizExists)
