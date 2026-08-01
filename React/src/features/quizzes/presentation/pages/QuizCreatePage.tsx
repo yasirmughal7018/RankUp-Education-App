@@ -13,8 +13,6 @@ export function QuizCreatePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isPortalAdmin = user?.role === "PortalAdmin";
   const isSchoolAdmin = user?.role === "SchoolAdmin";
-  const needsCampus =
-    isPortalAdmin || (isSchoolAdmin && user?.campusId == null);
 
   const initialValues = {
     ...createEmptyQuizForm(),
@@ -38,8 +36,9 @@ export function QuizCreatePage() {
           isSubmitting={isSubmitting}
           showContextStudentId={user?.role === "Parent"}
           showSchoolCampusFields={isPortalAdmin || isSchoolAdmin}
-          requireSchoolId={isPortalAdmin}
-          requireCampusId={needsCampus}
+          requireSchoolId={false}
+          requireCampusId={false}
+          schoolEditable={isPortalAdmin}
           requireQuizType
           onSubmit={async (values) => {
             setIsSubmitting(true);

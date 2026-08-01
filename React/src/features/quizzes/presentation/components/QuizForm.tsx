@@ -31,10 +31,12 @@ interface QuizFormProps {
   submitLabel: string;
   isSubmitting?: boolean;
   showContextStudentId?: boolean;
-  /** PortalAdmin must pick school + campus; SchoolAdmin may pick campus when missing on account. */
+  /** PortalAdmin / SchoolAdmin: show school + campus ownership fields (optional on create). */
   showSchoolCampusFields?: boolean;
   requireCampusId?: boolean;
   requireSchoolId?: boolean;
+  /** PortalAdmin can pick school; SchoolAdmin school comes from the token (read-only). */
+  schoolEditable?: boolean;
   /** When true, quiz type is required (create). Edit hides the field because API update omits type. */
   requireQuizType?: boolean;
   onSubmit: (values: QuizFormValues) => Promise<void>;
@@ -52,6 +54,7 @@ export function QuizForm({
   showSchoolCampusFields = false,
   requireCampusId = false,
   requireSchoolId = false,
+  schoolEditable = false,
   requireQuizType = false,
   onSubmit,
   onCancel,
@@ -188,7 +191,8 @@ export function QuizForm({
           parentId={values.subjectId || null}
           value={values.topicId || ""}
           disabled={isSubmitting || !values.subjectId}
-          required
+          allowEmpty
+          emptyLabel="None"
           onChange={(topicId) =>
             setValues((current) => ({
               ...current,
@@ -202,7 +206,8 @@ export function QuizForm({
           type={LOOKUP_TYPES.DIFFICULTY}
           value={values.difficultyLevelId || ""}
           disabled={isSubmitting}
-          required
+          allowEmpty
+          emptyLabel="None"
           onChange={(difficultyLevelId) =>
             setValues((current) => ({
               ...current,
@@ -287,6 +292,7 @@ export function QuizForm({
               <FieldLabel
                 htmlFor="schoolId"
                 required={requireSchoolId}
+                optional={!requireSchoolId}
                 hint="Places this quiz in an organization. This is not the student audience — after publish (and approval if needed), use Assign to choose public catalog, whole school, grade, section, or selected students."
               >
                 School
@@ -294,7 +300,7 @@ export function QuizForm({
               <select
                 id="schoolId"
                 value={values.schoolId ?? ""}
-                disabled={isSubmitting || !requireSchoolId || schoolsLoading}
+                disabled={isSubmitting || schoolsLoading || !schoolEditable}
                 onChange={(event) => {
                   const nextSchoolId = event.target.value
                     ? Number(event.target.value)
@@ -322,6 +328,7 @@ export function QuizForm({
               <FieldLabel
                 htmlFor="campusId"
                 required={requireCampusId}
+                optional={!requireCampusId}
                 hint="Campus within the selected school. This is ownership context only — student audience is chosen later with Assign."
               >
                 Campus
@@ -330,9 +337,7 @@ export function QuizForm({
                 id="campusId"
                 value={values.campusId ?? ""}
                 disabled={
-                  isSubmitting ||
-                  campusesLoading ||
-                  (requireSchoolId && !values.schoolId)
+                  isSubmitting || campusesLoading || !values.schoolId
                 }
                 onChange={(event) =>
                   setValues((current) => ({
@@ -348,7 +353,7 @@ export function QuizForm({
                 <option value="">
                   {campusesLoading
                     ? "Loading campuses..."
-                    : !values.schoolId && requireSchoolId
+                    : !values.schoolId
                       ? "Select a school first"
                       : "Select campus"}
                 </option>

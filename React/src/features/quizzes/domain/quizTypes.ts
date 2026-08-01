@@ -121,9 +121,9 @@ export interface QuizFormValues {
   navigationMode: QuizNavigationMode;
   reviewDisplayMode: QuizReviewDisplayMode;
   contextStudentId: number | null;
-  /** PortalAdmin create: target school. SchoolAdmin uses token school. */
+  /** PortalAdmin create: optional target school (omit / null → 0). SchoolAdmin uses token school. */
   schoolId: number | null;
-  /** PortalAdmin / SchoolAdmin create when campus not on token. */
+  /** PortalAdmin / SchoolAdmin create: optional campus (omit / null → 0). */
   campusId: number | null;
 }
 
@@ -510,13 +510,11 @@ export function validateQuizForm(values: QuizFormValues, requireQuizType = false
     return "Instructions are required.";
   }
 
-  if (values.classId <= 0 || values.subjectId <= 0 || values.topicId <= 0) {
-    return "Class, subject, and topic are required.";
+  if (values.classId <= 0 || values.subjectId <= 0) {
+    return "Class and subject are required.";
   }
 
-  if (values.difficultyLevelId <= 0) {
-    return "Difficulty level is required.";
-  }
+  // Topic and difficulty are optional on create/edit.
 
   if (requireQuizType && values.quizTypeId <= 0) {
     return "Quiz type is required.";

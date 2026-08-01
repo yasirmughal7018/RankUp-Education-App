@@ -1,0 +1,27 @@
+---
+description: Optional fields on quizzes/new create form by role
+globs: React/src/features/quizzes/**/*.{ts,tsx},WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,WebApi/src/RankUpEducation.Contracts/Quizzes/**/*.cs
+alwaysApply: false
+---
+
+# Quiz create (`/quizzes/new`) — optional fields
+
+## Always optional (all roles)
+
+- **Topic** — not required; allow empty / store `0` when unset.
+- **Difficulty** — not required; allow empty / store `0` when unset.
+
+## Role-scoped ownership fields
+
+| Role | School | Campus |
+|------|--------|--------|
+| **PortalAdmin** | Optional | Optional |
+| **SchoolAdmin** | From token (not user-picked) | Optional |
+| Teacher / Parent | From account / child context | From account / child context |
+
+Unset school/campus for PortalAdmin (or unset campus for SchoolAdmin) may persist as `0` until set later. Do not block create for missing Topic, Difficulty, School (PortalAdmin), or Campus (PortalAdmin / SchoolAdmin).
+
+## Still required on create
+
+- Title, Instructions, Class, Subject
+- Quiz type when the create form shows it (`requireQuizType`)

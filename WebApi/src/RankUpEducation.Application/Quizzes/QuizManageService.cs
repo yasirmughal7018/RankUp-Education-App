@@ -522,20 +522,17 @@ public sealed class QuizManageService : IQuizManageService
         if (scope.Role == UserRole.SchoolAdmin)
         {
             var schoolId = scope.SchoolId ?? throw new ForbiddenAppException("School admin school context was not found.");
-            var campusId = requestCampusId
-                ?? scope.CampusId
-                ?? throw new ForbiddenAppException(
-                    "Campus context is required to create a quiz. Set campus on your account or pass campusId.");
+            // Campus is optional on create — unset stores 0 until set later / via assign context.
+            var campusId = requestCampusId ?? scope.CampusId ?? 0;
 
             return new StudentSchoolContext(schoolId, campusId, 0);
         }
 
         if (scope.Role == UserRole.PortalAdmin)
         {
-            var schoolId = requestSchoolId
-                ?? throw new ValidationAppException(["schoolId is required when PortalAdmin creates a quiz."]);
-            var campusId = requestCampusId
-                ?? throw new ValidationAppException(["campusId is required when PortalAdmin creates a quiz."]);
+            // School and campus are optional on create — unset stores 0.
+            var schoolId = requestSchoolId is > 0 ? requestSchoolId.Value : 0;
+            var campusId = requestCampusId is > 0 ? requestCampusId.Value : 0;
 
             return new StudentSchoolContext(schoolId, campusId, 0);
         }

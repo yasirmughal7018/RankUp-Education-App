@@ -5,7 +5,8 @@ namespace RankUpEducation.Contracts.Quizzes;
 /// <summary>
 /// Payload for creating a draft quiz.
 /// Parents may pass <see cref="ContextStudentId"/> for school/campus scope.
-/// PortalAdmin must pass <see cref="SchoolId"/> and <see cref="CampusId"/>; SchoolAdmin may pass CampusId when not on the token.
+/// Topic and difficulty are optional (0 when unset).
+/// PortalAdmin may omit <see cref="SchoolId"/> and <see cref="CampusId"/>; SchoolAdmin may omit CampusId.
 /// </summary>
 public sealed record CreateQuizRequest(
     string Title,
