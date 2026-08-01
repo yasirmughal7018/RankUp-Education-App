@@ -242,7 +242,7 @@ class CreateQuizInput {
     this.shuffleOptions = true,
     this.isReviewRequired = true,
     this.navigationMode = 'Free',
-    this.reviewDisplayMode = 'ScoreOnly',
+    this.reviewDisplayMode = 'Full',
   });
 
   final String title;
@@ -276,7 +276,7 @@ class CreateQuizInput {
         'shuffleOptions': shuffleOptions,
         'isReviewRequired': isReviewRequired,
         'navigationMode': navigationMode,
-        'reviewDisplayMode': reviewDisplayMode,
+        'reviewDisplayMode': 'Full',
       };
 }
 

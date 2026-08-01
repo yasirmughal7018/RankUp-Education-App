@@ -226,8 +226,46 @@ public sealed class QuestionRepository : IQuestionRepository
                 .ToHashSet()
             : null;
 
-        return rows
+        var filteredRows = rows
             .Where(row => approvedStatusIds is null || approvedStatusIds.Contains(row.StatusId))
+            .ToArray();
+
+        if (filteredRows.Length == 0)
+        {
+            return Array.Empty<QuestionListItem>();
+        }
+
+        var questionIds = filteredRows.Select(row => row.Id).ToArray();
+
+        var correctOptions = await _dbContext.QuestionOptions.AsNoTracking()
+            .Where(option => questionIds.Contains(option.QuestionId) && option.IsCorrect)
+            .Select(option => new { option.QuestionId, option.OptionText })
+            .ToListAsync(cancellationToken);
+
+        var acceptedAnswers = await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+            .Where(answer => questionIds.Contains(answer.QuestionId))
+            .Select(answer => new { answer.QuestionId, answer.AnswerText })
+            .ToListAsync(cancellationToken);
+
+        var correctAnswerPreviews = questionIds.ToDictionary(
+            id => id,
+            id =>
+            {
+                var parts = correctOptions
+                    .Where(option => option.QuestionId == id)
+                    .Select(option => option.OptionText.Trim())
+                    .Where(text => text.Length > 0)
+                    .Concat(
+                        acceptedAnswers
+                            .Where(answer => answer.QuestionId == id)
+                            .Select(answer => answer.AnswerText.Trim())
+                            .Where(text => text.Length > 0))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                return parts.Length == 0 ? string.Empty : string.Join(", ", parts);
+            });
+
+        return filteredRows
             .Select(row => new QuestionListItem(
                 row.Id,
                 row.QuestionText,
@@ -252,7 +290,8 @@ public sealed class QuestionRepository : IQuestionRepository
                 row.VisibilityLevel,
                 QuestionVisibilityLevels.ToName(row.VisibilityLevel),
                 row.CreatedDate,
-                row.ModifiedDate))
+                row.ModifiedDate,
+                correctAnswerPreviews.GetValueOrDefault(row.Id, string.Empty)))
             .ToArray();
     }
 

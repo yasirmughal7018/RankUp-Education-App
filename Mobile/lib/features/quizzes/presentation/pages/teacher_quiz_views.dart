@@ -147,7 +147,6 @@ class _TeacherQuizCreateViewState extends ConsumerState<TeacherQuizCreateView> {
   int? _difficultyId;
   int? _quizTypeId;
   int _allowedAttempts = 1;
-  int? _timeLimitMinutes = 45;
   bool _shuffleQuestions = false;
   bool _shuffleOptions = true;
   bool _isReviewRequired = true;
@@ -193,7 +192,7 @@ class _TeacherQuizCreateViewState extends ConsumerState<TeacherQuizCreateView> {
         difficultyLevelId: _difficultyId!,
         quizTypeId: _quizTypeId!,
         instructions: _instructionsController.text,
-        timeLimitMinutes: _timeLimitMinutes,
+        timeLimitMinutes: null,
         allowedAttempts: _allowedAttempts,
         shuffleQuestions: _shuffleQuestions,
         shuffleOptions: _shuffleOptions,
@@ -292,34 +291,14 @@ class _TeacherQuizCreateViewState extends ConsumerState<TeacherQuizCreateView> {
           decoration: const InputDecoration(labelText: 'Instructions *'),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                initialValue: _timeLimitMinutes?.toString(),
-                enabled: !widget.isSaving,
-                decoration: const InputDecoration(
-                  labelText: 'Time limit (min)',
-                ),
-                keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  _timeLimitMinutes = int.tryParse(value);
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextFormField(
-                initialValue: _allowedAttempts.toString(),
-                enabled: !widget.isSaving,
-                decoration: const InputDecoration(labelText: 'Attempts'),
-                keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  _allowedAttempts = int.tryParse(value) ?? 1;
-                },
-              ),
-            ),
-          ],
+        TextFormField(
+          initialValue: _allowedAttempts.toString(),
+          enabled: !widget.isSaving,
+          decoration: const InputDecoration(labelText: 'Attempts'),
+          keyboardType: TextInputType.number,
+          onChanged: (value) {
+            _allowedAttempts = int.tryParse(value) ?? 1;
+          },
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,

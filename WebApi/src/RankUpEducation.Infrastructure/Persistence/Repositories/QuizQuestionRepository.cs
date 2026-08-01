@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Questions;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
@@ -112,18 +113,95 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
 
     public async Task RecalculateQuizTotalsAsync(long quizId, CancellationToken cancellationToken)
     {
-        var totals = await (
+        // Include pending Added/Modified/Deleted links — AsNoTracking DB queries miss unsaved changes.
+        var deletedQuestionIds = _dbContext.ChangeTracker.Entries<QuizQuestion>()
+            .Where(entry =>
+                entry.Entity.QuizId == quizId && entry.State == EntityState.Deleted)
+            .Select(entry => entry.Entity.QuestionId)
+            .ToHashSet();
+
+        var marksByQuestionId = new Dictionary<long, short>();
+        foreach (var entry in _dbContext.ChangeTracker.Entries<QuizQuestion>())
+        {
+            if (entry.Entity.QuizId != quizId)
+            {
+                continue;
+            }
+
+            if (entry.State is EntityState.Deleted or EntityState.Detached)
+            {
+                continue;
+            }
+
+            marksByQuestionId[entry.Entity.QuestionId] = entry.Entity.Marks;
+        }
+
+        var dbRows = await (
             from link in _dbContext.QuizQuestions.AsNoTracking()
             join question in _dbContext.Questions.AsNoTracking() on link.QuestionId equals question.Id
             where link.QuizId == quizId
-            group new { link.Marks, question.EstimatedTimeSeconds } by link.QuizId into grouped
             select new
             {
-                Count = (short)grouped.Count(),
-                Marks = (short)grouped.Sum(item => item.Marks),
-                EstimatedSeconds = grouped.Sum(item => (int)item.EstimatedTimeSeconds)
+                link.QuestionId,
+                link.Marks,
+                question.EstimatedTimeSeconds
             })
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+
+        var estimatedSecondsByQuestionId = new Dictionary<long, short>();
+        foreach (var row in dbRows)
+        {
+            if (deletedQuestionIds.Contains(row.QuestionId))
+            {
+                continue;
+            }
+
+            if (!marksByQuestionId.ContainsKey(row.QuestionId))
+            {
+                marksByQuestionId[row.QuestionId] = row.Marks;
+            }
+
+            estimatedSecondsByQuestionId[row.QuestionId] = row.EstimatedTimeSeconds;
+        }
+
+        // Pending attaches may reference questions not yet joined above (link Added, question already saved).
+        var missingTimeIds = marksByQuestionId.Keys
+            .Where(id => !estimatedSecondsByQuestionId.ContainsKey(id))
+            .ToArray();
+        if (missingTimeIds.Length > 0)
+        {
+            var missingTimes = await _dbContext.Questions.AsNoTracking()
+                .Where(question => missingTimeIds.Contains(question.Id))
+                .Select(question => new { question.Id, question.EstimatedTimeSeconds })
+                .ToListAsync(cancellationToken);
+            foreach (var row in missingTimes)
+            {
+                estimatedSecondsByQuestionId[row.Id] = row.EstimatedTimeSeconds;
+            }
+        }
+
+        // Prefer tracked question edits for estimated time when the entity is loaded.
+        foreach (var entry in _dbContext.ChangeTracker.Entries<Question>())
+        {
+            if (entry.State is EntityState.Deleted or EntityState.Detached)
+            {
+                continue;
+            }
+
+            if (marksByQuestionId.ContainsKey(entry.Entity.Id))
+            {
+                estimatedSecondsByQuestionId[entry.Entity.Id] = entry.Entity.EstimatedTimeSeconds;
+            }
+        }
+
+        var count = (short)marksByQuestionId.Count;
+        var marks = (short)Math.Clamp(
+            marksByQuestionId.Values.Sum(value => (int)value),
+            0,
+            short.MaxValue);
+        var estimatedSeconds = estimatedSecondsByQuestionId
+            .Where(pair => marksByQuestionId.ContainsKey(pair.Key))
+            .Sum(pair => (int)pair.Value);
 
         var quiz = await _dbContext.Quizzes.FirstOrDefaultAsync(item => item.Id == quizId, cancellationToken);
         if (quiz is null)
@@ -132,18 +210,18 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
         }
 
         short? timeLimitMinutes = null;
-        if (totals is not null && totals.EstimatedSeconds > 0)
+        if (estimatedSeconds > 0)
         {
+            // Persist whole minutes for legacy attempt budget APIs, but keep ceiling so
+            // 70 seconds → 2 minutes still covers the exact Σ duration.
+            // Manage UI shows exact "1 min 10 sec" from question times.
             timeLimitMinutes = (short)Math.Clamp(
-                (int)Math.Ceiling(totals.EstimatedSeconds / 60d),
+                (int)Math.Ceiling(estimatedSeconds / 60d),
                 1,
                 short.MaxValue);
         }
 
-        quiz.SetQuestionTotals(
-            totals?.Count ?? 0,
-            totals?.Marks ?? 0,
-            timeLimitMinutes);
+        quiz.SetQuestionTotals(count, marks, timeLimitMinutes);
     }
 
     public async Task<IReadOnlyList<QuizQuestionCopyItem>> GetQuizQuestionsForCopyAsync(

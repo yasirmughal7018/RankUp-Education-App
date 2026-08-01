@@ -60,7 +60,9 @@ internal static class QuestionMapping
 
             item.CreatedDate,
 
-            item.ModifiedDate);
+            item.ModifiedDate,
+
+            item.CorrectAnswerPreview);
 
 
 

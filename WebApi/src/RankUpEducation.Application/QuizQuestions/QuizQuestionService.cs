@@ -169,7 +169,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return await BuildManageResponseAsync(quizId, scope, cancellationToken);
+        return await BuildManageResponseAsync(quizId, cancellationToken);
     }
 
     public async Task<ManageQuizResponse> AttachBankQuestionAsync(
@@ -254,7 +254,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return await BuildManageResponseAsync(quizId, scope, cancellationToken);
+        return await BuildManageResponseAsync(quizId, cancellationToken);
     }
 
     public async Task<ManageQuizResponse> UpdateOnQuizAsync(
@@ -309,7 +309,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return await BuildManageResponseAsync(quizId, scope, cancellationToken);
+        return await BuildManageResponseAsync(quizId, cancellationToken);
     }
 
     public async Task<ManageQuizResponse> RemoveFromQuizAsync(
@@ -335,7 +335,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return await BuildManageResponseAsync(quizId, scope, cancellationToken);
+        return await BuildManageResponseAsync(quizId, cancellationToken);
     }
 
     private async Task ReplaceAnswersAsync(
@@ -399,10 +399,11 @@ public sealed class QuizQuestionService : IQuizQuestionService
 
     private async Task<ManageQuizResponse> BuildManageResponseAsync(
         long quizId,
-        QuizManageScope scope,
         CancellationToken cancellationToken)
     {
-        var detail = await _quizzes.GetDetailForCreatorAsync(quizId, scope.UserId, cancellationToken)
+        // Same as QuizManageService: load by id after ownership was already enforced.
+        // Do not filter by creator — PortalAdmin/SchoolAdmin may manage quizzes they did not create.
+        var detail = await _quizzes.GetDetailForManageAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
         var questions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);

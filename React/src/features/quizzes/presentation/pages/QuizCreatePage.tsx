@@ -26,7 +26,7 @@ export function QuizCreatePage() {
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Create quiz"
-        description="Start with quiz details. You can add questions after the quiz is created."
+        description="Start with quiz details and questions. Who can take it (public catalog, school, grade, section, or selected students) is chosen later when you Assign — after publish and approval when required."
         backTo="/quizzes"
         backAriaLabel="Back to quizzes"
       />

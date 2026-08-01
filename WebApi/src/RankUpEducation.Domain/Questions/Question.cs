@@ -229,6 +229,23 @@ public sealed class Question : BaseEntity
     }
 
     /// <summary>
+    /// Upgrades visibility only when <paramref name="visibilityLevel"/> is strictly higher
+    /// (Public &gt; School &gt; Campus &gt; None). Never downgrades an existing higher level.
+    /// </summary>
+    public void RaiseVisibilityIfHigher(
+        long approvedByUserId,
+        short approvedStatusId,
+        short visibilityLevel)
+    {
+        if (visibilityLevel <= VisibilityLevel)
+        {
+            return;
+        }
+
+        MarkFullyApproved(approvedByUserId, approvedStatusId, visibilityLevel);
+    }
+
+    /// <summary>
     /// Soft quiz-use flags: active + ApprovedBy + Public (PortalAdmin-published).
     /// Callers must also verify Approved status.
     /// </summary>

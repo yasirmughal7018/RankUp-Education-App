@@ -59,7 +59,10 @@ public sealed record QuestionListItem(
 
     DateOnly CreatedDate,
 
-    DateOnly ModifiedDate);
+    DateOnly ModifiedDate,
+
+    /// <summary>Comma-separated correct options / accepted answers for bank pickers.</summary>
+    string CorrectAnswerPreview);
 
 
 

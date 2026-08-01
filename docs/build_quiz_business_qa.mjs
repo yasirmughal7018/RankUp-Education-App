@@ -258,14 +258,14 @@ const studentAttemptFlow = [
   ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83) → Reviewed (85) after finalize. Expired (84) via overdue job."],
   ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse first option; Multiple exact set; Fill accepted-answer rules."],
   ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive: AI suggestion on submit + teacher finalize when answered. File Upload (link/path) requires teacher review. Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic)."],
-  ["15", "Student sees the permitted review screen", "Covered", "Quiz.ReviewDisplayMode (Full / CorrectAnswers / ScoreOnly / Withheld) + shared QuizReviewDisplay.Resolve on submit and get-result."],
+  ["15", "Student sees the permitted review screen", "Covered", "Full results after submit (or after teacher review when IsReviewRequired). ReviewDisplayMode modes are retired."],
   ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true. AI suggests; teacher confirms when required."],
   ["17", "Student views own quiz history", "Covered", "/student/history (web) and Mobile /reports or Quizzes history; GET /reports/students/{id}/quiz-history scoped to own profileId (History self — not full analytics)."],
 ];
 
 const timeManagementModes = [
   ["No time limit", "Covered", "Quiz.TimeLimitMinutes is optional/null. Attempt page shows no countdown; student may take as long as the assignment window allows."],
-  ["Total quiz time limit", "Covered", "Stored as Quiz.TimeLimitMinutes. Recalculated as ceil(Σ EstimatedTimeSeconds / 60) when questions are added/removed/attached; owner may still override on edit."],
+  ["Total quiz time limit", "Covered", "Stored as Quiz.TimeLimitMinutes. Create starts with null; recalculated as ceil(Σ EstimatedTimeSeconds / 60) when questions are added/updated/removed/attached. Metadata update preserves and refreshes that derived value (no manual field)."],
   ["Time limit per question", "Covered", "EstimatedTimeSeconds enforced at draft/submit: late answers ignored / capped; hard per-question timer in attempt UI."],
   ["Fixed availability window", "Covered", "QuizAssignment.StartDateTime / EndDateTime gate start, resume, and submit. Outside the window the attempt is blocked or Expired."],
 ];
@@ -370,8 +370,8 @@ const reviewRules = [
   "RequiresReview per question: Descriptive OR File Upload OR (Fill + AllowTeacherReview + submitted text).",
   "Mark answers: awarded marks in [0, MaxMarks]; not if already finalized.",
   "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true.",
-  "Score masking uses the same QuizReviewDisplay.Resolve on submit and get-result (ReviewDisplayMode + IsReviewRequired + IsReviewDone + HasSubjectiveAnswersRequiringReview).",
-  "Modes: Full, CorrectAnswers, ScoreOnly, Withheld — owner-configured on the quiz (type defaults via ApplyCreateDefaults; bools never OR’d with defaults).",
+  "Score masking uses QuizReviewDisplay.Resolve on submit and get-result (Full when review is done / not required; hidden while IsReviewRequired and not IsReviewDone).",
+  "ReviewDisplayMode modes are retired; create/update always persist Full. Bools never OR’d with type defaults.",
   "AI review: Descriptive always; Fill when AllowAiReview. OpenAI when configured, else heuristic. AI comment shown on teacher review screen; teacher still finalizes when required.",
 ];
 
@@ -391,7 +391,7 @@ const apiMap = [
   ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove; TimeLimitMinutes recalculated from EstimatedTimeSeconds."],
   ["POST .../attempts", "Student start/resume; instructions ack gate when Instructions set."],
   ["PUT .../attempts/{id}/draft", "Student save draft answers (+ mark-for-review / per-question time)."],
-  ["POST .../attempts/{id}/submit", "Student submit + auto-score; IsAutoSubmit → AutoSubmitted; shared review display mask."],
+  ["POST .../attempts/{id}/submit", "Student submit + auto-score; IsAutoSubmit → AutoSubmitted; shared Full / review-pending mask."],
   ["POST .../attempts/{id}/sync", "Offline queue replay (ClientSyncId idempotency)."],
   ["GET .../attempts/{id}/result", "Student own or Parent linked child; same mask rule as submit."],
   ["GET .../monitoring", "Owner progress board (incl. integrity signals where available)."],
@@ -454,13 +454,13 @@ const scenarios = [
     "QZ-09",
     "Auto-score objective + mask subjective",
     "Quiz IsReviewRequired with Fill(AllowTeacherReview) answers; student submits then reloads result.",
-    "Objective items scored; submit and get-result both use QuizReviewDisplay.Resolve — same mask / Pending Review until finalize.",
+    "Objective items scored; submit and get-result both use QuizReviewDisplay.Resolve — Pending Review until finalize when IsReviewRequired.",
   ],
   [
     "QZ-10",
     "Finalize review releases results",
     "Teacher marks all RequiresReview items and finalizes.",
-    "Attempt→Reviewed; IsReviewDone=true; student/parent see real scores per ReviewDisplayMode.",
+    "Attempt→Reviewed; IsReviewDone=true; student/parent see full scores/answers once review is done.",
   ],
   [
     "QZ-11",
@@ -526,7 +526,7 @@ const scenarios = [
     "QZ-21",
     "Create defaults preserve bools",
     "Client creates a Practice quiz with ShuffleQuestions=false while type default is also false/true variants.",
-    "ApplyCreateDefaults never OR’s bools with type defaults — explicit client bools win; only nullables (time/attempts/nav/review display) fall back.",
+    "ApplyCreateDefaults never OR’s bools with type defaults — explicit client bools win; only nullables (attempts/nav) fall back; TimeLimitMinutes stays null until questions; ReviewDisplayMode always Full.",
   ],
 ];
 
@@ -548,7 +548,7 @@ const checklist = [
   "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time banner (≤5m) + modal/audio at ≤60s (web + mobile).",
   "On attempt start, QuizAttemptQuestion freezes text/marks/options/order; answers store per attempt.",
   "Scoring: single/TF one correct; multi exact set; Fill accepted-answer rules.",
-  "ReviewDisplayMode + shared mask on submit and get-result until finalize when required.",
+  "Shared Full / review-pending mask on submit and get-result until finalize when required.",
   "ApplyCreateDefaults: nullable fallbacks only; bools never OR’d.",
   "Allow-retry only after IsReviewDone; adds ExtraAttempts.",
   "Cancel removes only future assignments.",
@@ -752,7 +752,7 @@ const html = `<!doctype html>
     "Parent list = assignments of linked children ∪ quizzes they created.",
     "Parent may review/finalize only their own quizzes; may view linked-child results and quiz history.",
     "Student sees assigned quizzes plus Public catalog (AudienceScope=Public and within audience window). School/section/multi assign stay Assigned — see §8.",
-    "Results masked via shared QuizReviewDisplay.Resolve on submit and get-result while review is pending.",
+    "Results masked while review is pending (IsReviewRequired and not done); otherwise Full.",
     "Rankings / performance / summary: Teacher (own), SchoolAdmin (school), PortalAdmin (all) — not students/parents.",
   ])}
 
@@ -762,11 +762,11 @@ const html = `<!doctype html>
     "Description DB max 500 (not required empty-check in app).",
     "Instructions required; DB max 1000. Non-empty instructions require InstructionsAcknowledged on start.",
     "Class / Subject / Topic / Difficulty required on create (UI); difficulty Easy/Medium/Hard (2001–2003).",
-    "TimeLimitMinutes optional; recalculated from Σ EstimatedTimeSeconds on question changes; server-enforced on submit.",
+    "TimeLimitMinutes optional; derived from Σ EstimatedTimeSeconds on question changes (no manual create/edit field); server-enforced on submit.",
     "Quiz AllowedAttempts optional on metadata; assignment AllowedAttempts must be > 0.",
     "Question marks > 0; publish/assign/duplicate need ≥1 question; no hard max count.",
     "Submitted text DB max 1000.",
-    "ApplyCreateDefaults: nullables fall back to type defaults; ShuffleQuestions / ShuffleOptions / IsReviewRequired from client are never OR’d with defaults.",
+    "ApplyCreateDefaults: AllowedAttempts / navigation nullables fall back to type defaults; ReviewDisplayMode always Full; TimeLimitMinutes stays null until questions recalculate totals; ShuffleQuestions / ShuffleOptions / IsReviewRequired from client are never OR’d with defaults.",
   ])}
 
   <h2>14. API transition map</h2>
@@ -1015,7 +1015,7 @@ const docChildren = [
   ...[
     "Parent list = linked-child assignments ∪ own quizzes.",
     "Student sees assigned quizzes plus Public catalog only (school/section/multi stay Assigned).",
-    "Results masked via shared QuizReviewDisplay.Resolve on submit and get-result.",
+    "Results masked while review is pending; otherwise Full.",
     "Reports: Teacher own / SchoolAdmin school / PortalAdmin all.",
   ].map(docBullet),
 
@@ -1023,8 +1023,8 @@ const docChildren = [
   ...[
     "Title required (max 100); instructions required (max 1000); non-empty instructions require ack on start.",
     "Difficulty Easy/Medium/Hard (2001–2003).",
-    "TimeLimitMinutes optional; derived from Σ EstimatedTimeSeconds on question changes; server-enforced.",
-    "ApplyCreateDefaults preserves explicit bools; nullables fall back to type defaults.",
+    "TimeLimitMinutes optional; derived from Σ EstimatedTimeSeconds on question changes (no manual create/edit field); server-enforced.",
+    "ApplyCreateDefaults preserves explicit bools; AllowedAttempts/navigation/review nullables use type defaults; TimeLimitMinutes stays null until questions are added.",
     "Publish/assign/duplicate need ≥1 question.",
   ].map(docBullet),
 

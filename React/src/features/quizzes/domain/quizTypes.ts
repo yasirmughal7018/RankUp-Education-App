@@ -348,21 +348,11 @@ export function normalizeQuizNavigationMode(
   return "Free";
 }
 
-/** Normalize API/form review display mode to a known value. */
+/** Review display modes are retired — results are always Full once review is not pending. */
 export function normalizeQuizReviewDisplayMode(
-  value: string | null | undefined,
+  _value?: string | null,
 ): QuizReviewDisplayMode {
-  const normalized = (value ?? "").trim().toLowerCase();
-  if (normalized === "full") {
-    return "Full";
-  }
-  if (normalized === "correctanswers" || normalized === "correct") {
-    return "CorrectAnswers";
-  }
-  if (normalized === "withheld" || normalized === "none") {
-    return "Withheld";
-  }
-  return "ScoreOnly";
+  return "Full";
 }
 
 /** Default values for the create-quiz form (Assessment-aligned until a type is chosen). */
@@ -376,13 +366,13 @@ export function createEmptyQuizForm(): QuizFormValues {
     difficultyLevelId: 0,
     quizTypeId: 0,
     instructions: "Read all questions carefully before answering.",
-    timeLimitMinutes: 45,
+    timeLimitMinutes: null,
     allowedAttempts: 1,
     shuffleQuestions: false,
     shuffleOptions: true,
     isReviewRequired: true,
     navigationMode: "Free",
-    reviewDisplayMode: "ScoreOnly",
+    reviewDisplayMode: "Full",
     contextStudentId: null,
     schoolId: null,
     campusId: null,
@@ -417,48 +407,48 @@ export function resolveQuizTypeDefaults(quizTypeName: string): Pick<
   if (name === "competition") {
     return {
       allowedAttempts: 1,
-      timeLimitMinutes: 30,
+      timeLimitMinutes: null,
       shuffleQuestions: true,
       shuffleOptions: true,
       isReviewRequired: false,
       navigationMode: "Locked",
-      reviewDisplayMode: "Withheld",
+      reviewDisplayMode: "Full",
     };
   }
 
   if (name === "surprise") {
     return {
       allowedAttempts: 1,
-      timeLimitMinutes: 15,
+      timeLimitMinutes: null,
       shuffleQuestions: true,
       shuffleOptions: true,
       isReviewRequired: false,
       navigationMode: "Sequential",
-      reviewDisplayMode: "Withheld",
+      reviewDisplayMode: "Full",
     };
   }
 
   if (name === "parentprivate" || name === "private") {
     return {
       allowedAttempts: 2,
-      timeLimitMinutes: 30,
+      timeLimitMinutes: null,
       shuffleQuestions: false,
       shuffleOptions: false,
       isReviewRequired: true,
       navigationMode: "Free",
-      reviewDisplayMode: "CorrectAnswers",
+      reviewDisplayMode: "Full",
     };
   }
 
   // Assessment (default school type)
   return {
     allowedAttempts: 1,
-    timeLimitMinutes: 45,
+    timeLimitMinutes: null,
     shuffleQuestions: false,
     shuffleOptions: true,
     isReviewRequired: true,
     navigationMode: "Free",
-    reviewDisplayMode: "ScoreOnly",
+    reviewDisplayMode: "Full",
   };
 }
 
@@ -497,13 +487,13 @@ export function buildQuizPayload(values: QuizFormValues) {
     difficultyLevelId: values.difficultyLevelId,
     quizTypeId: values.quizTypeId > 0 ? values.quizTypeId : null,
     instructions: values.instructions.trim(),
-    timeLimitMinutes: values.timeLimitMinutes,
+    timeLimitMinutes: null,
     allowedAttempts: values.allowedAttempts,
     shuffleQuestions: values.shuffleQuestions,
     shuffleOptions: values.shuffleOptions,
     isReviewRequired: values.isReviewRequired,
     navigationMode: normalizeQuizNavigationMode(values.navigationMode),
-    reviewDisplayMode: normalizeQuizReviewDisplayMode(values.reviewDisplayMode),
+    reviewDisplayMode: "Full" as const,
     contextStudentId: values.contextStudentId,
     schoolId: values.schoolId,
     campusId: values.campusId,
@@ -535,14 +525,49 @@ export function validateQuizForm(values: QuizFormValues, requireQuizType = false
   return null;
 }
 
-/** Suggested quiz time limit in minutes from question estimated durations. */
-export function suggestTimeLimitMinutes(
+/** Format a duration from total seconds, e.g. 70 → "1 min 10 sec". */
+export function formatQuizDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  if (seconds <= 0) {
+    return "—";
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (minutes <= 0) {
+    return `${remainder} sec`;
+  }
+  if (remainder === 0) {
+    return `${minutes} min`;
+  }
+  return `${minutes} min ${remainder} sec`;
+}
+
+/** Sum of question marks on a quiz. */
+export function sumQuizMarks(
+  questions: Array<{ marks?: number | null }>,
+): number {
+  return questions.reduce(
+    (sum, question) => sum + Math.max(0, question.marks ?? 0),
+    0,
+  );
+}
+
+/** Sum of estimated question durations in seconds. */
+export function sumQuizEstimatedSeconds(
   questions: Array<{ estimatedTimeSeconds?: number | null }>,
-): number | null {
-  const totalSeconds = questions.reduce(
+): number {
+  return questions.reduce(
     (sum, question) => sum + Math.max(0, question.estimatedTimeSeconds ?? 0),
     0,
   );
+}
+
+/** Suggested quiz time limit in minutes from question estimated durations (ceil). */
+export function suggestTimeLimitMinutes(
+  questions: Array<{ estimatedTimeSeconds?: number | null }>,
+): number | null {
+  const totalSeconds = sumQuizEstimatedSeconds(questions);
   if (totalSeconds <= 0) {
     return null;
   }

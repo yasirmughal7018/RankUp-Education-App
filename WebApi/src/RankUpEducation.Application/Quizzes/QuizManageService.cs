@@ -2,7 +2,6 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
-using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Questions;
@@ -33,7 +32,10 @@ public interface IQuizManageService
     /// <summary>Returns full manage view including attached questions for the quiz owner.</summary>
     Task<ManageQuizResponse> GetManageDetailAsync(long quizId, CancellationToken cancellationToken);
 
-    /// <summary>Clones quiz and deep-copies inline questions into new campus-scoped bank rows.</summary>
+    /// <summary>
+    /// Clones quiz metadata and reuses the same question-bank rows (no question insert).
+    /// Visibility is raised only when the caller's tier is higher (Public &gt; School &gt; Campus).
+    /// </summary>
     Task<DuplicateQuizResponse> DuplicateAsync(long quizId, CancellationToken cancellationToken);
 
     /// <summary>Archives a published/assigned quiz (drafts must be deleted instead).</summary>
@@ -125,16 +127,16 @@ public sealed class QuizManageService : IQuizManageService
             request.TopicId,
             request.DifficultyLevelId,
             request.Instructions,
-            request.TimeLimitMinutes,
+            null,
             request.AllowedAttempts,
             request.ShuffleQuestions,
             request.ShuffleOptions,
             request.IsReviewRequired,
             request.NavigationMode,
-            request.ReviewDisplayMode);
+            QuizReviewDisplay.Full);
 
         var quizTypeName = await _lookups.GetLookupNameAsync(quizTypeId, cancellationToken);
-        QuizTypeBehavior.ApplyCreateDefaults(quiz, quizTypeName, request.NavigationMode, request.ReviewDisplayMode);
+        QuizTypeBehavior.ApplyCreateDefaults(quiz, quizTypeName, request.NavigationMode);
 
         await _quizzes.AddQuizAsync(quiz, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -150,6 +152,7 @@ public sealed class QuizManageService : IQuizManageService
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
         var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
 
+        // Time limit is derived from question estimated times — never overwrite from the form.
         quiz.UpdateDetails(
             request.Title,
             request.Description,
@@ -158,14 +161,15 @@ public sealed class QuizManageService : IQuizManageService
             request.TopicId,
             request.DifficultyLevelId,
             request.Instructions,
-            request.TimeLimitMinutes,
+            quiz.TimeLimitMinutes,
             request.AllowedAttempts,
             request.ShuffleQuestions,
             request.ShuffleOptions,
             request.IsReviewRequired,
             request.NavigationMode,
-            request.ReviewDisplayMode);
+            QuizReviewDisplay.Full);
 
+        await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await BuildManageResponseAsync(quizId, cancellationToken);
     }
@@ -386,91 +390,41 @@ public sealed class QuizManageService : IQuizManageService
             source.ShuffleOptions,
             source.IsReviewRequired,
             source.NavigationMode,
-            source.ReviewDisplayMode);
+            QuizReviewDisplay.Full);
 
         await _quizzes.AddQuizAsync(copy, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var sourceQuestions = await _quizQuestions.GetQuizQuestionsForCopyAsync(quizId, cancellationToken);
+        if (sourceQuestions.Count == 0)
+        {
+            throw new BusinessRuleException("Quiz must contain at least one active question to duplicate.");
+        }
+
         var questionStatusId = await _guard.RequireLookupAsync(
             QuizLookupNames.QuestionStatus,
             QuizLookupNames.ActiveQuestionStatusNames,
             cancellationToken);
 
+        // Target visibility for this actor — only applied when higher than the existing question.
+        var targetVisibility = scope.Role switch
+        {
+            UserRole.PortalAdmin => QuestionVisibilityLevels.Public,
+            UserRole.SchoolAdmin => QuestionVisibilityLevels.School,
+            UserRole.CampusAdmin => QuestionVisibilityLevels.Campus,
+            _ => QuestionVisibilityLevels.Campus,
+        };
+
         foreach (var sourceQuestion in sourceQuestions)
         {
-            var question = new Question(
-                sourceQuestion.QuestionText,
-                sourceQuestion.QuestionTypeId,
-                sourceQuestion.ClassId,
-                sourceQuestion.SubjectId,
-                sourceQuestion.TopicId,
-                sourceQuestion.DifficultyLevel,
-                questionStatusId,
-                scope.UserId,
-                scope.Role,
-                sourceQuestion.EstimatedTimeSeconds,
-                sourceQuestion.Marks);
+            var question = await _questions.GetQuestionEntityForManageAsync(
+                    sourceQuestion.QuestionId,
+                    cancellationToken)
+                ?? throw new NotFoundAppException(
+                    $"Question {sourceQuestion.QuestionId} was not found and cannot be linked to the duplicated quiz.");
 
-            question.UpdateDetails(
-                sourceQuestion.QuestionText,
-                sourceQuestion.QuestionTypeId,
-                sourceQuestion.ClassId,
-                sourceQuestion.SubjectId,
-                sourceQuestion.TopicId,
-                sourceQuestion.DifficultyLevel,
-                sourceQuestion.EstimatedTimeSeconds,
-                sourceQuestion.Marks,
-                sourceQuestion.Hint,
-                sourceQuestion.Explanation);
-
-            question.SetOrgScope(copy.SchoolId, copy.SchoolCampusId);
-            question.MarkFullyApproved(
-                scope.UserId,
-                questionStatusId,
-                QuestionVisibilityLevels.Campus);
-
-            await _questions.AddQuestionAsync(question, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            // Trail: duplicated quiz questions are created + campus-endorsed in one step.
-            var trailNow = DateTimeOffset.UtcNow;
-            await _questions.AddApprovalEventAsync(
-                Approval.RecordQuestionEvent(
-                    question.Id, scope.UserId, scope.Role, ApprovalAction.Created, trailNow),
-                cancellationToken);
-            await _questions.AddApprovalEventAsync(
-                Approval.RecordQuestionEvent(
-                    question.Id, scope.UserId, scope.Role, ApprovalAction.Endorsed, trailNow),
-                cancellationToken);
-
-            if (sourceQuestion.Options.Count > 0)
-            {
-                var options = sourceQuestion.Options
-                    .Select(option => new QuestionOption(
-                        question.Id,
-                        option.OptionText,
-                        option.IsCorrect,
-                        option.OptionImageUrl))
-                    .ToArray();
-                await _questions.AddQuestionOptionsAsync(options, cancellationToken);
-            }
-
-            if (sourceQuestion.AcceptedAnswers.Count > 0)
-            {
-                var answers = sourceQuestion.AcceptedAnswers
-                    .Select(answer => new QuestionAcceptedAnswer(
-                        question.Id,
-                        answer.AnswerText,
-                        answer.IsCaseSensitive,
-                        answer.AllowPartialMatch,
-                        answer.MinimumLength,
-                        answer.MaximumLength,
-                        answer.AllowAiReview,
-                        answer.AllowTeacherReview))
-                    .ToArray();
-                await _questions.AddQuestionAcceptedAnswersAsync(answers, cancellationToken);
-            }
+            // Reuse the bank question; never insert a copy. Raise visibility only (never downgrade).
+            question.RaiseVisibilityIfHigher(scope.UserId, questionStatusId, targetVisibility);
 
             await _quizQuestions.AddQuizQuestionAsync(
                 new QuizQuestion(

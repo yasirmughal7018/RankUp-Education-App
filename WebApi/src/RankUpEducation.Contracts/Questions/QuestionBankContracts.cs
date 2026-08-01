@@ -175,7 +175,10 @@ public sealed record QuestionSummaryResponse(
 
     DateOnly CreatedDate,
 
-    DateOnly ModifiedDate);
+    DateOnly ModifiedDate,
+
+    /// <summary>Comma-separated correct options / accepted answers for quiz bank pickers.</summary>
+    string CorrectAnswerPreview = "");
 
 
 

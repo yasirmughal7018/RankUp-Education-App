@@ -73,7 +73,7 @@ public sealed class Quiz : SoftDeleteEntity
     /// Post-submit review: Full (score + correct + explanations), CorrectAnswers (score + correct),
     /// ScoreOnly, or Withheld (hide score/answers until review is published).
     /// </summary>
-    public string ReviewDisplayMode { get; private set; } = "ScoreOnly";
+    public string ReviewDisplayMode { get; private set; } = "Full";
 
     /// <summary>Assigned (row-based) or Public (platform catalog + lazy assignment). School-wide targets use assignment rows only.</summary>
     public string AudienceScope { get; private set; } = "Assigned";
@@ -123,7 +123,9 @@ public sealed class Quiz : SoftDeleteEntity
         ShuffleOptions = shuffleOptions;
         IsReviewRequired = isReviewRequired;
         NavigationMode = NormalizeNavigationMode(navigationMode);
-        ReviewDisplayMode = NormalizeReviewDisplayMode(reviewDisplayMode);
+        // Review display modes are retired — results are always Full once review is not pending.
+        _ = reviewDisplayMode;
+        ReviewDisplayMode = "Full";
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -133,29 +135,6 @@ public sealed class Quiz : SoftDeleteEntity
         return mode.Equals("Sequential", StringComparison.OrdinalIgnoreCase) ? "Sequential"
             : mode.Equals("Locked", StringComparison.OrdinalIgnoreCase) ? "Locked"
             : "Free";
-    }
-
-    private static string NormalizeReviewDisplayMode(string? reviewDisplayMode)
-    {
-        var mode = reviewDisplayMode.AsTrimmedOrNull() ?? "ScoreOnly";
-        if (mode.Equals("Full", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Full";
-        }
-
-        if (mode.Equals("CorrectAnswers", StringComparison.OrdinalIgnoreCase)
-            || mode.Equals("Correct", StringComparison.OrdinalIgnoreCase))
-        {
-            return "CorrectAnswers";
-        }
-
-        if (mode.Equals("Withheld", StringComparison.OrdinalIgnoreCase)
-            || mode.Equals("None", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Withheld";
-        }
-
-        return "ScoreOnly";
     }
 
     /// <summary>Opens public catalog access without requiring pre-created rows for every student.</summary>
@@ -176,7 +155,7 @@ public sealed class Quiz : SoftDeleteEntity
 
     /// <summary>
     /// Recalculates aggregate question count, marks, and time limit (ceil of Σ EstimatedTimeSeconds / 60)
-    /// after bank attach or inline add/update/remove.
+    /// after bank attach or inline add/update/remove. Includes unsaved link changes in the current unit of work.
     /// </summary>
     public void SetQuestionTotals(short totalQuestions, short totalMarks, short? timeLimitMinutes)
     {

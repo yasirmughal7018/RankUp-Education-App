@@ -14,7 +14,7 @@ interface QuizAttemptResultBodyProps {
   answerLabel?: string;
 }
 
-/** Shared student/parent result breakdown that honors ReviewDisplayMode. */
+/** Shared student/parent result breakdown (Full after review is published). */
 export function QuizAttemptResultBody({
   result,
   answerLabel = "Your answer",

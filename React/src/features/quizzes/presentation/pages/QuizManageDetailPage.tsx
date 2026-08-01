@@ -2,20 +2,25 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
-import { AddQuizQuestionDialog } from "@/features/quizzes/presentation/components/AddQuizQuestionDialog";
+import { AttachBankQuestionsDialog } from "@/features/quizzes/presentation/components/AttachBankQuestionsDialog";
 import { AssignQuizDialog } from "@/features/quizzes/presentation/components/AssignQuizDialog";
 import {
+  answersFromQuizQuestion,
+  QuizQuestionAnswerAside,
+} from "@/features/quizzes/presentation/components/QuizQuestionAnswerAside";
+import {
   canAuthorQuizzes,
+  formatQuizDuration,
   isDraftQuiz,
   isQuizMetadataEditable,
-  type QuizQuestionItem,
+  sumQuizEstimatedSeconds,
+  sumQuizMarks,
 } from "@/features/quizzes/domain/quizTypes";
 import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
-  useAddQuizQuestionMutation,
   useAllowRetryMutation,
   useArchiveQuizMutation,
   useAssignQuizMutation,
@@ -27,7 +32,6 @@ import {
   usePublishQuizMutation,
   useQuizAssignmentsQuery,
   useRemoveQuizQuestionMutation,
-  useUpdateQuizQuestionMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
 function formatDateTime(value: string): string {
@@ -68,8 +72,6 @@ export function QuizManageDetailPage() {
   const duplicateQuiz = useDuplicateQuizMutation(numericQuizId);
   const archiveQuiz = useArchiveQuizMutation(numericQuizId);
   const removeQuestion = useRemoveQuizQuestionMutation(numericQuizId);
-  const addQuestion = useAddQuizQuestionMutation(numericQuizId);
-  const updateQuestion = useUpdateQuizQuestionMutation(numericQuizId);
   const attachBankQuestion = useAttachBankQuestionMutation(numericQuizId);
   const assignQuiz = useAssignQuizMutation(numericQuizId);
   const cancelAssignments = useCancelQuizAssignmentsMutation(numericQuizId);
@@ -77,10 +79,7 @@ export function QuizManageDetailPage() {
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showQuestionDialog, setShowQuestionDialog] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<QuizQuestionItem | null>(
-    null,
-  );
+  const [showBankDialog, setShowBankDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
 
   const isSubmitting =
@@ -89,8 +88,6 @@ export function QuizManageDetailPage() {
     duplicateQuiz.isPending ||
     archiveQuiz.isPending ||
     removeQuestion.isPending ||
-    addQuestion.isPending ||
-    updateQuestion.isPending ||
     attachBankQuestion.isPending ||
     assignQuiz.isPending ||
     cancelAssignments.isPending ||
@@ -111,19 +108,8 @@ export function QuizManageDetailPage() {
     }
   }
 
-  function openAddQuestion() {
-    setEditingQuestion(null);
-    setShowQuestionDialog(true);
-  }
-
-  function openEditQuestion(question: QuizQuestionItem) {
-    setEditingQuestion(question);
-    setShowQuestionDialog(true);
-  }
-
-  function closeQuestionDialog() {
-    setShowQuestionDialog(false);
-    setEditingQuestion(null);
+  function openBankDialog() {
+    setShowBankDialog(true);
   }
 
   if (isLoading) {
@@ -204,19 +190,27 @@ export function QuizManageDetailPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-500">Questions</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {quiz.questionCount}
+            {quiz.questions.length > 0
+              ? quiz.questions.length
+              : quiz.questionCount}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-500">Total marks</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {quiz.totalMarks}
+            {quiz.questions.length > 0
+              ? sumQuizMarks(quiz.questions)
+              : quiz.totalMarks}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Time limit</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Total time</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {quiz.timeLimitMinutes ?? "—"} min
+            {quiz.questions.length > 0
+              ? formatQuizDuration(sumQuizEstimatedSeconds(quiz.questions))
+              : quiz.timeLimitMinutes != null
+                ? `${quiz.timeLimitMinutes} min`
+                : "—"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -268,10 +262,10 @@ export function QuizManageDetailPage() {
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={openAddQuestion}
+              onClick={openBankDialog}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
             >
-              Add question
+              Add from bank
             </button>
             {draft ? (
               <>
@@ -382,56 +376,112 @@ export function QuizManageDetailPage() {
       </section>
 
       <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Questions</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <p className="text-sm font-medium text-slate-900">
+            {quiz.questions.length} question
+            {quiz.questions.length === 1 ? "" : "s"}
+          </p>
         </div>
 
         {quiz.questions.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-slate-600">
+          <div className="px-4 py-8 text-center text-sm text-slate-600 sm:px-5">
             No questions added yet.
           </div>
         ) : (
-          <div className="divide-y divide-slate-200">
-            {quiz.questions.map((question) => (
-              <article key={question.questionId} className="px-4 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-slate-900">
-                      {question.displayOrder}. {question.questionText}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {question.questionType} · {question.marks} marks
-                    </p>
-                  </div>
+          <div>
+            <div className="hidden border-b border-slate-200 bg-slate-50 px-4 py-2.5 sm:grid sm:grid-cols-7 sm:gap-3 sm:px-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Subject
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Class
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Difficulty
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Type
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Marks
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Time sec
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Actions
+              </p>
+            </div>
 
-                  {questionsEditable ? (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => openEditQuestion(question)}
-                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+            <ul className="divide-y divide-slate-200">
+              {quiz.questions.map((question) => {
+                const timeLabel =
+                  question.estimatedTimeSeconds > 0
+                    ? `${question.estimatedTimeSeconds} sec`
+                    : "—";
+                const questionLine = `${question.displayOrder}. ${question.questionText}`;
+                const answers = answersFromQuizQuestion(question);
+
+                return (
+                  <li key={question.questionId} className="px-4 py-3.5 sm:px-5">
+                    <div className="flex items-start gap-3">
+                      <p
+                        className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900"
+                        title={questionLine}
                       >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() =>
-                          void runAction(
-                            () => removeQuestion.mutateAsync(question.questionId),
-                            "Question removed.",
-                          )
-                        }
-                        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                      >
-                        Remove
-                      </button>
+                        {questionLine}
+                      </p>
+                      <QuizQuestionAnswerAside
+                        questionType={question.questionType}
+                        answers={answers}
+                      />
                     </div>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+
+                    <div className="mt-2 grid grid-cols-2 items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 sm:grid-cols-7">
+                      <p className="min-w-0 truncate font-medium text-slate-900">
+                        {quiz.subject}
+                      </p>
+                      <p className="min-w-0 truncate">{quiz.grade}</p>
+                      <p className="min-w-0 truncate">{quiz.difficulty}</p>
+                      <p className="min-w-0 truncate">{question.questionType}</p>
+                      <p className="min-w-0 truncate tabular-nums sm:hidden">
+                        {question.marks} / {timeLabel}
+                      </p>
+                      <p className="hidden min-w-0 truncate tabular-nums sm:block">
+                        {question.marks}
+                      </p>
+                      <p className="hidden min-w-0 truncate tabular-nums sm:block">
+                        {timeLabel}
+                      </p>
+                      <div className="col-span-2 flex min-w-0 flex-wrap gap-2 sm:col-span-1">
+                        {questionsEditable ? (
+                          <button
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() =>
+                              void runAction(
+                                () =>
+                                  removeQuestion.mutateAsync(
+                                    question.questionId,
+                                  ),
+                                "Question removed.",
+                              )
+                            }
+                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <span className="hidden text-xs text-slate-400 sm:inline">
+                            —
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </section>
@@ -513,63 +563,33 @@ export function QuizManageDetailPage() {
         </section>
       ) : null}
 
-      {showQuestionDialog ? (
-        <AddQuizQuestionDialog
-          initialQuestion={editingQuestion}
+      {showBankDialog ? (
+        <AttachBankQuestionsDialog
           classId={quiz.classId}
           subjectId={quiz.subjectId}
           excludeQuestionIds={quiz.questions.map((item) => item.questionId)}
-          title={editingQuestion ? "Edit quiz question" : undefined}
-          submitLabel={editingQuestion ? "Save changes" : undefined}
-          isSubmitting={
-            addQuestion.isPending ||
-            updateQuestion.isPending ||
-            attachBankQuestion.isPending
-          }
-          onClose={closeQuestionDialog}
-          onSubmit={async (input) => {
+          isSubmitting={attachBankQuestion.isPending}
+          onClose={() => setShowBankDialog(false)}
+          onAttach={async (inputs) => {
             setActionError(null);
             try {
-              if (editingQuestion) {
-                await updateQuestion.mutateAsync({
-                  questionId: editingQuestion.questionId,
-                  input,
-                });
-                setSuccessMessage("Question updated.");
-              } else {
-                await addQuestion.mutateAsync(input);
-                setSuccessMessage("Question added to quiz.");
+              for (const input of inputs) {
+                await attachBankQuestion.mutateAsync(input);
               }
-              closeQuestionDialog();
+              setShowBankDialog(false);
+              setSuccessMessage(
+                inputs.length === 1
+                  ? "Question attached from bank."
+                  : `${inputs.length} questions attached from bank.`,
+              );
             } catch (caught) {
               const apiError = caught as { message?: string };
               setActionError(
-                apiError.message ||
-                  (editingQuestion
-                    ? "Unable to update question."
-                    : "Unable to add question."),
+                apiError.message || "Unable to attach bank questions.",
               );
               throw caught;
             }
           }}
-          onAttachFromBank={
-            editingQuestion
-              ? undefined
-              : async (input) => {
-                  setActionError(null);
-                  try {
-                    await attachBankQuestion.mutateAsync(input);
-                    closeQuestionDialog();
-                    setSuccessMessage("Question attached from bank.");
-                  } catch (caught) {
-                    const apiError = caught as { message?: string };
-                    setActionError(
-                      apiError.message || "Unable to attach bank question.",
-                    );
-                    throw caught;
-                  }
-                }
-          }
         />
       ) : null}
 

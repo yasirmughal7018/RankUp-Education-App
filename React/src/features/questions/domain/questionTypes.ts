@@ -45,6 +45,8 @@ export interface QuestionSummary {
   difficultyLevel: number;
   marks: number;
   estimatedTimeSeconds?: number;
+  /** Comma-separated correct options / accepted answers when provided by list API. */
+  correctAnswerPreview?: string;
   isActive: boolean;
   createdBy: string;
   /** Display name for creator (from app_users). */

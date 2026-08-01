@@ -1,8 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import type {
   QuizFormValues,
   QuizNavigationMode,
-  QuizReviewDisplayMode,
 } from "@/features/quizzes/domain/quizTypes";
 import {
   resolveQuizTypeDefaults,
@@ -12,6 +11,10 @@ import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { useLookups } from "@/core/hooks/useLookups";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
+import {
+  useDirectoryCampusesQuery,
+  useDirectorySchoolsQuery,
+} from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 const NAVIGATION_MODE_OPTIONS: Array<{
@@ -21,25 +24,6 @@ const NAVIGATION_MODE_OPTIONS: Array<{
   { value: "Free", label: "Free — jump to any question" },
   { value: "Sequential", label: "Sequential — previous/next only" },
   { value: "Locked", label: "Locked — next after answering" },
-];
-
-const REVIEW_DISPLAY_MODE_OPTIONS: Array<{
-  value: QuizReviewDisplayMode;
-  label: string;
-}> = [
-  {
-    value: "Full",
-    label: "Full — score, correct answers, and explanations",
-  },
-  {
-    value: "CorrectAnswers",
-    label: "Correct answers — score and correct options",
-  },
-  { value: "ScoreOnly", label: "Score only — hide answers and explanations" },
-  {
-    value: "Withheld",
-    label: "Withheld — nothing until review is published",
-  },
 ];
 
 interface QuizFormProps {
@@ -53,7 +37,6 @@ interface QuizFormProps {
   requireSchoolId?: boolean;
   /** When true, quiz type is required (create). Edit hides the field because API update omits type. */
   requireQuizType?: boolean;
-  suggestedTimeMinutes?: number | null;
   onSubmit: (values: QuizFormValues) => Promise<void>;
   onCancel: () => void;
 }
@@ -70,7 +53,6 @@ export function QuizForm({
   requireCampusId = false,
   requireSchoolId = false,
   requireQuizType = false,
-  suggestedTimeMinutes = null,
   onSubmit,
   onCancel,
 }: QuizFormProps) {
@@ -78,6 +60,26 @@ export function QuizForm({
   const [error, setError] = useState<string | null>(null);
   const { data: quizTypes = [] } = useLookups(
     requireQuizType ? LOOKUP_TYPES.QUIZ_TYPE : undefined,
+  );
+  const { data: schools = [], isLoading: schoolsLoading } =
+    useDirectorySchoolsQuery(showSchoolCampusFields);
+  const selectedSchoolId = values.schoolId ?? 0;
+  const { data: campuses = [], isLoading: campusesLoading } =
+    useDirectoryCampusesQuery(selectedSchoolId, showSchoolCampusFields);
+
+  const schoolOptions = useMemo(
+    () =>
+      schools.filter(
+        (school) => school.isActive || school.id === values.schoolId,
+      ),
+    [schools, values.schoolId],
+  );
+  const campusOptions = useMemo(
+    () =>
+      campuses.filter(
+        (campus) => campus.isActive || campus.id === values.campusId,
+      ),
+    [campuses, values.campusId],
   );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -233,6 +235,28 @@ export function QuizForm({
           />
         ) : null}
 
+        <div>
+          <FieldLabel htmlFor="allowedAttempts" optional>
+            Allowed attempts
+          </FieldLabel>
+          <input
+            id="allowedAttempts"
+            type="number"
+            value={values.allowedAttempts ?? ""}
+            disabled={isSubmitting}
+            onChange={(event) =>
+              setValues((current) => ({
+                ...current,
+                allowedAttempts: event.target.value
+                  ? Number(event.target.value)
+                  : null,
+              }))
+            }
+            className={inputClassName}
+            min={1}
+          />
+        </div>
+
         {showContextStudentId ? (
           <div>
             <FieldLabel htmlFor="contextStudentId" optional>
@@ -260,35 +284,56 @@ export function QuizForm({
         {showSchoolCampusFields ? (
           <>
             <div>
-              <FieldLabel htmlFor="schoolId" required={requireSchoolId}>
-                School ID
+              <FieldLabel
+                htmlFor="schoolId"
+                required={requireSchoolId}
+                hint="Places this quiz in an organization. This is not the student audience — after publish (and approval if needed), use Assign to choose public catalog, whole school, grade, section, or selected students."
+              >
+                School
               </FieldLabel>
-              <input
+              <select
                 id="schoolId"
-                type="number"
                 value={values.schoolId ?? ""}
-                disabled={isSubmitting || !requireSchoolId}
-                onChange={(event) =>
+                disabled={isSubmitting || !requireSchoolId || schoolsLoading}
+                onChange={(event) => {
+                  const nextSchoolId = event.target.value
+                    ? Number(event.target.value)
+                    : null;
                   setValues((current) => ({
                     ...current,
-                    schoolId: event.target.value
-                      ? Number(event.target.value)
-                      : null,
-                  }))
-                }
+                    schoolId: nextSchoolId,
+                    campusId: null,
+                  }));
+                }}
                 className={inputClassName}
-                min={1}
-              />
+                required={requireSchoolId}
+              >
+                <option value="">
+                  {schoolsLoading ? "Loading schools..." : "Select school"}
+                </option>
+                {schoolOptions.map((school) => (
+                  <option key={school.id} value={school.id}>
+                    {school.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <FieldLabel htmlFor="campusId" required={requireCampusId}>
-                Campus ID
+              <FieldLabel
+                htmlFor="campusId"
+                required={requireCampusId}
+                hint="Campus within the selected school. This is ownership context only — student audience is chosen later with Assign."
+              >
+                Campus
               </FieldLabel>
-              <input
+              <select
                 id="campusId"
-                type="number"
                 value={values.campusId ?? ""}
-                disabled={isSubmitting}
+                disabled={
+                  isSubmitting ||
+                  campusesLoading ||
+                  (requireSchoolId && !values.schoolId)
+                }
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
@@ -298,140 +343,24 @@ export function QuizForm({
                   }))
                 }
                 className={inputClassName}
-                min={1}
-              />
+                required={requireCampusId}
+              >
+                <option value="">
+                  {campusesLoading
+                    ? "Loading campuses..."
+                    : !values.schoolId && requireSchoolId
+                      ? "Select a school first"
+                      : "Select campus"}
+                </option>
+                {campusOptions.map((campus) => (
+                  <option key={campus.id} value={campus.id}>
+                    {campus.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </>
         ) : null}
-      </div>
-
-      <div>
-        <FieldLabel htmlFor="instructions" required>
-          Instructions
-        </FieldLabel>
-        <textarea
-          id="instructions"
-          value={values.instructions}
-          disabled={isSubmitting}
-          onChange={(event) =>
-            setValues((current) => ({
-              ...current,
-              instructions: event.target.value,
-            }))
-          }
-          className={`${inputClassName} min-h-28`}
-          required
-        />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <FieldLabel htmlFor="timeLimitMinutes" optional>
-            Time limit (minutes)
-          </FieldLabel>
-          <input
-            id="timeLimitMinutes"
-            type="number"
-            value={values.timeLimitMinutes ?? ""}
-            disabled={isSubmitting}
-            onChange={(event) =>
-              setValues((current) => ({
-                ...current,
-                timeLimitMinutes: event.target.value
-                  ? Number(event.target.value)
-                  : null,
-              }))
-            }
-            className={inputClassName}
-            min={1}
-          />
-          {suggestedTimeMinutes != null && suggestedTimeMinutes > 0 ? (
-            <button
-              type="button"
-              disabled={isSubmitting}
-              className="mt-1.5 text-sm font-medium text-sky-700 hover:text-sky-900"
-              onClick={() =>
-                setValues((current) => ({
-                  ...current,
-                  timeLimitMinutes: suggestedTimeMinutes,
-                }))
-              }
-            >
-              Use suggested {suggestedTimeMinutes} min from questions
-            </button>
-          ) : null}
-        </div>
-
-        <div>
-          <FieldLabel htmlFor="allowedAttempts" optional>
-            Allowed attempts
-          </FieldLabel>
-          <input
-            id="allowedAttempts"
-            type="number"
-            value={values.allowedAttempts ?? ""}
-            disabled={isSubmitting}
-            onChange={(event) =>
-              setValues((current) => ({
-                ...current,
-                allowedAttempts: event.target.value
-                  ? Number(event.target.value)
-                  : null,
-              }))
-            }
-            className={inputClassName}
-            min={1}
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-3 sm:grid-cols-3 md:col-span-1">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={values.shuffleQuestions}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  shuffleQuestions: event.target.checked,
-                }))
-              }
-            />
-            Shuffle questions
-          </label>
-
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={values.shuffleOptions}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  shuffleOptions: event.target.checked,
-                }))
-              }
-            />
-            Shuffle options
-          </label>
-
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={values.isReviewRequired}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  isReviewRequired: event.target.checked,
-                }))
-              }
-            />
-            Review required
-          </label>
-        </div>
 
         <div>
           <FieldLabel htmlFor="navigationMode">Navigation mode</FieldLabel>
@@ -454,32 +383,72 @@ export function QuizForm({
             ))}
           </select>
         </div>
+      </div>
 
-        <div>
-          <FieldLabel htmlFor="reviewDisplayMode">Review display</FieldLabel>
-          <select
-            id="reviewDisplayMode"
-            value={values.reviewDisplayMode}
+      <div>
+        <FieldLabel htmlFor="instructions" required>
+          Instructions
+        </FieldLabel>
+        <textarea
+          id="instructions"
+          value={values.instructions}
+          disabled={isSubmitting}
+          onChange={(event) =>
+            setValues((current) => ({
+              ...current,
+              instructions: event.target.value,
+            }))
+          }
+          className={`${inputClassName} min-h-28`}
+          required
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={values.shuffleQuestions}
             disabled={isSubmitting}
             onChange={(event) =>
               setValues((current) => ({
                 ...current,
-                reviewDisplayMode: event.target.value as QuizReviewDisplayMode,
+                shuffleQuestions: event.target.checked,
               }))
             }
-            className={inputClassName}
-          >
-            {REVIEW_DISPLAY_MODE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-slate-500">
-            Controls what students see after submit. Withheld requires Review
-            required so results can be published.
-          </p>
-        </div>
+          />
+          Shuffle questions
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={values.shuffleOptions}
+            disabled={isSubmitting}
+            onChange={(event) =>
+              setValues((current) => ({
+                ...current,
+                shuffleOptions: event.target.checked,
+              }))
+            }
+          />
+          Shuffle options
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={values.isReviewRequired}
+            disabled={isSubmitting}
+            onChange={(event) =>
+              setValues((current) => ({
+                ...current,
+                isReviewRequired: event.target.checked,
+              }))
+            }
+          />
+          Review required
+        </label>
       </div>
 
       <div className="flex justify-end gap-3">

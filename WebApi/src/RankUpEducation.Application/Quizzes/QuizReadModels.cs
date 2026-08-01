@@ -255,7 +255,7 @@ public sealed record AttemptReviewQuestionItem(
     bool HasHumanReviewFeedback = false,
     string? AiFeedback = null);
 
-/// <summary>Source question snapshot used when duplicating a quiz (deep copy).</summary>
+/// <summary>Source question snapshot used when duplicating a quiz (reuse bank rows).</summary>
 public sealed record QuizQuestionCopyItem(
     long QuestionId,
     string QuestionText,

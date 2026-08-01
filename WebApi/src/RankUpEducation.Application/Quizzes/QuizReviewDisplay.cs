@@ -1,12 +1,12 @@
 namespace RankUpEducation.Application.Quizzes;
 
-/// <summary>Resolves what students may see on the post-submit result screen.</summary>
+/// <summary>
+/// Resolves what students may see on the post-submit result screen.
+/// Review display modes were removed — results are Full once review is not pending.
+/// </summary>
 public static class QuizReviewDisplay
 {
     public const string Full = "Full";
-    public const string CorrectAnswers = "CorrectAnswers";
-    public const string ScoreOnly = "ScoreOnly";
-    public const string Withheld = "Withheld";
 
     public sealed record Visibility(
         string Mode,
@@ -15,32 +15,8 @@ public static class QuizReviewDisplay
         bool ShowExplanations,
         bool ReviewPending);
 
-    public static string Normalize(string? mode)
-    {
-        var value = mode?.Trim() ?? ScoreOnly;
-        if (value.Equals(Full, StringComparison.OrdinalIgnoreCase))
-        {
-            return Full;
-        }
-
-        if (value.Equals(CorrectAnswers, StringComparison.OrdinalIgnoreCase)
-            || value.Equals("Correct", StringComparison.OrdinalIgnoreCase))
-        {
-            return CorrectAnswers;
-        }
-
-        if (value.Equals(Withheld, StringComparison.OrdinalIgnoreCase)
-            || value.Equals("None", StringComparison.OrdinalIgnoreCase))
-        {
-            return Withheld;
-        }
-
-        return ScoreOnly;
-    }
-
     /// <summary>
-    /// Withheld hides score/answers until review is published (<c>IsReviewDone</c>).
-    /// Other modes still mask when review is required, subjective answers exist, and review is not done.
+    /// Hides score/answers while review is required and not yet done; otherwise shows full results.
     /// </summary>
     public static Visibility Resolve(
         string? reviewDisplayMode,
@@ -48,23 +24,14 @@ public static class QuizReviewDisplay
         bool isReviewDone,
         bool hasSubjectiveAnswers)
     {
-        var mode = Normalize(reviewDisplayMode);
-        var reviewIncomplete = isReviewRequired && !isReviewDone;
-        var pendingPublication = mode == Withheld
-            ? reviewIncomplete
-            : reviewIncomplete && hasSubjectiveAnswers;
+        _ = reviewDisplayMode;
+        _ = hasSubjectiveAnswers;
 
-        if (pendingPublication)
+        if (isReviewRequired && !isReviewDone)
         {
-            return new Visibility(mode, false, false, false, true);
+            return new Visibility(Full, false, false, false, true);
         }
 
-        return mode switch
-        {
-            Full => new Visibility(mode, true, true, true, false),
-            CorrectAnswers => new Visibility(mode, true, true, false, false),
-            Withheld => new Visibility(mode, true, false, false, false),
-            _ => new Visibility(ScoreOnly, true, false, false, false),
-        };
+        return new Visibility(Full, true, true, true, false);
     }
 }
