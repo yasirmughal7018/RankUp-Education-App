@@ -55,7 +55,7 @@ export function LoginPage() {
 
     const trimmedUsername = username.trim();
     if (!trimmedUsername) {
-      setLocalError("CNIC or mobile number is required.");
+      setLocalError("Username is required.");
       return;
     }
 
@@ -153,7 +153,7 @@ export function LoginPage() {
       ? "Your account is approved. Create a password, then sign in with it."
       : step === "password"
         ? `Sign in as ${username.trim()}`
-        : "Enter your CNIC or mobile number to continue.";
+        : "Enter your username to continue.";
 
   return (
     <AuthSplitLayout variant="login">
@@ -195,7 +195,7 @@ export function LoginPage() {
           <form className="space-y-4" onSubmit={handleIdentifierContinue}>
             <div>
               <FieldLabel htmlFor="username" required>
-                CNIC or mobile number
+                Username
               </FieldLabel>
               <input
                 id="username"
@@ -205,7 +205,7 @@ export function LoginPage() {
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 className={inputClassName}
-                placeholder="Enter CNIC or mobile number"
+                placeholder="Username"
                 required
                 disabled={busy}
                 autoFocus
@@ -324,7 +324,7 @@ export function LoginPage() {
               onClick={goBackToIdentifier}
               className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
             >
-              Use a different CNIC / mobile
+              Use a different username
             </button>
           </form>
         ) : null}

@@ -133,7 +133,7 @@
     <p class="subtitle">RankUp Education — Web (React), Mobile (Flutter), and API</p>
     <div class="meta">
       <span class="chip">Version: current codebase</span>
-      <span class="chip">Date: 20 Jul 2026</span>
+      <span class="chip">Date: 2 Aug 2026</span>
       <span class="chip">Roles: PortalAdmin · SchoolAdmin · CampusAdmin · Teacher · Parent · Student</span>
       <span class="chip">Registration + school/campus change lock</span>
     </div>
@@ -150,7 +150,7 @@
     <li><a href="#directory">7. Directory (admin) create rules</a></li>
     <li><a href="#multirole">8. Multi-role &amp; active role</a></li>
     <li><a href="#login">9. Login / password / active / locked checks</a></li>
-    <li><a href="#password-reset">9b. Password reset (admin-mediated)</a></li>
+    <li><a href="#password-reset">9b. Password reset (email link + admin clear)</a></li>
     <li><a href="#entry">10. Where to test (Web &amp; Mobile)</a></li>
     <li><a href="#scenarios">11. QA scenarios (step-by-step)</a></li>
     <li><a href="#checklist">12. Quick verification checklist</a></li>
@@ -160,11 +160,11 @@
   <h2 id="overview">1. Overview &amp; account states</h2>
   <p>RankUp supports these user-creation and access paths:</p>
   <ol>
-    <li><strong>Self-service registration</strong> — Student / Parent / Teacher submit → approval queue in <code>app_approval</code> → School/Campus may soft-approve → <strong>only Portal Admin activates</strong> → user sets password → Login.</li>
-    <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / SchoolAdmin / CampusAdmin with <strong>no password</strong> → auto-approved → user sets password on first login.</li>
+    <li><strong>Self-service registration</strong> — Student / Parent / Teacher submit (email = username) → approval queue in <code>app_approval</code> → School/Campus Admin may approve and <strong>activate Student/Teacher in scope</strong>; PortalAdmin activates any (required for Parent / no-school) → user sets password → Login.</li>
+    <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / SchoolAdmin / CampusAdmin with <strong>email (username) required</strong>, no password → auto-approved → user sets password on first login.</li>
     <li><strong>Add role to existing account</strong> — Directory create matching an existing identity adds a second role (multi-role) when combination rules allow. <strong>Teacher</strong> matches on <strong>mobile only</strong>; <strong>Parent / SchoolAdmin / CampusAdmin</strong> match on mobile or CNIC.</li>
     <li><strong>School / campus change</strong> — Teacher / Student / CampusAdmin request a change from Profile (Web <code>/account</code> or Mobile Profile) → confirmation → account <strong>locks</strong> → destination admin applies or rejects on the <strong>Web</strong> queue (<code>/admin/directory/school-changes</code>; PortalAdmin any; SchoolAdmin for their school; CampusAdmin for Teacher/Student into their campus) → account <strong>unlocks</strong>. <strong>Parent cannot request</strong> school/campus change (parents are not school-scoped). Mobile does not implement the admin apply queue.</li>
-    <li><strong>Password reset (admin-mediated)</strong> — User requests via Forgot password → admins who can Clear that user are notified (<code>PasswordResetRequest</code>) only if account is <strong>active</strong> with a password → admin Clears password (Web notification bell) → user sets a new password on login. Always returns success (no existence leak). CampusAdmin cannot clear SchoolAdmin/CampusAdmin; only PortalAdmin clears PortalAdmin.</li>
+    <li><strong>Password reset</strong> — User requests via Forgot password (username = email) → pending row in <code>app_user_password_reset_request</code> + email link (<code>/reset-password?token=</code>) + scoped admin notifications (<code>PasswordResetRequest</code>) when account is <strong>active</strong> with a password → completion via emailed token <strong>or</strong> admin Clear (Web bell; Parent for linked Student) — <strong>first completion wins</strong> → user sets or chooses a new password. Always returns success (no existence leak).</li>
   </ol>
   <p><strong>PortalAdmin</strong> is not created via the app (seed/DB). <strong>SchoolAdmin</strong> is created by PortalAdmin only. <strong>CampusAdmin</strong> is created by PortalAdmin or SchoolAdmin.</p>
   <p><strong>Important:</strong> Approving a registration or directory-creating a user does <em>not</em> set a password. The user must set a password on first login, then sign in.</p>
@@ -179,7 +179,7 @@
       <tr><td>Active &amp; ready</td><td><code>is_active=true</code> AND password set</td><td><code>Ready</code></td><td>Yes</td></tr>
       <tr><td>Locked (school/campus change)</td><td><code>is_active=false</code> AND password set AND pending row in <code>app_user_school_change_request</code></td><td><code>LockedPendingSchoolChange</code></td><td>No — see locked page / message</td></tr>
       <tr><td>Deactivated</td><td><code>is_active=false</code> with password set, <strong>no</strong> pending school change</td><td>throws “This account is not active.” (not a status enum)</td><td>No</td></tr>
-      <tr><td>Rejected registration (soft)</td><td>Row <strong>kept</strong>; <code>rejected_at</code> set</td><td><code>Rejected</code></td><td>No — may submit a <strong>new</strong> registration request</td></tr>
+      <tr><td>Rejected registration (soft)</td><td>Row <strong>kept</strong>; <code>rejected_at</code> set</td><td><code>Rejected</code></td><td>No — may submit a <strong>new</strong> registration with the same email</td></tr>
     </tbody>
   </table>
   <ul>
@@ -187,7 +187,7 @@
     <li>Default login role = earliest role assignment in <code>app_user_roles</code> (by <code>created_at</code>).</li>
     <li>JWT <code>role</code> claim = <strong>active</strong> session role; <code>roles</code> = all assigned roles.</li>
     <li>Registration routing: <code>app_approval</code> — a generic approval table shared with the question bank (<code>entity_type=1</code> user registration rows with <code>user_id</code>; <code>entity_type=2</code> question workflow-trail rows with <code>question_id</code>). School/campus change routing: <code>app_user_school_change_request</code> + <code>app_user_school_change_approval</code>.</li>
-    <li>Registration reject is a <strong>soft-reject</strong> (no hard delete). Unique indexes on username/CNIC ignore rows where <code>rejected_at IS NOT NULL</code>.</li>
+    <li>Registration reject is a <strong>soft-reject</strong> (no hard delete). Unique indexes on username/email/CNIC/mobile ignore rows where <code>rejected_at IS NOT NULL</code> — the same email may re-register after reject.</li>
   </ul>
 
   <h3>Role lookup IDs</h3>
@@ -220,8 +220,8 @@
     </thead>
     <tbody>
       <tr><td>Request account access</td><td>—</td><td>—</td><td>—</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-      <tr><td>Record registration approval</td><td>Yes (activates)</td><td>Own school (does not activate)</td><td>Own campus (does not activate)</td><td>—</td><td>—</td><td>—</td></tr>
-      <tr><td>Activate registration</td><td>Yes — required</td><td>No</td><td>No</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Record registration approval</td><td>Yes</td><td>Own school</td><td>Own campus</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Activate registration</td><td>Yes — any</td><td>Yes — Student/Teacher in own school</td><td>Yes — Student/Teacher in own campus</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Reject registrations (soft)</td><td>All pending</td><td>Own school</td><td>Own campus</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Request school / campus change</td><td>—</td><td>—</td><td>Campus only</td><td>Yes</td><td>No</td><td>Yes</td></tr>
       <tr><td>Apply school / campus change (unlock)</td><td>Yes (any request)</td><td>Yes — Teacher/Student/CampusAdmin into own destination school</td><td>Yes — Teacher/Student into own destination campus*</td><td>—</td><td>—</td><td>—</td></tr>
@@ -232,30 +232,30 @@
       <tr><td>Manage schools / campuses</td><td>Yes</td><td>Own school</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Activate / deactivate directory users</td><td>Yes</td><td>Own school</td><td>Own campus scope</td><td>—</td><td>—</td><td>—</td></tr>
       <tr><td>Self-deactivate own account</td><td>No</td><td>Yes (Web)</td><td>Yes (Web)</td><td>Yes (Web)</td><td>Yes (Web)</td><td>Yes (Web)</td></tr>
-      <tr><td>Clear password for reset (after notify)</td><td>Yes (any, incl. PortalAdmin)</td><td>Own school (incl. SchoolAdmin / CampusAdmin)</td><td>Own campus Teacher / Student / Parent only†</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>Clear password for reset (after notify)</td><td>Yes (any, incl. PortalAdmin)</td><td>Own school (Student/Teacher/CampusAdmin/Parent)</td><td>Own campus Teacher / Student only†</td><td>—</td><td>Linked Student only</td><td>—</td></tr>
       <tr><td>Switch active role (multi-role)</td><td>If multi-role</td><td>If multi-role</td><td>If multi-role</td><td>If multi-role</td><td>If multi-role</td><td>N/A (exclusive)</td></tr>
       <tr><td>Create PortalAdmin via app</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td></tr>
     </tbody>
   </table>
   <p><small>* CampusAdmin can review/apply only Teacher/Student requests into their own campus. CampusAdmin cannot review CampusAdmin-to-CampusAdmin change requests (those go to SchoolAdmin + PortalAdmin only).</small></p>
-  <p><small>† Password Clear (not school-change): CampusAdmin cannot clear SchoolAdmin or CampusAdmin passwords. Only PortalAdmin can clear a PortalAdmin. Notify recipients match these Clear rules (peer CampusAdmins are not notified for CampusAdmin resets).</small></p>
+  <p><small>† Password Clear (not school-change): CampusAdmin cannot clear SchoolAdmin or CampusAdmin passwords. Only PortalAdmin can clear a PortalAdmin. Parent may Clear linked Student only. Notify recipients: Student → School/Campus/Parent/Portal; Teacher → School/Campus/Portal; CampusAdmin → School/Portal; SchoolAdmin → Portal; Parent → Portal.</small></p>
 
   <h2 id="paths">3. Ways to create users</h2>
-  <h3>Path A — Self-service → Approval queue → Portal Admin activates → Set password → Login</h3>
+  <h3>Path A — Self-service → Approval queue → Admin activates → Set password → Login</h3>
   <ol>
     <li>Guest opens Request account access (Web or Mobile).</li>
-    <li>Chooses Student / Parent / Teacher and submits.</li>
-    <li>API creates pending <code>app_users</code> row + role in <code>app_user_roles</code> + one pending row per eligible reviewer in <code>app_approval</code>.</li>
+    <li>Chooses Student / Parent / Teacher; enters <strong>email (username)</strong> and required fields; submits.</li>
+    <li>API creates pending <code>app_users</code> row (<code>username</code> = email) + role in <code>app_user_roles</code> + one pending row per eligible reviewer in <code>app_approval</code>.</li>
     <li>Eligible admins see the request on Registration approvals.</li>
-    <li>SchoolAdmin / CampusAdmin may Approve → their queue row is marked; account stays pending.</li>
-    <li>PortalAdmin Approves → account activates (<code>NeedsPasswordSetup</code>); role profile created.</li>
-    <li>User enters CNIC/mobile → sets password → signs in.</li>
+    <li>SchoolAdmin / CampusAdmin Approve → activates Student/Teacher when in scope; otherwise records approval only (account stays pending).</li>
+    <li>PortalAdmin Approve → activates any request (including Parent / no-school); role profile created.</li>
+    <li>User enters email (or CNIC/mobile) → sets password → signs in.</li>
   </ol>
 
   <h3>Path B — Directory create (Web only)</h3>
   <ol>
     <li>Admin opens Directory (Students / Teachers / Parents / School Admins / Campus Admins).</li>
-    <li>Creates user with username and required fields — <strong>no password</strong>.</li>
+    <li>Creates user with <strong>email (username)</strong> and required fields — <strong>no password</strong>.</li>
     <li>User is auto-approved (<code>active</code>, no password) → <code>NeedsPasswordSetup</code>.</li>
     <li>On first login, user sets initial password, then signs in.</li>
   </ol>
@@ -276,16 +276,17 @@
     </thead>
     <tbody>
       <tr><td>Full name</td><td>Required *</td><td>Required *</td><td>Required *</td></tr>
-      <tr><td>Mobile number</td><td>Required *</td><td>Required *</td><td>Required *</td></tr>
+      <tr><td>Email (username)</td><td>Required *</td><td>Required *</td><td>Required *</td></tr>
+      <tr><td>Mobile number</td><td>Optional</td><td>Optional</td><td>Optional</td></tr>
       <tr><td>Account type</td><td>Required *</td><td>Required *</td><td>Required *</td></tr>
-      <tr><td>Email / CNIC / Reason</td><td>Optional</td><td>Optional</td><td>Optional</td></tr>
+      <tr><td>CNIC / Reason</td><td>Optional</td><td>Optional</td><td>Optional</td></tr>
       <tr><td>School</td><td>Optional</td><td>Hidden / not allowed</td><td>Optional</td></tr>
       <tr><td>Campus</td><td>Optional (needs school if set)</td><td>Hidden / not allowed</td><td>Optional (needs school if set)</td></tr>
-      <tr><td>Roll / teacher code</td><td>Roll required *</td><td>Hidden / not allowed</td><td>Teacher code optional</td></tr>
+      <tr><td>Roll / teacher code</td><td>Required * when school selected</td><td>Hidden / not allowed</td><td>Teacher code optional</td></tr>
     </tbody>
   </table>
   <ul>
-    <li>Username on request: CNIC if provided, otherwise mobile. Must be unique among <strong>non-rejected</strong> rows (<code>rejected_at IS NULL</code>).</li>
+    <li><strong>Username = email</strong> on submit. Must be unique among <strong>non-rejected</strong> rows (<code>rejected_at IS NULL</code>). Mobile and CNIC are optional but must be unique when provided.</li>
     <li><code>admin_target</code> is <strong>not used</strong>. Approval recipients are derived from school/campus and stored in <code>app_approval</code>.</li>
   </ul>
   <h3>Who is queued in <code>app_approval</code> (at submit time)</h3>
@@ -310,17 +311,17 @@
       <tr>
         <td>PortalAdmin</td>
         <td>All pending requests</td>
-        <td>Approve (activates) or Reject</td>
+        <td>Approve (activates any) or Reject</td>
       </tr>
       <tr>
         <td>SchoolAdmin</td>
         <td>Own school (school-only or with campus). Portal-only (no school) hidden.</td>
-        <td>Approve (record only) or Reject — until they have already approved</td>
+        <td>Approve (activates Student/Teacher in own school) or Reject — until they have already approved</td>
       </tr>
       <tr>
         <td>CampusAdmin</td>
         <td>Own school + campus only. School-only and Portal-only hidden.</td>
-        <td>Approve (record only) or Reject — until they have already approved</td>
+        <td>Approve (activates Student/Teacher in own campus) or Reject — until they have already approved</td>
       </tr>
     </tbody>
   </table>
@@ -334,26 +335,27 @@
       <tr>
         <td><strong>PortalAdmin</strong></td>
         <td>Marks their <code>app_approval</code> row; creates role profile; sets <code>is_active=true</code>, <code>must_change_password=true</code></td>
-        <td><strong>Yes</strong> — other pending rows are not required</td>
+        <td><strong>Yes</strong> — any request (Parent / no-school included); other pending rows are not required</td>
       </tr>
       <tr>
         <td><strong>SchoolAdmin</strong></td>
-        <td>Marks their queue row only</td>
-        <td><strong>No</strong> — still needs PortalAdmin</td>
+        <td>Marks queue row; activates Student/Teacher with a school in their scope</td>
+        <td><strong>Yes</strong> when Student/Teacher + school selected; <strong>No</strong> for Parent / no-school / out-of-scope</td>
       </tr>
       <tr>
         <td><strong>CampusAdmin</strong></td>
-        <td>Marks their queue row only; SchoolAdmin is then not required for Pending with display</td>
-        <td><strong>No</strong> — still needs PortalAdmin</td>
+        <td>Marks queue row; activates Student/Teacher with a campus in their scope</td>
+        <td><strong>Yes</strong> when Student/Teacher + campus selected; <strong>No</strong> for school-only, Parent, or out-of-scope</td>
       </tr>
     </tbody>
   </table>
   <ul>
-    <li>After SchoolAdmin / CampusAdmin approve, the request <strong>stays on their Approvals list</strong>.</li>
-    <li>Approve / Reject buttons are hidden for that admin; UI shows: <strong>Approved — awaiting Portal Admin.</strong> (API flag: <code>currentUserHasApproved</code>).</li>
+    <li>After an admin approves without activating, the request <strong>stays on their Approvals list</strong>.</li>
+    <li>Approve / Reject buttons are hidden for that admin; UI shows: <strong>Approved — awaiting activation.</strong> (API flag: <code>currentUserHasApproved</code>).</li>
     <li>“Pending with” lists remaining reviewers where <code>is_approved IS NULL</code>. If a CampusAdmin has already approved, pending SchoolAdmin rows are omitted from “Pending with”.</li>
-    <li>Student profile defaults on PortalAdmin activation: grade 1, section A.</li>
-    <li>On PortalAdmin activation, if the request has a CNIC and <code>username</code> is not already that CNIC, username is rewritten to the CNIC (fails if that username is taken).</li>
+    <li>Student profile defaults on activation: grade 1, section A.</li>
+    <li><strong>Username stays as registered (email)</strong> — no CNIC rewrite on activate.</li>
+    <li>Parent and no-school Student/Teacher requests: <strong>PortalAdmin only</strong> may activate.</li>
   </ul>
 
   <h3>Soft reject (critical — not a hard delete)</h3>
@@ -366,7 +368,7 @@
       <tr><td>Rejector’s <code>app_approval</code></td><td><code>is_approved = false</code>, <code>approved_at</code> set. If no queue row existed, one is created then marked rejected.</td></tr>
       <tr><td>Other admins’ pending rows</td><td><strong>Left as-is</strong>. They fall off the pending list because the user is rejected.</td></tr>
       <tr><td>login-status</td><td><code>Rejected</code> — “Your registration request was rejected. You may submit a new request.”</td></tr>
-      <tr><td>Re-request</td><td>Allowed. Same CNIC/mobile creates a <strong>new</strong> <code>app_users</code> + new approval queue.</td></tr>
+      <tr><td>Re-request</td><td>Allowed. Same email (or CNIC/mobile) creates a <strong>new</strong> <code>app_users</code> + new approval queue.</td></tr>
     </tbody>
   </table>
 
@@ -405,7 +407,7 @@
       <tr><td>Change requested</td><td>Account locked (<code>is_active=false</code>); sessions revoked; login-status = <code>LockedPendingSchoolChange</code></td></tr>
       <tr><td>User tries to sign in while locked</td><td>Web opens <code>/account-locked</code> with message explaining school/campus change is pending approval</td></tr>
       <tr><td>PortalAdmin / SchoolAdmin / CampusAdmin Approves (when allowed to apply)</td><td>New school/campus applied; account unlocked (<code>is_active=true</code>); user can sign in again</td></tr>
-      <tr><td>Any allowed reviewer Rejects</td><td>School/campus unchanged; account unlocked; user can sign in again</td></tr>
+      <tr><td>Any allowed reviewer Rejects</td><td>School/campus unchanged (optional <code>leaveWithoutSchool</code> for Student clears school/campus); account unlocked; user can sign in again</td></tr>
     </tbody>
   </table>
   <div class="note">
@@ -439,7 +441,7 @@
     <li>Approver queue for destination school/campus uses the same school/campus candidate rules as registration.</li>
     <li>CampusAdmin requester → queue is SchoolAdmin + PortalAdmin only (no peer CampusAdmins).</li>
     <li>Admin UI: <code>/admin/directory/school-changes</code> (also redirected from <code>/admin/school-changes</code>). Portal/School/Campus Admin all see the button on Directory overview when <code>schoolChanges</code> is in visible sections.</li>
-    <li>List filters match the apply matrix: every admin who can see a request can <strong>Approve &amp; apply</strong> (or Reject). There is no separate “record approval only” action for school/campus change.</li>
+    <li>List filters match the apply matrix: every admin who can see a request can <strong>Approve &amp; apply</strong> (or Reject). Reject unlocks without applying; optional <code>leaveWithoutSchool</code> for Student clears school/campus on reject. There is no separate “record approval only” action for school/campus change.</li>
     <li>Notifications category: <code>SchoolChangeRequest</code>.</li>
   </ul>
 
@@ -463,32 +465,32 @@
       <tr>
         <td>Student</td>
         <td>Portal / School / Campus Admin</td>
-        <td>fullName, username, school, campus, roll, grade, section</td>
-        <td>mobile</td>
+        <td>fullName, email (username), school, campus, roll, grade, section</td>
+        <td>mobile, cnic</td>
       </tr>
       <tr>
         <td>Teacher</td>
         <td>Portal / School / Campus Admin</td>
-        <td>fullName, username, school, campus, teacherCode</td>
-        <td>mobile</td>
+        <td>fullName, email (username), school, campus, teacherCode</td>
+        <td>mobile, cnic</td>
       </tr>
       <tr>
         <td>Parent</td>
         <td>Portal / School / Campus Admin</td>
-        <td>fullName, username</td>
+        <td>fullName, email (username)</td>
         <td>cnic, mobile</td>
       </tr>
       <tr>
         <td>SchoolAdmin</td>
         <td>PortalAdmin only</td>
-        <td>fullName, username, school</td>
-        <td>mobile, cnic, email</td>
+        <td>fullName, email (username), school</td>
+        <td>mobile, cnic</td>
       </tr>
       <tr>
         <td>CampusAdmin</td>
         <td>PortalAdmin or SchoolAdmin</td>
-        <td>fullName, username, school, campus</td>
-        <td>mobile, cnic, email</td>
+        <td>fullName, email (username), school, campus</td>
+        <td>mobile, cnic</td>
       </tr>
     </tbody>
   </table>
@@ -529,7 +531,7 @@
   <h2 id="login">9. Login / password / active / locked checks</h2>
   <h3>Shared flow (Web + Mobile)</h3>
   <ol>
-    <li>Enter CNIC or mobile → <code>POST /api/auth/login-status</code>.</li>
+    <li>Enter email, CNIC, or mobile → <code>POST /api/auth/login-status</code>.</li>
     <li>Branch:
       <code>PendingApproval</code> |
       <code>Rejected</code> |
@@ -540,8 +542,8 @@
     </li>
     <li>For Ready only: Sign in → <code>POST /api/auth/login</code>.</li>
   </ol>
-  <p>Login identifier resolution: username → CNIC → mobile (prefers non-rejected row when a soft-rejected duplicate exists).</p>
-  <p>While SchoolAdmin / CampusAdmin have approved a <strong>registration</strong> but PortalAdmin has not, login-status remains <code>PendingApproval</code>.</p>
+  <p>Login identifier resolution: username (email) → email address → CNIC → mobile (prefers non-rejected row when a soft-rejected duplicate exists).</p>
+  <p>While registration is pending and no authorized admin has activated yet, login-status remains <code>PendingApproval</code>.</p>
   <p>While a <strong>school/campus change</strong> is pending and the account is locked, login-status is <code>LockedPendingSchoolChange</code> (not PendingApproval).</p>
 
   <h3>Web locked page</h3>
@@ -569,30 +571,32 @@
     </tbody>
   </table>
 
-  <h2 id="password-reset">9b. Password reset (admin-mediated)</h2>
-  <p>There is no email reset link. Flow: user notifies admins → admin clears password → user uses <code>set-initial-password</code> on login.</p>
+  <h2 id="password-reset">9b. Password reset (email link + admin clear)</h2>
+  <p>User requests reset by username (email). API creates a pending row in <code>app_user_password_reset_request</code>, emails a link when the account has an email, and notifies scoped admins. Completion via the emailed token <strong>or</strong> admin Clear — <strong>first completion wins</strong>; the other path then fails.</p>
   <ol>
-    <li>Guest opens Forgot password (Web <code>/forgot-password</code> or Mobile login sheet) → <code>POST /api/auth/password-reset/request</code>.</li>
+    <li>Guest opens Forgot password (Web <code>/forgot-password</code> or Mobile login sheet) → enter username (email) → <code>POST /api/auth/password-reset/request</code>.</li>
     <li>API always returns success (no existence leak).</li>
-    <li>If the account is <strong>active</strong>, has a password, and is not pending/rejected/deleted, admins who are allowed to Clear that user receive <code>PasswordResetRequest</code> (school/campus candidates filtered by Clear rules below — not identical to registration reviewers).</li>
-    <li>Locked (<code>LockedPendingSchoolChange</code>) or deactivated accounts do <strong>not</strong> generate a notification (admin cannot clear until unlock/reactivate).</li>
-    <li>Admin (Web notification bell) → <strong>Clear password</strong> → <code>POST /api/auth/password-reset/clear</code> → hash cleared, sessions revoked, <code>NeedsPasswordSetup</code>.</li>
-    <li>User: login-status → set-initial-password → sign in.</li>
+    <li>If the account is <strong>active</strong>, has a password, and is not pending/rejected/deleted: pending row created; email sent with link <code>/reset-password?token=</code> (2-hour expiry); admins/parents who may Clear receive <code>PasswordResetRequest</code>.</li>
+    <li>Locked (<code>LockedPendingSchoolChange</code>) or deactivated accounts do <strong>not</strong> generate a notification or email (admin cannot clear until unlock/reactivate).</li>
+    <li><strong>Complete via token:</strong> user opens emailed link → Web <code>/reset-password?token=…</code> → new password → <code>POST /api/auth/password-reset/complete</code> → sessions revoked → Ready login.</li>
+    <li><strong>Complete via Clear:</strong> admin or linked Parent (Web notification bell) → <strong>Clear password</strong> → <code>POST /api/auth/password-reset/clear</code> → hash cleared, sessions revoked, <code>NeedsPasswordSetup</code> → set-initial-password → sign in.</li>
+    <li>If one path completes first, the other returns “already completed” / invalid token.</li>
   </ol>
-  <h3>Who can Clear (and who is notified)</h3>
+  <h3>Who is notified (and who can Clear)</h3>
   <table>
     <thead>
       <tr><th>Target user</th><th>Notified / can Clear</th></tr>
     </thead>
     <tbody>
       <tr><td>PortalAdmin</td><td>PortalAdmin only</td></tr>
-      <tr><td>SchoolAdmin</td><td>PortalAdmin + SchoolAdmin of that school (not CampusAdmin)</td></tr>
-      <tr><td>CampusAdmin</td><td>PortalAdmin + SchoolAdmin of that school (not peer CampusAdmins)</td></tr>
-      <tr><td>Teacher / Student (school + campus)</td><td>PortalAdmin + SchoolAdmin of school + CampusAdmin of campus</td></tr>
+      <tr><td>SchoolAdmin</td><td>PortalAdmin only (Clear: PortalAdmin only)</td></tr>
+      <tr><td>CampusAdmin</td><td>SchoolAdmin + PortalAdmin (Clear: SchoolAdmin + PortalAdmin; not peer CampusAdmins)</td></tr>
+      <tr><td>Teacher (school + campus)</td><td>SchoolAdmin + CampusAdmin + PortalAdmin</td></tr>
+      <tr><td>Student (school + campus)</td><td>SchoolAdmin + CampusAdmin + linked Parent(s) + PortalAdmin</td></tr>
       <tr><td>Parent (no school)</td><td>PortalAdmin only</td></tr>
     </tbody>
   </table>
-  <p>Clear password UI is <strong>Web only</strong>. Mobile can request reset but cannot clear.</p>
+  <p>Clear password UI is on <strong>Web</strong> (notification bell). Parent may Clear linked Student only. Mobile can request reset and complete via emailed token when opened on device; Clear is Web-only.</p>
 
   <h2 id="entry">10. Where to test (Web &amp; Mobile)</h2>
   <table>
@@ -611,7 +615,8 @@
       <tr><td>School Admins</td><td><code>/admin/directory/school-admins</code></td><td>Not available (Web only)</td></tr>
       <tr><td>Campus Admins</td><td><code>/admin/directory/campus-admins</code></td><td>Not available (Web only)</td></tr>
       <tr><td>Forgot password (request)</td><td><code>/forgot-password</code></td><td>Login → Forgot password</td></tr>
-      <tr><td>Password reset clear (admin)</td><td>Notifications bell → Clear password</td><td>Not available (Web only)</td></tr>
+      <tr><td>Reset password (email token)</td><td><code>/reset-password?token=</code></td><td>Open emailed link (browser)</td></tr>
+      <tr><td>Password reset clear (admin / Parent)</td><td>Notifications bell → Clear password</td><td>Not available (Web only)</td></tr>
       <tr><td>Self-deactivate account</td><td><code>/account</code> → Deactivate (current password)</td><td>Not available (Web only)</td></tr>
       <tr><td>Role switcher</td><td>User menu</td><td>Profile → Acting as</td></tr>
     </tbody>
@@ -620,17 +625,17 @@
   <h2 id="scenarios">11. QA scenarios (step-by-step)</h2>
 
   <div class="scenario" id="qa-01">
-    <h3><span class="id">QA-01</span> Student self-request — Portal Admin activates</h3>
+    <h3><span class="id">QA-01</span> Student self-request — admin activates</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Open Request account access.</li>
-      <li>Account type = Student. Fill full name, mobile, roll; optionally school + campus.</li>
+      <li>Account type = Student. Fill full name, email, roll (when school selected); optionally school + campus and mobile.</li>
       <li>Submit request. Confirm <code>app_approval</code> rows match selection.</li>
-      <li>As PortalAdmin, open Approvals → Approve.</li>
-      <li>On login: enter mobile/CNIC → Needs password setup.</li>
+      <li>As authorized admin (CampusAdmin in scope, SchoolAdmin, or PortalAdmin), open Approvals → Approve.</li>
+      <li>On login: enter email (or CNIC/mobile) → Needs password setup.</li>
       <li>Set password (≥6) → then Sign in.</li>
     </ol>
-    <div class="expect">Expected: Student reaches app home. Pending list cleared. Directory (Web) shows Active.</div>
+    <div class="expect">Expected: Student reaches app home. Pending list cleared for activated request. Directory (Web) shows Active.</div>
   </div>
 
   <div class="scenario" id="qa-02">
@@ -638,36 +643,38 @@
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Request as Parent; confirm school/campus/roll are hidden.</li>
-      <li>Submit with name + mobile.</li>
+      <li>Submit with name + email (mobile optional).</li>
       <li>SchoolAdmin / CampusAdmin Approvals → Parent request must NOT appear.</li>
       <li>PortalAdmin Approves → Parent sets password and logs in.</li>
     </ol>
-    <div class="expect">Expected: Only PortalAdmin sees and activates.</div>
+    <div class="expect">Expected: Only PortalAdmin sees and activates Parent / no-school requests.</div>
   </div>
 
   <div class="scenario" id="qa-03">
-    <h3><span class="id">QA-03</span> Campus path — CampusAdmin records, PortalAdmin activates</h3>
+    <h3><span class="id">QA-03</span> Campus path — CampusAdmin activates in scope</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Request as Student or Teacher with school + campus.</li>
       <li>As CampusAdmin of that campus, Approve.</li>
-      <li>Confirm account still PendingApproval (cannot set password yet).</li>
-      <li>CampusAdmin list still shows the row; buttons hidden; message: <strong>Approved — awaiting Portal Admin.</strong></li>
-      <li>As PortalAdmin, Approve → NeedsPasswordSetup → set password → login.</li>
+      <li>Confirm account activates → NeedsPasswordSetup (can set password).</li>
+      <li>CampusAdmin list still shows the row; buttons hidden; message: <strong>Approved — awaiting activation.</strong> only if another admin must still activate (e.g. out-of-scope approver).</li>
+      <li>Optional: repeat with PortalAdmin approving first without CampusAdmin acting → still activates.</li>
+      <li>Set password → login.</li>
     </ol>
-    <div class="expect">Expected: CampusAdmin does not activate. PortalAdmin activates.</div>
+    <div class="expect">Expected: CampusAdmin activates Student/Teacher in own campus. PortalAdmin can still activate first or alone.</div>
   </div>
 
   <div class="scenario" id="qa-04">
-    <h3><span class="id">QA-04</span> School-only path — SchoolAdmin records, PortalAdmin activates</h3>
+    <h3><span class="id">QA-04</span> School-only path — SchoolAdmin activates</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
       <li>Request as Teacher/Student with school selected and campus empty.</li>
       <li>CampusAdmin must NOT see it.</li>
-      <li>SchoolAdmin Approves → still pending; awaiting Portal Admin.</li>
-      <li>PortalAdmin Approves → activates.</li>
+      <li>SchoolAdmin Approves → activates (NeedsPasswordSetup).</li>
+      <li>CampusAdmin cannot activate school-only requests (no campus on request).</li>
+      <li>Optional: PortalAdmin Approves first → also activates.</li>
     </ol>
-    <div class="expect">Expected: SchoolAdmin alone does not activate registration; PortalAdmin does.</div>
+    <div class="expect">Expected: SchoolAdmin activates school-only Student/Teacher; CampusAdmin cannot activate without campus.</div>
   </div>
 
   <div class="scenario" id="qa-05">
@@ -678,14 +685,14 @@
       <li>As PortalAdmin, Approve immediately (without Campus/School acting).</li>
       <li>Confirm NeedsPasswordSetup; user can set password.</li>
     </ol>
-    <div class="expect">Expected: PortalAdmin alone activates even if other approval rows remain pending.</div>
+    <div class="expect">Expected: PortalAdmin alone activates even if other approval rows remain pending. School/Campus admins can also activate when in scope.</div>
   </div>
 
   <div class="scenario" id="qa-06">
     <h3><span class="id">QA-06</span> Teacher / Student without school (Portal only)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Request as Teacher or Student with school empty (Student still needs roll).</li>
+      <li>Request as Teacher or Student with school empty (roll not required without school).</li>
       <li>Confirm SchoolAdmin / CampusAdmin do not see it.</li>
       <li>PortalAdmin Approves → activates → set password.</li>
     </ol>
@@ -696,12 +703,12 @@
     <h3><span class="id">QA-07</span> Student request validation</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>As Student, submit without roll number → blocked.</li>
-      <li>Without full name or mobile → blocked.</li>
+      <li>As Student, submit without roll when school selected → blocked.</li>
+      <li>Without full name or email → blocked.</li>
       <li>Campus without school → blocked.</li>
-      <li>School/campus empty is allowed (Portal-only queue).</li>
+      <li>School/campus empty is allowed (Portal-only queue); roll not required without school.</li>
     </ol>
-    <div class="expect">Expected: Roll + identity required; school/campus optional for Student.</div>
+    <div class="expect">Expected: Email required; roll when school selected; school/campus optional for Student.</div>
   </div>
 
   <div class="scenario" id="qa-08">
@@ -715,14 +722,14 @@
   </div>
 
   <div class="scenario" id="qa-09">
-    <h3><span class="id">QA-09</span> Duplicate mobile / CNIC / username</h3>
+    <h3><span class="id">QA-09</span> Duplicate email / mobile / CNIC</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Submit a valid Student request.</li>
-      <li>Submit again with same mobile or CNIC → error.</li>
-      <li>Reject first request, then same mobile can register again.</li>
+      <li>Submit a valid Student request with email.</li>
+      <li>Submit again with same email, mobile, or CNIC → error.</li>
+      <li>Reject first request, then same email can register again.</li>
     </ol>
-    <div class="expect">Expected: Uniqueness while pending/active; after reject, re-request allowed.</div>
+    <div class="expect">Expected: Uniqueness while pending/active; after reject, same email re-request allowed.</div>
   </div>
 
   <div class="scenario" id="qa-10">
@@ -733,7 +740,7 @@
       <li>Admin Rejects from Approvals.</li>
       <li>DB: <code>app_users.rejected_at</code> is set; user row still exists.</li>
       <li>Login → status <strong>Rejected</strong>.</li>
-      <li>Submit Request Access again with same CNIC/mobile → succeeds (new row).</li>
+      <li>Submit Request Access again with same email → succeeds (new row).</li>
     </ol>
     <div class="expect">Expected: Soft-reject only; trail kept; re-request → PendingApproval on new row.</div>
     <div class="note">Do not expect “No account found” after reject — that was the old hard-delete behaviour.</div>
@@ -757,17 +764,17 @@
     <h3><span class="id">QA-12</span> PendingApproval login messaging (registration)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>While registration is pending (including after CampusAdmin/SchoolAdmin soft-approve), enter identifier on login.</li>
+      <li>While registration is pending (not yet activated by an authorized admin), enter identifier on login.</li>
       <li>Do not proceed to password login.</li>
     </ol>
-    <div class="expect">Expected: Status PendingApproval until PortalAdmin activates.</div>
+    <div class="expect">Expected: Status PendingApproval until an authorized admin activates.</div>
   </div>
 
   <div class="scenario" id="qa-13">
-    <h3><span class="id">QA-13</span> NeedsPasswordSetup then Ready (after PortalAdmin)</h3>
+    <h3><span class="id">QA-13</span> NeedsPasswordSetup then Ready (after activation)</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>PortalAdmin Approves a pending user.</li>
+      <li>Authorized admin Approves a pending user (PortalAdmin, or School/Campus Admin in scope).</li>
       <li>Login identifier → NeedsPasswordSetup.</li>
       <li>Try login before set-initial-password → blocked.</li>
       <li>Set password → login succeeds → Ready.</li>
@@ -780,7 +787,7 @@
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
       <li>Admin opens <code>/admin/directory/students</code> → Create.</li>
-      <li>Fill required fields including username — NO password field.</li>
+      <li>Fill required fields including email (username) — NO password field.</li>
       <li>On Web or Mobile login: NeedsPasswordSetup → set password → Sign in.</li>
     </ol>
     <div class="expect">Expected: No pending approval queue. NeedsPasswordSetup then Ready. (Directory create UI is Web-only.)</div>
@@ -801,7 +808,7 @@
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
       <li>PortalAdmin opens <code>/admin/directory/school-admins</code>.</li>
-      <li>Create School Admin: name, username, school. No password.</li>
+      <li>Create School Admin: name, email (username), school. No password.</li>
       <li>SchoolAdmin / CampusAdmin cannot open this page.</li>
       <li>New School Admin: NeedsPasswordSetup → set password → access school tools.</li>
     </ol>
@@ -894,9 +901,9 @@
     <ol class="steps">
       <li>Submit request with a long reason.</li>
       <li>Approvals table shows school / campus / Pending with; truncated reason; Read more.</li>
-      <li>After CampusAdmin approve, confirm status text instead of buttons.</li>
+      <li>After CampusAdmin approve (when they cannot activate), confirm status text instead of buttons.</li>
     </ol>
-    <div class="expect">Expected: Truncation + popup; awaiting message after local approve.</div>
+    <div class="expect">Expected: Truncation + popup; awaiting activation message when approve recorded but not activated.</div>
   </div>
 
   <div class="scenario" id="qa-25">
@@ -914,19 +921,19 @@
     <h3><span class="id">QA-26</span> Password minimum length</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>After PortalAdmin approval, try set password shorter than 6 characters.</li>
+      <li>After activation, try set password shorter than 6 characters.</li>
     </ol>
     <div class="expect">Expected: Validation error; password not saved.</div>
   </div>
 
   <div class="scenario" id="qa-27">
-    <h3><span class="id">QA-27</span> Login with CNIC vs mobile</h3>
+    <h3><span class="id">QA-27</span> Login with email, CNIC, or mobile</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Register/create user with both CNIC and mobile when possible.</li>
-      <li>After Ready, login using CNIC, then using mobile.</li>
+      <li>Register/create user with email and optionally CNIC/mobile.</li>
+      <li>After Ready, login using email, then CNIC, then mobile when stored.</li>
     </ol>
-    <div class="expect">Expected: Both identifiers resolve to the same account when stored.</div>
+    <div class="expect">Expected: Email (username), CNIC, and mobile resolve to the same account when stored.</div>
   </div>
 
   <div class="scenario" id="qa-28">
@@ -994,11 +1001,11 @@
     <div class="platforms"><span class="web">Web</span></div>
     <ol class="steps">
       <li>Teacher/Student requests change → locked; note current school/campus.</li>
-      <li>SchoolAdmin or PortalAdmin Rejects.</li>
+      <li>SchoolAdmin or PortalAdmin Rejects (optional: confirm <code>leaveWithoutSchool</code> for Student).</li>
       <li>User login-status returns Ready (not locked).</li>
-      <li>Confirm school/campus are unchanged.</li>
+      <li>Confirm school/campus unchanged (or cleared when Student + leaveWithoutSchool).</li>
     </ol>
-    <div class="expect">Expected: Reject unlocks; destination change is not applied.</div>
+    <div class="expect">Expected: Reject unlocks; destination change not applied; Student may optionally continue without school.</div>
   </div>
 
   <div class="scenario" id="qa-34">
@@ -1038,18 +1045,19 @@
   </div>
 
   <div class="scenario" id="qa-37">
-    <h3><span class="id">QA-37</span> Password reset — request notifies, admin clears, user sets password</h3>
+    <h3><span class="id">QA-37</span> Password reset — email link, notify, Clear, first wins</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Use an active Ready user (password set).</li>
-      <li>On Web or Mobile, open Forgot password → enter CNIC/mobile → submit.</li>
+      <li>Use an active Ready user (password set, email on account).</li>
+      <li>On Web or Mobile, open Forgot password → enter email (username) → submit.</li>
       <li>Confirm success message (no existence leak even if wrong id).</li>
-      <li>As a scoped admin who can Clear that user (see §9b matrix), open notification bell → see <code>Password reset: {username}</code>.</li>
-      <li>On Web, click <strong>Clear password</strong> → confirm.</li>
-      <li>User login-status → <code>NeedsPasswordSetup</code> → set-initial-password → sign in.</li>
-      <li>Negative: CampusAdmin forgot-password → peer CampusAdmins must <strong>not</strong> get the notification; SchoolAdmin/PortalAdmin can Clear.</li>
+      <li>DB: pending row in <code>app_user_password_reset_request</code>; user receives email with <code>/reset-password?token=</code>.</li>
+      <li>As a scoped admin (or linked Parent for Student), open notification bell → see <code>Password reset: {email}</code>.</li>
+      <li><strong>Path A — token:</strong> open link → set new password on <code>/reset-password</code> → sign in. Second Clear attempt fails (already completed).</li>
+      <li><strong>Path B — Clear:</strong> repeat request; on Web click <strong>Clear password</strong> → user login-status <code>NeedsPasswordSetup</code> → set-initial-password → sign in. Token link then invalid.</li>
+      <li>Negative: CampusAdmin reset → peer CampusAdmins must <strong>not</strong> get notification; SchoolAdmin/PortalAdmin (and Parent for linked Student) can Clear.</li>
     </ol>
-    <div class="expect">Expected: Notify recipients match Clear rules; after clear, sessions revoked; user can set a new password. Clear UI is Web-only.</div>
+    <div class="expect">Expected: Email + notify; first completion wins; after Clear, sessions revoked; Parent may Clear linked Student.</div>
   </div>
 
   <div class="scenario" id="qa-38">
@@ -1058,8 +1066,8 @@
     <ol class="steps">
       <li>Lock a user via school/campus change (or deactivate via directory).</li>
       <li>Submit Forgot password for that identifier.</li>
-      <li>UI still shows success; confirm no new <code>PasswordResetRequest</code> notification for admins.</li>
-      <li>If an old notification exists, Clear password for that user must fail until unlock/reactivate.</li>
+      <li>UI still shows success; confirm no new <code>PasswordResetRequest</code> notification and no new <code>app_user_password_reset_request</code> row.</li>
+      <li>If an old pending reset exists, Clear or token complete must fail until unlock/reactivate.</li>
     </ol>
     <div class="expect">Expected: No dead-end admin notifications for inactive accounts.</div>
   </div>
@@ -1095,18 +1103,18 @@
       <tr><th>#</th><th>Check</th><th>Web</th><th>Mobile</th><th>Pass?</th></tr>
     </thead>
     <tbody>
-      <tr><td>1</td><td>Student requires roll; school/campus optional</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>1</td><td>Student: email required; roll when school selected; school/campus optional</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>2</td><td>Parent hides school/campus/roll</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>3</td><td>Teacher school/campus/code optional</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>3</td><td>Teacher: email required; school/campus/code optional; mobile optional</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>4</td><td>Submit writes correct <code>app_approval</code> queue</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>5</td><td>Pending scope by school/campus (no admin_target)</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>6</td><td>SchoolAdmin / CampusAdmin registration approve does NOT activate</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>7</td><td>After local registration approve: awaiting Portal Admin</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>8</td><td>PortalAdmin registration approve → NeedsPasswordSetup</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>9</td><td>PortalAdmin alone can activate registration</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>6</td><td>SchoolAdmin / CampusAdmin activate Student/Teacher in scope</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>7</td><td>After approve without activate: awaiting activation</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>8</td><td>Authorized registration approve → NeedsPasswordSetup</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>9</td><td>PortalAdmin alone can activate any registration</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>10</td><td>Set password → Ready login</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>11</td><td>Reject registration → soft-reject + login-status Rejected</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>12</td><td>After reject: same CNIC/mobile can re-request</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>12</td><td>After reject: same email can re-request</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>13</td><td>Directory create → NeedsPasswordSetup (no approval queue)</td><td>☐</td><td>login only</td><td></td></tr>
       <tr><td>14</td><td>PortalAdmin creates SchoolAdmin; first login set password</td><td>☐</td><td>login only</td><td></td></tr>
       <tr><td>15</td><td>Portal/School Admin creates CampusAdmin; first login set password</td><td>☐</td><td>login only</td><td></td></tr>
@@ -1126,14 +1134,17 @@
       <tr><td>29</td><td>Directory overview shows Last login (date + time) after password login</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>30</td><td>Directory School / campus changes button visible for Portal/School/Campus Admin</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>31</td><td>Forgot password request succeeds without leaking existence</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>32</td><td>Active Ready user → PasswordResetRequest notify (Clear-capable admins only) → Clear → NeedsPasswordSetup</td><td>☐</td><td>request only</td><td></td></tr>
-      <tr><td>33</td><td>Locked / deactivated forgot-password does not notify admins</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>32</td><td>Active Ready user → pending reset row + email link + PasswordResetRequest notify</td><td>☐</td><td>request only</td><td></td></tr>
+      <tr><td>33</td><td>Locked / deactivated forgot-password does not notify or email</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>34</td><td>Logout sends refresh token and revokes it</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>35</td><td>CampusAdmin password reset: peers not notified; School/Portal can Clear</td><td>☐</td><td>request only</td><td></td></tr>
+      <tr><td>35</td><td>Password reset first completion wins (token OR Clear)</td><td>☐</td><td>token only</td><td></td></tr>
       <tr><td>36</td><td>Self-deactivate (Web) → “not active”; PortalAdmin cannot self-deactivate</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>37</td><td>Multi-role school change follows active role (Teacher vs CampusAdmin)</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>38</td><td>Directory badge ApprovedInactive = NeedsPasswordSetup (not “Ready”)</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>39</td><td>PortalAdmin activate rewrites username to CNIC when present and free</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>39</td><td>Directory create requires email (username); Parent may Clear linked Student reset</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>40</td><td>Complete reset via <code>/reset-password?token=</code> → Ready login</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>41</td><td>Username stays email on activate (no CNIC rewrite)</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>42</td><td>School-change reject optional leaveWithoutSchool (Student)</td><td>☐</td><td>—</td><td></td></tr>
     </tbody>
   </table>
 
@@ -1147,13 +1158,14 @@
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools</code></td><td>Anonymous</td><td>Schools</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registration-options/schools/{id}/campuses</code></td><td>Anonymous</td><td>Campuses</td></tr>
       <tr><td>GET</td><td><code>/api/auth/registrations/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending registrations</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>PortalAdmin activates; others soft-approve</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/registrations/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Records approval; activates when authorized (PortalAdmin any; School/Campus Admin Student/Teacher in scope)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/registrations/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Soft-reject registration</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login-status</code></td><td>Anonymous</td><td>PendingApproval | Rejected | NeedsPasswordSetup | LockedPendingSchoolChange | Ready</td></tr>
       <tr><td>POST</td><td><code>/api/auth/set-initial-password</code></td><td>Anonymous</td><td>Set first password after registration activation <strong>or</strong> admin password Clear (<code>NeedsPasswordSetup</code>)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Anonymous</td><td>Sign in (returns role + roles); updates <code>app_users.last_login_at</code></td></tr>
-      <tr><td>POST</td><td><code>/api/auth/password-reset/request</code></td><td>Anonymous</td><td>Notify admins who can Clear that user if active+password; always success (no existence leak)</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/password-reset/clear</code></td><td>Portal/School/Campus Admin</td><td>Clear → NeedsPasswordSetup; revoke sessions. PortalAdmin any; SchoolAdmin own school; CampusAdmin own-campus Teacher/Student/Parent only (Web UI)</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/password-reset/request</code></td><td>Anonymous</td><td>Email link + pending row + notify scoped admins if active+password; always success (no existence leak)</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/password-reset/complete</code></td><td>Anonymous</td><td>Complete reset via emailed token (first completion wins) → Ready login</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/password-reset/clear</code></td><td>Portal/School/Campus Admin, Parent</td><td>Clear pending reset → NeedsPasswordSetup; revoke sessions. First completion wins. Parent: linked Student only (Web UI)</td></tr>
       <tr><td>POST</td><td><code>/api/auth/change-password</code></td><td>Bearer</td><td>Change password; clear must_change_password</td></tr>
       <tr><td>POST</td><td><code>/api/auth/logout</code></td><td>Anonymous</td><td>Revoke refresh token when provided</td></tr>
       <tr><td>POST</td><td><code>/api/auth/switch-role</code></td><td>Bearer</td><td>Change active role; new tokens</td></tr>
@@ -1164,7 +1176,7 @@
       <tr><td>POST</td><td><code>/api/auth/me/school-change</code></td><td>Bearer</td><td>Request school/campus change; locks account (rules follow active role)</td></tr>
       <tr><td>GET</td><td><code>/api/auth/school-changes/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending changes + <code>schoolAdminHasApproved</code></td></tr>
       <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Apply+unlock when allowed: PortalAdmin any; SchoolAdmin destination school; CampusAdmin Teacher/Student into own campus</td></tr>
-      <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Reject + unlock (no apply)</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Reject + unlock (no apply); optional <code>leaveWithoutSchool</code> for Student</td></tr>
       <tr><td>GET</td><td><code>/api/directory/summary</code></td><td>Admins</td><td>Directory overview counts + <code>visibleSections</code> (includes <code>schoolChanges</code>)</td></tr>
       <tr><td>GET</td><td><code>/api/directory/students|teachers|parents|…</code></td><td>Admins</td><td>List users (includes contact, audit fields, <code>lastLoginAt</code>, approval history)</td></tr>
       <tr><td>POST</td><td><code>/api/directory/students|teachers|parents</code></td><td>Admins</td><td>Create / add-role users</td></tr>
@@ -1175,17 +1187,17 @@
   </table>
 
   <footer>
-    Updated 20 Jul 2026 from current business logic in WebApi AuthService / DirectoryService,
-    React AccountPage / AccountLockedPage / PendingSchoolChangesPage / DirectoryOverviewPage / LoginPage / NotificationsBell,
+    Updated 2 Aug 2026 from current business logic in WebApi AuthService / DirectoryService,
+    React AccountPage / AccountLockedPage / PendingSchoolChangesPage / DirectoryOverviewPage / LoginPage / ForgotPasswordPage / ResetPasswordPage / NotificationsBell,
     and Flutter Mobile login / profile school-change request / logout revoke.
-    Directory create / admin school-change queue / password-reset clear remain <strong>Web only</strong> (scenario chips QA-14–17; QA-37 clear step).
-    Password reset: request (Web+Mobile) + clear (Web) — QA-37 / QA-38.
+    Directory create / admin school-change queue / password-reset Clear remain <strong>Web only</strong> (scenario chips QA-14–17; QA-37 Clear step).
+    Password reset: request + email token (Web+Mobile) + Clear (Web; Parent for linked Student) — QA-37 / QA-38. First completion wins.
     Self-deactivate Web-only — QA-39. Active-role school-change — QA-40.
     Directory badges: <code>ApprovedInactive</code> = NeedsPasswordSetup; <code>Active</code> = Ready.
     Tables: <code>app_user_roles</code>, <code>app_approval</code>,
     <code>app_user_school_change_request</code>, <code>app_user_school_change_approval</code>,
-    <code>app_users.last_login_at</code>.
-    Companion DOCX (if present): <code>docs/02_RankUp_User_Creation_Approval_QA.docx</code> — update manually or rebuild when a generator script is available.
+    <code>app_user_password_reset_request</code>, <code>app_users.last_login_at</code>.
+    Companion DOCX (if present): <code>docs/03_RankUp_User_Creation_Approval_QA.docx</code> — update manually or rebuild when a generator script is available.
   </footer>
 </main>
 </body>

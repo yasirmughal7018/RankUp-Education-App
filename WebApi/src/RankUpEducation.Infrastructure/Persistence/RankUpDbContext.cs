@@ -36,6 +36,8 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<Approval> Approvals => Set<Approval>();
     public DbSet<UserSchoolChangeRequest> UserSchoolChangeRequests => Set<UserSchoolChangeRequest>();
     public DbSet<UserSchoolChangeApproval> UserSchoolChangeApprovals => Set<UserSchoolChangeApproval>();
+    public DbSet<UserRoleRequest> UserRoleRequests => Set<UserRoleRequest>();
+    public DbSet<UserPasswordResetRequest> UserPasswordResetRequests => Set<UserPasswordResetRequest>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<DeviceSession> DeviceSessions => Set<DeviceSession>();
     public DbSet<Notification> Notifications => Set<Notification>();

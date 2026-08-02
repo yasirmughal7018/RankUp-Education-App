@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Pencil, UserCheck, UserX } from "lucide-react";
+import { Pencil, UserCheck, UserPlus, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { AppSearchInput } from "@/components/ui/app-search-input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -37,6 +38,7 @@ import {
   useDirectoryCampusesQuery,
   useDirectorySchoolsQuery,
   useDirectoryTeachersQuery,
+  useGrantParentRoleToTeacherMutation,
   useUpdateTeacherMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import {
@@ -66,6 +68,8 @@ export function DirectoryTeachersPage() {
   const [teacherDialog, setTeacherDialog] = useState<
     "create" | DirectoryTeacher | null
   >(null);
+  const [grantParentTarget, setGrantParentTarget] =
+    useState<DirectoryTeacher | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -97,6 +101,7 @@ export function DirectoryTeachersPage() {
   const activateMutation = useActivateTeacherMutation();
   const deactivateMutation = useDeactivateTeacherMutation();
   const bulkDeactivateMutation = useBulkDeactivateTeachersMutation();
+  const grantParentMutation = useGrantParentRoleToTeacherMutation();
 
   const teachers = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -127,7 +132,8 @@ export function DirectoryTeachersPage() {
     updateMutation.isPending ||
     activateMutation.isPending ||
     deactivateMutation.isPending ||
-    bulkDeactivateMutation.isPending;
+    bulkDeactivateMutation.isPending ||
+    grantParentMutation.isPending;
 
   const allVisibleSelected =
     visibleTeachers.length > 0 &&
@@ -232,6 +238,7 @@ export function DirectoryTeachersPage() {
     if (!canManage) {
       return null;
     }
+    const hasParentRole = (teacher.roles ?? []).includes("Parent");
     return (
       <>
         <DirectoryIconAction
@@ -243,6 +250,17 @@ export function DirectoryTeachersPage() {
             setTeacherDialog(teacher);
           }}
         />
+        {!hasParentRole ? (
+          <DirectoryIconAction
+            icon={UserPlus}
+            label={`Add Parent role to ${teacher.fullName}`}
+            disabled={busy}
+            onClick={() => {
+              clearMessages();
+              setGrantParentTarget(teacher);
+            }}
+          />
+        ) : null}
         <DirectoryIconAction
           icon={teacher.isActive ? UserX : UserCheck}
           label={
@@ -396,7 +414,11 @@ export function DirectoryTeachersPage() {
                 canManage ? () => toggleSelect(teacher.teacherId) : undefined
               }
               title={teacher.fullName}
-              subtitle={`@${teacher.username}`}
+              subtitle={
+                (teacher.roles?.length ?? 0) > 1
+                  ? `${teacher.username} · ${teacher.roles?.join(", ")}`
+                  : teacher.username
+              }
               badge={
                 <AccountStatusBadge
                   accountStatus={teacher.accountStatus}
@@ -455,8 +477,13 @@ export function DirectoryTeachersPage() {
                 <DirectoryTd>
                   <p className="font-medium">{teacher.fullName}</p>
                   <p className="text-xs text-muted-foreground">
-                    @{teacher.username}
+                    {teacher.username}
                   </p>
+                  {(teacher.roles?.length ?? 0) > 1 ? (
+                    <p className="mt-0.5 text-xs font-medium text-primary">
+                      Roles: {teacher.roles?.join(", ")}
+                    </p>
+                  ) : null}
                 </DirectoryTd>
                 <DirectoryTd>{teacher.teacherCode}</DirectoryTd>
                 <DirectoryTd className="text-muted-foreground">
@@ -490,6 +517,42 @@ export function DirectoryTeachersPage() {
           onSubmit={handleFormSubmit}
         />
       ) : null}
+
+      <AppConfirmDialog
+        open={grantParentTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !grantParentMutation.isPending) {
+            setGrantParentTarget(null);
+          }
+        }}
+        title="Add Parent role"
+        description={
+          grantParentTarget
+            ? `Add the Parent role to ${grantParentTarget.fullName}? They will keep Teacher access and can switch roles after login. Students cannot combine roles.`
+            : ""
+        }
+        confirmLabel="Add Parent role"
+        loading={grantParentMutation.isPending}
+        onConfirm={() => {
+          if (!grantParentTarget) {
+            return;
+          }
+          void (async () => {
+            try {
+              await grantParentMutation.mutateAsync(grantParentTarget.teacherId);
+              setSuccessMessage(
+                `Parent role added to ${grantParentTarget.fullName}.`,
+              );
+              setGrantParentTarget(null);
+            } catch (err) {
+              const apiError = err as ApiError;
+              setActionError(
+                apiError.message ?? "Unable to add Parent role.",
+              );
+            }
+          })();
+        }}
+      />
     </DirectoryPageShell>
   );
 }

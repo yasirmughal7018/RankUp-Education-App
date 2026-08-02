@@ -10,6 +10,7 @@ import {
   type CreateDirectorySchoolAdminInput,
   type CreateDirectoryStudentInput,
   type CreateDirectoryTeacherInput,
+  type GrantTeacherRoleInput,
   type DirectoryCampus,
   type DirectoryCampusAdmin,
   type DirectoryCampusAdminFilters,
@@ -280,7 +281,7 @@ export async function listTeachers(
   );
 }
 
-/** Create teacher account and profile. */
+/** Create teacher account and profile (or add Teacher role to matching account). */
 export async function createTeacher(
   input: CreateDirectoryTeacherInput,
 ): Promise<DirectoryTeacher> {
@@ -288,6 +289,20 @@ export async function createTeacher(
     method: "POST",
     body: input,
   });
+}
+
+/** Add Teacher role to an existing Parent account. */
+export async function grantTeacherRoleToParent(
+  parentId: number,
+  input: GrantTeacherRoleInput,
+): Promise<DirectoryTeacher> {
+  return apiRequest<DirectoryTeacher>(
+    `/directory/parents/${parentId}/roles/teacher`,
+    {
+      method: "POST",
+      body: input,
+    },
+  );
 }
 
 /** Update teacher profile. */
@@ -338,7 +353,7 @@ export async function listParents(
   );
 }
 
-/** Create parent account. */
+/** Create parent account (or add Parent role to matching account). */
 export async function createParent(
   input: CreateDirectoryParentInput,
 ): Promise<DirectoryParent> {
@@ -346,6 +361,18 @@ export async function createParent(
     method: "POST",
     body: input,
   });
+}
+
+/** Add Parent role to an existing Teacher account. */
+export async function grantParentRoleToTeacher(
+  teacherId: number,
+): Promise<DirectoryParent> {
+  return apiRequest<DirectoryParent>(
+    `/directory/teachers/${teacherId}/roles/parent`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 /** Update parent profile. */

@@ -98,10 +98,10 @@ export function TeacherFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
+        const trimmedEmail = username.trim();
         const parsedSchoolId = Number(schoolId);
-        if (!trimmedUsername) {
-          setError("Username is required.");
+        if (!trimmedEmail) {
+          setError("Email address is required (it is the username).");
           return;
         }
         if (!parsedSchoolId || parsedSchoolId < 1) {
@@ -112,7 +112,8 @@ export function TeacherFormDialog({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: trimmedEmail,
+            emailAddress: trimmedEmail,
             schoolId: parsedSchoolId,
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
@@ -144,7 +145,7 @@ export function TeacherFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${teacher.fullName}.`
-              : "Add a new teacher to the directory. User must set password on first login."}
+              : "Add a teacher to the directory. If email or mobile matches an existing Parent (or other non-Student) account, the Teacher role is added to that same login. User must set password on first login."}
           </p>
         </div>
 
@@ -174,16 +175,17 @@ export function TeacherFormDialog({
             <>
               <div>
                 <FieldLabel htmlFor="teacher-username" required>
-                  Username
+                  Email (username)
                 </FieldLabel>
                 <input
                   id="teacher-username"
-                  type="text"
+                  type="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className={inputClassName}
                   required
                   disabled={isSubmitting}
+                  placeholder="you@example.com"
                 />
               </div>
               <div>

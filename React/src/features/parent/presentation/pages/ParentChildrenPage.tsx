@@ -59,8 +59,8 @@ export function ParentChildrenPage() {
                     {formatStudentLabel(student)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    ID {student.studentId} · Roll {student.rollNumber} ·{" "}
-                    {student.relationship}
+                    @{student.username} · ID {student.studentId} · Roll{" "}
+                    {student.rollNumber} · {student.relationship}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

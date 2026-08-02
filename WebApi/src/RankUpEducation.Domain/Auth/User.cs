@@ -72,6 +72,8 @@ public sealed class User : SoftDeleteEntity
     public DateTimeOffset? RequestedAt { get; private set; }
     /// <summary>Set when a registration request is rejected (soft close; row kept for audit).</summary>
     public DateTimeOffset? RejectedAt { get; private set; }
+    /// <summary>Admin-supplied reason when a registration request is rejected.</summary>
+    public string? RejectionReason { get; private set; }
     public DateTimeOffset? LastLoginAt { get; private set; }
     public IReadOnlyCollection<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyCollection<DeviceSession> DeviceSessions => _deviceSessions;
@@ -153,7 +155,7 @@ public sealed class User : SoftDeleteEntity
         string fullName,
         UserRole role,
         DateTimeOffset requestedAt,
-        string mobileNumber,
+        string? mobileNumber,
         string? emailAddress = null,
         string? cnic = null,
         int? schoolId = null,
@@ -168,7 +170,7 @@ public sealed class User : SoftDeleteEntity
             PasswordHash = null,
             IsActive = false,
             RequestedAt = requestedAt,
-            MobileNumber = mobileNumber.AsTrimmedString(),
+            MobileNumber = mobileNumber.AsTrimmedOrNull(),
             EmailAddress = emailAddress.AsNormalizedEmailOrNull(),
             Cnic = cnic.AsTrimmedOrNull(),
             SchoolId = schoolId,
@@ -235,20 +237,28 @@ public sealed class User : SoftDeleteEntity
         PasswordHash = null;
         MustChangePassword = true;
         RejectedAt = null;
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     /// <summary>Soft-reject registration. Keeps the user row and approval trail for audit.</summary>
-    public void RejectPendingRegistration(DateTimeOffset rejectedAt)
+    public void RejectPendingRegistration(DateTimeOffset rejectedAt, string reason)
     {
         if (!IsPendingRegistration)
         {
             throw new BusinessRuleException("This user is not a pending registration request.");
         }
 
+        var trimmed = reason.AsTrimmedString();
+        if (!trimmed.HasTrimmedText())
+        {
+            throw new BusinessRuleException("Rejection reason is required.");
+        }
+
         IsActive = false;
         PasswordHash = null;
         RejectedAt = rejectedAt;
+        RejectionReason = trimmed.Length > 1000 ? trimmed[..1000] : trimmed;
         MustChangePassword = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
@@ -333,7 +343,7 @@ public sealed class User : SoftDeleteEntity
     /// <summary>Self-service contact update (school/campus changes go through approval).</summary>
     public void UpdateSelfServiceContact(
         string fullName,
-        string mobileNumber,
+        string? mobileNumber,
         string? emailAddress,
         string? cnic)
     {
@@ -342,13 +352,8 @@ public sealed class User : SoftDeleteEntity
             throw new BusinessRuleException("Display name is required.");
         }
 
-        if (!mobileNumber.HasTrimmedText())
-        {
-            throw new BusinessRuleException("Mobile number is required.");
-        }
-
         FullName = fullName.AsTrimmedString();
-        MobileNumber = mobileNumber.AsTrimmedString();
+        MobileNumber = mobileNumber.AsTrimmedOrNull();
         EmailAddress = emailAddress.AsNormalizedEmailOrNull();
         Cnic = cnic.AsTrimmedOrNull();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -459,6 +464,16 @@ public sealed class User : SoftDeleteEntity
     {
         UserRoleRules.EnsureCanAddRole(Roles.ToList(), role);
         EnsureRoleAssignment(role, createdAt);
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>Removes a Parent or Teacher role when another role remains.</summary>
+    public void RemoveRole(UserRole role)
+    {
+        UserRoleRules.EnsureCanRemoveRole(Roles.ToList(), role);
+        var assignment = _roleAssignments.FirstOrDefault(item => item.Role == role)
+            ?? throw new BusinessRuleException($"This account does not have the {role} role.");
+        _roleAssignments.Remove(assignment);
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 

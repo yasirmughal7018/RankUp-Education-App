@@ -25,6 +25,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.ModifiedDate).HasColumnName("modified_date");
         builder.Property(user => user.RequestedAt).HasColumnName("requested_at");
         builder.Property(user => user.RejectedAt).HasColumnName("rejected_at");
+        builder.Property(user => user.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(1000);
         builder.Property(user => user.MobileNumber).HasColumnName("mobile_number").HasMaxLength(40);
         builder.Property(user => user.Cnic).HasColumnName("cnic").HasMaxLength(20);
         builder.HasIndex(user => user.Cnic)

@@ -90,7 +90,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       _LoginStep.accountLocked =>
                         'Your account is locked until an admin finishes your school or campus change.',
                       _LoginStep.identifier =>
-                        'Enter CNIC or mobile number to continue.',
+                        'Enter your username to continue.',
                     },
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyLarge,
@@ -138,10 +138,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       controller: _identifierController,
                       decoration: InputDecoration(
                         label: buildFieldLabel(
-                          'CNIC or mobile number',
+                          'Username',
                           required: true,
                         ),
-                        prefixIcon: const Icon(Icons.badge_outlined),
+                        prefixIcon: const Icon(Icons.person_outline),
                       ),
                       autocorrect: false,
                       enableSuggestions: false,
@@ -254,7 +254,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              'After approval or rejection, your account unlocks and you can sign in again with the same CNIC or mobile number.',
+                              'After approval or rejection, your account unlocks and you can sign in again with the same username.',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onTertiaryContainer,
                               ),
@@ -362,7 +362,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       onPressed: busy ? null : _backToIdentifier,
                       child: Text(
                         _step == _LoginStep.password
-                            ? 'Use a different CNIC / mobile'
+                            ? 'Use a different username'
                             : 'Back',
                       ),
                     ),
@@ -395,7 +395,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Enter CNIC or mobile first. If your account was '
+                              'Enter your username first. If your account was '
                               'just approved, you will set a password, then sign '
                               'in again with that password.',
                             ),
@@ -431,7 +431,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     final identifier = _identifierController.text.trim();
     if (identifier.isEmpty) {
-      setState(() => _localError = 'CNIC or mobile number is required.');
+      setState(() => _localError = 'Username is required.');
       return;
     }
 
@@ -612,10 +612,10 @@ class _PasswordResetSheetState extends State<_PasswordResetSheet> {
                 controller: _identifierController,
                 decoration: InputDecoration(
                   label: buildFieldLabel(
-                    'CNIC or mobile number',
+                    'Username',
                     required: true,
                   ),
-                  prefixIcon: const Icon(Icons.badge_outlined),
+                  prefixIcon: const Icon(Icons.person_outline),
                 ),
                 validator: _required,
                 textInputAction: TextInputAction.done,

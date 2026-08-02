@@ -34,9 +34,13 @@ export interface ApproveRegistrationResult {
   message: string;
 }
 
-/** Reject a pending registration. */
-export async function rejectRegistration(userId: number): Promise<void> {
+/** Reject a pending registration with a required reason. */
+export async function rejectRegistration(
+  userId: number,
+  reason: string,
+): Promise<void> {
   await apiRequestVoid(`/auth/registrations/${userId}/reject`, {
     method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }

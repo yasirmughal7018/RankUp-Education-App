@@ -108,10 +108,10 @@ export function StudentFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
+        const trimmedEmail = username.trim();
         const parsedSchoolId = Number(schoolId);
-        if (!trimmedUsername) {
-          setError("Username is required.");
+        if (!trimmedEmail) {
+          setError("Email address is required (it is the username).");
           return;
         }
         if (!parsedSchoolId || parsedSchoolId < 1) {
@@ -122,7 +122,8 @@ export function StudentFormDialog({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: trimmedEmail,
+            emailAddress: trimmedEmail,
             schoolId: parsedSchoolId,
             campusId: parsedCampusId,
             rollNumber: trimmedRoll,
@@ -186,16 +187,17 @@ export function StudentFormDialog({
             <>
               <div>
                 <FieldLabel htmlFor="student-username" required>
-                  Username
+                  Email (username)
                 </FieldLabel>
                 <input
                   id="student-username"
-                  type="text"
+                  type="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className={inputClassName}
                   required
                   disabled={isSubmitting}
+                  placeholder="you@example.com"
                 />
               </div>
               <div>

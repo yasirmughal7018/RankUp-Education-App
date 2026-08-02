@@ -48,9 +48,13 @@ export async function approveSchoolChange(
   );
 }
 
-/** Reject a school change request. */
-export async function rejectSchoolChange(requestId: number): Promise<void> {
-  await apiRequestVoid(`/auth/school-changes/${requestId}/reject`, {
+/** Reject a school change request. Optionally clear school for the student. */
+export async function rejectSchoolChange(
+  requestId: number,
+  leaveWithoutSchool = false,
+): Promise<void> {
+  const query = leaveWithoutSchool ? "?leaveWithoutSchool=true" : "";
+  await apiRequestVoid(`/auth/school-changes/${requestId}/reject${query}`, {
     method: "POST",
   });
 }

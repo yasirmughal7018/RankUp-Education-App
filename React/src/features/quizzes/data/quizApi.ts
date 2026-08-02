@@ -233,6 +233,7 @@ export async function assignQuiz(
       gradeId: input.gradeId,
       section: input.section ?? null,
       schoolIds: input.schoolIds?.length ? input.schoolIds : null,
+      campusId: input.campusId ?? null,
     },
   });
 }

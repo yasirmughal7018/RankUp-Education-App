@@ -726,12 +726,21 @@ export function DirectoryOverviewPage() {
         subtitle="Browse schools and people in your authorized scope. Counts and lists stay filtered by the API."
         action={
           showSchoolChanges ? (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <Link to="/admin/directory/role-requests">Role requests</Link>
+              </Button>
+              <Button asChild className="w-full sm:w-auto">
+                <Link to="/admin/directory/school-changes">
+                  School / campus changes
+                </Link>
+              </Button>
+            </div>
+          ) : (
             <Button asChild className="w-full sm:w-auto">
-              <Link to="/admin/directory/school-changes">
-                School / campus changes
-              </Link>
+              <Link to="/admin/directory/role-requests">Role requests</Link>
             </Button>
-          ) : undefined
+          )
         }
       />
 

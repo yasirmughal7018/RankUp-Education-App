@@ -112,7 +112,8 @@ public sealed record CreateDirectoryStudentRequest(
     string RollNumber,
     short Grade,
     string Section,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    string? EmailAddress = null);
 
 /// <summary>Update an existing student from the directory UI.</summary>
 public sealed record UpdateDirectoryStudentRequest(
@@ -154,7 +155,9 @@ public sealed record DirectoryTeacherResponse(
     bool NeedsPasswordSetup,
     IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
-    string AccountStatus);
+    string AccountStatus,
+    /// <summary>All roles on this account (e.g. Teacher, Parent).</summary>
+    IReadOnlyList<string> Roles);
 
 public sealed record CreateDirectoryTeacherRequest(
     string FullName,
@@ -162,10 +165,18 @@ public sealed record CreateDirectoryTeacherRequest(
     int SchoolId,
     int CampusId,
     string TeacherCode,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    string? EmailAddress = null);
 
 public sealed record UpdateDirectoryTeacherRequest(
     string FullName,
+    int CampusId,
+    string TeacherCode,
+    string? MobileNumber = null);
+
+/// <summary>Grant Teacher role to an existing Parent account.</summary>
+public sealed record GrantTeacherRoleRequest(
+    int SchoolId,
     int CampusId,
     string TeacherCode,
     string? MobileNumber = null);
@@ -195,13 +206,16 @@ public sealed record DirectoryParentResponse(
     bool NeedsPasswordSetup,
     IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
-    string AccountStatus);
+    string AccountStatus,
+    /// <summary>All roles on this account (e.g. Parent, Teacher).</summary>
+    IReadOnlyList<string> Roles);
 
 public sealed record CreateDirectoryParentRequest(
     string FullName,
     string Username,
     string? Cnic = null,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    string? EmailAddress = null);
 
 public sealed record UpdateDirectoryParentRequest(
     string FullName,

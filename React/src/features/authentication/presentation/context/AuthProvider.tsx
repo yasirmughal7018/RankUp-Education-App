@@ -35,6 +35,7 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   setInitialPassword: (username: string, newPassword: string) => Promise<void>;
   switchRole: (role: UserRole) => Promise<CurrentUser>;
+  removeMyRole: (role: UserRole) => Promise<CurrentUser>;
   logout: () => Promise<void>;
   clearError: () => void;
   updateUser: (user: CurrentUser) => void;
@@ -230,6 +231,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setActiveSession],
   );
 
+  const removeMyRole = useCallback(
+    async (role: UserRole) => {
+      setIsSubmitting(true);
+      setError(null);
+
+      try {
+        const nextSession = await authApi.removeMyRole(role);
+        saveStoredSession(nextSession);
+        setActiveSession(nextSession);
+        return normalizeCurrentUser(nextSession.user);
+      } catch (caught) {
+        const apiError = caught as ApiError;
+        setError(apiError.message || "Unable to remove role.");
+        throw caught;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [setActiveSession],
+  );
+
   const updateUser = useCallback(
     (user: CurrentUser) => {
       if (!sessionRef.current) {
@@ -256,6 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       setInitialPassword,
       switchRole,
+      removeMyRole,
       logout,
       clearError: () => setError(null),
       updateUser,
@@ -268,6 +291,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       setInitialPassword,
       switchRole,
+      removeMyRole,
       logout,
       updateUser,
     ],

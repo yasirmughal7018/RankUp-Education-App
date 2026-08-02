@@ -149,6 +149,8 @@ export interface DirectoryTeacher extends DirectoryAccountAuditFields {
   cnic?: string | null;
   emailAddress?: string | null;
   accountStatus: DirectoryAccountStatus;
+  /** All roles on this account (e.g. Teacher, Parent). */
+  roles?: string[];
 }
 
 export interface DirectoryParent extends DirectoryAccountAuditFields {
@@ -163,6 +165,8 @@ export interface DirectoryParent extends DirectoryAccountAuditFields {
   cnic?: string | null;
   emailAddress?: string | null;
   accountStatus: DirectoryAccountStatus;
+  /** All roles on this account (e.g. Parent, Teacher). */
+  roles?: string[];
 }
 
 export interface PagedDirectoryResult<T> {
@@ -181,6 +185,7 @@ export interface CreateDirectoryStudentInput {
   grade: number;
   section: string;
   mobileNumber?: string | null;
+  emailAddress?: string | null;
 }
 
 export interface UpdateDirectoryStudentInput {
@@ -199,6 +204,7 @@ export interface CreateDirectoryTeacherInput {
   campusId: number;
   teacherCode: string;
   mobileNumber?: string | null;
+  emailAddress?: string | null;
 }
 
 export interface UpdateDirectoryTeacherInput {
@@ -212,6 +218,15 @@ export interface CreateDirectoryParentInput {
   fullName: string;
   username: string;
   cnic?: string | null;
+  mobileNumber?: string | null;
+  emailAddress?: string | null;
+}
+
+/** Grant Teacher role to an existing Parent account. */
+export interface GrantTeacherRoleInput {
+  schoolId: number;
+  campusId: number;
+  teacherCode: string;
   mobileNumber?: string | null;
 }
 

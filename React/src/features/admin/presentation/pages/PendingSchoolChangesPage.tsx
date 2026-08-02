@@ -39,8 +39,13 @@ export function PendingSchoolChangesPage() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (requestId: number) =>
-      schoolChangeApi.rejectSchoolChange(requestId),
+    mutationFn: ({
+      requestId,
+      leaveWithoutSchool,
+    }: {
+      requestId: number;
+      leaveWithoutSchool: boolean;
+    }) => schoolChangeApi.rejectSchoolChange(requestId, leaveWithoutSchool),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ["admin", "school-changes", "pending"],
@@ -53,17 +58,36 @@ export function PendingSchoolChangesPage() {
   const actionsDisabled =
     approveMutation.isPending || rejectMutation.isPending;
 
+  function handleReject(item: schoolChangeApi.PendingSchoolChangeItem) {
+    if (
+      !window.confirm(
+        `Reject school/campus change for ${item.fullName}? The account will be unlocked.`,
+      )
+    ) {
+      return;
+    }
+
+    let leaveWithoutSchool = false;
+    if (item.requesterRole === "Student") {
+      leaveWithoutSchool = window.confirm(
+        "Clear school affiliation so the student continues without a school?\n\nOK = without school\nCancel = keep previous school",
+      );
+    }
+
+    rejectMutation.mutate({ requestId: item.id, leaveWithoutSchool });
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="School / campus change requests"
         description={
           user?.role === "PortalAdmin"
-            ? "Portal Admin can approve and apply every pending school or campus change."
+            ? "Portal Admin can approve and apply every pending school or campus change. On reject, unlock the student with previous school or without a school."
             : user?.role === "SchoolAdmin"
-              ? "School Admin can approve Teacher/Student (and related) requests into your school campuses."
+              ? "School Admin can approve Teacher/Student (and related) requests into your school. Reject unlocks the account (optionally without school for students)."
               : user?.role === "CampusAdmin"
-                ? "Campus Admin can approve Teacher/Student requests into your campus."
+                ? "Campus Admin can approve Teacher/Student requests into your campus. Reject unlocks the account (optionally without school for students)."
                 : "Review pending school or campus change requests for your scope."
         }
         backTo="/admin/directory"
@@ -152,7 +176,7 @@ export function PendingSchoolChangesPage() {
                       <button
                         type="button"
                         disabled={actionsDisabled}
-                        onClick={() => rejectMutation.mutate(item.id)}
+                        onClick={() => handleReject(item)}
                         className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
                       >
                         Reject

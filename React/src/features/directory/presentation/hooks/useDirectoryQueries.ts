@@ -8,6 +8,7 @@ import type {
   CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
   CreateDirectoryTeacherInput,
+  GrantTeacherRoleInput,
   DirectoryCampusAdminFilters,
   DirectoryParentFilters,
   DirectorySchoolAdminFilters,
@@ -301,7 +302,10 @@ export function useCreateTeacherMutation() {
   return useMutation({
     mutationFn: (input: CreateDirectoryTeacherInput) =>
       directoryApi.createTeacher(input),
-    onSuccess: () => invalidateTeachers(queryClient),
+    onSuccess: () => {
+      invalidateTeachers(queryClient);
+      invalidateParents(queryClient);
+    },
   });
 }
 
@@ -353,6 +357,39 @@ export function useBulkDeactivateTeachersMutation() {
   });
 }
 
+/** Add Parent role to an existing Teacher. */
+export function useGrantParentRoleToTeacherMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (teacherId: number) =>
+      directoryApi.grantParentRoleToTeacher(teacherId),
+    onSuccess: () => {
+      invalidateTeachers(queryClient);
+      invalidateParents(queryClient);
+    },
+  });
+}
+
+/** Add Teacher role to an existing Parent. */
+export function useGrantTeacherRoleToParentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      parentId,
+      input,
+    }: {
+      parentId: number;
+      input: GrantTeacherRoleInput;
+    }) => directoryApi.grantTeacherRoleToParent(parentId, input),
+    onSuccess: () => {
+      invalidateParents(queryClient);
+      invalidateTeachers(queryClient);
+    },
+  });
+}
+
 /** Create parent. */
 export function useCreateParentMutation() {
   const queryClient = useQueryClient();
@@ -360,7 +397,10 @@ export function useCreateParentMutation() {
   return useMutation({
     mutationFn: (input: CreateDirectoryParentInput) =>
       directoryApi.createParent(input),
-    onSuccess: () => invalidateParents(queryClient),
+    onSuccess: () => {
+      invalidateParents(queryClient);
+      invalidateTeachers(queryClient);
+    },
   });
 }
 

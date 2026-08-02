@@ -250,7 +250,27 @@ public sealed class DirectoryController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _directoryService.CreateTeacherAsync(request, cancellationToken);
-        return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(response, "Teacher created."));
+        var message = response.Roles.Count > 1
+            ? "Teacher role added to existing account."
+            : "Teacher created.";
+        return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(response, message));
+    }
+
+    /// <summary>Adds the Teacher role to an existing Parent account.</summary>
+    [HttpPost("parents/{parentId:long}/roles/teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> GrantTeacherRoleToParentAsync(
+        long parentId,
+        [FromBody] GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantTeacherRoleToParentAsync(
+            parentId,
+            request,
+            cancellationToken);
+        return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(
+            response,
+            "Teacher role added to parent account."));
     }
 
     /// <summary>Updates an existing teacher.</summary>
@@ -319,7 +339,25 @@ public sealed class DirectoryController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _directoryService.CreateParentAsync(request, cancellationToken);
-        return Ok(ApiResponse<DirectoryParentResponse>.Ok(response, "Parent created."));
+        var message = response.Roles.Count > 1
+            ? "Parent role added to existing account."
+            : "Parent created.";
+        return Ok(ApiResponse<DirectoryParentResponse>.Ok(response, message));
+    }
+
+    /// <summary>Adds the Parent role to an existing Teacher account.</summary>
+    [HttpPost("teachers/{teacherId:long}/roles/parent")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> GrantParentRoleToTeacherAsync(
+        long teacherId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantParentRoleToTeacherAsync(
+            teacherId,
+            cancellationToken);
+        return Ok(ApiResponse<DirectoryParentResponse>.Ok(
+            response,
+            "Parent role added to teacher account."));
     }
 
     /// <summary>Updates an existing parent.</summary>

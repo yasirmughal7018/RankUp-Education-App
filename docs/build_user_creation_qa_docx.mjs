@@ -1,6 +1,7 @@
 /**
  * Rebuilds docs/03_RankUp_User_Creation_Approval_QA.docx from current business rules.
  * Run: npm run build:user-qa-docx  (from docs/)
+ * Keep in sync with docs/03_RankUp_User_Creation_Approval_QA.html.
  */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -91,9 +92,9 @@ const doc = new Document({
       children: [
         h1("User Creation, Approval & Login — QA Guide"),
         p("RankUp Education — Web (React), Mobile (Flutter), and API"),
-        p("Version: current codebase · Date: 17 Jul 2026"),
+        p("Version: current codebase · Date: 2 Aug 2026"),
         p(
-          "Regenerated to match business logic including school/campus change lock/unlock.",
+          "Aligned with email-username, scoped registration activation, and forgot-password first-wins. Full scenarios: docs/03_RankUp_User_Creation_Approval_QA.html",
         ),
 
         h2("1. Account states"),
@@ -113,55 +114,55 @@ const doc = new Document({
           ],
         ),
 
-        h2("2. Registration (unchanged core)"),
-        bullet("Student / Parent / Teacher self-request → app_approval queue."),
-        bullet("app_approval is a generic approval table shared with the question bank: user-registration rows use entity_type=1 (user_id), question workflow-trail rows use entity_type=2 (question_id)."),
-        bullet("SchoolAdmin / CampusAdmin soft-approve only; do NOT activate."),
-        bullet("PortalAdmin alone activates → NeedsPasswordSetup → set password → login."),
-        bullet("Soft-reject keeps row (rejected_at); same CNIC/mobile can re-request."),
+        h2("2. Username & registration"),
+        bullet("Username = email (required) for Student / Parent / Teacher self-request and directory create (incl. SchoolAdmin / CampusAdmin)."),
+        bullet("Mobile optional. Student roll required only when a school is selected."),
+        bullet("Login lookup: username (email) → cnic → mobile."),
+        bullet("Queue: no school / Parent → PortalAdmin; school only → SchoolAdmin + PortalAdmin; school+campus → CampusAdmin + SchoolAdmin + PortalAdmin."),
+        bullet("Activation: PortalAdmin any; SchoolAdmin Student/Teacher in school; CampusAdmin Student/Teacher in campus; no-school/Parent → PortalAdmin only."),
+        bullet("Soft-reject keeps row (rejected_at); same email can re-request after reject."),
 
-        h2("3. School / campus change (new)"),
-        bullet("Who can request: Teacher, Student, CampusAdmin (campus only for CampusAdmin). Parent cannot request."),
-        bullet("PortalAdmin / SchoolAdmin cannot request via profile."),
-        bullet("Web Profile + Mobile Profile: separate School/campus section + Request button (not Save profile)."),
-        bullet("Confirmation popup required before submit."),
-        bullet("On confirm: create pending request, set is_active=false, revoke sessions, logout → locked messaging."),
-        bullet("Apply (unlock + move): PortalAdmin any; SchoolAdmin into own school; CampusAdmin Teacher/Student into own campus."),
-        bullet("List filters match apply matrix — Approve & apply (no separate record-approval-only action)."),
-        bullet("Reject: unlock without applying change."),
-        bullet("PortalAdmin UI shows schoolAdminHasApproved yes/no."),
+        h2("3. School / campus change"),
+        bullet("Who can request: Teacher, Student, CampusAdmin (campus only). Parent cannot request."),
+        bullet("On confirm: pending request, is_active=false, revoke sessions, logout → locked messaging."),
+        bullet("Apply: PortalAdmin any; SchoolAdmin into own school; CampusAdmin Teacher/Student into own campus."),
+        bullet("Reject unlocks without applying; optional leaveWithoutSchool for Student."),
         bullet("login-status while locked: LockedPendingSchoolChange."),
 
         h2("4. Directory create"),
-        bullet("PortalAdmin creates SchoolAdmin and CampusAdmin."),
-        bullet("SchoolAdmin creates CampusAdmin (own school only)."),
-        bullet("Directory users: auto-approved, NeedsPasswordSetup on first login."),
+        bullet("Email (username) required; no password on create → NeedsPasswordSetup."),
+        bullet("PortalAdmin creates SchoolAdmin and CampusAdmin; SchoolAdmin creates CampusAdmin (own school)."),
 
-        h2("5. Key Web routes"),
+        h2("5. Forgot password (first completion wins)"),
+        bullet("POST /password-reset/request { username } — email link + pending app_user_password_reset_request + notify helpers (no existence leak)."),
+        bullet("POST /password-reset/complete { token, newPassword } — email self-reset."),
+        bullet("POST /password-reset/clear { username } — PortalAdmin / SchoolAdmin / CampusAdmin / linked Parent (Web bell)."),
+        bullet("Notify: Student → School+Campus+Parent+Portal; Teacher → School+Campus+Portal; CampusAdmin → School+Portal; SchoolAdmin → Portal."),
+        bullet("Web: /forgot-password + /reset-password?token=. Mobile: request only."),
+
+        h2("6. Key Web routes"),
         bullet("/login — login-status branching"),
-        bullet("/account-locked — why locked (school/campus change)"),
-        bullet("/account — profile + separate school/campus change"),
+        bullet("/forgot-password, /reset-password — password reset"),
+        bullet("/account-locked — school/campus change lock"),
+        bullet("/account — profile + school/campus change request"),
         bullet("/admin/registrations — registration approvals"),
-        bullet("/admin/school-changes — school/campus change approvals"),
-        bullet("/admin/directory/school-admins — PortalAdmin only"),
-        bullet("/admin/directory/campus-admins — PortalAdmin or SchoolAdmin"),
+        bullet("/admin/directory/school-changes — school/campus change queue"),
 
-        h2("6. Key APIs"),
+        h2("7. Key APIs"),
         bullet("POST /api/auth/login-status — includes LockedPendingSchoolChange"),
+        bullet("POST /api/auth/register — email username"),
+        bullet("POST /api/auth/registrations/{id}/approve — activate when authorized"),
+        bullet("POST /api/auth/password-reset/request|complete|clear"),
         bullet("POST /api/auth/me/school-change — request + lock"),
-        bullet("GET /api/auth/school-changes/pending — includes schoolAdminHasApproved"),
         bullet("POST /api/auth/school-changes/{id}/approve|reject"),
 
-        h2("7. QA focus scenarios"),
-        bullet("QA-31: Teacher change → confirm → lock → SchoolAdmin apply → unlock"),
-        bullet("QA-32: PortalAdmin apply; see School Admin approved / not yet"),
-        bullet("QA-33: Reject unlocks without applying"),
-        bullet("QA-34: CampusAdmin applies Teacher/Student inbound campus change"),
-        bullet("QA-35: CampusAdmin campus-only request"),
-        bullet("QA-36: Cancel confirm → no lock"),
+        h2("8. QA focus scenarios (see HTML for full steps)"),
+        bullet("QA-01..05: scoped activation (School/Campus/Portal)"),
+        bullet("QA-31..36: school-change lock / apply / reject / leaveWithoutSchool"),
+        bullet("QA-37..38: forgot-password email + clear; first wins; locked does not notify"),
 
         p(
-          "Full step-by-step scenarios and checklist: see docs/02_RankUp_User_Creation_Approval_QA.html",
+          "Full step-by-step scenarios and checklist: docs/03_RankUp_User_Creation_Approval_QA.html",
         ),
       ],
     },

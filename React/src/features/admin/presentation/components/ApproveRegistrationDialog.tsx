@@ -1,5 +1,13 @@
-import { useEffect } from "react";
 import type { PendingRegistration } from "@/features/admin/domain/registrationTypes";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ApproveRegistrationDialogProps {
   registration: PendingRegistration;
@@ -13,12 +21,26 @@ interface ApproveRegistrationDialogProps {
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-3 gap-2 text-sm">
-      <dt className="font-medium text-slate-600">{label}</dt>
-      <dd className="col-span-2 text-slate-900">{value}</dd>
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className="col-span-2 text-foreground">{value}</dd>
     </div>
   );
 }
 
+function formatApproverRole(role: string): string {
+  switch (role) {
+    case "PortalAdmin":
+      return "Portal Admin";
+    case "SchoolAdmin":
+      return "School Admin";
+    case "CampusAdmin":
+      return "Campus Admin";
+    default:
+      return role;
+  }
+}
+
+/** Themed confirmation dialog before approving a registration. */
 export function ApproveRegistrationDialog({
   registration,
   schoolName,
@@ -27,17 +49,6 @@ export function ApproveRegistrationDialog({
   onClose,
   onConfirm,
 }: ApproveRegistrationDialogProps) {
-  useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isSubmitting) {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [isSubmitting, onClose]);
-
   async function handleConfirm() {
     try {
       await onConfirm(registration);
@@ -47,36 +58,33 @@ export function ApproveRegistrationDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-8">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="approve-registration-title"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
-      >
-        <div className="mb-6">
-          <h2
-            id="approve-registration-title"
-            className="text-xl font-semibold text-slate-900"
-          >
-            Approve registration
-          </h2>
-          <p className="mt-2 text-sm text-slate-600">
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !isSubmitting) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Approve registration</DialogTitle>
+          <DialogDescription>
             Review the request details. Approving does not change any fields or
             set a password. The user must set their own password on first login.
-          </p>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
-        <dl className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <dl className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
           <DetailRow label="Name" value={registration.fullName} />
           <DetailRow label="Username" value={registration.username} />
           <DetailRow label="Role" value={registration.role} />
           <DetailRow
-            label="Mobile"
-            value={registration.mobileNumber ?? registration.username}
+            label="Email"
+            value={registration.emailAddress || registration.username || "—"}
           />
+          <DetailRow label="Mobile" value={registration.mobileNumber || "—"} />
           <DetailRow label="CNIC" value={registration.cnic || "—"} />
-          <DetailRow label="Email" value={registration.emailAddress || "—"} />
           <DetailRow label="School" value={schoolName} />
           <DetailRow label="Campus" value={campusName || "—"} />
           <DetailRow
@@ -85,15 +93,7 @@ export function ApproveRegistrationDialog({
               (registration.pendingApprovers ?? [])
                 .map(
                   (approver) =>
-                    `${approver.fullName} (${
-                      approver.role === "PortalAdmin"
-                        ? "Portal Admin"
-                        : approver.role === "SchoolAdmin"
-                          ? "School Admin"
-                          : approver.role === "CampusAdmin"
-                            ? "Campus Admin"
-                            : approver.role
-                    })`,
+                    `${approver.fullName} (${formatApproverRole(approver.role)})`,
                 )
                 .join(", ") || "—"
             }
@@ -108,25 +108,24 @@ export function ApproveRegistrationDialog({
           />
         </dl>
 
-        <div className="mt-6 flex justify-end gap-3">
-          <button
+        <DialogFooter>
+          <Button
             type="button"
+            variant="outline"
             onClick={onClose}
             disabled={isSubmitting}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => void handleConfirm()}
             disabled={isSubmitting}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isSubmitting ? "Approving..." : "Approve account"}
-          </button>
-        </div>
-      </div>
-    </div>
+            {isSubmitting ? "Approving…" : "Approve"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
+import { Button } from "@/components/ui/button";
 import type { ApiError, CurrentUser, UserRole } from "@/core/api/types";
-import { getRoleLabel } from "@/core/api/types";
+import { dashboardPathForRole, getRoleLabel } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
+import { PageHeader } from "@/core/components/PageHeader";
 import { SearchableSelect } from "@/core/components/SearchableSelect";
 import * as authApi from "@/features/authentication/data/authApi";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
@@ -12,11 +15,14 @@ import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 const fieldClass = FORM_FIELD_CLASS;
 
-const SCHOOL_CHANGE_ROLES: UserRole[] = [
-  "Teacher",
-  "Student",
-  "CampusAdmin",
-];
+const SCHOOL_CHANGE_ROLES: UserRole[] = ["Teacher", "Student", "CampusAdmin"];
+
+const REQUESTABLE_ROLES = ["Parent", "Teacher"] as const;
+
+/** Roles the user may remove themselves when another role remains. */
+const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher"];
+
+type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
 function userInitials(name?: string | null, username?: string | null) {
   const source = (name || username || "?").trim();
@@ -39,6 +45,20 @@ type SchoolChangeForm = {
   campusId: string;
 };
 
+type RoleRequestForm = {
+  schoolId: string;
+  campusId: string;
+  teacherCode: string;
+  reasonMessage: string;
+};
+
+const emptyRoleRequestForm: RoleRequestForm = {
+  schoolId: "",
+  campusId: "",
+  teacherCode: "",
+  reasonMessage: "",
+};
+
 function toProfileForm(user: CurrentUser): ProfileForm {
   return {
     fullName: user.fullName || "",
@@ -59,64 +79,65 @@ function Notice({
   tone,
   children,
 }: {
-  tone: "error" | "success" | "warn";
+  tone: "error" | "success" | "warn" | "info";
   children: ReactNode;
 }) {
   const map = {
-    error: "border-red-200/80 bg-red-50 text-red-800",
-    success: "border-emerald-200/80 bg-emerald-50 text-emerald-800",
-    warn: "border-amber-200/80 bg-amber-50 text-amber-900",
+    error:
+      "border-destructive/30 bg-destructive/10 text-destructive dark:text-red-200",
+    success:
+      "border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200",
+    warn: "border-amber-300/70 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200",
+    info: "border-border bg-muted text-muted-foreground",
   } as const;
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs leading-snug ${map[tone]}`}>
+    <div
+      className={`rounded-lg border px-3 py-2 text-xs leading-snug ${map[tone]}`}
+    >
       {children}
     </div>
   );
 }
 
-function Btn({
+function SectionCard({
+  id,
+  title,
+  description,
+  className = "",
+  titleClassName = "text-foreground",
+  descriptionClassName = "text-muted-foreground",
   children,
-  disabled,
-  type = "submit",
-  onClick,
-  variant = "primary",
-  block = false,
 }: {
+  id?: string;
+  title: string;
+  description?: string;
+  className?: string;
+  titleClassName?: string;
+  descriptionClassName?: string;
   children: ReactNode;
-  disabled?: boolean;
-  type?: "submit" | "button";
-  onClick?: () => void;
-  variant?: "primary" | "danger" | "soft" | "ghost";
-  block?: boolean;
 }) {
-  const styles = {
-    primary:
-      "bg-brand-600 text-white shadow-sm shadow-brand-600/25 hover:bg-brand-700",
-    danger:
-      "bg-red-600 text-white shadow-sm shadow-red-600/20 hover:bg-red-700",
-    soft: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-    ghost: "text-slate-600 hover:bg-slate-100",
-  } as const;
-
   return (
-    <button
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-55",
-        styles[variant],
-        block ? "w-full" : "",
-      ].join(" ")}
+    <section
+      id={id}
+      className={`rounded-2xl border border-border bg-card p-5 shadow-sm ${className}`}
     >
-      {children}
-    </button>
+      <header>
+        <h2 className={`text-sm font-semibold ${titleClassName}`}>{title}</h2>
+        {description ? (
+          <p className={`mt-0.5 text-xs ${descriptionClassName}`}>
+            {description}
+          </p>
+        ) : null}
+      </header>
+      <div className="mt-4 space-y-3">{children}</div>
+    </section>
   );
 }
 
-/** Profile, school change, avatar, and account deactivation settings. */
+/** Profile, roles, school change, avatar, password, and deactivation settings. */
 export function AccountPage() {
-  const { user, updateUser, logout } = useAuth();
+  const { user, updateUser, logout, switchRole, removeMyRole, isSubmitting } =
+    useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -143,6 +164,21 @@ export function AccountPage() {
   const [isLoadingSchools, setIsLoadingSchools] = useState(false);
   const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
 
+  const [selectedRoleRequest, setSelectedRoleRequest] =
+    useState<RequestableRole | null>(null);
+  const [roleForm, setRoleForm] = useState<RoleRequestForm>(
+    emptyRoleRequestForm,
+  );
+  const [roleCampuses, setRoleCampuses] = useState<
+    authApi.RegistrationCampusOption[]
+  >([]);
+  const [isLoadingRoleCampuses, setIsLoadingRoleCampuses] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [roleSuccess, setRoleSuccess] = useState<string | null>(null);
+  const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+  const [roleToRemove, setRoleToRemove] = useState<UserRole | null>(null);
+  const [isRemovingRole, setIsRemovingRole] = useState(false);
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -159,6 +195,25 @@ export function AccountPage() {
     !!profile && SCHOOL_CHANGE_ROLES.includes(profile.role);
   const isCampusAdminOnly = profile?.role === "CampusAdmin";
   const canDeactivateAccount = profile?.role !== "PortalAdmin";
+
+  const accountRoles: UserRole[] =
+    profile && Array.isArray(profile.roles) && profile.roles.length > 0
+      ? profile.roles
+      : profile
+        ? [profile.role]
+        : [];
+  const isPortalAdmin = profile?.role === "PortalAdmin";
+  const isStudentRole = profile?.role === "Student";
+  const pendingRoleRequest = profile?.pendingRoleRequest ?? null;
+  const availableRoleRequests: RequestableRole[] =
+    !profile || isPortalAdmin || isStudentRole || pendingRoleRequest
+      ? []
+      : REQUESTABLE_ROLES.filter((role) => !accountRoles.includes(role));
+  const activeRoleChoice: RequestableRole | null =
+    selectedRoleRequest && availableRoleRequests.includes(selectedRoleRequest)
+      ? selectedRoleRequest
+      : (availableRoleRequests[0] ?? null);
+  const needsSchoolsForRoleRequest = availableRoleRequests.includes("Teacher");
 
   useEffect(() => {
     let cancelled = false;
@@ -186,7 +241,7 @@ export function AccountPage() {
   }, [updateUser]);
 
   useEffect(() => {
-    if (!canRequestSchoolChange) return;
+    if (!canRequestSchoolChange && !needsSchoolsForRoleRequest) return;
     let cancelled = false;
     setIsLoadingSchools(true);
     void authApi
@@ -203,7 +258,7 @@ export function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [canRequestSchoolChange]);
+  }, [canRequestSchoolChange, needsSchoolsForRoleRequest]);
 
   useEffect(() => {
     const schoolId = schoolForm?.schoolId ? Number(schoolForm.schoolId) : NaN;
@@ -230,16 +285,45 @@ export function AccountPage() {
   }, [canRequestSchoolChange, schoolForm?.schoolId]);
 
   useEffect(() => {
+    const schoolId = roleForm.schoolId ? Number(roleForm.schoolId) : NaN;
+    if (activeRoleChoice !== "Teacher" || !Number.isFinite(schoolId)) {
+      setRoleCampuses([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingRoleCampuses(true);
+    void authApi
+      .listRegistrationCampuses(schoolId)
+      .then((items) => {
+        if (!cancelled) setRoleCampuses(items.filter((c) => c.isActive));
+      })
+      .catch(() => {
+        if (!cancelled) setRoleCampuses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingRoleCampuses(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRoleChoice, roleForm.schoolId]);
+
+  useEffect(() => {
     const hash = location.hash.replace("#", "");
     if (!hash || isLoadingProfile) return;
     if (hash === "avatar") {
       setAvatarOpen(true);
       return;
     }
-    document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById(hash)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [location.hash, isLoadingProfile]);
 
-  function updateField<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
+  function updateField<K extends keyof ProfileForm>(
+    key: K,
+    value: ProfileForm[K],
+  ) {
     setForm((current) => (current ? { ...current, [key]: value } : current));
   }
 
@@ -252,6 +336,13 @@ export function AccountPage() {
     );
   }
 
+  function updateRoleField<K extends keyof RoleRequestForm>(
+    key: K,
+    value: RoleRequestForm[K],
+  ) {
+    setRoleForm((current) => ({ ...current, [key]: value }));
+  }
+
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || !profile) return;
@@ -261,15 +352,15 @@ export function AccountPage() {
       setProfileError("Display name is required.");
       return;
     }
-    if (!form.mobileNumber.trim()) {
-      setProfileError("Mobile number is required.");
+    if (!form.emailAddress.trim()) {
+      setProfileError("Email address is required (it is the username).");
       return;
     }
     setIsSavingProfile(true);
     try {
       const updated = await authApi.updateProfile({
         fullName: form.fullName.trim(),
-        mobileNumber: form.mobileNumber.trim(),
+        mobileNumber: form.mobileNumber.trim() || null,
         emailAddress: form.emailAddress.trim() || null,
         cnic: form.cnic.trim() || null,
       });
@@ -279,9 +370,114 @@ export function AccountPage() {
       updateUser(updated);
       setProfileSuccess("Profile saved.");
     } catch (caught) {
-      setProfileError((caught as ApiError).message || "Unable to update profile.");
+      setProfileError(
+        (caught as ApiError).message || "Unable to update profile.",
+      );
     } finally {
       setIsSavingProfile(false);
+    }
+  }
+
+  async function handleRoleRequestSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeRoleChoice) return;
+    setRoleError(null);
+    setRoleSuccess(null);
+
+    if (activeRoleChoice === "Teacher") {
+      if (!roleForm.schoolId) {
+        setRoleError("Select the school you teach at.");
+        return;
+      }
+      if (!roleForm.campusId) {
+        setRoleError("Select the campus you teach at.");
+        return;
+      }
+      if (!roleForm.teacherCode.trim()) {
+        setRoleError("Teacher code is required.");
+        return;
+      }
+    }
+
+    setIsSubmittingRole(true);
+    try {
+      const result = await authApi.requestAdditionalRole({
+        role: activeRoleChoice,
+        schoolId:
+          activeRoleChoice === "Teacher" && roleForm.schoolId
+            ? Number(roleForm.schoolId)
+            : null,
+        campusId:
+          activeRoleChoice === "Teacher" && roleForm.campusId
+            ? Number(roleForm.campusId)
+            : null,
+        teacherCode:
+          activeRoleChoice === "Teacher"
+            ? roleForm.teacherCode.trim() || null
+            : null,
+        reasonMessage: roleForm.reasonMessage.trim() || null,
+      });
+      setRoleForm(emptyRoleRequestForm);
+      setSelectedRoleRequest(null);
+      const refreshed = await authApi.getCurrentUser();
+      setProfile(refreshed);
+      setForm(toProfileForm(refreshed));
+      setSchoolForm(toSchoolChangeForm(refreshed));
+      updateUser(refreshed);
+      setRoleSuccess(
+        result.message ||
+          `Request for the ${getRoleLabel(activeRoleChoice)} role was submitted for review.`,
+      );
+    } catch (caught) {
+      setRoleError(
+        (caught as ApiError).message || "Unable to submit role request.",
+      );
+    } finally {
+      setIsSubmittingRole(false);
+    }
+  }
+
+  async function handleSwitchToRole(role: UserRole) {
+    if (!profile || role === profile.role) {
+      return;
+    }
+    setRoleError(null);
+    setRoleSuccess(null);
+    try {
+      const updated = await switchRole(role);
+      setProfile(updated);
+      setForm(toProfileForm(updated));
+      setSchoolForm(toSchoolChangeForm(updated));
+      setRoleSuccess(`Now using ${getRoleLabel(role)}.`);
+      navigate(dashboardPathForRole(updated.role), { replace: true });
+    } catch (caught) {
+      setRoleError((caught as ApiError).message || "Unable to switch role.");
+    }
+  }
+
+  async function confirmRemoveRole() {
+    if (!roleToRemove || !profile) {
+      return;
+    }
+    setRoleError(null);
+    setRoleSuccess(null);
+    setIsRemovingRole(true);
+    const removed = roleToRemove;
+    try {
+      const updated = await removeMyRole(removed);
+      setRoleToRemove(null);
+      setProfile(updated);
+      setForm(toProfileForm(updated));
+      setSchoolForm(toSchoolChangeForm(updated));
+      setRoleSuccess(`${getRoleLabel(removed)} was removed from your account.`);
+      if (updated.role !== profile.role) {
+        navigate(dashboardPathForRole(updated.role), { replace: true });
+      }
+    } catch (caught) {
+      setRoleError((caught as ApiError).message || "Unable to remove role.");
+      setRoleToRemove(null);
+    } finally {
+      setIsRemovingRole(false);
     }
   }
 
@@ -358,7 +554,9 @@ export function AccountPage() {
       setConfirmPassword("");
       setPasswordSuccess("Password updated.");
     } catch (caught) {
-      setPasswordError((caught as ApiError).message || "Unable to change password.");
+      setPasswordError(
+        (caught as ApiError).message || "Unable to change password.",
+      );
     } finally {
       setIsSubmittingPassword(false);
     }
@@ -392,7 +590,7 @@ export function AccountPage() {
   if (!user || !form || !profile) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center px-4">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           {isLoadingProfile ? "Loading profile…" : "Unable to load profile."}
         </p>
       </div>
@@ -411,219 +609,299 @@ export function AccountPage() {
     null;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[#f3f6fb]">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-56 opacity-90"
-        style={{
-          background:
-            "radial-gradient(90% 70% at 12% 0%, rgba(29,106,245,0.18), transparent 55%), radial-gradient(70% 50% at 88% 8%, rgba(51,137,255,0.14), transparent 50%)",
-        }}
+    <div className="space-y-5">
+      <PageHeader
+        title="Account"
+        description="Manage your profile, roles, and security."
       />
 
-      <div className="relative mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:py-6">
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.9fr)]">
-          {/* ── LEFT ── */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(20,39,87,0.06)]">
-            {/* Identity */}
-            <div
-              className="relative px-5 py-5 sm:px-6"
-              style={{
-                background:
-                  "linear-gradient(125deg, #142757 0%, #1845b6 48%, #1d6af5 100%)",
-              }}
-            >
-              <div
-                aria-hidden
-                className="absolute inset-0 opacity-[0.12]"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(circle at 20% 30%, #fff 0.7px, transparent 1px)",
-                  backgroundSize: "22px 22px",
-                }}
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            id="avatar"
+            onClick={() => setAvatarOpen(true)}
+            aria-label="Change photo"
+            className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-muted text-lg font-bold text-foreground ring-1 ring-border outline-none transition hover:ring-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
               />
-              <div className="relative flex items-center gap-4">
-                <button
-                  type="button"
-                  id="avatar"
-                  onClick={() => setAvatarOpen(true)}
-                  className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white/15 text-lg font-bold text-white ring-2 ring-white/35 outline-none transition hover:ring-amber-300/70 focus-visible:ring-amber-300"
-                  aria-label="Change photo"
+            ) : (
+              <span className="flex h-full w-full items-center justify-center">
+                {initials}
+              </span>
+            )}
+            <span className="absolute inset-x-0 bottom-0 bg-foreground/70 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-background opacity-0 transition group-hover:opacity-100">
+              Edit
+            </span>
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-lg font-semibold text-foreground">
+              {form.fullName || profile.username}
+            </h2>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {accountRoles.map((role) => (
+                <span
+                  key={role}
+                  className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                    role === profile.role
+                      ? "bg-primary/10 text-primary ring-1 ring-primary/20"
+                      : "bg-muted text-muted-foreground"
+                  }`}
                 >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center">
-                      {initials}
-                    </span>
-                  )}
-                  <span className="absolute inset-x-0 bottom-0 bg-black/45 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-white opacity-0 transition group-hover:opacity-100">
-                    Edit
-                  </span>
-                </button>
-                <div className="min-w-0 flex-1 text-white">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-100/80">
-                    Account
-                  </p>
-                  <h1 className="mt-0.5 truncate text-xl font-semibold tracking-tight sm:text-2xl">
-                    {form.fullName || profile.username}
-                  </h1>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-sky-50/90">
-                    <span className="rounded-md bg-white/15 px-2 py-0.5 font-medium text-white">
-                      {getRoleLabel(profile.role)}
-                    </span>
-                    <span className="truncate opacity-90">@{profile.username}</span>
-                    {schoolLabel ? (
-                      <span className="truncate opacity-80">
-                        {schoolLabel}
-                        {campusLabel ? ` · ${campusLabel}` : ""}
-                      </span>
-                    ) : null}
-                  </p>
-                </div>
-                <Btn
-                  type="button"
-                  variant="soft"
-                  onClick={() => setAvatarOpen(true)}
-                >
-                  <span className="hidden sm:inline">Update photo</span>
-                  <span className="sm:hidden">Photo</span>
-                </Btn>
-              </div>
+                  {getRoleLabel(role)}
+                </span>
+              ))}
             </div>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span className="truncate">{profile.username}</span>
+              {schoolLabel ? (
+                <span className="truncate">
+                  {schoolLabel}
+                  {campusLabel ? ` · ${campusLabel}` : ""}
+                </span>
+              ) : null}
+            </p>
+          </div>
 
-            {/* Profile form */}
-            <div id="profile" className="border-b border-slate-100 px-5 py-5 sm:px-6">
-              <div className="mb-4 flex items-end justify-between gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAvatarOpen(true)}
+          >
+            <span className="hidden sm:inline">Update photo</span>
+            <span className="sm:hidden">Photo</span>
+          </Button>
+        </div>
+      </section>
+
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
+          <SectionCard
+            id="profile"
+            title="Personal details"
+            description="Name and contact — school changes are handled separately."
+          >
+            {profileError ? <Notice tone="error">{profileError}</Notice> : null}
+            {profileSuccess ? (
+              <Notice tone="success">{profileSuccess}</Notice>
+            ) : null}
+
+            <form
+              className="space-y-3"
+              onSubmit={(e) => void handleProfileSubmit(e)}
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <FieldLabel htmlFor="fullName" required>
+                    Display name
+                  </FieldLabel>
+                  <input
+                    id="fullName"
+                    type="text"
+                    required
+                    value={form.fullName}
+                    onChange={(e) => updateField("fullName", e.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-slate-900">
-                    Personal details
-                  </h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    Name and contact — school changes are separate below.
-                  </p>
+                  <FieldLabel htmlFor="mobileNumber" optional>
+                    Mobile
+                  </FieldLabel>
+                  <input
+                    id="mobileNumber"
+                    type="tel"
+                    value={form.mobileNumber}
+                    onChange={(e) => updateField("mobileNumber", e.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="emailAddress" required>
+                    Email (username)
+                  </FieldLabel>
+                  <input
+                    id="emailAddress"
+                    type="email"
+                    required
+                    value={form.emailAddress}
+                    onChange={(e) => updateField("emailAddress", e.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <FieldLabel htmlFor="cnic">CNIC</FieldLabel>
+                  <input
+                    id="cnic"
+                    type="text"
+                    value={form.cnic}
+                    onChange={(e) => updateField("cnic", e.target.value)}
+                    className={fieldClass}
+                    placeholder="Optional"
+                  />
                 </div>
               </div>
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isSavingProfile || isLoadingProfile}
+                >
+                  {isSavingProfile ? "Saving…" : "Save profile"}
+                </Button>
+              </div>
+            </form>
+          </SectionCard>
 
+          <SectionCard
+            id="roles"
+            title="Roles"
+            description="Roles on this account and requests for another one."
+          >
+            <ul className="space-y-2">
+              {accountRoles.map((role) => {
+                const isCurrentSession = role === profile.role;
+                const canRemove =
+                  accountRoles.length > 1 && REMOVABLE_ROLES.includes(role);
+                const busy = isSubmitting || isRemovingRole || isSubmittingRole;
+
+                return (
+                  <li
+                    key={role}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+                      isCurrentSession
+                        ? "border-primary/30 bg-primary/5 text-foreground"
+                        : "border-border bg-muted/40 text-muted-foreground"
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="font-medium">{getRoleLabel(role)}</span>
+                      {isCurrentSession ? (
+                        <span className="ml-2 shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                          Current
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="flex shrink-0 flex-wrap items-center gap-2">
+                      {!isCurrentSession && accountRoles.length > 1 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => void handleSwitchToRole(role)}
+                        >
+                          Switch to this
+                        </Button>
+                      ) : null}
+                      {canRemove ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive hover:text-destructive"
+                          disabled={busy}
+                          onClick={() => {
+                            setRoleError(null);
+                            setRoleToRemove(role);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {roleError ? <Notice tone="error">{roleError}</Notice> : null}
+            {roleSuccess ? <Notice tone="success">{roleSuccess}</Notice> : null}
+
+            {isStudentRole ? (
+              <Notice tone="info">
+                Student accounts cannot add other roles.
+              </Notice>
+            ) : isPortalAdmin ? null : pendingRoleRequest ? (
+              <Notice tone="warn">
+                A request for the{" "}
+                <span className="font-semibold">
+                  {getRoleLabel(pendingRoleRequest.requestedRole as UserRole)}
+                </span>{" "}
+                role is pending admin review. Your account stays active while it
+                is reviewed.
+              </Notice>
+            ) : availableRoleRequests.length === 0 ? (
+              <Notice tone="info">
+                You already have every role that can be requested here.
+              </Notice>
+            ) : (
               <div className="space-y-3">
-                {profileError ? <Notice tone="error">{profileError}</Notice> : null}
-                {profileSuccess ? (
-                  <Notice tone="success">{profileSuccess}</Notice>
-                ) : null}
-
                 <form
                   className="space-y-3"
-                  onSubmit={(e) => void handleProfileSubmit(e)}
+                  onSubmit={(e) => void handleRoleRequestSubmit(e)}
                 >
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                      <FieldLabel htmlFor="fullName" required>
-                        Display name
-                      </FieldLabel>
-                      <input
-                        id="fullName"
-                        type="text"
-                        required
-                        value={form.fullName}
-                        onChange={(e) => updateField("fullName", e.target.value)}
-                        className={fieldClass}
-                      />
-                    </div>
+                  {availableRoleRequests.length > 1 ? (
                     <div>
-                      <FieldLabel htmlFor="mobileNumber" required>
-                        Mobile
+                      <FieldLabel htmlFor="roleChoice" required>
+                        Role to request
                       </FieldLabel>
-                      <input
-                        id="mobileNumber"
-                        type="tel"
-                        required
-                        value={form.mobileNumber}
-                        onChange={(e) =>
-                          updateField("mobileNumber", e.target.value)
-                        }
-                        className={fieldClass}
-                      />
+                      <div
+                        id="roleChoice"
+                        className="flex flex-wrap gap-2"
+                        role="group"
+                      >
+                        {availableRoleRequests.map((role) => {
+                          const isChosen = role === activeRoleChoice;
+                          return (
+                            <button
+                              key={role}
+                              type="button"
+                              onClick={() => {
+                                setSelectedRoleRequest(role);
+                                setRoleError(null);
+                              }}
+                              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                                isChosen
+                                  ? "border-primary/40 bg-primary/10 text-primary"
+                                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+                              }`}
+                            >
+                              {getRoleLabel(role)}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div>
-                      <FieldLabel htmlFor="emailAddress">Email</FieldLabel>
-                      <input
-                        id="emailAddress"
-                        type="email"
-                        value={form.emailAddress}
-                        onChange={(e) =>
-                          updateField("emailAddress", e.target.value)
-                        }
-                        className={fieldClass}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <FieldLabel htmlFor="cnic">CNIC</FieldLabel>
-                      <input
-                        id="cnic"
-                        type="text"
-                        value={form.cnic}
-                        onChange={(e) => updateField("cnic", e.target.value)}
-                        className={fieldClass}
-                        placeholder="Optional"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end pt-1">
-                    <Btn disabled={isSavingProfile || isLoadingProfile}>
-                      {isSavingProfile ? "Saving…" : "Save profile"}
-                    </Btn>
-                  </div>
-                </form>
-              </div>
-            </div>
-
-            {/* School change */}
-            {canRequestSchoolChange && schoolForm ? (
-              <div id="school-campus" className="px-5 py-5 sm:px-6">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900">
-                      School / campus
-                    </h2>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {isCampusAdminOnly
-                        ? "Campus only — confirming locks your login for admin review."
-                        : "Own request button — confirming locks your login for admin review."}
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      You can request the{" "}
+                      <span className="font-semibold text-foreground">
+                        {activeRoleChoice
+                          ? getRoleLabel(activeRoleChoice)
+                          : "—"}
+                      </span>{" "}
+                      role.
                     </p>
-                  </div>
-                </div>
+                  )}
 
-                <div className="space-y-3">
-                  {profile.pendingSchoolChange ? (
-                    <Notice tone="warn">
-                      Pending change → school{" "}
-                      {profile.pendingSchoolChange.toSchoolId ?? "—"} / campus{" "}
-                      {profile.pendingSchoolChange.toCampusId ?? "—"} (
-                      {profile.pendingSchoolChange.status})
-                    </Notice>
-                  ) : null}
-                  {schoolError ? <Notice tone="error">{schoolError}</Notice> : null}
-
-                  <form
-                    className="space-y-3"
-                    onSubmit={(e) => openSchoolChangeConfirm(e)}
-                  >
+                  {activeRoleChoice === "Teacher" ? (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
-                        <FieldLabel htmlFor="schoolId">School</FieldLabel>
+                        <FieldLabel htmlFor="roleSchoolId" required>
+                          School
+                        </FieldLabel>
                         <SearchableSelect
-                          id="schoolId"
-                          disabled={
-                            isSavingSchoolChange ||
-                            isLoadingSchools ||
-                            isCampusAdminOnly
-                          }
-                          value={schoolForm.schoolId}
+                          id="roleSchoolId"
+                          disabled={isSubmittingRole || isLoadingSchools}
+                          value={roleForm.schoolId}
                           allowEmpty
                           emptyLabel={
                             isLoadingSchools ? "Loading…" : "Select school"
@@ -636,245 +914,350 @@ export function AccountPage() {
                             label: school.name,
                           }))}
                           onChange={(next) => {
-                            updateSchoolField("schoolId", next);
-                            updateSchoolField("campusId", "");
+                            updateRoleField("schoolId", next);
+                            updateRoleField("campusId", "");
                           }}
                         />
                       </div>
                       <div>
-                        <FieldLabel htmlFor="campusId">Campus</FieldLabel>
+                        <FieldLabel htmlFor="roleCampusId" required>
+                          Campus
+                        </FieldLabel>
                         <SearchableSelect
-                          id="campusId"
+                          id="roleCampusId"
                           disabled={
-                            isSavingSchoolChange ||
-                            !schoolForm.schoolId ||
-                            isLoadingCampuses
+                            isSubmittingRole ||
+                            !roleForm.schoolId ||
+                            isLoadingRoleCampuses
                           }
-                          value={schoolForm.campusId}
+                          value={roleForm.campusId}
                           allowEmpty
                           emptyLabel={
-                            !schoolForm.schoolId
+                            !roleForm.schoolId
                               ? "School first"
-                              : isLoadingCampuses
+                              : isLoadingRoleCampuses
                                 ? "Loading…"
                                 : "Select campus"
                           }
                           placeholder={
-                            !schoolForm.schoolId
+                            !roleForm.schoolId
                               ? "School first"
-                              : isLoadingCampuses
+                              : isLoadingRoleCampuses
                                 ? "Loading…"
                                 : "Select campus"
                           }
-                          options={campuses.map((campus) => ({
+                          options={roleCampuses.map((campus) => ({
                             value: String(campus.id),
                             label: campus.name,
                           }))}
-                          onChange={(next) => updateSchoolField("campusId", next)}
+                          onChange={(next) =>
+                            updateRoleField("campusId", next)
+                          }
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <FieldLabel htmlFor="roleTeacherCode" required>
+                          Teacher code
+                        </FieldLabel>
+                        <input
+                          id="roleTeacherCode"
+                          type="text"
+                          value={roleForm.teacherCode}
+                          onChange={(e) =>
+                            updateRoleField("teacherCode", e.target.value)
+                          }
+                          className={fieldClass}
+                          placeholder="Code issued by your school"
                         />
                       </div>
                     </div>
-                    <div className="flex justify-end pt-1">
-                      <Btn disabled={isSavingSchoolChange || isLoadingProfile}>
-                        {isSavingSchoolChange ? "Submitting…" : "Request change"}
-                      </Btn>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            ) : null}
-          </div>
+                  ) : null}
 
-          {/* ── RIGHT (narrower) ── */}
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-[4.75rem]">
-            <div
-              id="password"
-              className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(20,39,87,0.06)]"
-            >
-              <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Security
-                </h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Password & account access
-                </p>
-              </div>
-              <div className="space-y-3 px-4 py-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Change password
-                </h3>
-                {passwordError ? (
-                  <Notice tone="error">{passwordError}</Notice>
-                ) : null}
-                {passwordSuccess ? (
-                  <Notice tone="success">{passwordSuccess}</Notice>
-                ) : null}
-                <form
-                  className="space-y-2.5"
-                  onSubmit={(e) => void handlePasswordSubmit(e)}
-                >
                   <div>
-                    <FieldLabel htmlFor="currentPassword" required>
-                      Current
+                    <FieldLabel htmlFor="roleReason" optional>
+                      Message for the reviewer
                     </FieldLabel>
-                    <input
-                      id="currentPassword"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
+                    <textarea
+                      id="roleReason"
+                      rows={3}
+                      value={roleForm.reasonMessage}
+                      onChange={(e) =>
+                        updateRoleField("reasonMessage", e.target.value)
+                      }
                       className={fieldClass}
+                      placeholder={
+                        activeRoleChoice === "Parent"
+                          ? "Which students should be linked to you?"
+                          : "Anything the reviewer should know"
+                      }
                     />
                   </div>
-                  <div>
-                    <FieldLabel htmlFor="newPassword" required>
-                      New
-                    </FieldLabel>
-                    <input
-                      id="newPassword"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className={fieldClass}
-                    />
+
+                  <p className="text-xs text-muted-foreground">
+                    Your account stays active while the request is pending.
+                  </p>
+
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={isSubmittingRole || !activeRoleChoice}
+                    >
+                      {isSubmittingRole ? "Submitting…" : "Request role"}
+                    </Button>
                   </div>
-                  <div>
-                    <FieldLabel htmlFor="confirmPassword" required>
-                      Confirm
-                    </FieldLabel>
-                    <input
-                      id="confirmPassword"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={fieldClass}
-                    />
-                  </div>
-                  <Btn block disabled={isSubmittingPassword}>
-                    {isSubmittingPassword ? "Updating…" : "Update password"}
-                  </Btn>
                 </form>
               </div>
-            </div>
+            )}
+          </SectionCard>
 
-            {canDeactivateAccount ? (
-              <div
-                id="deactivate"
-                className="overflow-hidden rounded-2xl border border-red-200/70 bg-white shadow-[0_8px_30px_rgba(127,29,29,0.05)]"
+          {canRequestSchoolChange && schoolForm ? (
+            <SectionCard
+              id="school-campus"
+              title="School / campus"
+              description={
+                isCampusAdminOnly
+                  ? "Campus only — confirming locks your login for admin review."
+                  : "Confirming locks your login until an admin reviews the request."
+              }
+            >
+              {profile.pendingSchoolChange ? (
+                <Notice tone="warn">
+                  Pending change → school{" "}
+                  {profile.pendingSchoolChange.toSchoolId ?? "—"} / campus{" "}
+                  {profile.pendingSchoolChange.toCampusId ?? "—"} (
+                  {profile.pendingSchoolChange.status})
+                </Notice>
+              ) : null}
+              {schoolError ? <Notice tone="error">{schoolError}</Notice> : null}
+
+              <form
+                className="space-y-3"
+                onSubmit={(e) => openSchoolChangeConfirm(e)}
               >
-                <div className="border-b border-red-100 bg-gradient-to-r from-red-50 to-white px-4 py-3">
-                  <h2 className="text-sm font-semibold text-red-700">
-                    Danger zone
-                  </h2>
-                  <p className="mt-0.5 text-xs text-red-600/80">
-                    Deactivate disables login until an admin restores it.
-                  </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <FieldLabel htmlFor="schoolId">School</FieldLabel>
+                    <SearchableSelect
+                      id="schoolId"
+                      disabled={
+                        isSavingSchoolChange ||
+                        isLoadingSchools ||
+                        isCampusAdminOnly
+                      }
+                      value={schoolForm.schoolId}
+                      allowEmpty
+                      emptyLabel={
+                        isLoadingSchools ? "Loading…" : "Select school"
+                      }
+                      placeholder={
+                        isLoadingSchools ? "Loading…" : "Select school"
+                      }
+                      options={schools.map((school) => ({
+                        value: String(school.id),
+                        label: school.name,
+                      }))}
+                      onChange={(next) => {
+                        updateSchoolField("schoolId", next);
+                        updateSchoolField("campusId", "");
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="campusId">Campus</FieldLabel>
+                    <SearchableSelect
+                      id="campusId"
+                      disabled={
+                        isSavingSchoolChange ||
+                        !schoolForm.schoolId ||
+                        isLoadingCampuses
+                      }
+                      value={schoolForm.campusId}
+                      allowEmpty
+                      emptyLabel={
+                        !schoolForm.schoolId
+                          ? "School first"
+                          : isLoadingCampuses
+                            ? "Loading…"
+                            : "Select campus"
+                      }
+                      placeholder={
+                        !schoolForm.schoolId
+                          ? "School first"
+                          : isLoadingCampuses
+                            ? "Loading…"
+                            : "Select campus"
+                      }
+                      options={campuses.map((campus) => ({
+                        value: String(campus.id),
+                        label: campus.name,
+                      }))}
+                      onChange={(next) => updateSchoolField("campusId", next)}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-3 px-4 py-4">
-                  {deactivateError ? (
-                    <Notice tone="error">{deactivateError}</Notice>
-                  ) : null}
-                  <form
-                    className="space-y-2.5"
-                    onSubmit={(e) => void handleDeactivate(e)}
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isSavingSchoolChange || isLoadingProfile}
                   >
-                    <div>
-                      <FieldLabel htmlFor="deactivatePassword" required>
-                        Current password
-                      </FieldLabel>
-                      <input
-                        id="deactivatePassword"
-                        type="password"
-                        autoComplete="current-password"
-                        required
-                        value={deactivatePassword}
-                        onChange={(e) => setDeactivatePassword(e.target.value)}
-                        className={fieldClass}
-                      />
-                    </div>
-                    <label className="flex items-start gap-2.5 rounded-lg border border-red-100 bg-red-50/50 px-3 py-2.5 text-xs leading-snug text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={deactivateConfirm}
-                        onChange={(e) => setDeactivateConfirm(e.target.checked)}
-                        className="mt-0.5 rounded border-slate-300 text-red-600 focus:ring-red-500"
-                      />
-                      <span>
-                        I understand I will be signed out immediately.
-                      </span>
-                    </label>
-                    <Btn
-                      variant="danger"
-                      block
-                      disabled={isDeactivating || !deactivateConfirm}
-                    >
-                      {isDeactivating ? "Deactivating…" : "Deactivate account"}
-                    </Btn>
-                  </form>
+                    {isSavingSchoolChange ? "Submitting…" : "Request change"}
+                  </Button>
                 </div>
-              </div>
+              </form>
+            </SectionCard>
+          ) : null}
+        </div>
+
+        <div className="space-y-5">
+          <SectionCard
+            id="password"
+            title="Password"
+            description="Change the password used to sign in."
+          >
+            {passwordError ? <Notice tone="error">{passwordError}</Notice> : null}
+            {passwordSuccess ? (
+              <Notice tone="success">{passwordSuccess}</Notice>
             ) : null}
-          </aside>
+            <form
+              className="space-y-3"
+              onSubmit={(e) => void handlePasswordSubmit(e)}
+            >
+              <div>
+                <FieldLabel htmlFor="currentPassword" required>
+                  Current password
+                </FieldLabel>
+                <input
+                  id="currentPassword"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className={fieldClass}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="newPassword" required>
+                  New password
+                </FieldLabel>
+                <input
+                  id="newPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className={fieldClass}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="confirmPassword" required>
+                  Confirm new password
+                </FieldLabel>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={fieldClass}
+                />
+              </div>
+              <Button
+                type="submit"
+                size="sm"
+                className="w-full"
+                disabled={isSubmittingPassword}
+              >
+                {isSubmittingPassword ? "Updating…" : "Update password"}
+              </Button>
+            </form>
+          </SectionCard>
+
+          {canDeactivateAccount ? (
+            <SectionCard
+              id="deactivate"
+              title="Danger zone"
+              description="Deactivating disables login until an admin restores the account."
+              className="border-destructive/30"
+              titleClassName="text-destructive"
+              descriptionClassName="text-destructive/80"
+            >
+              {deactivateError ? (
+                <Notice tone="error">{deactivateError}</Notice>
+              ) : null}
+              <form
+                className="space-y-3"
+                onSubmit={(e) => void handleDeactivate(e)}
+              >
+                <div>
+                  <FieldLabel htmlFor="deactivatePassword" required>
+                    Current password
+                  </FieldLabel>
+                  <input
+                    id="deactivatePassword"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={deactivatePassword}
+                    onChange={(e) => setDeactivatePassword(e.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+                <label className="flex items-start gap-2.5 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-xs leading-snug text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={deactivateConfirm}
+                    onChange={(e) => setDeactivateConfirm(e.target.checked)}
+                    className="mt-0.5 rounded border-input text-destructive focus:ring-ring"
+                  />
+                  <span>I understand I will be signed out immediately.</span>
+                </label>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  disabled={isDeactivating || !deactivateConfirm}
+                >
+                  {isDeactivating ? "Deactivating…" : "Deactivate account"}
+                </Button>
+              </form>
+            </SectionCard>
+          ) : null}
         </div>
       </div>
 
-      {confirmSchoolChangeOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[3px]">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="school-change-confirm-title"
-            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-          >
-            <div
-              className="px-5 py-4 text-white"
-              style={{
-                background:
-                  "linear-gradient(125deg, #142757 0%, #1845b6 55%, #1d6af5 100%)",
-              }}
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-100/80">
-                Confirmation
-              </p>
-              <h3
-                id="school-change-confirm-title"
-                className="mt-1 text-lg font-semibold"
-              >
-                Lock account for school change?
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <p className="text-sm leading-relaxed text-slate-600">
-                Your account will lock until an admin for the destination school
-                or campus approves or rejects this request. You will be signed
-                out now.
-              </p>
-              <div className="mt-5 flex justify-end gap-2">
-                <Btn
-                  type="button"
-                  variant="soft"
-                  disabled={isSavingSchoolChange}
-                  onClick={() => setConfirmSchoolChangeOpen(false)}
-                >
-                  Cancel
-                </Btn>
-                <Btn
-                  type="button"
-                  disabled={isSavingSchoolChange}
-                  onClick={() => void confirmSchoolChangeRequest()}
-                >
-                  {isSavingSchoolChange ? "Submitting…" : "Confirm & lock"}
-                </Btn>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AppConfirmDialog
+        open={confirmSchoolChangeOpen}
+        onOpenChange={setConfirmSchoolChangeOpen}
+        title="Lock account for school change?"
+        description="Your account will lock until an admin for the destination school or campus approves or rejects this request. You will be signed out now."
+        confirmLabel="Confirm & lock"
+        loading={isSavingSchoolChange}
+        onConfirm={() => void confirmSchoolChangeRequest()}
+      />
+
+      <AppConfirmDialog
+        open={roleToRemove != null}
+        onOpenChange={(open) => {
+          if (!open && !isRemovingRole) {
+            setRoleToRemove(null);
+          }
+        }}
+        title="Remove role?"
+        description={
+          roleToRemove
+            ? `Remove ${getRoleLabel(roleToRemove)} from your account? You can request it again later. Your other role will stay.`
+            : ""
+        }
+        confirmLabel="Remove role"
+        loading={isRemovingRole}
+        onConfirm={() => void confirmRemoveRole()}
+      />
 
       {avatarOpen ? (
         <AvatarUploadDialog

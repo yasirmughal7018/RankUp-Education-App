@@ -70,16 +70,17 @@ export function ParentFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
-        if (!trimmedUsername) {
-          setError("Username is required.");
+        const trimmedEmail = username.trim();
+        if (!trimmedEmail) {
+          setError("Email address is required (it is the username).");
           return;
         }
         await onSubmit({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: trimmedEmail,
+            emailAddress: trimmedEmail,
             cnic: trimmedCnic,
             mobileNumber: mobile,
           },
@@ -109,7 +110,7 @@ export function ParentFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${parent.fullName}.`
-              : "Add a new parent to the directory. User must set password on first login."}
+              : "Add a parent to the directory. If email, mobile, or CNIC matches an existing Teacher (or other non-Student) account, the Parent role is added to that same login. User must set password on first login."}
           </p>
         </div>
 
@@ -139,16 +140,17 @@ export function ParentFormDialog({
             <>
               <div>
                 <FieldLabel htmlFor="parent-username" required>
-                  Username
+                  Email (username)
                 </FieldLabel>
                 <input
                   id="parent-username"
-                  type="text"
+                  type="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className={inputClassName}
                   required
                   disabled={isSubmitting}
+                  placeholder="you@example.com"
                 />
               </div>
             </>

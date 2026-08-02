@@ -17,6 +17,7 @@ const AUTH_PAGES_WITHOUT_MENU = new Set([
   "/account-locked",
   "/request-access",
   "/forgot-password",
+  "/reset-password",
 ]);
 
 /** Shell layout: AppShell chrome + outlet for all routes. */
@@ -37,6 +38,9 @@ export function AppLayout() {
         { to: "/admin", label: "Admin" },
         { to: "/admin/directory", label: "Directory" },
       );
+    }
+    if (user?.role === "Teacher") {
+      items.push({ to: "/admin/directory/students", label: "Students" });
     }
     if (user && canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });
@@ -77,6 +81,9 @@ export function AppLayout() {
     const items: SidebarNavItem[] = [{ to: "/dashboard", label: "Home" }];
     if (isAdminRole(user.role)) {
       items.push({ to: "/admin/directory", label: "Directory" });
+    }
+    if (user.role === "Teacher") {
+      items.push({ to: "/admin/directory/students", label: "Students" });
     }
     if (canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });

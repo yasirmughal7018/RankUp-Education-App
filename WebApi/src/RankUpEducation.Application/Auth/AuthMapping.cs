@@ -9,7 +9,8 @@ internal static class AuthMapping
     public static CurrentUserResponse ToCurrentUserResponse(
         this User user,
         UserRole? activeRole = null,
-        CurrentUserPendingSchoolChange? pendingSchoolChange = null)
+        CurrentUserPendingSchoolChange? pendingSchoolChange = null,
+        CurrentUserPendingRoleRequest? pendingRoleRequest = null)
     {
         var role = activeRole ?? user.Role;
         if (!user.HasRole(role))
@@ -37,6 +38,7 @@ internal static class AuthMapping
             user.AvatarUrl,
             pendingSchoolChange,
             permissions,
-            mustChangePassword);
+            mustChangePassword,
+            pendingRoleRequest);
     }
 }

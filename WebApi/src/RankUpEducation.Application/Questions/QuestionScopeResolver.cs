@@ -119,6 +119,11 @@ public static class QuestionScopeResolver
     /// </summary>
     public static void EnsureCanApproveOrReject(Question question, QuestionManageScope scope)
     {
+        if (scope.IsPortalAdmin)
+        {
+            return;
+        }
+
         if (!scope.CanApprove)
         {
             throw new ForbiddenAppException(
@@ -134,11 +139,6 @@ public static class QuestionScopeResolver
         if (!CanApproveCreatorTier(scope.Role, question.CreatedByRole))
         {
             throw new ForbiddenAppException(DescribeHierarchyDenial(scope.Role, question.CreatedByRole));
-        }
-
-        if (scope.IsPortalAdmin)
-        {
-            return;
         }
 
         if (scope.IsSchoolAdmin)
@@ -230,7 +230,8 @@ public static class QuestionScopeResolver
 
     /// <summary>True when approver tier is strictly above creator tier (PortalAdmin always).</summary>
     public static bool CanApproveCreatorTier(UserRole approverRole, UserRole creatorRole)
-        => ApprovalTier(approverRole) > ApprovalTier(creatorRole);
+        => approverRole == UserRole.PortalAdmin
+           || ApprovalTier(approverRole) > ApprovalTier(creatorRole);
 
     /// <summary>Creators CampusAdmin may still see in pending/restricted queues (Teacher/Parent only).</summary>
     public static bool IsCreatorVisibleToCampusAdmin(UserRole createdByRole)

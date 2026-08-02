@@ -96,13 +96,30 @@ class _PendingRegistrationsPageState
   }
 
   Future<void> _reject(PendingRegistration registration) async {
+    final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Reject request?'),
-          content: Text(
-            'Reject registration for ${registration.fullName}?',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Reject registration for ${registration.fullName}? A reason is required (min 10 characters).',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                maxLength: 1000,
+                decoration: const InputDecoration(
+                  labelText: 'Rejection reason',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -110,7 +127,12 @@ class _PendingRegistrationsPageState
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () {
+                if (reasonController.text.trim().length < 10) {
+                  return;
+                }
+                Navigator.of(context).pop(true);
+              },
               child: const Text('Reject'),
             ),
           ],
@@ -118,7 +140,10 @@ class _PendingRegistrationsPageState
       },
     );
 
-    if (confirmed != true || !mounted) {
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
+
+    if (confirmed != true || !mounted || reason.length < 10) {
       return;
     }
 
@@ -131,7 +156,7 @@ class _PendingRegistrationsPageState
     try {
       await ref
           .read(registrationRemoteDataSourceProvider)
-          .reject(registration.id);
+          .reject(registration.id, reason: reason);
       if (!mounted) {
         return;
       }

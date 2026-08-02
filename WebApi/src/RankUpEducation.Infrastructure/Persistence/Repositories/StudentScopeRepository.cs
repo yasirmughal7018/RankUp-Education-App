@@ -35,6 +35,7 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             select new LinkedStudentInfo(
                 student.Id,
                 user.FullName,
+                user.Username,
                 user.RollNumberTeacherCode ?? string.Empty,
                 student.Grade,
                 student.Section,
@@ -50,6 +51,16 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             where student.Id == studentId
             select new StudentSchoolContext(user.SchoolId, user.CampusId, student.Grade))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<long>> GetLinkedParentIdsAsync(
+        long studentId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.ParentStudentRelations.AsNoTracking()
+            .Where(relation => relation.StudentId == studentId && relation.IsActive)
+            .Select(relation => relation.ParentId)
+            .ToListAsync(cancellationToken);
     }
 
     public Task<bool> IsLinkedStudentAsync(long parentId, long studentId, CancellationToken cancellationToken)
@@ -115,14 +126,27 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
 
     public async Task<IReadOnlyList<long>> GetStudentIdsInSchoolAsync(
         int schoolId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? campusId = null,
+        short? gradeId = null)
     {
-        return await (
+        var query =
             from student in _dbContext.Students.AsNoTracking()
             join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
             where user.SchoolId == schoolId
-            select student.Id)
-            .ToListAsync(cancellationToken);
+            select new { student.Id, user.CampusId, student.Grade };
+
+        if (campusId is > 0)
+        {
+            query = query.Where(row => row.CampusId == campusId.Value);
+        }
+
+        if (gradeId is > 0)
+        {
+            query = query.Where(row => row.Grade == gradeId.Value);
+        }
+
+        return await query.Select(row => row.Id).ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<long>> GetStudentIdsInSchoolsAsync(

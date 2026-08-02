@@ -4,6 +4,7 @@ namespace RankUpEducation.Application.Common.Abstractions;
 public sealed record LinkedStudentInfo(
     long StudentId,
     string FullName,
+    string Username,
     string RollNumber,
     short Grade,
     string Section,

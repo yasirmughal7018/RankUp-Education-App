@@ -473,7 +473,16 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ForbiddenAppException("You can only assign school-wide within your school.");
         }
 
-        return await _studentScope.GetStudentIdsInSchoolAsync(schoolId, cancellationToken);
+        var campusId = request.CampusId is > 0
+            ? request.CampusId
+            : scope.CampusId;
+        var gradeId = request.GradeId is > 0 ? request.GradeId : null;
+
+        return await _studentScope.GetStudentIdsInSchoolAsync(
+            schoolId,
+            cancellationToken,
+            campusId,
+            gradeId);
     }
 
     private async Task<IReadOnlyList<long>> ResolveMultiSchoolStudentsAsync(

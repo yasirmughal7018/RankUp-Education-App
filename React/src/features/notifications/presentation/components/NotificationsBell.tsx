@@ -22,6 +22,7 @@ function formatCreatedAt(value: string): string {
 const ADMIN_NOTIFICATION_CATEGORIES = new Set([
   "RegistrationRequest",
   "SchoolChangeRequest",
+  "RoleRequest",
   "PasswordResetRequest",
 ]);
 
@@ -55,7 +56,12 @@ function isVisibleCategory(category: string, role: UserRole | undefined): boolea
     return isQuiz || isAdminCategory;
   }
 
-  // Teachers, Parents, Students: quiz alerts only (API already scopes by recipient).
+  // Parents also receive student password-reset help requests.
+  if (role === "Parent" && category === "PasswordResetRequest") {
+    return true;
+  }
+
+  // Teachers, Parents, Students: quiz alerts (API already scopes by recipient).
   return isQuiz;
 }
 
@@ -64,8 +70,12 @@ function hrefForCategory(category: string, role: UserRole | undefined): string {
     return "/admin/directory/school-changes";
   }
 
+  if (category === "RoleRequest") {
+    return "/admin/directory/role-requests";
+  }
+
   if (category === "PasswordResetRequest") {
-    return "/admin/directory";
+    return role === "Parent" ? "/parent/children" : "/admin/directory";
   }
 
   if (category === "QuizAssigned" || category === "QuizReviewed") {
@@ -87,6 +97,13 @@ function headerCopy(role: UserRole | undefined): { title: string; subtitle: stri
     };
   }
 
+  if (role === "Parent") {
+    return {
+      title: "Notifications",
+      subtitle: "Child quizzes and password help requests",
+    };
+  }
+
   if (role === "Student") {
     return {
       title: "Notifications",
@@ -105,6 +122,7 @@ export function NotificationsBell() {
   const { user } = useAuth();
   const role = user?.role;
   const isAdmin = role != null && isAdminRole(role);
+  const canClearPasswordReset = isAdmin || role === "Parent";
   const [open, setOpen] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);
   const [clearingUsername, setClearingUsername] = useState<string | null>(null);
@@ -164,7 +182,7 @@ export function NotificationsBell() {
 
   async function handleClearPassword(notificationId: number, username: string) {
     const confirmed = window.confirm(
-      `Clear the password for "${username}"?\n\nThey will set a new password on the login screen (NeedsPasswordSetup).`,
+      `Clear the password for "${username}"?\n\nThey will set a new password on the login screen.\nIf someone already completed this request, this action will fail.`,
     );
     if (!confirmed) {
       return;
@@ -250,7 +268,8 @@ export function NotificationsBell() {
               <ul className="divide-y divide-slate-100">
                 {recentItems.map((item) => {
                   const resetUsername =
-                    isAdmin && item.category === "PasswordResetRequest"
+                    canClearPasswordReset &&
+                    item.category === "PasswordResetRequest"
                       ? usernameFromPasswordResetTitle(item.title)
                       : null;
 

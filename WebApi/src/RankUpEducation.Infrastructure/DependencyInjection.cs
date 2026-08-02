@@ -28,6 +28,8 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, JwtTokenService>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ISchoolChangeRequestRepository, SchoolChangeRequestRepository>();
+        services.AddScoped<IUserRoleRequestRepository, UserRoleRequestRepository>();
+        services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddScoped<IQuestionRepository, QuestionRepository>();

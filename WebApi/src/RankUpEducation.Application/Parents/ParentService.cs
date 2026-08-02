@@ -33,6 +33,7 @@ public sealed class ParentService : IParentService
             students.Select(student => new LinkedStudentResponse(
                 student.StudentId,
                 student.FullName,
+                student.Username,
                 student.RollNumber,
                 student.Grade,
                 student.Section,

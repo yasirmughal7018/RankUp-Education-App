@@ -40,9 +40,13 @@ With mocks enabled, these local demo accounts work without the API:
 | Teacher Demo | `teacher-demo` | `password` |
 
 The mobile app has one common login screen for Student, Parent, and Teacher
-accounts. It must not send a role during login. The backend must validate the
-username and password, resolve the role from the database, and return the role
-with the authenticated user.
+accounts. It must not send a role during login. The backend validates the
+username and password, resolves roles from `app_user_roles`, and returns the
+active session role plus the full `roles` list.
+
+Multi-role accounts (e.g. Parent + Teacher) use `POST /auth/switch-role` from
+Profile. Student and PortalAdmin cannot combine with other roles. Full rules:
+[`docs/02_RankUp_Authentication_Logic.html`](../../docs/02_RankUp_Authentication_Logic.html).
 
 Login request:
 

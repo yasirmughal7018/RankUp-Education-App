@@ -75,6 +75,8 @@ public sealed record ManageQuizResponse(
     string ReviewDisplayMode,
     string CreatedBy,
     string SchoolName,
+    int? SchoolId,
+    int? CampusId,
     IReadOnlyList<ManageQuizQuestionResponse> Questions,
     IReadOnlyList<QuizApprovalHistoryItem> ApprovalHistory);
 
@@ -104,7 +106,8 @@ public sealed record AssignQuizRequest(
     short AllowedAttempts,
     short? GradeId = null,
     string? Section = null,
-    IReadOnlyList<int>? SchoolIds = null);
+    IReadOnlyList<int>? SchoolIds = null,
+    int? CampusId = null);
 
 /// <summary>One student assignment with attempt and review summary.</summary>
 public sealed record QuizAssignmentResponse(

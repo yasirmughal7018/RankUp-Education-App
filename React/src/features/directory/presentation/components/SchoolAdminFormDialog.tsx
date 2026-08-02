@@ -74,7 +74,11 @@ export function SchoolAdminFormDialog({
 
     const mobile = mobileNumber.trim() || null;
     const trimmedCnic = cnic.trim() || null;
-    const email = emailAddress.trim() || null;
+    const email = emailAddress.trim();
+    if (!email) {
+      setError("Email address is required (it is the username).");
+      return;
+    }
 
     try {
       if (isEdit) {
@@ -89,16 +93,11 @@ export function SchoolAdminFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
-        if (!trimmedUsername) {
-          setError("Username is required.");
-          return;
-        }
         await onSubmit({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: email,
             schoolId: parsedSchoolId,
             mobileNumber: mobile,
             cnic: trimmedCnic,
@@ -156,22 +155,7 @@ export function SchoolAdminFormDialog({
             />
           </div>
 
-          {!isEdit ? (
-            <div>
-              <FieldLabel htmlFor="school-admin-username" required>
-                Username
-              </FieldLabel>
-              <input
-                id="school-admin-username"
-                type="text"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                className={inputClassName}
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-          ) : (
+          {!isEdit ? null : (
             <p className="text-sm text-slate-500">
               Username {schoolAdmin.username}
             </p>
@@ -227,8 +211,8 @@ export function SchoolAdminFormDialog({
           </div>
 
           <div>
-            <FieldLabel htmlFor="school-admin-email" optional>
-              Email
+            <FieldLabel htmlFor="school-admin-email" required>
+              Email (username)
             </FieldLabel>
             <input
               id="school-admin-email"
@@ -236,7 +220,9 @@ export function SchoolAdminFormDialog({
               value={emailAddress}
               onChange={(event) => setEmailAddress(event.target.value)}
               className={inputClassName}
+              required
               disabled={isSubmitting}
+              placeholder="you@example.com"
             />
           </div>
 

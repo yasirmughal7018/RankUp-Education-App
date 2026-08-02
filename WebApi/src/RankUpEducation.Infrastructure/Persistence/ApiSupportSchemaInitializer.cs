@@ -54,8 +54,61 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuizApprovalTrailSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionApprovalTrailBackfillSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserAvatarAndSchoolChangeSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(UserRoleRequestSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(PasswordResetRequestSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
+
+    private const string UserRoleRequestSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_user_role_request (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL
+                REFERENCES public.app_users (id) ON DELETE CASCADE,
+            requested_role SMALLINT NOT NULL,
+            school_id INTEGER NULL,
+            campus_id INTEGER NULL,
+            teacher_code VARCHAR(50) NULL,
+            reason_message VARCHAR(1000) NULL,
+            status SMALLINT NOT NULL DEFAULT 0,
+            requested_at TIMESTAMPTZ NOT NULL,
+            resolved_at TIMESTAMPTZ NULL,
+            rejection_reason VARCHAR(1000) NULL,
+            resolved_by_user_id BIGINT NULL
+                REFERENCES public.app_users (id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_role_request_user_id
+            ON public.app_user_role_request (user_id);
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_role_request_status
+            ON public.app_user_role_request (status);
+        """;
+
+    private const string PasswordResetRequestSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_user_password_reset_request (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL
+                REFERENCES public.app_users (id) ON DELETE CASCADE,
+            requester_role SMALLINT NOT NULL,
+            status SMALLINT NOT NULL DEFAULT 0,
+            requested_at TIMESTAMPTZ NOT NULL,
+            resolved_at TIMESTAMPTZ NULL,
+            completed_by_user_id BIGINT NULL
+                REFERENCES public.app_users (id) ON DELETE SET NULL,
+            completed_by_role SMALLINT NULL,
+            email_token_hash VARCHAR(128) NULL,
+            email_token_expires_at TIMESTAMPTZ NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_password_reset_request_user_id
+            ON public.app_user_password_reset_request (user_id);
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_password_reset_request_status
+            ON public.app_user_password_reset_request (status);
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_password_reset_request_email_token
+            ON public.app_user_password_reset_request (email_token_hash);
+        """;
 
     private const string UserAvatarAndSchoolChangeSupportSql = """
         ALTER TABLE public.app_users
@@ -1469,6 +1522,9 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         ALTER TABLE public.app_users
             ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ NULL;
+
+        ALTER TABLE public.app_users
+            ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(1000) NULL;
 
         ALTER TABLE public.app_users
             ALTER COLUMN password_hash DROP NOT NULL;

@@ -180,24 +180,25 @@ public sealed class Approval
         ApprovedAt = approvedAt;
     }
 
-    public void MarkRejected(DateTimeOffset rejectedAt)
+    public void MarkRejected(DateTimeOffset rejectedAt, string? reason = null)
     {
         if (!IsPending)
         {
             return;
         }
 
-        RecordRejected(rejectedAt);
+        RecordRejected(rejectedAt, reason);
     }
 
     /// <summary>
     /// Force-record rejection (e.g. admin who previously approved then rejects while still pending activation).
     /// </summary>
-    public void RecordRejected(DateTimeOffset rejectedAt)
+    public void RecordRejected(DateTimeOffset rejectedAt, string? reason = null)
     {
         IsApproved = false;
         Action = ApprovalAction.Rejected;
         ApprovedAt = rejectedAt;
+        Reason = Normalize(reason) ?? Reason;
     }
 
     /// <summary>Approve-style events read as true, refusals as false, neutral lifecycle events as null.</summary>

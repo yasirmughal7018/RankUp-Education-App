@@ -3,7 +3,7 @@ namespace RankUpEducation.Contracts.Auth;
 /// <summary>Self-registration payload for Student, Parent, or Teacher.</summary>
 public sealed record RegisterAccountRequest(
     string FullName,
-    string MobileNumber,
+    string? MobileNumber,
     string? EmailAddress,
     string UserType,
     string? RollNumberTeacherCode,
@@ -47,6 +47,9 @@ public sealed record PendingRegistrationResponse(
 
 /// <summary>Approve uses registration details as submitted. No password or field edits.</summary>
 public sealed record ApproveRegistrationRequest();
+
+/// <summary>Reject a pending registration with a required admin reason.</summary>
+public sealed record RejectRegistrationRequest(string Reason);
 
 /// <summary>Result of approving a registration (activation requires Portal Admin).</summary>
 public sealed record ApproveRegistrationResponse(

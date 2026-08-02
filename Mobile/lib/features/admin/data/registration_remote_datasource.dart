@@ -37,10 +37,11 @@ class RegistrationRemoteDataSource {
     }
   }
 
-  Future<void> reject(int userId) async {
+  Future<void> reject(int userId, {required String reason}) async {
     try {
       await _dio.post<Map<String, dynamic>>(
         '/auth/registrations/$userId/reject',
+        data: {'reason': reason},
       );
     } on DioException catch (error) {
       throw mapDioException(error);

@@ -17,5 +17,6 @@ public sealed record CurrentUserResponse(
     string? AvatarUrl,
     CurrentUserPendingSchoolChange? PendingSchoolChange,
     IReadOnlyList<string> Permissions,
-    bool? MustChangePassword);
+    bool? MustChangePassword,
+    CurrentUserPendingRoleRequest? PendingRoleRequest = null);
 

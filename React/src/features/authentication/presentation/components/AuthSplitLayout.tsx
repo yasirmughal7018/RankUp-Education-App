@@ -29,22 +29,22 @@ const panelCopy: Record<
   },
   "request-access": {
     headline: "Request access to RankUp Education",
-    lead: "New students, parents, and teachers can request an account. School and campus admins review requests; Portal Admin activates access.",
+    lead: "New students, parents, and teachers can request an account. Campus and School admins can activate students in their scope; Portal Admin can activate any request (and must for accounts without a school).",
     points: [
-      "Choose Student, Parent, or Teacher when you apply",
+      "Email address is required and becomes the username for every role",
       "Optional school and campus route your approval queue",
+      "Student roll number is required only when a school is selected",
       "After approval, set your password and sign in",
-      "Your data stays scoped to your school and role",
     ],
   },
   "forgot-password": {
-    headline: "Reset access with help from your school",
-    lead: "Enter the CNIC or mobile number on your account. Your school admin will be notified so they can help restore secure access.",
+    headline: "Reset your RankUp password",
+    lead: "Enter your username. We send a reset link and notify the right School Admin, Campus Admin, Parent, or Portal Admin. Only the first completion counts.",
     points: [
-      "Use the same CNIC or mobile number you sign in with",
-      "Your request is sent to school administrators",
-      "An admin can help you regain access safely",
-      "After reset, sign in again with your new password",
+      "Email link lets you choose a new password yourself",
+      "Student requests go to School, Campus, Parent, and Portal Admin",
+      "Teacher / Campus / School Admin requests escalate by role",
+      "Once one person finishes the reset, others cannot redo it",
     ],
   },
   "account-locked": {
@@ -54,7 +54,7 @@ const panelCopy: Record<
       "Your request is waiting in the admin approval queue",
       "Campus, School, or Portal Admin can approve or reject in their scope",
       "Approval applies the new school/campus and unlocks you",
-      "Rejection keeps your current school/campus and unlocks you",
+      "Rejection unlocks you with your previous school, or without a school",
     ],
   },
 };

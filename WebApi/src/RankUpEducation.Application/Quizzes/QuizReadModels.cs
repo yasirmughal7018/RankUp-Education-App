@@ -82,7 +82,9 @@ public sealed record QuizDetailItem(
     string ReviewDisplayMode = "ScoreOnly",
     string ApprovalStatus = "Pending",
     string? RejectionReason = null,
-    IReadOnlyList<QuizApprovalEventItem>? ApprovalHistory = null);
+    IReadOnlyList<QuizApprovalEventItem>? ApprovalHistory = null,
+    int? SchoolId = null,
+    int? CampusId = null);
 
 /// <summary>One quiz workflow event projected from app_approval.</summary>
 public sealed record QuizApprovalEventItem(

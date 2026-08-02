@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Link2, Pencil, Unlink, UserCheck, UserX } from "lucide-react";
+import { Link2, Pencil, Unlink, UserCheck, UserPlus, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { AppSearchInput } from "@/components/ui/app-search-input";
@@ -9,6 +9,7 @@ import { useAuth } from "@/features/authentication/presentation/context/AuthProv
 import type {
   CreateDirectoryParentInput,
   DirectoryParent,
+  GrantTeacherRoleInput,
   UpdateDirectoryParentInput,
 } from "@/features/directory/domain/directoryTypes";
 import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
@@ -28,6 +29,7 @@ import {
   directorySelectClassName,
 } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
+import { GrantTeacherRoleDialog } from "@/features/directory/presentation/components/GrantTeacherRoleDialog";
 import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
 import { ParentFormDialog } from "@/features/directory/presentation/components/ParentFormDialog";
 import {
@@ -36,6 +38,8 @@ import {
   useCreateParentMutation,
   useDeactivateParentMutation,
   useDirectoryParentsQuery,
+  useDirectorySchoolsQuery,
+  useGrantTeacherRoleToParentMutation,
   useLinkParentStudentMutation,
   useUnlinkParentStudentMutation,
   useUpdateParentMutation,
@@ -81,6 +85,8 @@ export function DirectoryParentsPage() {
     "create" | DirectoryParent | null
   >(null);
   const [linkParent, setLinkParent] = useState<DirectoryParent | null>(null);
+  const [grantTeacherTarget, setGrantTeacherTarget] =
+    useState<DirectoryParent | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -95,6 +101,7 @@ export function DirectoryParentsPage() {
 
   const { data, isLoading, error, refetch, isFetching } =
     useDirectoryParentsQuery(filters);
+  const { data: schools = [] } = useDirectorySchoolsQuery(canManage);
 
   const createMutation = useCreateParentMutation();
   const updateMutation = useUpdateParentMutation();
@@ -103,6 +110,7 @@ export function DirectoryParentsPage() {
   const bulkDeactivateMutation = useBulkDeactivateParentsMutation();
   const linkMutation = useLinkParentStudentMutation();
   const unlinkMutation = useUnlinkParentStudentMutation();
+  const grantTeacherMutation = useGrantTeacherRoleToParentMutation();
 
   const parents = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -130,7 +138,8 @@ export function DirectoryParentsPage() {
     deactivateMutation.isPending ||
     bulkDeactivateMutation.isPending ||
     linkMutation.isPending ||
-    unlinkMutation.isPending;
+    unlinkMutation.isPending ||
+    grantTeacherMutation.isPending;
 
   const allVisibleSelected =
     visibleParents.length > 0 &&
@@ -289,6 +298,7 @@ export function DirectoryParentsPage() {
     if (!canManage) {
       return null;
     }
+    const hasTeacherRole = (parent.roles ?? []).includes("Teacher");
     return (
       <>
         <DirectoryIconAction
@@ -300,6 +310,17 @@ export function DirectoryParentsPage() {
             setParentDialog(parent);
           }}
         />
+        {!hasTeacherRole ? (
+          <DirectoryIconAction
+            icon={UserPlus}
+            label={`Add Teacher role to ${parent.fullName}`}
+            disabled={busy}
+            onClick={() => {
+              clearMessages();
+              setGrantTeacherTarget(parent);
+            }}
+          />
+        ) : null}
         <DirectoryIconAction
           icon={parent.isActive ? UserX : UserCheck}
           label={
@@ -436,7 +457,11 @@ export function DirectoryParentsPage() {
                 canManage ? () => toggleSelect(parent.parentId) : undefined
               }
               title={parent.fullName}
-              subtitle={`@${parent.username}`}
+              subtitle={
+                (parent.roles?.length ?? 0) > 1
+                  ? `${parent.username} · ${parent.roles?.join(", ")}`
+                  : parent.username
+              }
               badge={
                 <AccountStatusBadge
                   accountStatus={parent.accountStatus}
@@ -487,8 +512,13 @@ export function DirectoryParentsPage() {
                 <DirectoryTd>
                   <p className="font-medium">{parent.fullName}</p>
                   <p className="text-xs text-muted-foreground">
-                    @{parent.username}
+                    {parent.username}
                   </p>
+                  {(parent.roles?.length ?? 0) > 1 ? (
+                    <p className="mt-0.5 text-xs font-medium text-primary">
+                      Roles: {parent.roles?.join(", ")}
+                    </p>
+                  ) : null}
                 </DirectoryTd>
                 <DirectoryTd>
                   <p>{parent.linkedStudentCount}</p>
@@ -533,6 +563,25 @@ export function DirectoryParentsPage() {
           isSubmitting={linkMutation.isPending}
           onClose={() => setLinkParent(null)}
           onSubmit={handleLink}
+        />
+      ) : null}
+
+      {grantTeacherTarget ? (
+        <GrantTeacherRoleDialog
+          parent={grantTeacherTarget}
+          schools={schools}
+          isSubmitting={grantTeacherMutation.isPending}
+          onClose={() => setGrantTeacherTarget(null)}
+          onSubmit={async (input: GrantTeacherRoleInput) => {
+            await grantTeacherMutation.mutateAsync({
+              parentId: grantTeacherTarget.parentId,
+              input,
+            });
+            setSuccessMessage(
+              `Teacher role added to ${grantTeacherTarget.fullName}.`,
+            );
+            setGrantTeacherTarget(null);
+          }}
         />
       ) : null}
     </DirectoryPageShell>

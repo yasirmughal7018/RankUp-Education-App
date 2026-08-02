@@ -14,6 +14,12 @@ public interface IAuthService
     Task<LoginResponse> SwitchRoleAsync(SwitchRoleRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Removes Parent or Teacher from the signed-in account when another role remains,
+    /// then re-issues tokens for a remaining role.
+    /// </summary>
+    Task<LoginResponse> RemoveMyRoleAsync(string role, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Checks whether the account is pending, needs first password, or can sign in.
     /// </summary>
     Task<LoginStatusResponse> GetLoginStatusAsync(
@@ -37,13 +43,24 @@ public interface IAuthService
     Task<ApproveRegistrationResponse> ApproveRegistrationAsync(long userId, CancellationToken cancellationToken);
 
     /// <summary>Soft-rejects a pending registration while retaining audit history.</summary>
-    Task RejectRegistrationAsync(long userId, CancellationToken cancellationToken);
+    Task RejectRegistrationAsync(long userId, string reason, CancellationToken cancellationToken);
 
-    /// <summary>Notifies eligible admins to clear the user's password (does not reveal account existence).</summary>
+    /// <summary>
+    /// Starts forgot-password: emails a reset link (when email exists) and notifies
+    /// role-scoped admins/parents. Does not reveal whether the account exists.
+    /// </summary>
     Task RequestPasswordResetAsync(PasswordResetRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Admin clears the user's password after a forgot-password request so they can set a new one on login.
+    /// Completes forgot-password via the emailed token (first completion wins).
+    /// </summary>
+    Task CompletePasswordResetAsync(
+        CompletePasswordResetRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Admin or linked Parent clears the password for a pending reset request
+    /// (first completion wins; others are blocked).
     /// </summary>
     Task ClearPasswordForResetAsync(PasswordResetRequest request, CancellationToken cancellationToken);
 
@@ -61,6 +78,25 @@ public interface IAuthService
     /// <summary>Queues a school/campus transfer and locks the account until admins resolve it.</summary>
     Task<RequestSchoolChangeResponse> RequestSchoolChangeAsync(
         RequestSchoolChangeRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Queues a request to add Parent or Teacher as an additional role (does not lock).</summary>
+    Task<RequestAdditionalRoleResponse> RequestAdditionalRoleAsync(
+        RequestAdditionalRoleRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Lists pending additional-role requests visible to the signed-in admin's scope.</summary>
+    Task<IReadOnlyList<PendingRoleRequestResponse>> ListPendingRoleRequestsAsync(
+        int take,
+        CancellationToken cancellationToken);
+
+    /// <summary>Approves an additional-role request and applies the role immediately.</summary>
+    Task ApproveRoleRequestAsync(long requestId, CancellationToken cancellationToken);
+
+    /// <summary>Rejects an additional-role request with a required reason.</summary>
+    Task RejectRoleRequestAsync(
+        long requestId,
+        string reason,
         CancellationToken cancellationToken);
 
     /// <summary>Stores a profile avatar image and returns the updated user profile.</summary>
@@ -85,9 +121,11 @@ public interface IAuthService
         long requestId,
         CancellationToken cancellationToken);
 
-    /// <summary>Rejects a pending school-change request and unlocks the account.</summary>
+    /// <summary>Rejects a pending school-change request and unlocks the account.
+    /// When <paramref name="leaveWithoutSchool"/> is true for a Student, clears school/campus.</summary>
     Task RejectSchoolChangeAsync(
         long requestId,
+        bool leaveWithoutSchool,
         CancellationToken cancellationToken);
 
     /// <summary>Changes password for a signed-in user, or completes first-time setup.</summary>

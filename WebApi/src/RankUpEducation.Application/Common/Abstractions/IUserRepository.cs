@@ -88,6 +88,14 @@ public interface IUserRepository
 
     Task AddParentProfileAsync(Domain.Parents.Parent parent, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// True when student groups still reference this user+role (blocks role removal via FK).
+    /// </summary>
+    Task<bool> HasStudentGroupsForRoleAsync(
+        long userId,
+        UserRole role,
+        CancellationToken cancellationToken);
+
     Task DeleteAsync(User user, CancellationToken cancellationToken);
 
     /// <summary>Revokes all active refresh tokens (logout all sessions, school-change lock, password clear).</summary>

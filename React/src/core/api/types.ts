@@ -43,8 +43,19 @@ export interface CurrentUser {
   cnic?: string | null;
   avatarUrl?: string | null;
   pendingSchoolChange?: PendingSchoolChange | null;
+  pendingRoleRequest?: PendingRoleRequest | null;
   permissions: string[];
   mustChangePassword?: boolean | null;
+}
+
+export interface PendingRoleRequest {
+  id: number;
+  requestedRole: string;
+  schoolId?: number | null;
+  campusId?: number | null;
+  teacherCode?: string | null;
+  reasonMessage?: string | null;
+  requestedAt: string;
 }
 
 export interface AuthTokensResponse {

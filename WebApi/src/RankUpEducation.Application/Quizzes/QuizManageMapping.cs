@@ -38,6 +38,8 @@ internal static class QuizManageMapping
             detail.ReviewDisplayMode,
             detail.CreatedByName,
             detail.SchoolName,
+            detail.SchoolId,
+            detail.CampusId,
             questions.Select(QuizQuestionMapping.ToQuestionResponse).ToArray(),
             (detail.ApprovalHistory ?? Array.Empty<QuizApprovalEventItem>())
                 .Select(entry => new QuizApprovalHistoryItem(

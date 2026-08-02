@@ -41,7 +41,7 @@ public sealed class UserRepository : IUserRepository
     {
         var normalized = identifier.AsLowercase();
 
-        // Priority: username → CNIC → mobile number.
+        // Priority: username → email address → CNIC → mobile number.
         // Prefer non-rejected rows so a re-request after soft-reject is found first.
         var byUsername = await PreferActiveRegistrationAsync(
             UsersWithRoles().Where(user => user.Username.ToLower() == normalized),
@@ -49,6 +49,15 @@ public sealed class UserRepository : IUserRepository
         if (byUsername is not null)
         {
             return await WithProfileContextAsync(Task.FromResult<User?>(byUsername), null, cancellationToken);
+        }
+
+        var byEmail = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(
+                user => user.EmailAddress != null && user.EmailAddress.ToLower() == normalized),
+            cancellationToken);
+        if (byEmail is not null)
+        {
+            return await WithProfileContextAsync(Task.FromResult<User?>(byEmail), null, cancellationToken);
         }
 
         var byCnic = await PreferActiveRegistrationAsync(
@@ -208,6 +217,8 @@ public sealed class UserRepository : IUserRepository
         // - no school → PortalAdmin
         // - school only → SchoolAdmin + PortalAdmin
         // - campus → CampusAdmin + SchoolAdmin + PortalAdmin
+        // Any of those queued admins may activate Student/Teacher in their scope;
+        // PortalAdmin can activate any (and is required when there is no school).
         var includeSchoolAdmins = schoolId.HasValue;
         var includeCampusAdmins = schoolId.HasValue && campusId.HasValue;
 
@@ -382,6 +393,16 @@ public sealed class UserRepository : IUserRepository
     public async Task AddParentProfileAsync(Parent parent, CancellationToken cancellationToken)
     {
         await _dbContext.Parents.AddAsync(parent, cancellationToken);
+    }
+
+    public Task<bool> HasStudentGroupsForRoleAsync(
+        long userId,
+        UserRole role,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.StudentGroups.AnyAsync(
+            group => group.ReferralId == userId && group.CreatorRole == role,
+            cancellationToken);
     }
 
     public Task DeleteAsync(User user, CancellationToken cancellationToken)

@@ -361,7 +361,7 @@ export function QuizManageDetailPage() {
               type="button"
               disabled={isSubmitting}
               onClick={openBankDialog}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
             >
               Add from bank
             </button>
@@ -373,7 +373,7 @@ export function QuizManageDetailPage() {
               onClick={() =>
                 void runAction(() => publishQuiz.mutateAsync(), "Quiz published.")
               }
-              className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-50 disabled:opacity-70"
+              className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
             >
               Publish
             </button>
@@ -395,7 +395,7 @@ export function QuizManageDetailPage() {
                   }
                 })();
               }}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+              className="rounded-lg border border-[var(--status-rejected-border)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:bg-[var(--status-rejected-bg)] disabled:opacity-70"
             >
               Delete
             </button>
@@ -411,7 +411,7 @@ export function QuizManageDetailPage() {
                     "Resubmitted for approval.",
                   )
                 }
-                className="rounded-lg border border-brand-200 px-4 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-50 disabled:opacity-70"
+                className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
               >
                 Resubmit for approval
               </button>
@@ -426,7 +426,7 @@ export function QuizManageDetailPage() {
             onClick={() =>
               void runAction(() => unarchiveQuiz.mutateAsync(), "Quiz unarchived.")
             }
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
           >
             Unarchive
           </button>
@@ -438,7 +438,7 @@ export function QuizManageDetailPage() {
               type="button"
               disabled={isSubmitting || quiz.questionCount === 0}
               onClick={() => setShowAssignDialog(true)}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
             >
               Assign
             </button>
@@ -458,7 +458,7 @@ export function QuizManageDetailPage() {
                       navigate(`/quizzes/${duplicated.id}`);
                     }, "Quiz duplicated.")
                   }
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                  className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
                 >
                   Duplicate
                 </button>
@@ -485,7 +485,7 @@ export function QuizManageDetailPage() {
                       }
                     })();
                   }}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-70"
                 >
                   Archive
                 </button>
@@ -508,7 +508,7 @@ export function QuizManageDetailPage() {
                     "Upcoming assignments cancelled.",
                   );
                 }}
-                className="rounded-lg border border-amber-200 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-50 disabled:opacity-70"
+                className="rounded-lg border border-[var(--status-pending-border)] px-4 py-2 text-sm font-medium text-[var(--status-pending-text)] transition hover:bg-[var(--status-pending-bg)] disabled:opacity-70"
               >
                 Cancel assignments
               </button>
@@ -814,7 +814,10 @@ export function QuizManageDetailPage() {
       {showAssignDialog ? (
         <AssignQuizDialog
           isSubmitting={assignQuiz.isPending}
-          defaultGrade={quiz.grade}
+          classId={quiz.classId}
+          allowedAttempts={quiz.allowedAttempts}
+          schoolId={quiz.schoolId}
+          campusId={quiz.campusId}
           quizType={quiz.quizType}
           onClose={() => setShowAssignDialog(false)}
           onSubmit={async (input) => {

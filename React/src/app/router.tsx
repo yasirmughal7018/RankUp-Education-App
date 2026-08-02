@@ -5,6 +5,7 @@ import { AdminOverviewPage } from "@/features/admin/presentation/pages/AdminOver
 import { QuizApprovalsRoute } from "@/features/quizzes/presentation/components/QuizApprovalsRoute";
 import { AdminQuizApprovalsPage } from "@/features/admin/presentation/pages/AdminQuizApprovalsPage";
 import { PendingRegistrationsPage } from "@/features/admin/presentation/pages/PendingRegistrationsPage";
+import { PendingRoleRequestsPage } from "@/features/admin/presentation/pages/PendingRoleRequestsPage";
 import { PendingSchoolChangesPage } from "@/features/admin/presentation/pages/PendingSchoolChangesPage";
 import {
   GuestRoute,
@@ -13,6 +14,7 @@ import {
 import { AccountLockedPage } from "@/features/authentication/presentation/pages/AccountLockedPage";
 import { AccountPage } from "@/features/authentication/presentation/pages/AccountPage";
 import { ForgotPasswordPage } from "@/features/authentication/presentation/pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "@/features/authentication/presentation/pages/ResetPasswordPage";
 import { LoginPage } from "@/features/authentication/presentation/pages/LoginPage";
 import { RequestAccessPage } from "@/features/authentication/presentation/pages/RequestAccessPage";
 import { DashboardPage } from "@/features/dashboard/presentation/pages/DashboardPage";
@@ -21,6 +23,7 @@ import { DirectoryCampusAdminsPage } from "@/features/directory/presentation/pag
 import { DirectoryParentsPage } from "@/features/directory/presentation/pages/DirectoryParentsPage";
 import { DirectorySchoolAdminsPage } from "@/features/directory/presentation/pages/DirectorySchoolAdminsPage";
 import { DirectorySchoolsPage } from "@/features/directory/presentation/pages/DirectorySchoolsPage";
+import { DirectoryStudentsRoute } from "@/features/directory/presentation/components/DirectoryStudentsRoute";
 import { DirectoryStudentsPage } from "@/features/directory/presentation/pages/DirectoryStudentsPage";
 import { DirectoryTeachersPage } from "@/features/directory/presentation/pages/DirectoryTeachersPage";
 import { HomePage } from "@/features/home/presentation/pages/HomePage";
@@ -71,6 +74,9 @@ export function AppRouter() {
             <Route path="request-access" element={<RequestAccessPage />} />
           </Route>
 
+          {/* Token link must work even if the user already has a session. */}
+          <Route path="reset-password" element={<ResetPasswordPage />} />
+
           <Route element={<ProtectedRoute />}>
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="account" element={<AccountPage />} />
@@ -97,12 +103,12 @@ export function AppRouter() {
                 element={<PendingSchoolChangesPage />}
               />
               <Route
-                path="admin/directory/schools"
-                element={<DirectorySchoolsPage />}
+                path="admin/directory/role-requests"
+                element={<PendingRoleRequestsPage />}
               />
               <Route
-                path="admin/directory/students"
-                element={<DirectoryStudentsPage />}
+                path="admin/directory/schools"
+                element={<DirectorySchoolsPage />}
               />
               <Route
                 path="admin/directory/teachers"
@@ -119,6 +125,13 @@ export function AppRouter() {
               <Route
                 path="admin/directory/campus-admins"
                 element={<DirectoryCampusAdminsPage />}
+              />
+            </Route>
+
+            <Route element={<DirectoryStudentsRoute />}>
+              <Route
+                path="admin/directory/students"
+                element={<DirectoryStudentsPage />}
               />
             </Route>
 

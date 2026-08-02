@@ -31,7 +31,8 @@ export function useRejectRegistrationMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (userId: number) => registrationApi.rejectRegistration(userId),
+    mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
+      registrationApi.rejectRegistration(userId, reason),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.pendingRegistrations(),

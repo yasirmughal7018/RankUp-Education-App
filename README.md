@@ -76,7 +76,11 @@ More detail: [`Mobile/README.md`](Mobile/README.md)
 
 ## Roles
 
-API-backed roles used across clients: `PortalAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
+API-backed roles: `PortalAdmin`, `SchoolAdmin`, `CampusAdmin`, `Teacher`, `Student`, `Parent`.
+
+- Roles are stored in `app_user_roles` (not on `app_users`). **Student** and **PortalAdmin** are exclusive; SchoolAdmin / CampusAdmin / Teacher / Parent may combine (common case: **Parent + Teacher**).
+- Session role is on the JWT / `refresh_tokens.active_role` (UI: “Current” / “Acting as”) — not an `is_active` column on role rows.
+- Users can request or remove Parent/Teacher as an additional role; directory admins can grant Parent↔Teacher. See [`docs/02_RankUp_Authentication_Logic.html`](docs/02_RankUp_Authentication_Logic.html).
 
 ## Repository layout
 

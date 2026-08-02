@@ -1,4 +1,9 @@
 namespace RankUpEducation.Contracts.Auth;
 
-/// <summary>CNIC or mobile number for forgot-password or admin clear flows.</summary>
+/// <summary>Username (email) for forgot-password request.</summary>
 public sealed record PasswordResetRequest(string Username);
+
+/// <summary>Complete a password reset using the emailed token.</summary>
+public sealed record CompletePasswordResetRequest(
+    string Token,
+    string NewPassword);

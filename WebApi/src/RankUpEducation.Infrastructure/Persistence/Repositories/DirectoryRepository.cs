@@ -400,6 +400,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var campusNames = await GetCampusNamesAsync(campusIds, cancellationToken);
         var studentCounts = await GetTeacherStudentCountsAsync(teacherIds, cancellationToken);
         var approvalHistory = await GetApprovalHistoryByUserIdsAsync(teacherIds, cancellationToken);
+        var rolesByUser = await GetRoleNamesByUserIdsAsync(teacherIds, cancellationToken);
 
         var items = rows
             .Select(row => new DirectoryTeacherResponse(
@@ -428,7 +429,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     row.IsActive,
                     !string.IsNullOrWhiteSpace(row.PasswordHash),
                     row.RejectedAt is not null,
-                    lockedSet.Contains(row.Id))))
+                    lockedSet.Contains(row.Id)),
+                rolesByUser.GetValueOrDefault(row.Id, Array.Empty<string>())))
             .ToArray();
 
         return (items, totalCount);
@@ -482,6 +484,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         var lockedSet = await GetLockedUserIdsAsync(parentIds, cancellationToken);
         var approvalHistory = await GetApprovalHistoryByUserIdsAsync(parentIds, cancellationToken);
+        var rolesByUser = await GetRoleNamesByUserIdsAsync(parentIds, cancellationToken);
 
         var items = rows.Select(row => new DirectoryParentResponse(
             row.parent.Id,
@@ -501,7 +504,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
             row.user.ReasonMessage,
             row.user.NeedsPasswordSetup,
             approvalHistory.GetValueOrDefault(row.parent.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
-            DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.parent.Id)))).ToArray();
+            DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.parent.Id)),
+            rolesByUser.GetValueOrDefault(row.parent.Id, Array.Empty<string>()))).ToArray();
 
         return (items, totalCount);
     }
@@ -1079,6 +1083,30 @@ public sealed class DirectoryRepository : IDirectoryRepository
             deactivated,
             rejected,
             total);
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<string>>> GetRoleNamesByUserIdsAsync(
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<string>>();
+        }
+
+        var rows = await _dbContext.UserRoleAssignments.AsNoTracking()
+            .Where(assignment => userIds.Contains(assignment.UserId))
+            .Select(assignment => new { assignment.UserId, assignment.Role })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.UserId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .OrderBy(row => row.Role)
+                    .Select(row => row.Role.ToString())
+                    .ToArray());
     }
 
     private async Task<Dictionary<long, IReadOnlyList<DirectoryApprovalHistoryItem>>> GetApprovalHistoryByUserIdsAsync(

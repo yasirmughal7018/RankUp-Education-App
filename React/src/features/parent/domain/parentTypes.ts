@@ -1,6 +1,7 @@
 export interface LinkedStudent {
   studentId: number;
   fullName: string;
+  username: string;
   rollNumber: string;
   grade: number;
   section: string;

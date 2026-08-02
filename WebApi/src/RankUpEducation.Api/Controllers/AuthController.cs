@@ -45,6 +45,17 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<LoginResponse>.Ok(result, "Active role updated."));
     }
 
+    /// <summary>Remove Parent or Teacher from the signed-in multi-role account.</summary>
+    [HttpDelete("me/roles/{role}")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<LoginResponse>>> RemoveMyRoleAsync(
+        string role,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.RemoveMyRoleAsync(role, cancellationToken);
+        return Ok(ApiResponse<LoginResponse>.Ok(result, "Role removed."));
+    }
+
     /// <summary>
     /// Step 1 of login: check whether the account needs a password or can sign in.
     /// </summary>
@@ -139,13 +150,17 @@ public sealed class AuthController : ControllerBase
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> RejectRegistrationAsync(
         long userId,
+        [FromBody] RejectRegistrationRequest request,
         CancellationToken cancellationToken)
     {
-        await _authService.RejectRegistrationAsync(userId, cancellationToken);
+        await _authService.RejectRegistrationAsync(userId, request.Reason, cancellationToken);
         return Ok(ApiResponse<object?>.Ok(null, "Registration rejected."));
     }
 
-    /// <summary>Request admin-mediated password reset (always returns success to the client).</summary>
+    /// <summary>
+    /// Starts forgot-password: emails a reset link and notifies scoped admins/parents.
+    /// Always returns success to the client.
+    /// </summary>
     [HttpPost("password-reset/request")]
     [AllowAnonymous]
     [EnableRateLimiting("UsersAnonymous")]
@@ -154,14 +169,28 @@ public sealed class AuthController : ControllerBase
         CancellationToken cancellationToken)
     {
         await _authService.RequestPasswordResetAsync(request, cancellationToken);
-        return Ok(ApiResponse<object?>.Ok(null, "If the account exists, the school admin has been notified."));
+        return Ok(ApiResponse<object?>.Ok(
+            null,
+            "If the account exists, a reset email was sent and the appropriate admins were notified."));
+    }
+
+    /// <summary>Completes forgot-password using the emailed token (first completion wins).</summary>
+    [HttpPost("password-reset/complete")]
+    [AllowAnonymous]
+    [EnableRateLimiting("UsersAnonymous")]
+    public async Task<ActionResult<ApiResponse<object?>>> CompletePasswordResetAsync(
+        [FromBody] CompletePasswordResetRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _authService.CompletePasswordResetAsync(request, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Password updated. You can sign in now."));
     }
 
     /// <summary>
-    /// Admin clears a user's password after a forgot-password notification so they can set a new one on login.
+    /// Admin or linked Parent clears a pending password reset (first completion wins).
     /// </summary>
     [HttpPost("password-reset/clear")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin,Parent")]
     public async Task<ActionResult<ApiResponse<object?>>> ClearPasswordForResetAsync(
         [FromBody] PasswordResetRequest request,
         CancellationToken cancellationToken)
@@ -228,6 +257,17 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<RequestSchoolChangeResponse>.Ok(result, result.Message));
     }
 
+    /// <summary>Request Parent or Teacher as an additional role (account stays active).</summary>
+    [HttpPost("me/role-requests")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<RequestAdditionalRoleResponse>>> RequestAdditionalRoleAsync(
+        [FromBody] RequestAdditionalRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.RequestAdditionalRoleAsync(request, cancellationToken);
+        return Ok(ApiResponse<RequestAdditionalRoleResponse>.Ok(result, result.Message));
+    }
+
     /// <summary>Upload or replace the signed-in user's profile avatar (max 5 MB).</summary>
     [HttpPost("me/avatar")]
     [Authorize]
@@ -289,10 +329,48 @@ public sealed class AuthController : ControllerBase
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> RejectSchoolChangeAsync(
         long requestId,
+        [FromQuery] bool leaveWithoutSchool = false,
+        CancellationToken cancellationToken = default)
+    {
+        await _authService.RejectSchoolChangeAsync(requestId, leaveWithoutSchool, cancellationToken);
+        var message = leaveWithoutSchool
+            ? "School/campus change rejected. Account unlocked without a school."
+            : "School/campus change request rejected. Account unlocked with previous school.";
+        return Ok(ApiResponse<object?>.Ok(null, message));
+    }
+
+    /// <summary>Admin queue of pending additional-role requests.</summary>
+    [HttpGet("role-requests/pending")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<PendingRoleRequestResponse>>>> ListPendingRoleRequestsAsync(
+        [FromQuery] int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var items = await _authService.ListPendingRoleRequestsAsync(take, cancellationToken);
+        return Ok(ApiResponse<IReadOnlyList<PendingRoleRequestResponse>>.Ok(items));
+    }
+
+    /// <summary>Approve an additional-role request and apply the role.</summary>
+    [HttpPost("role-requests/{requestId:long}/approve")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> ApproveRoleRequestAsync(
+        long requestId,
         CancellationToken cancellationToken)
     {
-        await _authService.RejectSchoolChangeAsync(requestId, cancellationToken);
-        return Ok(ApiResponse<object?>.Ok(null, "School/campus change request rejected."));
+        await _authService.ApproveRoleRequestAsync(requestId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Role request approved."));
+    }
+
+    /// <summary>Reject an additional-role request.</summary>
+    [HttpPost("role-requests/{requestId:long}/reject")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> RejectRoleRequestAsync(
+        long requestId,
+        [FromBody] RejectRoleRequestRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _authService.RejectRoleRequestAsync(requestId, request.Reason, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Role request rejected."));
     }
 
     /// <summary>Change password while signed in (or complete first-time setup).</summary>

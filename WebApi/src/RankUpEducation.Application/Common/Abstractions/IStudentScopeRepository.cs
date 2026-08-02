@@ -15,6 +15,9 @@ public interface IStudentScopeRepository
     /// <summary>Returns the school and campus context for a student, if any.</summary>
     Task<StudentSchoolContext?> GetStudentSchoolContextAsync(long studentId, CancellationToken cancellationToken);
 
+    /// <summary>Returns parent user ids linked to the student (active links only).</summary>
+    Task<IReadOnlyList<long>> GetLinkedParentIdsAsync(long studentId, CancellationToken cancellationToken);
+
     /// <summary>Returns whether the student is linked to the given parent.</summary>
     Task<bool> IsLinkedStudentAsync(long parentId, long studentId, CancellationToken cancellationToken);
 
@@ -41,9 +44,12 @@ public interface IStudentScopeRepository
         CancellationToken cancellationToken);
 
     /// <summary>Returns active student ids across all campuses in a school.</summary>
+    /// <summary>Returns active student ids in a school, optionally narrowed by campus and/or grade.</summary>
     Task<IReadOnlyList<long>> GetStudentIdsInSchoolAsync(
         int schoolId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        int? campusId = null,
+        short? gradeId = null);
 
     /// <summary>Returns active student ids across the given schools (PortalAdmin multi-school).</summary>
     Task<IReadOnlyList<long>> GetStudentIdsInSchoolsAsync(

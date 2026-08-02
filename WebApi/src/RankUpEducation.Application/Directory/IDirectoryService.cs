@@ -99,6 +99,12 @@ public interface IDirectoryService
         CreateDirectoryTeacherRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Adds the Teacher role to an existing Parent account.</summary>
+    Task<DirectoryTeacherResponse> GrantTeacherRoleToParentAsync(
+        long parentId,
+        GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken);
+
     /// <summary>Updates teacher profile and campus assignment.</summary>
     Task<DirectoryTeacherResponse> UpdateTeacherAsync(
         long teacherId,
@@ -126,6 +132,11 @@ public interface IDirectoryService
     /// <summary>Provisions a parent account or adds the parent role to an existing user.</summary>
     Task<DirectoryParentResponse> CreateParentAsync(
         CreateDirectoryParentRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds the Parent role to an existing Teacher account.</summary>
+    Task<DirectoryParentResponse> GrantParentRoleToTeacherAsync(
+        long teacherId,
         CancellationToken cancellationToken);
 
     /// <summary>Updates parent contact and profile fields.</summary>

@@ -113,7 +113,8 @@ npm run preview
 | `/login` | Guest only | Login — calls `POST /api/auth/login` |
 | `/dashboard` | Authenticated | Role-based dashboard |
 | `/admin` | PortalAdmin, SchoolAdmin | Administration overview |
-| `/admin/registrations` | PortalAdmin, SchoolAdmin | Pending account requests |
+| `/admin/registrations` | PortalAdmin, SchoolAdmin, CampusAdmin | Pending account requests |
+| `/admin/directory/role-requests` | PortalAdmin, SchoolAdmin, CampusAdmin | Pending additional Parent/Teacher role requests |
 | `/admin/quiz-approvals` | PortalAdmin, SchoolAdmin | Approve teacher quizzes |
 | `/admin/directory` | PortalAdmin, SchoolAdmin | Directory overview |
 | `/admin/directory/schools` | PortalAdmin, SchoolAdmin | Schools + campuses |
@@ -218,6 +219,10 @@ Timed attempts show a countdown and auto-submit when time expires. Answers are r
 
 - `POST /api/auth/password-reset/request` — `/forgot-password`
 - `POST /api/auth/register` — `/request-access`
+- `POST /api/auth/switch-role` — multi-role session switch (user-menu **Acting as** toggle)
+- `DELETE /api/auth/me/roles/{role}` — remove Parent/Teacher when another role remains (`/account`)
+- `POST /api/auth/me/role-requests` — request additional Parent or Teacher
+- `GET /api/auth/role-requests/pending` + approve/reject — `/admin/directory/role-requests`
 
 ## Quiz Monitoring & Review
 
@@ -236,7 +241,9 @@ Timed attempts show a countdown and auto-submit when time expires. Answers are r
 5. On `401`, the app refreshes tokens via `POST /api/auth/token/refresh`.
 6. Logout calls `POST /api/auth/logout` and clears local storage.
 
-Supported roles from the API: `PortalAdmin`, `SchoolAdmin`, `Teacher`, `Student`, `Parent`.
+Supported roles from the API: `PortalAdmin`, `SchoolAdmin`, `CampusAdmin`, `Teacher`, `Student`, `Parent`.
+
+Multi-role: assignments live in `app_user_roles`. Session role is `CurrentUser.role` (Acting as / Current); full list is `CurrentUser.roles`. Student and PortalAdmin cannot combine with other roles. See `docs/02_RankUp_Authentication_Logic.html`.
 
 ## API Integration
 

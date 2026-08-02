@@ -101,6 +101,8 @@ export interface ManageQuiz {
   reviewDisplayMode: QuizReviewDisplayMode;
   createdBy: string;
   schoolName: string;
+  schoolId?: number | null;
+  campusId?: number | null;
   questions: QuizQuestionItem[];
   /** Workflow trail from app_approval, oldest first. */
   approvalHistory?: QuizApprovalHistoryEntry[];
@@ -196,6 +198,7 @@ export interface AssignQuizInput {
   gradeId: number | null;
   section?: string | null;
   schoolIds?: number[] | null;
+  campusId?: number | null;
 }
 
 export interface QuizAssignment {

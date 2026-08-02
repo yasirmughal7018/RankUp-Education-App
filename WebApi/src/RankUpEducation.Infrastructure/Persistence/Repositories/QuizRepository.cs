@@ -620,7 +620,9 @@ public sealed class QuizRepository : IQuizRepository
             ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
             ApprovalStatus: approvalName,
             RejectionReason: quiz.RejectionReason,
-            ApprovalHistory: approvalHistory);
+            ApprovalHistory: approvalHistory,
+            SchoolId: quiz.SchoolId,
+            CampusId: quiz.SchoolCampusId);
     }
 
     public async Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken)
