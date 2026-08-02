@@ -134,6 +134,11 @@ public sealed record ArchiveQuizResponse(
     string LifecycleStatus,
     bool PermanentlyDeleted = false);
 
+/// <summary>Unarchive confirmation with the restored lifecycle status.</summary>
+public sealed record UnarchiveQuizResponse(
+    long QuizId,
+    string LifecycleStatus);
+
 /// <summary>Extra attempts to grant after review finalization.</summary>
 public sealed record AllowRetryRequest(short ExtraAttempts = 1);
 
@@ -153,8 +158,8 @@ public sealed record ApproveQuizResponse(
     string ApprovalStatus,
     string LifecycleStatus);
 
-/// <summary>Optional rejection reason for teacher quiz approval queue.</summary>
-public sealed record RejectQuizRequest(string? Reason = null);
+/// <summary>Rejection reason required when denying a teacher quiz.</summary>
+public sealed record RejectQuizRequest(string Reason);
 
 /// <summary>School-admin rejection confirmation.</summary>
 public sealed record RejectQuizResponse(

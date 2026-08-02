@@ -334,7 +334,7 @@ public sealed class QuizAssignService : IQuizAssignService
         if (scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-            if (!approvalName.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+            if (!QuizLookupNames.IsFinalApprovedName(approvalName))
             {
                 throw new BusinessRuleException("Quizzes must be approved before assignment.");
             }

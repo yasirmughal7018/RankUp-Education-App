@@ -129,6 +129,16 @@ export async function archiveQuiz(
   };
 }
 
+/** Restore an archived quiz to Published or Assigned. */
+export async function unarchiveQuiz(
+  quizId: number,
+): Promise<{ quizId: number; lifecycleStatus: string }> {
+  return apiRequest<{ quizId: number; lifecycleStatus: string }>(
+    `/quizzes/${quizId}/unarchive`,
+    { method: "POST" },
+  );
+}
+
 /** Admin queue: quizzes awaiting approval. */
 export async function listPendingQuizApprovals(): Promise<PendingQuizApproval[]> {
   const response = await apiRequest<{ items: PendingQuizApproval[] }>(
@@ -143,14 +153,19 @@ export async function approveQuiz(quizId: number): Promise<void> {
   await apiRequest(`/quizzes/${quizId}/approve`, { method: "POST" });
 }
 
-/** Admin: reject a pending quiz with optional reason. */
+/** Admin: reject a quiz; reason is required. */
 export async function rejectQuiz(
   quizId: number,
-  reason?: string,
+  reason: string,
 ): Promise<void> {
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    throw { message: "Rejection reason is required.", status: 400 };
+  }
+
   await apiRequest(`/quizzes/${quizId}/reject`, {
     method: "POST",
-    body: { reason: reason?.trim() || null },
+    body: { reason: trimmed },
   });
 }
 

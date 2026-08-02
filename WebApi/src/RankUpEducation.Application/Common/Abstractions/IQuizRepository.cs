@@ -43,6 +43,8 @@ public interface IQuizRepository
 
     Task<IReadOnlyList<PendingQuizApprovalItem>> ListPendingApprovalAsync(
         int? schoolId,
+        int? campusId,
+        bool includeSchoolApproved,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<QuizListItem>> ListForCreatorAsync(

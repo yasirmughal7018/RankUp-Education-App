@@ -43,6 +43,9 @@ public interface IQuizManageService
     /// </summary>
     Task<ArchiveQuizResponse> ArchiveAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Restores an archived quiz to Published (no assignments) or Assigned (has assignments).</summary>
+    Task<UnarchiveQuizResponse> UnarchiveAsync(long quizId, CancellationToken cancellationToken);
+
     /// <summary>School admin approves a teacher quiz pending approval.</summary>
     Task<ApproveQuizResponse> ApproveAsync(long quizId, CancellationToken cancellationToken);
 
@@ -211,9 +214,17 @@ public sealed class QuizManageService : IQuizManageService
                 cancellationToken);
             quiz.SubmitForApproval(publishedStatusId, pendingApprovalStatusId);
         }
+        else if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
+        {
+            var schoolApprovedStatusId = await _guard.RequireLookupAsync(
+                QuizLookupNames.QuizApprovalStatus,
+                QuizLookupNames.SchoolApprovedStatusNames,
+                cancellationToken);
+            quiz.Publish(publishedStatusId, schoolApprovedStatusId, scope.UserId.ToString());
+        }
         else
         {
-            // Parent private quizzes skip the approval queue on publish.
+            // PortalAdmin / Parent: final Approved (parents skip the school queue).
             var approvedStatusId = await _guard.RequireLookupAsync(
                 QuizLookupNames.QuizApprovalStatus,
                 QuizLookupNames.ApprovedStatusNames,
@@ -226,19 +237,20 @@ public sealed class QuizManageService : IQuizManageService
         return await BuildManageResponseAsync(quizId, cancellationToken);
     }
 
+    public async Task<ManageQuizResponse> GetManageDetailAsync(long quizId, CancellationToken cancellationToken)
+    {
+        var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
+        await _guard.RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+        return await BuildManageResponseAsync(quizId, cancellationToken);
+    }
+
     public async Task<ApproveQuizResponse> ApproveAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireApprovalScope(GetCurrentUser());
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
-        if (scope.Role == UserRole.SchoolAdmin)
-        {
-            if (quiz.SchoolId != scope.SchoolId)
-            {
-                throw new ForbiddenAppException("You can only approve quizzes in your school.");
-            }
-        }
+        EnsureApprovalTargetAccess(quiz, scope);
 
         if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
         {
@@ -246,25 +258,48 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        var isPending = QuizLookupNames.PendingApprovalStatusNames.Any(name =>
-            name.Equals(approvalName, StringComparison.OrdinalIgnoreCase));
-        var isRejected = QuizLookupNames.RejectedApprovalStatusNames.Any(name =>
-            name.Equals(approvalName, StringComparison.OrdinalIgnoreCase));
-        if (!isPending && !isRejected)
+        if (QuizLookupNames.IsRejectedApprovalName(approvalName))
         {
-            throw new BusinessRuleException("Only pending or rejected quizzes can be approved.");
+            throw new BusinessRuleException(
+                "Rejected quizzes cannot be approved. The teacher must resubmit the quiz first.");
         }
 
-        var approvedStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizApprovalStatus,
-            QuizLookupNames.ApprovedStatusNames,
-            cancellationToken);
+        short nextStatusId;
+        string nextStatusName;
+        if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
+        {
+            if (!QuizLookupNames.IsPendingApprovalName(approvalName))
+            {
+                throw new BusinessRuleException("Only pending quizzes can be school-approved.");
+            }
 
-        quiz.Approve(approvedStatusId, scope.UserId.ToString());
+            nextStatusId = await _guard.RequireLookupAsync(
+                QuizLookupNames.QuizApprovalStatus,
+                QuizLookupNames.SchoolApprovedStatusNames,
+                cancellationToken);
+            nextStatusName = "SchoolApproved";
+        }
+        else
+        {
+            if (!QuizLookupNames.IsPendingApprovalName(approvalName)
+                && !QuizLookupNames.IsSchoolApprovedName(approvalName))
+            {
+                throw new BusinessRuleException(
+                    "Only pending or school-approved quizzes can be approved by portal admin.");
+            }
+
+            nextStatusId = await _guard.RequireLookupAsync(
+                QuizLookupNames.QuizApprovalStatus,
+                QuizLookupNames.ApprovedStatusNames,
+                cancellationToken);
+            nextStatusName = "Approved";
+        }
+
+        quiz.Approve(nextStatusId, scope.UserId.ToString());
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
-        return new ApproveQuizResponse(quizId, "Approved", lifecycleName);
+        return new ApproveQuizResponse(quizId, nextStatusName, lifecycleName);
     }
 
     public async Task<RejectQuizResponse> RejectAsync(
@@ -276,25 +311,33 @@ public sealed class QuizManageService : IQuizManageService
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
-        if (scope.Role == UserRole.SchoolAdmin)
-        {
-            if (quiz.SchoolId != scope.SchoolId)
-            {
-                throw new ForbiddenAppException("You can only reject quizzes in your school.");
-            }
-        }
+        EnsureApprovalTargetAccess(quiz, scope);
 
         if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
         {
             throw new BusinessRuleException("Parent private quizzes do not require school approval.");
         }
 
-        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        var isPending = QuizLookupNames.PendingApprovalStatusNames.Any(name =>
-            name.Equals(approvalName, StringComparison.OrdinalIgnoreCase));
-        if (!isPending)
+        if (string.IsNullOrWhiteSpace(request.Reason))
         {
-            throw new BusinessRuleException("Only pending quizzes can be rejected.");
+            throw new ValidationAppException(["Rejection reason is required."]);
+        }
+
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        if (QuizLookupNames.IsRejectedApprovalName(approvalName))
+        {
+            throw new BusinessRuleException("Quiz is already rejected.");
+        }
+
+        if (QuizLookupNames.IsFinalApprovedName(approvalName))
+        {
+            throw new BusinessRuleException("Fully approved quizzes cannot be rejected.");
+        }
+
+        if (!QuizLookupNames.IsPendingApprovalName(approvalName)
+            && !QuizLookupNames.IsSchoolApprovedName(approvalName))
+        {
+            throw new BusinessRuleException("Only pending or school-approved quizzes can be rejected.");
         }
 
         var rejectedStatusId = await _guard.RequireLookupAsync(
@@ -314,8 +357,16 @@ public sealed class QuizManageService : IQuizManageService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireApprovalScope(GetCurrentUser());
-        var schoolId = scope.Role == UserRole.SchoolAdmin ? scope.SchoolId : null;
-        var items = await _quizzes.ListPendingApprovalAsync(schoolId, cancellationToken);
+        var schoolId = scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
+            ? scope.SchoolId
+            : null;
+        var campusId = scope.Role == UserRole.CampusAdmin ? scope.CampusId : null;
+        var includeSchoolApproved = scope.Role == UserRole.PortalAdmin;
+        var items = await _quizzes.ListPendingApprovalAsync(
+            schoolId,
+            campusId,
+            includeSchoolApproved,
+            cancellationToken);
         return new PendingQuizApprovalListResponse(
             items.Select(item => new PendingQuizApprovalItemResponse(
                 item.QuizId,
@@ -332,13 +383,31 @@ public sealed class QuizManageService : IQuizManageService
                 item.RejectionReason)).ToArray());
     }
 
-    public async Task<ManageQuizResponse> GetManageDetailAsync(long quizId, CancellationToken cancellationToken)
+    private static void EnsureApprovalTargetAccess(Quiz quiz, QuizManageScope scope)
     {
-        var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
-        await _guard.RequireOwnedQuizAsync(quizId, scope, cancellationToken);
-        return await BuildManageResponseAsync(quizId, cancellationToken);
-    }
+        if (scope.Role == UserRole.PortalAdmin)
+        {
+            return;
+        }
 
+        if (scope.Role == UserRole.SchoolAdmin)
+        {
+            if (quiz.SchoolId != scope.SchoolId)
+            {
+                throw new ForbiddenAppException("You can only review quizzes in your school.");
+            }
+
+            return;
+        }
+
+        if (scope.Role == UserRole.CampusAdmin)
+        {
+            if (quiz.SchoolId != scope.SchoolId || quiz.SchoolCampusId != scope.CampusId)
+            {
+                throw new ForbiddenAppException("You can only review quizzes in your campus.");
+            }
+        }
+    }
     public async Task<DuplicateQuizResponse> DuplicateAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
@@ -484,6 +553,32 @@ public sealed class QuizManageService : IQuizManageService
 
         var archivedName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new ArchiveQuizResponse(quizId, archivedName, PermanentlyDeleted: false);
+    }
+
+    public async Task<UnarchiveQuizResponse> UnarchiveAsync(long quizId, CancellationToken cancellationToken)
+    {
+        var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
+        var quiz = await _guard.RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        if (!IsArchivedLifecycle(lifecycleName))
+        {
+            throw new BusinessRuleException("Only archived quizzes can be unarchived.");
+        }
+
+        var hasAssignments = await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken);
+        var restoredStatusId = await _guard.RequireLookupAsync(
+            QuizLookupNames.QuizLifecycleStatus,
+            hasAssignments
+                ? QuizLookupNames.AssignedLifecycleNames
+                : QuizLookupNames.PublishedLifecycleNames,
+            cancellationToken);
+
+        quiz.Unarchive(restoredStatusId);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var restoredName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        return new UnarchiveQuizResponse(quizId, restoredName);
     }
 
     private async Task<ManageQuizResponse> BuildManageResponseAsync(long quizId, CancellationToken cancellationToken)

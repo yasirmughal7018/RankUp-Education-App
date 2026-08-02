@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -13,6 +14,8 @@ import {
   formatQuizDuration,
   isDraftQuiz,
   isQuizMetadataEditable,
+  isRejectedQuizApprovalStatus,
+  isSchoolApprovedQuizStatus,
   sumQuizEstimatedSeconds,
   sumQuizMarks,
 } from "@/features/quizzes/domain/quizTypes";
@@ -23,6 +26,7 @@ import {
 import {
   useAllowRetryMutation,
   useArchiveQuizMutation,
+  useUnarchiveQuizMutation,
   useAssignQuizMutation,
   useAttachBankQuestionMutation,
   useCancelQuizAssignmentsMutation,
@@ -60,37 +64,46 @@ export function QuizManageDetailPage() {
   const canAuthor = user != null && canAuthorQuizzes(user.role);
   const numericQuizId = Number(quizId);
 
-  const {
-    data: quiz,
-    isLoading,
-    error,
-    isSuccess: quizLoaded,
-  } = useManageQuizQuery(numericQuizId);
-  const { data: assignments = [] } = useQuizAssignmentsQuery(
-    numericQuizId,
-    quizLoaded,
-  );
+  // When true, stop manage/assignments queries so hard-delete cannot trigger a
+  // second GetManageDetail (RequireOwnedQuizAsync) after the quiz row is gone.
+  const [suppressDetailQueries, setSuppressDetailQueries] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [showBankDialog, setShowBankDialog] = useState(false);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
 
   const publishQuiz = usePublishQuizMutation(numericQuizId);
   const deleteQuiz = useDeleteQuizMutation(numericQuizId);
   const duplicateQuiz = useDuplicateQuizMutation(numericQuizId);
   const archiveQuiz = useArchiveQuizMutation(numericQuizId);
+  const unarchiveQuiz = useUnarchiveQuizMutation(numericQuizId);
   const removeQuestion = useRemoveQuizQuestionMutation(numericQuizId);
   const attachBankQuestion = useAttachBankQuestionMutation(numericQuizId);
   const assignQuiz = useAssignQuizMutation(numericQuizId);
   const cancelAssignments = useCancelQuizAssignmentsMutation(numericQuizId);
   const allowRetry = useAllowRetryMutation(numericQuizId);
 
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [showBankDialog, setShowBankDialog] = useState(false);
-  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const detailQueriesEnabled =
+    !suppressDetailQueries && !deleteQuiz.isPending;
+
+  const {
+    data: quiz,
+    isLoading,
+    error,
+    isSuccess: quizLoaded,
+  } = useManageQuizQuery(numericQuizId, detailQueriesEnabled);
+
+  const { data: assignments = [] } = useQuizAssignmentsQuery(
+    numericQuizId,
+    detailQueriesEnabled && quizLoaded,
+  );
 
   const isSubmitting =
     publishQuiz.isPending ||
     deleteQuiz.isPending ||
     duplicateQuiz.isPending ||
     archiveQuiz.isPending ||
+    unarchiveQuiz.isPending ||
     removeQuestion.isPending ||
     attachBankQuestion.isPending ||
     assignQuiz.isPending ||
@@ -116,7 +129,7 @@ export function QuizManageDetailPage() {
     setShowBankDialog(true);
   }
 
-  if (isLoading) {
+  if (isLoading && !suppressDetailQueries) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10 text-sm text-slate-600 sm:px-6">
         Loading quiz...
@@ -125,6 +138,14 @@ export function QuizManageDetailPage() {
   }
 
   if (!quiz) {
+    if (suppressDetailQueries) {
+      return (
+        <div className="mx-auto max-w-5xl px-4 py-10 text-sm text-slate-600 sm:px-6">
+          Closing quiz...
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         <PageHeader
@@ -138,12 +159,12 @@ export function QuizManageDetailPage() {
   }
 
   const draft = isDraftQuiz(quiz.lifecycleStatus);
+  const archived = quiz.lifecycleStatus.trim().toLowerCase() === "archived";
   const published =
     quiz.lifecycleStatus.toLowerCase() === "published" ||
     quiz.lifecycleStatus.toLowerCase() === "assigned";
-  const approvalRejected =
-    quiz.approvalStatus.trim().toLowerCase() === "rejected" ||
-    quiz.approvalStatus.trim().toLowerCase() === "declined";
+  const approvalRejected = isRejectedQuizApprovalStatus(quiz.approvalStatus);
+  const schoolApproved = isSchoolApprovedQuizStatus(quiz.approvalStatus);
   const settingsEditable =
     canAuthor &&
     isQuizMetadataEditable(quiz.lifecycleStatus, assignments);
@@ -244,7 +265,12 @@ export function QuizManageDetailPage() {
           </div>
         ) : approvalRejected ? (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            This quiz was rejected. Edit if needed, then resubmit for approval.
+            This quiz was rejected and cannot be approved until you resubmit it.
+          </div>
+        ) : schoolApproved ? (
+          <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            School-approved — waiting for portal admin final approval before
+            assignment.
           </div>
         ) : null}
 
@@ -286,12 +312,21 @@ export function QuizManageDetailPage() {
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={() =>
-                void runAction(async () => {
-                  await deleteQuiz.mutateAsync();
-                  navigate("/quizzes");
-                }, "")
-              }
+              onClick={() => {
+                void (async () => {
+                  setActionError(null);
+                  setSuccessMessage(null);
+                  flushSync(() => setSuppressDetailQueries(true));
+                  try {
+                    await deleteQuiz.mutateAsync();
+                    navigate("/quizzes");
+                  } catch (caught) {
+                    setSuppressDetailQueries(false);
+                    const apiError = caught as { message?: string };
+                    setActionError(apiError.message || "Action failed.");
+                  }
+                })();
+              }}
               className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
             >
               Delete
@@ -314,6 +349,19 @@ export function QuizManageDetailPage() {
               </button>
             ) : null}
           </>
+        ) : null}
+
+        {archived && canAuthor ? (
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() =>
+              void runAction(() => unarchiveQuiz.mutateAsync(), "Quiz unarchived.")
+            }
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+          >
+            Unarchive
+          </button>
         ) : null}
 
         {published ? (
@@ -356,9 +404,12 @@ export function QuizManageDetailPage() {
                       try {
                         const result = await archiveQuiz.mutateAsync();
                         if (result.permanentlyDeleted) {
+                          // Hard-delete only: stop manage refetch, then leave the page.
+                          flushSync(() => setSuppressDetailQueries(true));
                           navigate("/quizzes");
                           return;
                         }
+                        // Soft archive: mutation already invalidated manage for latest status.
                         setSuccessMessage("Quiz archived.");
                       } catch (caught) {
                         const apiError = caught as { message?: string };

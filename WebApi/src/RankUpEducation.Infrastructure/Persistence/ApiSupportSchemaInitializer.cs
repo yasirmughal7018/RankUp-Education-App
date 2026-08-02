@@ -561,7 +561,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         FROM (
             VALUES
                 (5::smallint,  'ParentPrivate'::varchar, 'QuizType'::varchar, 5::smallint),
-                (45::smallint, 'Rejected'::varchar,      'QuizApprovalStatus'::varchar, 6::smallint),
+                (45::smallint, 'Rejected'::varchar,      'QuizApprovalStatus'::varchar, 4::smallint),
+                (46::smallint, 'SchoolApproved'::varchar,'QuizApprovalStatus'::varchar, 2::smallint),
                 (65::smallint, 'Cancelled'::varchar,     'QuizLifecycleStatus'::varchar, 6::smallint),
                 (66::smallint, 'Archived'::varchar,      'QuizLifecycleStatus'::varchar, 7::smallint)
         ) AS v(id, name, type, ord)
@@ -578,17 +579,34 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         -- Keep the required canonical rows active if they already exist at these IDs.
         UPDATE public.lookups SET is_active = TRUE
         WHERE (id = 5 AND type = 'QuizType')
-           OR (id = 45 AND type = 'QuizApprovalStatus')
+           OR (id IN (45, 46) AND type = 'QuizApprovalStatus')
            OR (id IN (65, 66) AND type = 'QuizLifecycleStatus');
 
-        -- Clean model: approval = Pending/Approved/Rejected; lifecycle = quiz definition only.
-        -- Rename approval 40 'Draft' -> 'Pending' (code reads both as pending; zero-risk).
-        UPDATE public.lookups SET name = 'Pending'
+        -- Clean model: Pending → SchoolApproved → Approved; Rejected is the only deny state.
+        UPDATE public.lookups SET name = 'Pending', order_by = 1, is_active = TRUE
         WHERE id = 40 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'Pending';
 
+        UPDATE public.lookups SET name = 'SchoolApproved', order_by = 2, is_active = TRUE
+        WHERE id = 46 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'SchoolApproved';
+
+        UPDATE public.lookups SET name = 'Approved', order_by = 3, is_active = TRUE
+        WHERE id = 44 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'Approved';
+
+        UPDATE public.lookups SET name = 'Rejected', order_by = 4, is_active = TRUE
+        WHERE id = 45 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'Rejected';
+
+        -- Remap legacy approval states onto the clean model.
+        UPDATE public.quizzes
+        SET approval_status_id = 40
+        WHERE approval_status_id IN (41, 42);
+
+        UPDATE public.quizzes
+        SET approval_status_id = 45
+        WHERE approval_status_id = 43;
+
         -- Deactivate dead/overlapping states (ID stability kept, hidden from normal use):
-        -- 41 Under Teacher Review / 42 Under AI Review (review is per attempt, not approval),
-        -- 43 approval-Cancelled (cancellation lives on lifecycle 65),
+        -- 41 Under Teacher Review / 42 Under AI Review,
+        -- 43 approval-Cancelled (use Rejected 45 instead),
         -- 63 'In Progress:' / 64 Completed (per-student progress, never valid on the quiz row).
         UPDATE public.lookups SET is_active = FALSE, order_by = 99
         WHERE (id IN (41, 42, 43) AND type = 'QuizApprovalStatus')

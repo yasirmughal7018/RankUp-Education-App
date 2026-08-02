@@ -8,15 +8,15 @@ function ForbiddenScreen() {
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
         <h1 className="text-2xl font-semibold text-slate-900">Access denied</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          Only School Admin and Portal Admin accounts can approve teacher
-          quizzes.
+          Only School Admin, Campus Admin, and Portal Admin accounts can approve
+          teacher quizzes.
         </p>
       </div>
     </div>
   );
 }
 
-/** Restricts quiz approval routes to SchoolAdmin / PortalAdmin (not CampusAdmin). */
+/** Restricts quiz approval routes to SchoolAdmin / CampusAdmin / PortalAdmin. */
 export function QuizApprovalsRoute() {
   const { user } = useAuth();
 

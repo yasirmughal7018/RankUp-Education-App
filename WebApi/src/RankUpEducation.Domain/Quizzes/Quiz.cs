@@ -213,17 +213,15 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>School admin rejects a pending teacher quiz; clears prior approver stamp.</summary>
-    public void Reject(short approvalStatusId, string? reason = null)
+    /// <summary>School/campus/portal admin rejects a pending or school-approved quiz; reason required.</summary>
+    public void Reject(short approvalStatusId, string reason)
     {
+        var trimmed = reason.AsTrimmedOrNull()
+            ?? throw new BusinessRuleException("Rejection reason is required.");
+
         ApprovalStatusId = approvalStatusId;
         ApprovedBy = null;
-        var trimmed = reason.AsTrimmedOrNull();
-        RejectionReason = trimmed is null
-            ? null
-            : trimmed.Length > 1000
-                ? trimmed[..1000]
-                : trimmed;
+        RejectionReason = trimmed.Length > 1000 ? trimmed[..1000] : trimmed;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
@@ -240,6 +238,14 @@ public sealed class Quiz : SoftDeleteEntity
     {
         LifecycleStatusId = lifecycleStatusId;
         IsActive = false;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>Restores an archived quiz to an active lifecycle (Published or Assigned).</summary>
+    public void Unarchive(short lifecycleStatusId)
+    {
+        LifecycleStatusId = lifecycleStatusId;
+        IsActive = true;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 }

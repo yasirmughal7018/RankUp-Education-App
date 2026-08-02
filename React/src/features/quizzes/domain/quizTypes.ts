@@ -227,9 +227,34 @@ export function canAssignAdminAudiences(role: UserRole): boolean {
   return role === "SchoolAdmin" || role === "PortalAdmin";
 }
 
-/** True for roles that may approve/reject teacher quizzes (not CampusAdmin). */
+/** True for roles that may approve/reject teacher quizzes. */
 export function canApproveQuizzes(role: UserRole): boolean {
-  return role === "SchoolAdmin" || role === "PortalAdmin";
+  return (
+    role === "SchoolAdmin" ||
+    role === "CampusAdmin" ||
+    role === "PortalAdmin"
+  );
+}
+
+/** School/campus first-tier approval. */
+export function isSchoolApprovedQuizStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase().replace(/\s+/g, "");
+  return normalized === "schoolapproved";
+}
+
+/** Portal final approval required before assignment. */
+export function isFinalApprovedQuizStatus(status: string): boolean {
+  return status.trim().toLowerCase() === "approved";
+}
+
+/** Single rejection status (legacy Cancelled/Declined map here). */
+export function isRejectedQuizApprovalStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return (
+    normalized === "rejected" ||
+    normalized === "declined" ||
+    normalized === "cancelled"
+  );
 }
 
 /** Assign modes supported by API for the given role (canonical source for Assign dialog). */

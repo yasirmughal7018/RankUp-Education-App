@@ -224,6 +224,11 @@ public sealed class QuizzesController : ControllerBase
         long quizId,
         CancellationToken cancellationToken)
     {
+        if (quizId <= 0)
+        {
+            return NotFound(ApiResponse<QuizAssignmentListResponse>.Fail("Quiz was not found."));
+        }
+
         var response = await _quizAssignService.ListAssignmentsAsync(quizId, cancellationToken);
         return Ok(ApiResponse<QuizAssignmentListResponse>.Ok(response));
     }
@@ -309,6 +314,21 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ArchiveQuizResponse>.Ok(response, message));
     }
 
+    /// <summary>Restores an archived quiz to Published or Assigned.</summary>
+    [HttpPost("{quizId:long}/unarchive")]
+    public async Task<ActionResult<ApiResponse<UnarchiveQuizResponse>>> UnarchiveAsync(
+        long quizId,
+        CancellationToken cancellationToken)
+    {
+        if (quizId <= 0)
+        {
+            return NotFound(ApiResponse<UnarchiveQuizResponse>.Fail("Quiz was not found."));
+        }
+
+        var response = await _quizManageService.UnarchiveAsync(quizId, cancellationToken);
+        return Ok(ApiResponse<UnarchiveQuizResponse>.Ok(response, "Quiz unarchived."));
+    }
+
     /// <summary>Grants additional attempts after review is finalized.</summary>
     [HttpPost("{quizId:long}/assignments/{assignmentId:long}/allow-retry")]
     public async Task<ActionResult<ApiResponse<AllowRetryResponse>>> AllowRetryAsync(
@@ -321,9 +341,9 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<AllowRetryResponse>.Ok(response, "Retry allowed."));
     }
 
-    /// <summary>School admin approves a teacher quiz.</summary>
+    /// <summary>School, campus, or portal admin approves a teacher quiz.</summary>
     [HttpPost("{quizId:long}/approve")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<ApproveQuizResponse>>> ApproveAsync(
         long quizId,
         CancellationToken cancellationToken)
@@ -332,18 +352,15 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ApproveQuizResponse>.Ok(response, "Quiz approved."));
     }
 
-    /// <summary>School admin rejects a pending teacher quiz.</summary>
+    /// <summary>School, campus, or portal admin rejects a teacher quiz; reason required.</summary>
     [HttpPost("{quizId:long}/reject")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<RejectQuizResponse>>> RejectAsync(
         long quizId,
-        [FromBody] RejectQuizRequest? request,
+        [FromBody] RejectQuizRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await _quizManageService.RejectAsync(
-            quizId,
-            request ?? new RejectQuizRequest(),
-            cancellationToken);
+        var response = await _quizManageService.RejectAsync(quizId, request, cancellationToken);
         return Ok(ApiResponse<RejectQuizResponse>.Ok(response, "Quiz rejected."));
     }
 }

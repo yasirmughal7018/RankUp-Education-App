@@ -186,7 +186,7 @@ public sealed class QuizRepository : IQuizRepository
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Quizzes.AsNoTracking()
-            .Where(quiz => quiz.IsActive && !quiz.IsDeleted);
+            .Where(quiz => !quiz.IsDeleted);
 
         if (schoolId is not null)
         {
@@ -216,6 +216,8 @@ public sealed class QuizRepository : IQuizRepository
 
     public async Task<IReadOnlyList<PendingQuizApprovalItem>> ListPendingApprovalAsync(
         int? schoolId,
+        int? campusId,
+        bool includeSchoolApproved,
         CancellationToken cancellationToken)
     {
         var pendingIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
@@ -223,12 +225,14 @@ public sealed class QuizRepository : IQuizRepository
             QuizLookupNames.QuizApprovalStatus,
             QuizLookupNames.PendingApprovalStatusNames,
             cancellationToken);
-        var rejectedIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
-            _dbContext,
-            QuizLookupNames.QuizApprovalStatus,
-            QuizLookupNames.RejectedApprovalStatusNames,
-            cancellationToken);
-        var approvalQueueIds = pendingIds.Concat(rejectedIds).Distinct().ToArray();
+        var schoolApprovedIds = includeSchoolApproved
+            ? await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+                _dbContext,
+                QuizLookupNames.QuizApprovalStatus,
+                QuizLookupNames.SchoolApprovedStatusNames,
+                cancellationToken)
+            : Array.Empty<short>();
+        var approvalQueueIds = pendingIds.Concat(schoolApprovedIds).Distinct().ToArray();
 
         if (approvalQueueIds.Length == 0)
         {
@@ -250,6 +254,11 @@ public sealed class QuizRepository : IQuizRepository
         if (schoolId is not null)
         {
             query = query.Where(quiz => quiz.SchoolId == schoolId.Value);
+        }
+
+        if (campusId is not null)
+        {
+            query = query.Where(quiz => quiz.SchoolCampusId == campusId.Value);
         }
 
         if (parentPrivateTypeIds.Count > 0)

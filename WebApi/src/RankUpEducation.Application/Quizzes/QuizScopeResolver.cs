@@ -65,17 +65,33 @@ public static class QuizScopeResolver
         return new QuizManageScope(role, userId, profileId, null, null);
     }
 
-    /// <summary>Requires SchoolAdmin or PortalAdmin for quiz approval/rejection endpoints.</summary>
+    /// <summary>Requires SchoolAdmin, CampusAdmin, or PortalAdmin for quiz approval/rejection.</summary>
     public static QuizManageScope RequireApprovalScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin))
         {
-            throw new ForbiddenAppException("Only school administrators can approve quizzes.");
+            throw new ForbiddenAppException("Only school, campus, or portal administrators can approve quizzes.");
         }
 
         var userId = currentUser.UserId
             ?? throw new ForbiddenAppException("User account was not found.");
+
+        if (role == UserRole.SchoolAdmin)
+        {
+            var schoolId = currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School admin school context was not found.");
+            return new QuizManageScope(role, userId, userId, schoolId, currentUser.CampusId);
+        }
+
+        if (role == UserRole.CampusAdmin)
+        {
+            var schoolId = currentUser.SchoolId
+                ?? throw new ForbiddenAppException("Campus admin school context was not found.");
+            var campusId = currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus admin campus context was not found.");
+            return new QuizManageScope(role, userId, userId, schoolId, campusId);
+        }
 
         return new QuizManageScope(role, userId, userId, currentUser.SchoolId, currentUser.CampusId);
     }

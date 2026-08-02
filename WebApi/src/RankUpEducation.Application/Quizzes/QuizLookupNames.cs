@@ -22,15 +22,16 @@ public static class QuizLookupNames
     }
 
     /// <summary>
-    /// Approval gate only: Pending → Approved / Rejected.
-    /// Legacy rows 41 (Under Teacher Review), 42 (Under AI Review), and 43 (Cancelled)
-    /// are deactivated by the schema initializer — review belongs to attempts,
-    /// cancellation to the lifecycle.
+    /// Approval gate: Pending → SchoolApproved (school/campus) → Approved (portal).
+    /// Rejected is terminal for admin approve until the teacher re-submits to Pending.
+    /// Legacy 41/42 (Under Teacher/AI Review) and 43 (Cancelled) are remapped/deactivated.
     /// </summary>
     public static class QuizApprovalStatusIds
     {
-        /// <summary>Row 40; renamed from legacy 'Draft' — means awaiting approval.</summary>
+        /// <summary>Row 40; renamed from legacy 'Draft' — awaiting first approval.</summary>
         public const short Pending = 40;
+        /// <summary>School or campus admin endorsed; awaiting portal final approval.</summary>
+        public const short SchoolApproved = 46;
         public const short Approved = 44;
         public const short Rejected = 45;
     }
@@ -110,6 +111,7 @@ public static class QuizLookupNames
     public static readonly string[] ParentPrivateQuizTypeNames = ["ParentPrivate", "Parent Private", "Private"];
     public static readonly string[] SchoolQuizTypeNames = ["Practice", "Assessment", "Competition", "Surprise"];
     public static readonly string[] PendingApprovalStatusNames = ["Pending", "Draft", "Under Review"];
+    public static readonly string[] SchoolApprovedStatusNames = ["SchoolApproved", "School Approved"];
     // The deployed lookup table calls the initial editable lifecycle "Not Assigned".
     public static readonly string[] DraftLifecycleNames = ["Not Assigned", "Draft", "DRAFT"];
     public static readonly string[] PublishedLifecycleNames = ["Published", "PUBLISHED"];
@@ -117,7 +119,27 @@ public static class QuizLookupNames
     public static readonly string[] CancelledLifecycleNames = ["Cancelled", "CANCELLED"];
     public static readonly string[] ArchivedLifecycleNames = ["Archived", "ARCHIVED"];
     public static readonly string[] ApprovedStatusNames = ["Approved", "APPROVED"];
-    public static readonly string[] RejectedApprovalStatusNames = ["Rejected", "Declined", "REJECTED"];
+    /// <summary>Canonical reject status name for writes.</summary>
+    public static readonly string[] RejectedApprovalStatusNames = ["Rejected", "REJECTED"];
+    /// <summary>Legacy deny labels still recognized when reading older rows.</summary>
+    public static readonly string[] RejectedApprovalAliasNames =
+        ["Rejected", "Declined", "Cancelled", "REJECTED"];
+
+    public static bool IsPendingApprovalName(string? name)
+        => !string.IsNullOrWhiteSpace(name)
+           && PendingApprovalStatusNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsSchoolApprovedName(string? name)
+        => !string.IsNullOrWhiteSpace(name)
+           && SchoolApprovedStatusNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsFinalApprovedName(string? name)
+        => !string.IsNullOrWhiteSpace(name)
+           && ApprovedStatusNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsRejectedApprovalName(string? name)
+        => !string.IsNullOrWhiteSpace(name)
+           && RejectedApprovalAliasNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
     public static readonly string[] AssignedResultNames =
         ["Not Attempted", "Assigned", "Not Started", "Pending"];
 

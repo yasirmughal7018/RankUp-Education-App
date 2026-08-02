@@ -1,0 +1,24 @@
+---
+description: Quiz approval statuses SchoolApproved / Approved / Rejected
+globs: WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,WebApi/src/RankUpEducation.Contracts/Quizzes/**/*.cs,React/src/features/quizzes/**/*.{ts,tsx},React/src/features/admin/**/*Quiz*
+alwaysApply: false
+---
+
+# Quiz approval statuses
+
+Canonical `QuizApprovalStatus` values:
+
+| Status | Who sets it | Meaning |
+|--------|-------------|---------|
+| **Pending** | Teacher publish / resubmit | Awaiting school or campus review |
+| **SchoolApproved** | SchoolAdmin or CampusAdmin | First-tier approve; waiting for portal |
+| **Approved** | PortalAdmin | Final approve; required before assign |
+| **Rejected** | SchoolAdmin, CampusAdmin, or PortalAdmin | Deny; **reason required** |
+
+## Rules
+
+- Do **not** use Under Teacher Review, Under AI Review, or Cancelled as approval statuses.
+- Rejected quizzes **cannot be approved** by any admin until the teacher resubmits (back to Pending).
+- School/Campus approve only from **Pending** → SchoolApproved.
+- Portal approve from **Pending** or **SchoolApproved** → Approved.
+- Assignment requires final **Approved** (not SchoolApproved alone).
