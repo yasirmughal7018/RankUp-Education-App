@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Questions;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Questions;
@@ -117,7 +118,7 @@ internal sealed class QuizManageGuard
         {
             var byId = await _lookups.GetByIdAndTypeAsync(
                 typedId,
-                QuizLookupNames.QuestionType,
+                LookupNames.QuestionType,
                 cancellationToken);
             if (byId is not null)
             {
@@ -127,15 +128,15 @@ internal sealed class QuizManageGuard
 
         (short PreferredId, string[] Names)[] candidateGroups =
         [
-            (QuizLookupNames.QuestionTypeIds.SingleChoice, QuizLookupNames.SingleChoiceQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.MultipleChoice, QuizLookupNames.MultiSelectQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.TrueFalse, QuizLookupNames.TrueFalseQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.FillInTheBlanks, QuizLookupNames.FillBlankQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.Descriptive, QuizLookupNames.DescriptiveQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.FileUpload, QuizLookupNames.FileUploadQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.Matching, QuizLookupNames.MatchingQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.Ordering, QuizLookupNames.OrderingQuestionTypeNames),
-            (QuizLookupNames.QuestionTypeIds.Media, QuizLookupNames.MediaQuestionTypeNames)
+            (LookupNames.QuestionTypeIds.SingleChoice, LookupNames.SingleChoiceQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.MultipleChoice, LookupNames.MultiSelectQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.TrueFalse, LookupNames.TrueFalseQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.FillInTheBlanks, LookupNames.FillBlankQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.Descriptive, LookupNames.DescriptiveQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.FileUpload, LookupNames.FileUploadQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.Matching, LookupNames.MatchingQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.Ordering, LookupNames.OrderingQuestionTypeNames),
+            (LookupNames.QuestionTypeIds.Media, LookupNames.MediaQuestionTypeNames)
         ];
 
         foreach (var (preferredId, group) in candidateGroups)
@@ -143,14 +144,14 @@ internal sealed class QuizManageGuard
             if (group.Any(name => name.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
             {
                 return await RequirePreferredLookupAsync(
-                    QuizLookupNames.QuestionType,
+                    LookupNames.QuestionType,
                     preferredId,
                     group,
                     cancellationToken);
             }
         }
 
-        var directId = await _lookups.ResolveLookupIdAsync(QuizLookupNames.QuestionType, normalized, 0, cancellationToken);
+        var directId = await _lookups.ResolveLookupIdAsync(LookupNames.QuestionType, normalized, 0, cancellationToken);
         if (directId == 0)
         {
             throw new ValidationAppException([$"Question type '{questionType}' is not supported."]);
@@ -166,7 +167,7 @@ internal sealed class QuizManageGuard
     {
         var preferred = await _lookups.GetByIdAndTypeAsync(
             difficultyLevel,
-            QuizLookupNames.DifficultyLevel,
+            LookupNames.DifficultyLevel,
             cancellationToken);
         if (preferred is not null)
         {
@@ -176,30 +177,30 @@ internal sealed class QuizManageGuard
         var legacyName = await _lookups.GetLookupNameAsync(difficultyLevel, cancellationToken);
         if (!string.IsNullOrWhiteSpace(legacyName))
         {
-            if (QuizLookupNames.EasyDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
+            if (LookupNames.EasyDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
             {
                 return await RequirePreferredLookupAsync(
-                    QuizLookupNames.DifficultyLevel,
-                    QuizLookupNames.DifficultyLevelIds.Easy,
-                    QuizLookupNames.EasyDifficultyNames,
+                    LookupNames.DifficultyLevel,
+                    LookupNames.DifficultyLevelIds.Easy,
+                    LookupNames.EasyDifficultyNames,
                     cancellationToken);
             }
 
-            if (QuizLookupNames.MediumDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
+            if (LookupNames.MediumDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
             {
                 return await RequirePreferredLookupAsync(
-                    QuizLookupNames.DifficultyLevel,
-                    QuizLookupNames.DifficultyLevelIds.Medium,
-                    QuizLookupNames.MediumDifficultyNames,
+                    LookupNames.DifficultyLevel,
+                    LookupNames.DifficultyLevelIds.Medium,
+                    LookupNames.MediumDifficultyNames,
                     cancellationToken);
             }
 
-            if (QuizLookupNames.HardDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
+            if (LookupNames.HardDifficultyNames.Any(n => n.Equals(legacyName, StringComparison.OrdinalIgnoreCase)))
             {
                 return await RequirePreferredLookupAsync(
-                    QuizLookupNames.DifficultyLevel,
-                    QuizLookupNames.DifficultyLevelIds.Hard,
-                    QuizLookupNames.HardDifficultyNames,
+                    LookupNames.DifficultyLevel,
+                    LookupNames.DifficultyLevelIds.Hard,
+                    LookupNames.HardDifficultyNames,
                     cancellationToken);
             }
         }
@@ -316,7 +317,7 @@ internal sealed class QuizManageGuard
         => IsDraftLifecycle(lifecycleName) || lifecycleName.Equals("Published", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsDraftLifecycle(string lifecycleName)
-        => QuizLookupNames.DraftLifecycleNames.Any(
+        => LookupNames.DraftLifecycleNames.Any(
             name => lifecycleName.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsArchivedLifecycle(string lifecycleName)

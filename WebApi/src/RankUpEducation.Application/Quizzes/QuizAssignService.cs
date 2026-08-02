@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
@@ -113,8 +114,8 @@ public sealed class QuizAssignService : IQuizAssignService
 
             quiz.SetAudienceAccess("Public", request.StartAt, request.EndAt, request.AllowedAttempts);
             var publicLifecycleId = await RequireLookupAsync(
-                QuizLookupNames.QuizLifecycleStatus,
-                QuizLookupNames.AssignedLifecycleNames,
+                LookupNames.QuizLifecycleStatus,
+                LookupNames.AssignedLifecycleNames,
                 cancellationToken);
             quiz.SetLifecycleStatus(publicLifecycleId);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -132,18 +133,18 @@ public sealed class QuizAssignService : IQuizAssignService
         var now = _dateTimeProvider.UtcNow;
         var resultStatusId = request.StartAt > now
             ? await _lookups.ResolveLookupIdByNamesAsync(
-                QuizLookupNames.QuizResultStatus,
-                QuizLookupNames.UpcomingResultNames,
-                QuizLookupNames.QuizResultStatusIds.Upcoming,
+                LookupNames.QuizResultStatus,
+                LookupNames.UpcomingResultNames,
+                LookupNames.QuizResultStatusIds.Upcoming,
                 cancellationToken)
             : await _lookups.ResolveLookupIdByNamesAsync(
-                QuizLookupNames.QuizResultStatus,
-                QuizLookupNames.AssignedResultNames,
-                QuizLookupNames.QuizResultStatusIds.NotAttempted,
+                LookupNames.QuizResultStatus,
+                LookupNames.AssignedResultNames,
+                LookupNames.QuizResultStatusIds.NotAttempted,
                 cancellationToken);
         var assignedLifecycleId = await RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.AssignedLifecycleNames,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.AssignedLifecycleNames,
             cancellationToken);
 
         var assignments = new List<QuizAssignment>();
@@ -238,10 +239,10 @@ public sealed class QuizAssignService : IQuizAssignService
         // Cancelled is not a quiz lifecycle — restore Assigned or Published from remaining rows.
         var hasAssignments = await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken);
         var restoredLifecycleId = await RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
+            LookupNames.QuizLifecycleStatus,
             hasAssignments
-                ? QuizLookupNames.AssignedLifecycleNames
-                : QuizLookupNames.PublishedLifecycleNames,
+                ? LookupNames.AssignedLifecycleNames
+                : LookupNames.PublishedLifecycleNames,
             cancellationToken);
         quiz.SetLifecycleStatus(restoredLifecycleId);
 
@@ -284,9 +285,9 @@ public sealed class QuizAssignService : IQuizAssignService
 
         // Retry quota is open, but the student has not started the new attempt yet.
         var notAttemptedResultId = await _lookups.ResolveLookupIdByNamesAsync(
-            QuizLookupNames.QuizResultStatus,
-            QuizLookupNames.AssignedResultNames,
-            QuizLookupNames.QuizResultStatusIds.NotAttempted,
+            LookupNames.QuizResultStatus,
+            LookupNames.AssignedResultNames,
+            LookupNames.QuizResultStatusIds.NotAttempted,
             cancellationToken);
         assignment.SetResultStatus(notAttemptedResultId);
 
@@ -340,9 +341,9 @@ public sealed class QuizAssignService : IQuizAssignService
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             var canAssign =
-                QuizLookupNames.IsFinalApprovedName(approvalName)
+                LookupNames.IsFinalApprovedName(approvalName)
                 || (scope.Role == UserRole.SchoolAdmin
-                    && QuizLookupNames.IsSchoolApprovedName(approvalName));
+                    && LookupNames.IsSchoolApprovedName(approvalName));
             if (!canAssign)
             {
                 throw new BusinessRuleException(

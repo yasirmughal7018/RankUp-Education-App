@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Quizzes;
 
@@ -289,7 +290,7 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
         var submittedStatusIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
             "QuizAttemptStatus",
-            QuizLookupNames.SubmittedAttemptStatusNames,
+            LookupNames.SubmittedAttemptStatusNames,
             cancellationToken);
 
         if (submittedStatusIds.Count == 0)

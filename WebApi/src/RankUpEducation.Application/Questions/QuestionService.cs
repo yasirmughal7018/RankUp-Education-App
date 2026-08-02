@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Questions;
@@ -885,39 +886,39 @@ public sealed class QuestionService : IQuestionService
     }
 
     private static bool IsPendingReviewStatus(string statusName)
-        => QuizLookupNames.IsPendingQuestionStatusName(statusName);
+        => LookupNames.IsPendingQuestionStatusName(statusName);
 
     private static bool IsApprovedStatus(string statusName)
-        => QuizLookupNames.IsApprovedQuestionStatusName(statusName);
+        => LookupNames.IsApprovedQuestionStatusName(statusName);
 
     private static bool IsArchivedStatus(string statusName)
-        => QuizLookupNames.IsArchivedQuestionStatusName(statusName);
+        => LookupNames.IsArchivedQuestionStatusName(statusName);
 
     private static bool IsOwnerEditableStatus(string statusName)
-        => QuizLookupNames.IsOwnerEditableQuestionStatusName(statusName);
+        => LookupNames.IsOwnerEditableQuestionStatusName(statusName);
 
     private Task<short> RequirePendingReviewStatusIdAsync(CancellationToken cancellationToken)
         => RequireQuestionStatusIdAsync(
-            QuizLookupNames.QuestionStatusIds.PendingReview,
-            QuizLookupNames.PendingQuestionStatusNames,
+            LookupNames.QuestionStatusIds.PendingReview,
+            LookupNames.PendingQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireApprovedStatusIdAsync(CancellationToken cancellationToken)
         => RequireQuestionStatusIdAsync(
-            QuizLookupNames.QuestionStatusIds.Approved,
-            QuizLookupNames.ApprovedQuestionStatusNames,
+            LookupNames.QuestionStatusIds.Approved,
+            LookupNames.ApprovedQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireRejectedStatusIdAsync(CancellationToken cancellationToken)
         => RequireQuestionStatusIdAsync(
-            QuizLookupNames.QuestionStatusIds.Rejected,
-            QuizLookupNames.RejectedQuestionStatusNames,
+            LookupNames.QuestionStatusIds.Rejected,
+            LookupNames.RejectedQuestionStatusNames,
             cancellationToken);
 
     private Task<short> RequireArchivedStatusIdAsync(CancellationToken cancellationToken)
         => RequireQuestionStatusIdAsync(
-            QuizLookupNames.QuestionStatusIds.Archived,
-            QuizLookupNames.ArchivedQuestionStatusNames,
+            LookupNames.QuestionStatusIds.Archived,
+            LookupNames.ArchivedQuestionStatusNames,
             cancellationToken);
 
     private async Task<short> RequireQuestionStatusIdAsync(
@@ -927,7 +928,7 @@ public sealed class QuestionService : IQuestionService
     {
         var preferred = await _lookups.GetByIdAndTypeAsync(
             preferredId,
-            QuizLookupNames.QuestionStatus,
+            LookupNames.QuestionStatus,
             cancellationToken);
 
         if (preferred is not null)
@@ -936,7 +937,7 @@ public sealed class QuestionService : IQuestionService
         }
 
         return await _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
+            LookupNames.QuestionStatus,
             canonicalNames,
             cancellationToken);
     }

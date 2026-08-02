@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
@@ -102,8 +103,8 @@ public sealed class QuizManageService : IQuizManageService
             request.CampusId,
             cancellationToken);
         var draftStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.DraftLifecycleNames,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.DraftLifecycleNames,
             cancellationToken);
         var quizTypeId = await ResolveQuizTypeIdForCreateAsync(scope, request.QuizTypeId, cancellationToken);
         var approvalStatusId = await ResolveInitialApprovalStatusIdAsync(scope, cancellationToken);
@@ -201,24 +202,24 @@ public sealed class QuizManageService : IQuizManageService
         var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
 
         var publishedStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.PublishedLifecycleNames,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.PublishedLifecycleNames,
             cancellationToken);
 
         if (scope.Role == UserRole.Teacher)
         {
             // Teacher publish (re)queues Pending approval — also recovers Rejected quizzes.
             var pendingApprovalStatusId = await _guard.RequireLookupAsync(
-                QuizLookupNames.QuizApprovalStatus,
-                QuizLookupNames.PendingApprovalStatusNames,
+                LookupNames.QuizApprovalStatus,
+                LookupNames.PendingApprovalStatusNames,
                 cancellationToken);
             quiz.SubmitForApproval(publishedStatusId, pendingApprovalStatusId);
         }
         else if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
             var schoolApprovedStatusId = await _guard.RequireLookupAsync(
-                QuizLookupNames.QuizApprovalStatus,
-                QuizLookupNames.SchoolApprovedStatusNames,
+                LookupNames.QuizApprovalStatus,
+                LookupNames.SchoolApprovedStatusNames,
                 cancellationToken);
             quiz.Publish(publishedStatusId, schoolApprovedStatusId, scope.UserId.ToString());
         }
@@ -226,8 +227,8 @@ public sealed class QuizManageService : IQuizManageService
         {
             // PortalAdmin / Parent: final Approved (parents skip the school queue).
             var approvedStatusId = await _guard.RequireLookupAsync(
-                QuizLookupNames.QuizApprovalStatus,
-                QuizLookupNames.ApprovedStatusNames,
+                LookupNames.QuizApprovalStatus,
+                LookupNames.ApprovedStatusNames,
                 cancellationToken);
             quiz.Publish(publishedStatusId, approvedStatusId, scope.UserId.ToString());
         }
@@ -258,7 +259,7 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        if (QuizLookupNames.IsRejectedApprovalName(approvalName))
+        if (LookupNames.IsRejectedApprovalName(approvalName))
         {
             throw new BusinessRuleException(
                 "Rejected quizzes cannot be approved. The teacher must resubmit the quiz first.");
@@ -268,29 +269,29 @@ public sealed class QuizManageService : IQuizManageService
         string nextStatusName;
         if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
-            if (!QuizLookupNames.IsPendingApprovalName(approvalName))
+            if (!LookupNames.IsPendingApprovalName(approvalName))
             {
                 throw new BusinessRuleException("Only pending quizzes can be school-approved.");
             }
 
             nextStatusId = await _guard.RequireLookupAsync(
-                QuizLookupNames.QuizApprovalStatus,
-                QuizLookupNames.SchoolApprovedStatusNames,
+                LookupNames.QuizApprovalStatus,
+                LookupNames.SchoolApprovedStatusNames,
                 cancellationToken);
             nextStatusName = "SchoolApproved";
         }
         else
         {
-            if (!QuizLookupNames.IsPendingApprovalName(approvalName)
-                && !QuizLookupNames.IsSchoolApprovedName(approvalName))
+            if (!LookupNames.IsPendingApprovalName(approvalName)
+                && !LookupNames.IsSchoolApprovedName(approvalName))
             {
                 throw new BusinessRuleException(
                     "Only pending or school-approved quizzes can be approved by portal admin.");
             }
 
             nextStatusId = await _guard.RequireLookupAsync(
-                QuizLookupNames.QuizApprovalStatus,
-                QuizLookupNames.ApprovedStatusNames,
+                LookupNames.QuizApprovalStatus,
+                LookupNames.ApprovedStatusNames,
                 cancellationToken);
             nextStatusName = "Approved";
         }
@@ -324,25 +325,25 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        if (QuizLookupNames.IsRejectedApprovalName(approvalName))
+        if (LookupNames.IsRejectedApprovalName(approvalName))
         {
             throw new BusinessRuleException("Quiz is already rejected.");
         }
 
-        if (QuizLookupNames.IsFinalApprovedName(approvalName))
+        if (LookupNames.IsFinalApprovedName(approvalName))
         {
             throw new BusinessRuleException("Fully approved quizzes cannot be rejected.");
         }
 
-        if (!QuizLookupNames.IsPendingApprovalName(approvalName)
-            && !QuizLookupNames.IsSchoolApprovedName(approvalName))
+        if (!LookupNames.IsPendingApprovalName(approvalName)
+            && !LookupNames.IsSchoolApprovedName(approvalName))
         {
             throw new BusinessRuleException("Only pending or school-approved quizzes can be rejected.");
         }
 
         var rejectedStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizApprovalStatus,
-            QuizLookupNames.RejectedApprovalStatusNames,
+            LookupNames.QuizApprovalStatus,
+            LookupNames.RejectedApprovalStatusNames,
             cancellationToken);
 
         quiz.Reject(rejectedStatusId, request.Reason);
@@ -420,11 +421,11 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         var draftStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.DraftLifecycleNames,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.DraftLifecycleNames,
             cancellationToken);
         var pendingApprovalId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizApprovalStatus,
+            LookupNames.QuizApprovalStatus,
             ["Pending", "Draft"],
             cancellationToken);
 
@@ -478,8 +479,8 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         var questionStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
-            QuizLookupNames.ActiveQuestionStatusNames,
+            LookupNames.QuestionStatus,
+            LookupNames.ActiveQuestionStatusNames,
             cancellationToken);
 
         // Target visibility for this actor — only applied when higher than the existing question.
@@ -544,8 +545,8 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         var archivedStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.ArchivedLifecycleNames,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.ArchivedLifecycleNames,
             cancellationToken);
 
         quiz.Archive(archivedStatusId);
@@ -568,10 +569,10 @@ public sealed class QuizManageService : IQuizManageService
 
         var hasAssignments = await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken);
         var restoredStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
+            LookupNames.QuizLifecycleStatus,
             hasAssignments
-                ? QuizLookupNames.AssignedLifecycleNames
-                : QuizLookupNames.PublishedLifecycleNames,
+                ? LookupNames.AssignedLifecycleNames
+                : LookupNames.PublishedLifecycleNames,
             cancellationToken);
 
         quiz.Unarchive(restoredStatusId);
@@ -661,8 +662,8 @@ public sealed class QuizManageService : IQuizManageService
         if (scope.Role == UserRole.Parent)
         {
             return await _guard.RequireLookupAsync(
-                QuizLookupNames.QuizType,
-                QuizLookupNames.ParentPrivateQuizTypeNames,
+                LookupNames.QuizType,
+                LookupNames.ParentPrivateQuizTypeNames,
                 cancellationToken);
         }
 
@@ -677,8 +678,8 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         return await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizType,
-            QuizLookupNames.SchoolQuizTypeNames,
+            LookupNames.QuizType,
+            LookupNames.SchoolQuizTypeNames,
             cancellationToken);
     }
 
@@ -687,8 +688,8 @@ public sealed class QuizManageService : IQuizManageService
         CancellationToken cancellationToken)
     {
         return await _guard.RequireLookupAsync(
-            QuizLookupNames.QuizApprovalStatus,
-            QuizLookupNames.PendingApprovalStatusNames,
+            LookupNames.QuizApprovalStatus,
+            LookupNames.PendingApprovalStatusNames,
             cancellationToken);
     }
 
@@ -715,7 +716,7 @@ public sealed class QuizManageService : IQuizManageService
     private static short? OptionalLookupId(short value) => value > 0 ? value : null;
 
     private static bool IsDraftLifecycle(string lifecycleName)
-        => QuizLookupNames.DraftLifecycleNames.Any(
+        => LookupNames.DraftLifecycleNames.Any(
             name => lifecycleName.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsArchivedLifecycle(string lifecycleName)

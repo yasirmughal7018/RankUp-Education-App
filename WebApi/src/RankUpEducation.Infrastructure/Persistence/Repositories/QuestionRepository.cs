@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Questions;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Approvals;
@@ -91,7 +92,7 @@ public sealed class QuestionRepository : IQuestionRepository
         if (pendingApprovalOnly)
         {
             query = query.Where(question =>
-                question.StatusId == QuizLookupNames.QuestionStatusIds.PendingReview);
+                question.StatusId == LookupNames.QuestionStatusIds.PendingReview);
 
             // Approver queues: org + creator-tier hierarchy (PortalAdmin passes null scope).
             if (visibilityScope is not null)
@@ -220,8 +221,8 @@ public sealed class QuestionRepository : IQuestionRepository
         var approvedStatusIds = eligibleForQuizOnly
             ? lookupNames
                 .Where(pair =>
-                    QuizLookupNames.IsApprovedQuestionStatusId(pair.Key)
-                    || QuizLookupNames.IsApprovedQuestionStatusName(pair.Value))
+                    LookupNames.IsApprovedQuestionStatusId(pair.Key)
+                    || LookupNames.IsApprovedQuestionStatusName(pair.Value))
                 .Select(pair => pair.Key)
                 .ToHashSet()
             : null;

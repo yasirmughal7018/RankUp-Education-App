@@ -1,3 +1,4 @@
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Common.Utilities;
 
 namespace RankUpEducation.Application.Quizzes;
@@ -8,24 +9,24 @@ public static class QuizQuestionHelper
     /// <summary>Free-text / short-answer items requiring manual or AI review.</summary>
     public static bool IsDescriptiveType(string questionTypeName)
     {
-        return MatchesAny(questionTypeName, QuizLookupNames.DescriptiveQuestionTypeNames);
+        return MatchesAny(questionTypeName, LookupNames.DescriptiveQuestionTypeNames);
     }
 
     /// <summary>File-upload answers — always teacher-reviewed.</summary>
     public static bool IsFileUploadType(string questionTypeName)
-        => MatchesAny(questionTypeName, QuizLookupNames.FileUploadQuestionTypeNames);
+        => MatchesAny(questionTypeName, LookupNames.FileUploadQuestionTypeNames);
 
     /// <summary>Left/right matching (even option count: first half left, second half right).</summary>
     public static bool IsMatchingType(string questionTypeName)
-        => MatchesAny(questionTypeName, QuizLookupNames.MatchingQuestionTypeNames);
+        => MatchesAny(questionTypeName, LookupNames.MatchingQuestionTypeNames);
 
     /// <summary>Put options into the correct sequence (DisplayOrder).</summary>
     public static bool IsOrderingType(string questionTypeName)
-        => MatchesAny(questionTypeName, QuizLookupNames.OrderingQuestionTypeNames);
+        => MatchesAny(questionTypeName, LookupNames.OrderingQuestionTypeNames);
 
     /// <summary>Image/media choice — scored like single choice.</summary>
     public static bool IsMediaType(string questionTypeName)
-        => MatchesAny(questionTypeName, QuizLookupNames.MediaQuestionTypeNames);
+        => MatchesAny(questionTypeName, LookupNames.MediaQuestionTypeNames);
 
     /// <summary>Fill-in-the-blank items scored against accepted answers or correct option text.</summary>
     public static bool IsFillBlankType(string questionTypeName)
@@ -41,7 +42,7 @@ public static class QuizQuestionHelper
             return true;
         }
 
-        return MatchesAny(questionTypeName, QuizLookupNames.FillBlankQuestionTypeNames);
+        return MatchesAny(questionTypeName, LookupNames.FillBlankQuestionTypeNames);
     }
 
     /// <summary>True/false or equivalent two-option types.</summary>
@@ -58,7 +59,7 @@ public static class QuizQuestionHelper
             return true;
         }
 
-        return MatchesAny(questionTypeName, QuizLookupNames.TrueFalseQuestionTypeNames);
+        return MatchesAny(questionTypeName, LookupNames.TrueFalseQuestionTypeNames);
     }
 
     /// <summary>Single-select MCQ; excludes multi-select, T/F, fill-blank, and descriptive aliases.</summary>
@@ -75,8 +76,8 @@ public static class QuizQuestionHelper
             return false;
         }
 
-        return MatchesAny(questionTypeName, QuizLookupNames.SingleChoiceQuestionTypeNames)
-            || MatchesAny(questionTypeName, QuizLookupNames.MediaQuestionTypeNames)
+        return MatchesAny(questionTypeName, LookupNames.SingleChoiceQuestionTypeNames)
+            || MatchesAny(questionTypeName, LookupNames.MediaQuestionTypeNames)
             || string.Equals(questionTypeName, "MCQ", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -95,8 +96,8 @@ public static class QuizQuestionHelper
             return false;
         }
 
-        if (MatchesAny(questionTypeName, QuizLookupNames.SingleChoiceQuestionTypeNames)
-            && !MatchesAny(questionTypeName, QuizLookupNames.MultiSelectQuestionTypeNames))
+        if (MatchesAny(questionTypeName, LookupNames.SingleChoiceQuestionTypeNames)
+            && !MatchesAny(questionTypeName, LookupNames.MultiSelectQuestionTypeNames))
         {
             return false;
         }
@@ -110,7 +111,7 @@ public static class QuizQuestionHelper
             return true;
         }
 
-        return MatchesAny(questionTypeName, QuizLookupNames.MultiSelectQuestionTypeNames);
+        return MatchesAny(questionTypeName, LookupNames.MultiSelectQuestionTypeNames);
     }
 
     /// <summary>Whether the type presents selectable options (excludes fill-blank, descriptive, and file).</summary>

@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Questions;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Contracts.Questions;
@@ -97,8 +98,8 @@ public sealed class QuizQuestionService : IQuizQuestionService
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
         var questionStatusId = await _guard.RequireLookupAsync(
-            QuizLookupNames.QuestionStatus,
-            QuizLookupNames.ActiveQuestionStatusNames,
+            LookupNames.QuestionStatus,
+            LookupNames.ActiveQuestionStatusNames,
             cancellationToken);
 
         var question = new Question(
@@ -109,7 +110,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             quiz.TopicId,
             quiz.DifficultyLevelId is > 0
                 ? quiz.DifficultyLevelId.Value
-                : QuizLookupNames.DifficultyLevelIds.Medium,
+                : LookupNames.DifficultyLevelIds.Medium,
             questionStatusId,
             scope.UserId,
             scope.Role,
@@ -124,7 +125,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             quiz.TopicId,
             quiz.DifficultyLevelId is > 0
                 ? quiz.DifficultyLevelId.Value
-                : QuizLookupNames.DifficultyLevelIds.Medium,
+                : LookupNames.DifficultyLevelIds.Medium,
             request.EstimatedTimeSeconds,
             request.Marks,
             request.Hint,
@@ -199,8 +200,8 @@ public sealed class QuizQuestionService : IQuizQuestionService
 
         var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
         var isApprovedStatus =
-            QuizLookupNames.IsApprovedQuestionStatusId(question.StatusId)
-            || QuizLookupNames.IsApprovedQuestionStatusName(statusName);
+            LookupNames.IsApprovedQuestionStatusId(question.StatusId)
+            || LookupNames.IsApprovedQuestionStatusName(statusName);
         if (!isApprovedStatus)
         {
             throw new BusinessRuleException("Only approved question-bank items can be attached to a quiz.");

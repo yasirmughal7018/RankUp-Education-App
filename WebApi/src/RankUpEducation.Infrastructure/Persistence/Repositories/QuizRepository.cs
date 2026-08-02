@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Quizzes;
 
@@ -191,8 +192,8 @@ public sealed class QuizRepository : IQuizRepository
     {
         var draftIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.DraftLifecycleNames,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.DraftLifecycleNames,
             cancellationToken);
         var viewerKey = viewerUserId?.ToString();
 
@@ -241,14 +242,14 @@ public sealed class QuizRepository : IQuizRepository
     {
         var pendingIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
-            QuizLookupNames.QuizApprovalStatus,
-            QuizLookupNames.PendingApprovalStatusNames,
+            LookupNames.QuizApprovalStatus,
+            LookupNames.PendingApprovalStatusNames,
             cancellationToken);
         var schoolApprovedIds = includeSchoolApproved
             ? await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
                 _dbContext,
-                QuizLookupNames.QuizApprovalStatus,
-                QuizLookupNames.SchoolApprovedStatusNames,
+                LookupNames.QuizApprovalStatus,
+                LookupNames.SchoolApprovedStatusNames,
                 cancellationToken)
             : Array.Empty<short>();
         var approvalQueueIds = pendingIds.Concat(schoolApprovedIds).Distinct().ToArray();
@@ -260,8 +261,8 @@ public sealed class QuizRepository : IQuizRepository
 
         var parentPrivateTypeIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
-            QuizLookupNames.QuizType,
-            QuizLookupNames.ParentPrivateQuizTypeNames,
+            LookupNames.QuizType,
+            LookupNames.ParentPrivateQuizTypeNames,
             cancellationToken);
 
         var query = _dbContext.Quizzes.AsNoTracking()
@@ -606,7 +607,7 @@ public sealed class QuizRepository : IQuizRepository
     public async Task<bool> IsParentPrivateQuizTypeAsync(short quizTypeId, CancellationToken cancellationToken)
     {
         var typeName = await _lookups.GetLookupNameAsync(quizTypeId, cancellationToken);
-        return QuizLookupNames.ParentPrivateQuizTypeNames
+        return LookupNames.ParentPrivateQuizTypeNames
             .Any(name => name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
     }
 

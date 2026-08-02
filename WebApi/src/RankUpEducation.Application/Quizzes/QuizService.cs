@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Notifications;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Common.Utilities;
@@ -65,7 +66,7 @@ public interface IQuizService
 /// <inheritdoc cref="IQuizService"/>
 public sealed class QuizService : IQuizService
 {
-    private const string AttemptStatusType = QuizLookupNames.QuizAttemptStatus;
+    private const string AttemptStatusType = LookupNames.QuizAttemptStatus;
     private const string InProgressStatusName = "InProgress";
     private const string SubmittedStatusName = "Submitted";
 
@@ -286,9 +287,9 @@ public sealed class QuizService : IQuizService
         if (access.AssignmentId == 0)
         {
             var resultStatusId = await _lookups.ResolveLookupIdAsync(
-                QuizLookupNames.QuizResultStatus,
+                LookupNames.QuizResultStatus,
                 "Not Attempted",
-                fallback: QuizLookupNames.QuizResultStatusIds.NotAttempted,
+                fallback: LookupNames.QuizResultStatusIds.NotAttempted,
                 cancellationToken);
             var assignedById = ResolvePublicCatalogAssignedById(quiz, studentId);
             var materialized = new QuizAssignment(
@@ -310,7 +311,7 @@ public sealed class QuizService : IQuizService
         var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             InProgressStatusName,
-            fallback: QuizLookupNames.QuizAttemptStatusIds.InProgress,
+            fallback: LookupNames.QuizAttemptStatusIds.InProgress,
             cancellationToken);
 
         var existingInProgress = await _attempts.GetInProgressAttemptAsync(
@@ -436,14 +437,14 @@ public sealed class QuizService : IQuizService
 
         var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
         if (assignment is not null
-            && (assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.NotAttempted
-                || assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Upcoming
-                || assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Expired))
+            && (assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.NotAttempted
+                || assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Upcoming
+                || assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Expired))
         {
             var inProgressResultId = await _lookups.ResolveLookupIdAsync(
-                QuizLookupNames.QuizResultStatus,
+                LookupNames.QuizResultStatus,
                 "In Progress",
-                fallback: QuizLookupNames.QuizResultStatusIds.InProgress,
+                fallback: LookupNames.QuizResultStatusIds.InProgress,
                 cancellationToken);
             assignment.SetResultStatus(inProgressResultId);
         }
@@ -478,7 +479,7 @@ public sealed class QuizService : IQuizService
         var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             InProgressStatusName,
-            fallback: QuizLookupNames.QuizAttemptStatusIds.InProgress,
+            fallback: LookupNames.QuizAttemptStatusIds.InProgress,
             cancellationToken);
 
         if (attempt.StatusId != inProgressStatusId)
@@ -674,8 +675,8 @@ public sealed class QuizService : IQuizService
 
         var submittedStatusName = request.IsAutoSubmit ? "AutoSubmitted" : SubmittedStatusName;
         var submittedStatusFallback = request.IsAutoSubmit
-            ? QuizLookupNames.QuizAttemptStatusIds.AutoSubmitted
-            : QuizLookupNames.QuizAttemptStatusIds.Submitted;
+            ? LookupNames.QuizAttemptStatusIds.AutoSubmitted
+            : LookupNames.QuizAttemptStatusIds.Submitted;
         var submittedStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
             submittedStatusName,
@@ -684,9 +685,9 @@ public sealed class QuizService : IQuizService
 
         var statusName = await _lookups.GetLookupNameAsync(attempt.StatusId, cancellationToken);
         var alreadySubmitted =
-            attempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.Submitted
-            || attempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.AutoSubmitted
-            || attempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.Reviewed
+            attempt.StatusId == LookupNames.QuizAttemptStatusIds.Submitted
+            || attempt.StatusId == LookupNames.QuizAttemptStatusIds.AutoSubmitted
+            || attempt.StatusId == LookupNames.QuizAttemptStatusIds.Reviewed
             || string.Equals(statusName, "Submitted", StringComparison.OrdinalIgnoreCase)
             || string.Equals(statusName, "AutoSubmitted", StringComparison.OrdinalIgnoreCase)
             || string.Equals(statusName, "Reviewed", StringComparison.OrdinalIgnoreCase);
@@ -940,11 +941,11 @@ public sealed class QuizService : IQuizService
         if (assignment is not null)
         {
             var resultStatusId = await _lookups.ResolveLookupIdAsync(
-                QuizLookupNames.QuizResultStatus,
+                LookupNames.QuizResultStatus,
                 statusVisibility.ReviewPending ? "Under Review" : "Completed",
                 fallback: statusVisibility.ReviewPending
-                    ? QuizLookupNames.QuizResultStatusIds.UnderReview
-                    : QuizLookupNames.QuizResultStatusIds.Completed,
+                    ? LookupNames.QuizResultStatusIds.UnderReview
+                    : LookupNames.QuizResultStatusIds.Completed,
                 cancellationToken);
             assignment.SetResultStatus(resultStatusId);
         }
@@ -1346,19 +1347,19 @@ public sealed class QuizService : IQuizService
         }
 
         if (inProgressAttempt is not null
-            && inProgressAttempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.InProgress)
+            && inProgressAttempt.StatusId == LookupNames.QuizAttemptStatusIds.InProgress)
         {
-            inProgressAttempt.MarkExpired(QuizLookupNames.QuizAttemptStatusIds.Expired);
+            inProgressAttempt.MarkExpired(LookupNames.QuizAttemptStatusIds.Expired);
             var assignment = await _assignments.GetAssignmentEntityAsync(
                 inProgressAttempt.QuizId,
                 inProgressAttempt.StudentId,
                 cancellationToken);
             if (assignment is not null
-                && assignment.QuizResultStatus is QuizLookupNames.QuizResultStatusIds.InProgress
-                    or QuizLookupNames.QuizResultStatusIds.NotAttempted
-                    or QuizLookupNames.QuizResultStatusIds.Upcoming)
+                && assignment.QuizResultStatus is LookupNames.QuizResultStatusIds.InProgress
+                    or LookupNames.QuizResultStatusIds.NotAttempted
+                    or LookupNames.QuizResultStatusIds.Upcoming)
             {
-                assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.Expired);
+                assignment.SetResultStatus(LookupNames.QuizResultStatusIds.Expired);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Quizzes;
 
@@ -255,7 +256,7 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
         var dueUpcoming = await (
             from assignment in _dbContext.QuizAssignments
             join quiz in _dbContext.Quizzes on assignment.QuizId equals quiz.Id
-            where assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Upcoming
+            where assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Upcoming
                 && assignment.StartDateTime <= now
                 && assignment.EndDateTime >= now
                 && !_dbContext.QuizAttempts.Any(attempt =>
@@ -264,10 +265,10 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
 
         foreach (var row in dueUpcoming)
         {
-            row.assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.NotAttempted);
+            row.assignment.SetResultStatus(LookupNames.QuizResultStatusIds.NotAttempted);
             changed++;
 
-            if (row.quiz.QuizTypeId == QuizLookupNames.QuizTypeIds.Surprise)
+            if (row.quiz.QuizTypeId == LookupNames.QuizTypeIds.Surprise)
             {
                 newlyOpenedSurprise.Add(new QuizAssignmentOpenedNotice(
                     row.quiz.Id,
@@ -279,15 +280,15 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
         var overdueUnattempted = await _dbContext.QuizAssignments
             .Where(assignment =>
                 assignment.EndDateTime < now
-                && (assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.NotAttempted
-                    || assignment.QuizResultStatus == QuizLookupNames.QuizResultStatusIds.Upcoming)
+                && (assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.NotAttempted
+                    || assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Upcoming)
                 && !_dbContext.QuizAttempts.Any(attempt =>
                     attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId))
             .ToListAsync(cancellationToken);
 
         foreach (var assignment in overdueUnattempted)
         {
-            assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.Expired);
+            assignment.SetResultStatus(LookupNames.QuizResultStatusIds.Expired);
             changed++;
         }
 
@@ -296,18 +297,18 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             join assignment in _dbContext.QuizAssignments
                 on new { attempt.QuizId, attempt.StudentId }
                 equals new { assignment.QuizId, assignment.StudentId }
-            where attempt.StatusId == QuizLookupNames.QuizAttemptStatusIds.InProgress
+            where attempt.StatusId == LookupNames.QuizAttemptStatusIds.InProgress
                 && assignment.EndDateTime < now
             select new { attempt, assignment }).ToListAsync(cancellationToken);
 
         foreach (var row in overdueInProgress)
         {
-            row.attempt.MarkExpired(QuizLookupNames.QuizAttemptStatusIds.Expired);
-            if (row.assignment.QuizResultStatus is QuizLookupNames.QuizResultStatusIds.InProgress
-                or QuizLookupNames.QuizResultStatusIds.NotAttempted
-                or QuizLookupNames.QuizResultStatusIds.Upcoming)
+            row.attempt.MarkExpired(LookupNames.QuizAttemptStatusIds.Expired);
+            if (row.assignment.QuizResultStatus is LookupNames.QuizResultStatusIds.InProgress
+                or LookupNames.QuizResultStatusIds.NotAttempted
+                or LookupNames.QuizResultStatusIds.Upcoming)
             {
-                row.assignment.SetResultStatus(QuizLookupNames.QuizResultStatusIds.Expired);
+                row.assignment.SetResultStatus(LookupNames.QuizResultStatusIds.Expired);
             }
 
             changed++;

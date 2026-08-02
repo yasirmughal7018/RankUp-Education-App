@@ -1,7 +1,7 @@
-namespace RankUpEducation.Application.Quizzes;
+namespace RankUpEducation.Application.Lookups;
 
-/// <summary>Canonical lookup type names and alias groups used across quiz lifecycle, scoring, and question types.</summary>
-public static class QuizLookupNames
+/// <summary>Canonical lookup type names, IDs, and alias groups used across quizzes, questions, and related flows.</summary>
+public static class LookupNames
 {
     public const string QuizType = "QuizType";
     public const string QuizLifecycleStatus = "QuizLifecycleStatus";
@@ -22,9 +22,9 @@ public static class QuizLookupNames
     }
 
     /// <summary>
-    /// Approval gate: Pending → SchoolApproved (school/campus) → Approved (portal).
+    /// Approval gate: Pending -> SchoolApproved (school/campus) -> Approved (portal).
     /// Rejected is terminal for admin approve until the teacher re-submits to Pending.
-    /// Canonical IDs: 40–43. Older 44/45/46 rows are remapped and deactivated by the initializer.
+    /// Canonical IDs: 40-43. Older 44/45/46 rows are remapped and deactivated by the initializer.
     /// </summary>
     public static class QuizApprovalStatusIds
     {
@@ -37,7 +37,7 @@ public static class QuizLookupNames
     }
 
     /// <summary>
-    /// Quiz-definition lifecycle only: Draft → Published → Assigned → Archived.
+    /// Quiz-definition lifecycle only: Draft -> Published -> Assigned -> Archived.
     /// Completed / In Progress / Cancelled are not quiz-lifecycle states (deactivated).
     /// </summary>
     public static class QuizLifecycleStatusIds
@@ -211,7 +211,7 @@ public static class QuizLookupNames
         "Image Choice"
     ];
 
-    /// <summary>Legacy alias — single-choice style MCQ names.</summary>
+    /// <summary>Legacy alias -- single-choice style MCQ names.</summary>
     public static readonly string[] McqQuestionTypeNames = SingleChoiceQuestionTypeNames;
 
     public static readonly string[] DraftQuestionStatusNames = ["Draft"];

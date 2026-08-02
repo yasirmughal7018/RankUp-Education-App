@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
@@ -211,7 +212,7 @@ public sealed class QuizReviewService : IQuizReviewService
         var obtainedMarks = (short)reviewDetail.Questions.Sum(question => question.AwardedMarks);
         var reviewedStatusId = await _lookups.ResolveLookupIdByNamesAsync(
             "QuizAttemptStatus",
-            QuizLookupNames.ReviewedAttemptStatusNames,
+            LookupNames.ReviewedAttemptStatusNames,
             fallback: attempt.StatusId,
             cancellationToken);
 
@@ -219,9 +220,9 @@ public sealed class QuizReviewService : IQuizReviewService
         assignment.MarkReviewDone();
 
         var completedResultId = await _lookups.ResolveLookupIdAsync(
-            QuizLookupNames.QuizResultStatus,
+            LookupNames.QuizResultStatus,
             "Completed",
-            fallback: QuizLookupNames.QuizResultStatusIds.Completed,
+            fallback: LookupNames.QuizResultStatusIds.Completed,
             cancellationToken);
         assignment.SetResultStatus(completedResultId);
 
