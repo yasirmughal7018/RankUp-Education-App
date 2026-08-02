@@ -55,7 +55,7 @@ export function QuizEditPage() {
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <PageHeader
           title="Quiz is read-only"
-          description="Settings can only be changed while the quiz is Not Assigned or Published and no assignment has started."
+          description="Settings can only be changed while the quiz is Draft or Published and no assignment has started."
           backTo={`/quizzes/${quizId}`}
           backAriaLabel="Back to quiz"
         />

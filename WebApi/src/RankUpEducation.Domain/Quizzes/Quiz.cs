@@ -165,7 +165,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>Moves lifecycle (e.g. Published → Assigned after assignment, or Cancelled).</summary>
+    /// <summary>Moves lifecycle (e.g. Published → Assigned after assignment).</summary>
     public void SetLifecycleStatus(short lifecycleStatusId)
     {
         LifecycleStatusId = lifecycleStatusId;

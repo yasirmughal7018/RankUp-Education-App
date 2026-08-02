@@ -535,8 +535,8 @@ public sealed class QuizManageService : IQuizManageService
             throw new BusinessRuleException("Draft quizzes should be deleted instead of archived.");
         }
 
-        // Unassigned or not-yet-started: remove from DB instead of soft-archiving.
-        if (!await _quizzes.HasStartedAssignmentsAsync(quizId, DateTimeOffset.UtcNow, cancellationToken))
+        // No assignment rows: remove from DB. Otherwise soft-archive (same visibility rules as published).
+        if (!await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken))
         {
             await _quizzes.DeleteQuizAsync(quiz, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

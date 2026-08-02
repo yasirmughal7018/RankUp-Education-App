@@ -139,12 +139,30 @@ public sealed class QuizService : IQuizService
             UserRole.Teacher => await ListForTeacherAsync(search, subject, grade, cancellationToken),
             UserRole.SchoolAdmin => await _quizzes.ListForSchoolAsync(
                 _currentUser.SchoolId,
+                campusId: null,
+                viewerUserId: _currentUser.UserId,
+                includeAllDrafts: false,
+                includeAllSchools: false,
+                search,
+                subject,
+                grade,
+                cancellationToken),
+            UserRole.CampusAdmin => await _quizzes.ListForSchoolAsync(
+                _currentUser.SchoolId,
+                _currentUser.CampusId,
+                viewerUserId: _currentUser.UserId,
+                includeAllDrafts: false,
+                includeAllSchools: false,
                 search,
                 subject,
                 grade,
                 cancellationToken),
             UserRole.PortalAdmin => await _quizzes.ListForSchoolAsync(
-                null,
+                schoolId: null,
+                campusId: null,
+                viewerUserId: _currentUser.UserId,
+                includeAllDrafts: true,
+                includeAllSchools: true,
                 search,
                 subject,
                 grade,
@@ -191,7 +209,7 @@ public sealed class QuizService : IQuizService
             }
         }
 
-        if (role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin or UserRole.Parent)
+        if (role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
         {
             // Non-student viewers without creator detail fall back to list summary fields.
             var list = await ListAsync(null, null, null, cancellationToken);
@@ -1278,9 +1296,22 @@ public sealed class QuizService : IQuizService
             grade,
             cancellationToken);
         var createdItems = await _quizzes.ListForCreatorAsync(teacherUserId, search, subject, grade, cancellationToken);
+        var publicItems = await _quizzes.ListForSchoolAsync(
+            schoolId: null,
+            campusId: null,
+            viewerUserId: teacherUserId,
+            includeAllDrafts: false,
+            includeAllSchools: false,
+            search,
+            subject,
+            grade,
+            cancellationToken);
 
         return schoolItems
             .Concat(createdItems.Where(created => schoolItems.All(item => item.QuizId != created.QuizId)))
+            .Concat(publicItems.Where(item =>
+                schoolItems.All(existing => existing.QuizId != item.QuizId)
+                && createdItems.All(existing => existing.QuizId != item.QuizId)))
             .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
             .ThenByDescending(item => item.QuizId)
             .ToArray();

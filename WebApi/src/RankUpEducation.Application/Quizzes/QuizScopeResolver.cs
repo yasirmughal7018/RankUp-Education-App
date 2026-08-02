@@ -148,6 +148,16 @@ public static class QuizScopeResolver
             return;
         }
 
+        if (scope.Role == UserRole.CampusAdmin)
+        {
+            if (scope.SchoolId != quiz.SchoolId || scope.CampusId != quiz.SchoolCampusId)
+            {
+                throw new ForbiddenAppException("You can only manage quizzes in your campus.");
+            }
+
+            return;
+        }
+
         if (!IsQuizOwner(quiz, scope))
         {
             throw new ForbiddenAppException("You do not have access to this quiz.");

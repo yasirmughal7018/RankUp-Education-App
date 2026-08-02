@@ -550,67 +550,139 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         """;
 
     private const string QuizLookupSupportSql = """
-        -- Existing deployed quiz lookups are retained:
-        -- QuizType 1–4; QuizApprovalStatus 40–44; QuizLifecycleStatus 60–64;
-        -- QuizResultStatus 20–25; QuizAttemptStatus 80–85.
-        --
-        -- Add only business states required by current flows but absent from that set.
-        -- IDs continue each existing range and inserts are safe on repeated startup.
+        -- Quiz approval: 40 Pending, 41 SchoolApproved, 42 Approved, 43 Rejected.
+        -- Quiz lifecycle: 60 Draft, 61 Published, 62 Assigned, 63 Archived.
         INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
         SELECT v.id, v.name, v.type, v.ord, TRUE, NULL
         FROM (
             VALUES
-                (5::smallint,  'ParentPrivate'::varchar, 'QuizType'::varchar, 5::smallint),
-                (45::smallint, 'Rejected'::varchar,      'QuizApprovalStatus'::varchar, 4::smallint),
-                (46::smallint, 'SchoolApproved'::varchar,'QuizApprovalStatus'::varchar, 2::smallint),
-                (65::smallint, 'Cancelled'::varchar,     'QuizLifecycleStatus'::varchar, 6::smallint),
-                (66::smallint, 'Archived'::varchar,      'QuizLifecycleStatus'::varchar, 7::smallint)
+                (5::smallint,  'ParentPrivate'::varchar,  'QuizType'::varchar, 5::smallint),
+                (40::smallint, 'Pending'::varchar,        'QuizApprovalStatus'::varchar, 1::smallint),
+                (41::smallint, 'SchoolApproved'::varchar, 'QuizApprovalStatus'::varchar, 2::smallint),
+                (42::smallint, 'Approved'::varchar,       'QuizApprovalStatus'::varchar, 3::smallint),
+                (43::smallint, 'Rejected'::varchar,       'QuizApprovalStatus'::varchar, 4::smallint),
+                (60::smallint, 'Draft'::varchar,          'QuizLifecycleStatus'::varchar, 1::smallint),
+                (61::smallint, 'Published'::varchar,      'QuizLifecycleStatus'::varchar, 2::smallint),
+                (62::smallint, 'Assigned'::varchar,       'QuizLifecycleStatus'::varchar, 3::smallint),
+                (63::smallint, 'Archived'::varchar,       'QuizLifecycleStatus'::varchar, 4::smallint)
         ) AS v(id, name, type, ord)
         WHERE NOT EXISTS (
             SELECT 1 FROM public.lookups existing WHERE existing.id = v.id
-        )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM public.lookups existing
-            WHERE existing.type = v.type
-              AND lower(existing.name) = lower(v.name)
         );
 
-        -- Keep the required canonical rows active if they already exist at these IDs.
-        UPDATE public.lookups SET is_active = TRUE
-        WHERE (id = 5 AND type = 'QuizType')
-           OR (id IN (45, 46) AND type = 'QuizApprovalStatus')
-           OR (id IN (65, 66) AND type = 'QuizLifecycleStatus');
+        -- Remap quiz FKs off legacy meanings of 41–43 before renaming those rows.
+        -- Under Teacher Review / Under AI Review → Pending.
+        UPDATE public.quizzes AS q
+        SET approval_status_id = 40
+        FROM public.lookups AS l
+        WHERE q.approval_status_id = l.id
+          AND l.type = 'QuizApprovalStatus'
+          AND l.id IN (41, 42)
+          AND lower(l.name) IN (
+              'under teacher review',
+              'under ai review',
+              'under review'
+          );
 
-        -- Clean model: Pending → SchoolApproved → Approved; Rejected is the only deny state.
+        -- Old approval-Cancelled (43) → Rejected (will live on 43 after rename; use 45 if present).
+        UPDATE public.quizzes AS q
+        SET approval_status_id = CASE
+            WHEN EXISTS (
+                SELECT 1 FROM public.lookups r
+                WHERE r.id = 45 AND r.type = 'QuizApprovalStatus'
+            ) THEN 45
+            ELSE 43
+        END
+        FROM public.lookups AS l
+        WHERE q.approval_status_id = l.id
+          AND l.type = 'QuizApprovalStatus'
+          AND l.id = 43
+          AND lower(l.name) IN ('cancelled', 'canceled');
+
+        -- Previous scheme: 44 Approved, 45 Rejected, 46 SchoolApproved → 42 / 43 / 41.
+        UPDATE public.quizzes SET approval_status_id = 41 WHERE approval_status_id = 46;
+        UPDATE public.quizzes SET approval_status_id = 42 WHERE approval_status_id = 44;
+        UPDATE public.quizzes SET approval_status_id = 43 WHERE approval_status_id = 45;
+
+        -- Canonical names on 40–43 (reuse existing IDs; rename away from Under Review / Cancelled).
         UPDATE public.lookups SET name = 'Pending', order_by = 1, is_active = TRUE
-        WHERE id = 40 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'Pending';
+        WHERE id = 40 AND type = 'QuizApprovalStatus';
 
         UPDATE public.lookups SET name = 'SchoolApproved', order_by = 2, is_active = TRUE
-        WHERE id = 46 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'SchoolApproved';
+        WHERE id = 41 AND type = 'QuizApprovalStatus';
 
         UPDATE public.lookups SET name = 'Approved', order_by = 3, is_active = TRUE
-        WHERE id = 44 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'Approved';
+        WHERE id = 42 AND type = 'QuizApprovalStatus';
 
         UPDATE public.lookups SET name = 'Rejected', order_by = 4, is_active = TRUE
-        WHERE id = 45 AND type = 'QuizApprovalStatus' AND name IS DISTINCT FROM 'Rejected';
+        WHERE id = 43 AND type = 'QuizApprovalStatus';
 
-        -- Remap legacy approval states onto the clean model.
+        -- Retire previous approval IDs (44/45/46) so name resolution cannot hit them.
+        UPDATE public.lookups
+        SET is_active = FALSE,
+            order_by = 99,
+            name = CASE id
+                WHEN 44 THEN 'Approved (legacy)'
+                WHEN 45 THEN 'Rejected (legacy)'
+                WHEN 46 THEN 'SchoolApproved (legacy)'
+                ELSE name
+            END
+        WHERE id IN (44, 45, 46) AND type = 'QuizApprovalStatus';
+
+        -- Canonical lifecycle names: Draft → Published → Assigned → Archived.
+        UPDATE public.lookups SET name = 'Draft', order_by = 1, is_active = TRUE
+        WHERE id = 60 AND type = 'QuizLifecycleStatus';
+
+        UPDATE public.lookups SET name = 'Published', order_by = 2, is_active = TRUE
+        WHERE id = 61 AND type = 'QuizLifecycleStatus';
+
+        UPDATE public.lookups SET name = 'Assigned', order_by = 3, is_active = TRUE
+        WHERE id = 62 AND type = 'QuizLifecycleStatus';
+
+        -- Remap retired lifecycle rows on quizzes before ID 63 becomes Archived.
+        -- Cancelled (65) → Assigned if any assignment rows exist, else Published.
+        UPDATE public.quizzes AS q
+        SET lifecycle_status_id = 62
+        WHERE q.lifecycle_status_id = 65
+          AND EXISTS (
+              SELECT 1 FROM public.quiz_assignments AS a WHERE a.quiz_id = q.id
+          );
+
         UPDATE public.quizzes
-        SET approval_status_id = 40
-        WHERE approval_status_id IN (41, 42);
+        SET lifecycle_status_id = 61
+        WHERE lifecycle_status_id = 65;
 
+        -- Old In Progress (63) / Completed (64) were never valid on the quiz row → Assigned.
+        UPDATE public.quizzes AS q
+        SET lifecycle_status_id = 62
+        FROM public.lookups AS l
+        WHERE q.lifecycle_status_id = l.id
+          AND l.type = 'QuizLifecycleStatus'
+          AND l.id IN (63, 64)
+          AND lower(l.name) NOT IN ('archived');
+
+        -- Previous Archived id 66 → canonical 63.
         UPDATE public.quizzes
-        SET approval_status_id = 45
-        WHERE approval_status_id = 43;
+        SET lifecycle_status_id = 63
+        WHERE lifecycle_status_id = 66;
 
-        -- Deactivate dead/overlapping states (ID stability kept, hidden from normal use):
-        -- 41 Under Teacher Review / 42 Under AI Review,
-        -- 43 approval-Cancelled (use Rejected 45 instead),
-        -- 63 'In Progress:' / 64 Completed (per-student progress, never valid on the quiz row).
-        UPDATE public.lookups SET is_active = FALSE, order_by = 99
-        WHERE (id IN (41, 42, 43) AND type = 'QuizApprovalStatus')
-           OR (id IN (63, 64) AND type = 'QuizLifecycleStatus');
+        UPDATE public.lookups SET name = 'Archived', order_by = 4, is_active = TRUE
+        WHERE id = 63 AND type = 'QuizLifecycleStatus';
+
+        -- Deactivate retired lifecycle statuses (Completed / Cancelled / old Archived 66).
+        UPDATE public.lookups
+        SET is_active = FALSE,
+            order_by = 99,
+            name = CASE id
+                WHEN 64 THEN 'Completed (legacy)'
+                WHEN 65 THEN 'Cancelled (legacy)'
+                WHEN 66 THEN 'Archived (legacy)'
+                ELSE name
+            END
+        WHERE id IN (64, 65, 66) AND type = 'QuizLifecycleStatus';
+
+        UPDATE public.lookups SET is_active = TRUE
+        WHERE id = 5 AND type = 'QuizType';
         """;
 
     /// <summary>

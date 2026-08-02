@@ -33,7 +33,7 @@ export function QuizzesPage() {
         title="Quiz management"
         description={
           isAdminAssigner
-            ? "Review school quizzes and assign by school, multi-school, or public catalog."
+            ? "Review school quizzes and assign by school or public catalog."
             : "Create, publish, and assign quizzes for students."
         }
         action={

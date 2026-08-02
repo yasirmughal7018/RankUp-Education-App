@@ -288,6 +288,11 @@ export function assignModesForRole(role: UserRole): Array<{
         label: "All in school",
         group: "School",
       },
+      {
+        value: "public",
+        label: "Public (catalog)",
+        group: "Platform",
+      },
     ];
   }
 
@@ -321,10 +326,10 @@ export function assignModesForRole(role: UserRole): Array<{
   ];
 }
 
-/** Initial editable lifecycle: deployed lookup uses "Not Assigned"; "Draft" is legacy. */
+/** Initial editable lifecycle: Draft (legacy "Not Assigned" still accepted). */
 export function isDraftQuiz(status: string): boolean {
   const normalized = status.trim().toLowerCase();
-  return normalized === "not assigned" || normalized === "draft";
+  return normalized === "draft" || normalized === "not assigned";
 }
 
 /** True when an assignment window has opened or any attempt exists (mirrors API HasStartedAssignments). */
@@ -340,7 +345,7 @@ export function hasQuizAssignmentStarted(
 }
 
 /**
- * Metadata/questions may change only while Not Assigned/Draft or Published,
+ * Metadata/questions may change only while Draft or Published,
  * and no assignment has started — matches QuizManageGuard.EnsureEditableLifecycle.
  */
 export function isQuizMetadataEditable(

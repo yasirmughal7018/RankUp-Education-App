@@ -6,14 +6,14 @@ alwaysApply: false
 
 # Quiz approval statuses
 
-Canonical `QuizApprovalStatus` values:
+Canonical `QuizApprovalStatus` lookup IDs:
 
-| Status | Who sets it | Meaning |
-|--------|-------------|---------|
-| **Pending** | Teacher publish / resubmit | Awaiting school or campus review |
-| **SchoolApproved** | SchoolAdmin or CampusAdmin | First-tier approve; waiting for portal |
-| **Approved** | PortalAdmin | Final approve; required before assign |
-| **Rejected** | SchoolAdmin, CampusAdmin, or PortalAdmin | Deny; **reason required** |
+| ID | Status | Who sets it |
+|----|--------|-------------|
+| **40** | **Pending** | Teacher publish / resubmit |
+| **41** | **SchoolApproved** | SchoolAdmin or CampusAdmin |
+| **42** | **Approved** | PortalAdmin |
+| **43** | **Rejected** | SchoolAdmin, CampusAdmin, or PortalAdmin (reason required) |
 
 ## Rules
 
@@ -21,4 +21,6 @@ Canonical `QuizApprovalStatus` values:
 - Rejected quizzes **cannot be approved** by any admin until the teacher resubmits (back to Pending).
 - School/Campus approve only from **Pending** → SchoolApproved.
 - Portal approve from **Pending** or **SchoolApproved** → Approved.
-- Assignment requires final **Approved** (not SchoolApproved alone).
+- Assignment: Teachers need final **Approved**. SchoolAdmin may assign when **SchoolApproved** or **Approved** (including own quizzes).
+- **Public** catalog assign: SchoolAdmin or PortalAdmin (sets `AudienceScope=Public`).
+- Legacy IDs 44/45/46 are remapped onto 42/43/41 and deactivated by the schema initializer.

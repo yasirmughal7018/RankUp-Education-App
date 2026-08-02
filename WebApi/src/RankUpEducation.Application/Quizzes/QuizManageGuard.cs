@@ -4,6 +4,7 @@ using RankUpEducation.Application.Questions;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Questions;
 using RankUpEducation.Contracts.QuizQuestions;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Quizzes;
 
@@ -41,7 +42,28 @@ internal sealed class QuizManageGuard
         }
 
         QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
+        await EnsureDraftVisibleAsync(quiz, scope, cancellationToken);
         return quiz;
+    }
+
+    /// <summary>Draft quizzes are visible only to the owner and PortalAdmin.</summary>
+    public async Task EnsureDraftVisibleAsync(
+        Quiz quiz,
+        QuizManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        if (!IsDraftLifecycle(lifecycleName))
+        {
+            return;
+        }
+
+        if (scope.Role == UserRole.PortalAdmin || QuizScopeResolver.IsQuizOwner(quiz, scope))
+        {
+            return;
+        }
+
+        throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
     }
 
     public async Task<Quiz> RequireEditableQuizAsync(

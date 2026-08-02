@@ -36,6 +36,10 @@ public interface IQuizRepository
 
     Task<IReadOnlyList<QuizListItem>> ListForSchoolAsync(
         int? schoolId,
+        int? campusId,
+        long? viewerUserId,
+        bool includeAllDrafts,
+        bool includeAllSchools,
         string? search,
         string? subject,
         string? grade,

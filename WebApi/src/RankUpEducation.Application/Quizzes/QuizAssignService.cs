@@ -105,9 +105,10 @@ public sealed class QuizAssignService : IQuizAssignService
         var mode = request.Mode.AsLowercase();
         if (mode == "public")
         {
-            if (scope.Role != UserRole.PortalAdmin)
+            if (scope.Role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin))
             {
-                throw new ForbiddenAppException("Only portal admins can publish public quizzes.");
+                throw new ForbiddenAppException(
+                    "Only school or portal administrators can publish public catalog quizzes.");
             }
 
             quiz.SetAudienceAccess("Public", request.StartAt, request.EndAt, request.AllowedAttempts);
@@ -234,11 +235,15 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("No upcoming assignments were found to cancel.");
         }
 
-        var cancelledLifecycleId = await RequireLookupAsync(
+        // Cancelled is not a quiz lifecycle — restore Assigned or Published from remaining rows.
+        var hasAssignments = await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken);
+        var restoredLifecycleId = await RequireLookupAsync(
             QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.CancelledLifecycleNames,
+            hasAssignments
+                ? QuizLookupNames.AssignedLifecycleNames
+                : QuizLookupNames.PublishedLifecycleNames,
             cancellationToken);
-        quiz.SetLifecycleStatus(cancelledLifecycleId);
+        quiz.SetLifecycleStatus(restoredLifecycleId);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -334,9 +339,16 @@ public sealed class QuizAssignService : IQuizAssignService
         if (scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-            if (!QuizLookupNames.IsFinalApprovedName(approvalName))
+            var canAssign =
+                QuizLookupNames.IsFinalApprovedName(approvalName)
+                || (scope.Role == UserRole.SchoolAdmin
+                    && QuizLookupNames.IsSchoolApprovedName(approvalName));
+            if (!canAssign)
             {
-                throw new BusinessRuleException("Quizzes must be approved before assignment.");
+                throw new BusinessRuleException(
+                    scope.Role == UserRole.SchoolAdmin
+                        ? "Quizzes must be school-approved or approved before assignment."
+                        : "Quizzes must be approved before assignment.");
             }
         }
 
@@ -357,6 +369,13 @@ public sealed class QuizAssignService : IQuizAssignService
         if (quiz is null)
         {
             throw new NotFoundAppException($"Quiz #{quizId} was not found.");
+        }
+
+        // Public catalog quizzes may be viewed/assigned by any assign-capable role.
+        if (quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
+            && scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
+        {
+            return quiz;
         }
 
         QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);

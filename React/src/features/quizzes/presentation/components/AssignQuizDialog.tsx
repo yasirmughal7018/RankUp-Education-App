@@ -257,7 +257,7 @@ export function AssignQuizDialog({
         <h2 className="text-xl font-semibold text-slate-900">Assign quiz</h2>
         <p className="mt-2 text-sm text-slate-600">
           {isAdminAssigner
-            ? "Choose a school-wide, multi-school, or public audience and set the window."
+            ? "Choose a school-wide or public catalog audience and set the window."
             : "Choose students and set the assignment window."}
         </p>
         {surprise ? (

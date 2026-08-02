@@ -180,18 +180,37 @@ public sealed class QuizRepository : IQuizRepository
 
     public async Task<IReadOnlyList<QuizListItem>> ListForSchoolAsync(
         int? schoolId,
+        int? campusId,
+        long? viewerUserId,
+        bool includeAllDrafts,
+        bool includeAllSchools,
         string? search,
         string? subject,
         string? grade,
         CancellationToken cancellationToken)
     {
+        var draftIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+            _dbContext,
+            QuizLookupNames.QuizLifecycleStatus,
+            QuizLookupNames.DraftLifecycleNames,
+            cancellationToken);
+        var viewerKey = viewerUserId?.ToString();
+
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => !quiz.IsDeleted);
 
-        if (schoolId is not null)
-        {
-            query = query.Where(quiz => quiz.SchoolId == schoolId.Value);
-        }
+        // Draft: owner + PortalAdmin only.
+        // Published / Assigned / Archived: school/campus scope, or Public (everyone).
+        query = query.Where(quiz =>
+            (draftIds.Contains(quiz.LifecycleStatusId)
+                && (includeAllDrafts
+                    || (viewerKey != null && quiz.CreatedByName == viewerKey)))
+            || (!draftIds.Contains(quiz.LifecycleStatusId)
+                && (quiz.AudienceScope == "Public"
+                    || includeAllSchools
+                    || (schoolId != null
+                        && quiz.SchoolId == schoolId
+                        && (campusId == null || quiz.SchoolCampusId == campusId)))));
 
         query = QuizQueryHelper.ApplyQuizFilters(query, search, subject, grade);
         var quizzes = await query.ToListAsync(cancellationToken);

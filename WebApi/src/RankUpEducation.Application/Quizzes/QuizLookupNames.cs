@@ -24,30 +24,28 @@ public static class QuizLookupNames
     /// <summary>
     /// Approval gate: Pending → SchoolApproved (school/campus) → Approved (portal).
     /// Rejected is terminal for admin approve until the teacher re-submits to Pending.
-    /// Legacy 41/42 (Under Teacher/AI Review) and 43 (Cancelled) are remapped/deactivated.
+    /// Canonical IDs: 40–43. Older 44/45/46 rows are remapped and deactivated by the initializer.
     /// </summary>
     public static class QuizApprovalStatusIds
     {
-        /// <summary>Row 40; renamed from legacy 'Draft' — awaiting first approval.</summary>
+        /// <summary>Awaiting school/campus review.</summary>
         public const short Pending = 40;
         /// <summary>School or campus admin endorsed; awaiting portal final approval.</summary>
-        public const short SchoolApproved = 46;
-        public const short Approved = 44;
-        public const short Rejected = 45;
+        public const short SchoolApproved = 41;
+        public const short Approved = 42;
+        public const short Rejected = 43;
     }
 
     /// <summary>
-    /// Quiz-definition lifecycle only: NotAssigned → Published → Assigned → Cancelled / Archived.
-    /// Legacy rows 63 ('In Progress:') and 64 (Completed) are deactivated — per-student
-    /// progress lives on attempts/results, never on the quiz row.
+    /// Quiz-definition lifecycle only: Draft → Published → Assigned → Archived.
+    /// Completed / In Progress / Cancelled are not quiz-lifecycle states (deactivated).
     /// </summary>
     public static class QuizLifecycleStatusIds
     {
-        public const short NotAssigned = 60;
+        public const short Draft = 60;
         public const short Published = 61;
         public const short Assigned = 62;
-        public const short Cancelled = 65;
-        public const short Archived = 66;
+        public const short Archived = 63;
     }
 
     public static class QuizAttemptStatusIds
@@ -112,11 +110,10 @@ public static class QuizLookupNames
     public static readonly string[] SchoolQuizTypeNames = ["Practice", "Assessment", "Competition", "Surprise"];
     public static readonly string[] PendingApprovalStatusNames = ["Pending", "Draft", "Under Review"];
     public static readonly string[] SchoolApprovedStatusNames = ["SchoolApproved", "School Approved"];
-    // The deployed lookup table calls the initial editable lifecycle "Not Assigned".
-    public static readonly string[] DraftLifecycleNames = ["Not Assigned", "Draft", "DRAFT"];
+    /// <summary>Initial editable lifecycle (DB may still say "Not Assigned" until initializer renames).</summary>
+    public static readonly string[] DraftLifecycleNames = ["Draft", "Not Assigned", "DRAFT"];
     public static readonly string[] PublishedLifecycleNames = ["Published", "PUBLISHED"];
     public static readonly string[] AssignedLifecycleNames = ["Assigned", "ASSIGNED"];
-    public static readonly string[] CancelledLifecycleNames = ["Cancelled", "CANCELLED"];
     public static readonly string[] ArchivedLifecycleNames = ["Archived", "ARCHIVED"];
     public static readonly string[] ApprovedStatusNames = ["Approved", "APPROVED"];
     /// <summary>Canonical reject status name for writes.</summary>
