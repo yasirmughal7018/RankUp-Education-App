@@ -18,8 +18,16 @@ export function RoleSwitcher() {
     return null;
   }
 
+  const lockedRole = user.pendingSchoolChange?.lockedRole ?? null;
+
   async function handleChange(nextRole: UserRole) {
     if (!user || nextRole === user.role) {
+      return;
+    }
+    if (lockedRole && nextRole === lockedRole) {
+      setError(
+        `${getRoleLabel(nextRole)} is locked pending school/campus change approval.`,
+      );
       return;
     }
 
@@ -46,21 +54,29 @@ export function RoleSwitcher() {
       >
         {user.roles.map((role) => {
           const isSelected = role === user.role;
+          const isLocked = lockedRole === role;
           return (
             <button
               key={role}
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isLocked}
               aria-pressed={isSelected}
+              title={
+                isLocked
+                  ? "Locked pending school/campus change approval"
+                  : undefined
+              }
               onClick={() => void handleChange(role)}
               className={cn(
                 "rounded-md px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
                 isSelected
                   ? "bg-white text-brand-700 shadow-sm ring-1 ring-slate-200/80"
                   : "text-slate-600 hover:text-slate-900",
+                isLocked && "bg-amber-50 text-amber-800",
               )}
             >
               {getRoleLabel(role)}
+              {isLocked ? " · Locked" : ""}
             </button>
           );
         })}

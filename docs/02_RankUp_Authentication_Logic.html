@@ -458,8 +458,10 @@
   <h2 id="school-change">8. School / Campus Change Lock</h2>
   <ul>
     <li><strong>Who may request:</strong> Teacher, Student, CampusAdmin. <strong>Cannot:</strong> PortalAdmin, SchoolAdmin, Parent.</li>
-    <li>Confirm on Profile → <code>POST /api/auth/me/school-change</code> → pending request → <code>is_active=false</code> → all refresh tokens revoked → client logout → locked messaging.</li>
-    <li>login-status → <code>LockedPendingSchoolChange</code>.</li>
+    <li>Confirm on Profile → <code>POST /api/auth/me/school-change</code> → pending request with <code>requester_role</code>.</li>
+    <li><strong>Single role</strong> (e.g. Teacher only): account <code>is_active=false</code>, all refresh tokens revoked, login-status → <code>LockedPendingSchoolChange</code>.</li>
+    <li><strong>Multi-role</strong> (e.g. Teacher+Parent): account stays active; only the requesting role is locked (shown as Locked on profile / Acting as). Other roles remain usable; switch to the locked role is blocked until approve/reject.</li>
+    <li>login-status → <code>LockedPendingSchoolChange</code> only when the whole account is deactivated.</li>
     <li><strong>Request UI:</strong> React <code>/account</code> and Flutter Mobile Profile (Teacher / Student / CampusAdmin).</li>
     <li><strong>Admin apply / reject queue:</strong> <strong>Web only</strong> — <code>/admin/directory/school-changes</code>. Mobile does not implement the admin school-change queue.</li>
   </ul>

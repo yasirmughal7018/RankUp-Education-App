@@ -104,6 +104,13 @@ public interface IUserRepository
         DateTimeOffset revokedAt,
         CancellationToken cancellationToken);
 
+    /// <summary>Revokes active refresh tokens scoped to a specific session role.</summary>
+    Task RevokeRefreshTokensForRoleAsync(
+        long userId,
+        UserRole role,
+        DateTimeOffset revokedAt,
+        CancellationToken cancellationToken);
+
     /// <summary>Persists <c>app_users.last_login_at</c> after a successful password login.</summary>
     Task UpdateLastLoginAtAsync(
         long userId,

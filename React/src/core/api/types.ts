@@ -25,6 +25,10 @@ export interface PendingSchoolChange {
   toCampusId: number | null;
   requestedAt: string;
   status: string;
+  /** Role locked by the pending school/campus change (e.g. Teacher). */
+  lockedRole?: string | null;
+  /** True when the whole account was deactivated (single-role case). */
+  isAccountFullyLocked?: boolean | null;
 }
 
 export interface CurrentUser {

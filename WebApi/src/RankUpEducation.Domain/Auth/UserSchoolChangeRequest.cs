@@ -4,7 +4,9 @@ namespace RankUpEducation.Domain.Auth;
 
 /// <summary>
 /// Self-service school/campus transfer request (table: app_user_school_change_request).
-/// While pending, the requester's account is locked until an admin approves or rejects.
+/// While pending, the <see cref="RequesterRole"/> is locked.
+/// If that was the account's only role, the whole account is deactivated until resolved.
+/// Multi-role accounts (e.g. Teacher+Parent) stay active for other roles.
 /// </summary>
 public sealed class UserSchoolChangeRequest
 {

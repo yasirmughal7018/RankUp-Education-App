@@ -28,6 +28,8 @@ public sealed class AuthService : IAuthService
     private const string PasswordResetRequestCategory = "PasswordResetRequest";
     private const string LockedPendingSchoolChangeMessage =
         "Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.";
+    private const string LockedRolePendingSchoolChangeMessageFormat =
+        "Your {0} role is locked because you requested a school or campus change. You can keep using your other role(s) until an admin approves or rejects the change.";
 
     private static readonly TimeSpan PasswordResetTokenLifetime = TimeSpan.FromHours(2);
     private readonly IUserRepository _users;
@@ -90,6 +92,7 @@ public sealed class AuthService : IAuthService
 
         try
         {
+            await TryConvertFullSchoolChangeLockToRoleScopedAsync(user, cancellationToken);
             user.EnsureCanLogin();
         }
         catch (BusinessRuleException exception)
@@ -116,7 +119,8 @@ public sealed class AuthService : IAuthService
             throw new AuthenticationAppException("Invalid username or password.");
         }
 
-        var activeRole = user.Role;
+        var lockedRole = await GetPendingSchoolChangeLockedRoleAsync(user.Id, cancellationToken);
+        var activeRole = ResolveUsableSessionRole(user, preferredRole: null, lockedRole);
         var refreshToken = IssueRefreshToken(user, activeRole);
         var loginAt = _dateTimeProvider.UtcNow;
         user.RecordLogin(loginAt);
@@ -130,7 +134,7 @@ public sealed class AuthService : IAuthService
         return new LoginResponse(
             _tokenService.CreateAccessToken(sessionUser, activeRole),
             refreshToken,
-            sessionUser.ToCurrentUserResponse(activeRole));
+            await ToCurrentUserResponseAsync(sessionUser, activeRole, cancellationToken));
     }
 
     /// <inheritdoc />
@@ -150,12 +154,21 @@ public sealed class AuthService : IAuthService
 
         try
         {
+            await TryConvertFullSchoolChangeLockToRoleScopedAsync(user, cancellationToken);
             user.EnsureCanLogin();
             user.EnsureHasRole(targetRole);
         }
         catch (BusinessRuleException exception)
         {
             throw new AuthenticationAppException(exception.Message);
+        }
+
+        var lockedRole = await GetPendingSchoolChangeLockedRoleAsync(user.Id, cancellationToken);
+        if (lockedRole == targetRole)
+        {
+            throw new ValidationAppException([
+                string.Format(LockedRolePendingSchoolChangeMessageFormat, targetRole),
+            ]);
         }
 
         var sessionUser = await _users.GetByIdForRoleAsync(user.Id, targetRole, cancellationToken) ?? user;
@@ -165,7 +178,7 @@ public sealed class AuthService : IAuthService
         return new LoginResponse(
             _tokenService.CreateAccessToken(sessionUser, targetRole),
             refreshToken,
-            sessionUser.ToCurrentUserResponse(targetRole));
+            await ToCurrentUserResponseAsync(sessionUser, targetRole, cancellationToken));
     }
 
     /// <inheritdoc />
@@ -262,17 +275,23 @@ public sealed class AuthService : IAuthService
 
         if (!user.IsActive)
         {
-            var pendingLockMessage = await TryGetPendingSchoolChangeLockMessageAsync(
+            var converted = await TryConvertFullSchoolChangeLockToRoleScopedAsync(
                 user,
                 cancellationToken);
-            if (pendingLockMessage is not null)
+            if (!converted)
             {
-                return new LoginStatusResponse(
-                    "LockedPendingSchoolChange",
-                    pendingLockMessage);
-            }
+                var pendingLockMessage = await TryGetPendingSchoolChangeLockMessageAsync(
+                    user,
+                    cancellationToken);
+                if (pendingLockMessage is not null)
+                {
+                    return new LoginStatusResponse(
+                        "LockedPendingSchoolChange",
+                        pendingLockMessage);
+                }
 
-            throw new AuthenticationAppException("This account is not active.");
+                throw new AuthenticationAppException("This account is not active.");
+            }
         }
 
         if (user.NeedsPasswordSetup)
@@ -652,12 +671,16 @@ public sealed class AuthService : IAuthService
         var user = await _users.GetByIdAsync(storedToken.UserId, cancellationToken)
             ?? throw new AuthenticationAppException("User account was not found.");
 
+        await TryConvertFullSchoolChangeLockToRoleScopedAsync(user, cancellationToken);
         user.EnsureCanLogin();
-        var activeRole = storedToken.ActiveRole ?? user.Role;
-        if (!user.HasRole(activeRole))
+        var lockedRole = await GetPendingSchoolChangeLockedRoleAsync(user.Id, cancellationToken);
+        var preferredRole = storedToken.ActiveRole;
+        if (preferredRole.HasValue && preferredRole == lockedRole)
         {
-            activeRole = user.Role;
+            preferredRole = null;
         }
+
+        var activeRole = ResolveUsableSessionRole(user, preferredRole, lockedRole);
 
         storedToken.Revoke(_dateTimeProvider.UtcNow);
         var sessionUser = await _users.GetByIdForRoleAsync(user.Id, activeRole, cancellationToken) ?? user;
@@ -1068,17 +1091,49 @@ public sealed class AuthService : IAuthService
             ]);
         }
 
-        user.SetActive(false);
-        await _users.RevokeRefreshTokensForUserAsync(
+        var otherRoles = user.Roles.Where(role => role != activeRole).ToList();
+        var fullyLockAccount = otherRoles.Count == 0;
+        var lockedRoleName = activeRole.ToString();
+
+        if (fullyLockAccount)
+        {
+            user.SetActive(false);
+            await _users.RevokeRefreshTokensForUserAsync(
+                user.Id,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new RequestSchoolChangeResponse(
+                changeRequest.Id,
+                IsLocked: true,
+                LockedPendingSchoolChangeMessage,
+                IsAccountFullyLocked: true,
+                LockedRole: lockedRoleName);
+        }
+
+        // Multi-role: lock only the requesting role; keep account active for other roles.
+        await _users.RevokeRefreshTokensForRoleAsync(
             user.Id,
+            activeRole,
             _dateTimeProvider.UtcNow,
             cancellationToken);
+
+        var continueAs = ResolveUsableSessionRole(user, preferredRole: null, lockedRole: activeRole);
+        var sessionUser = await _users.GetByIdForRoleAsync(user.Id, continueAs, cancellationToken) ?? user;
+        var refreshToken = IssueRefreshToken(sessionUser, continueAs);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var message = string.Format(LockedRolePendingSchoolChangeMessageFormat, lockedRoleName);
         return new RequestSchoolChangeResponse(
             changeRequest.Id,
             IsLocked: true,
-            LockedPendingSchoolChangeMessage);
+            message,
+            IsAccountFullyLocked: false,
+            LockedRole: lockedRoleName,
+            AccessToken: _tokenService.CreateAccessToken(sessionUser, continueAs),
+            RefreshToken: refreshToken,
+            User: await ToCurrentUserResponseAsync(sessionUser, continueAs, cancellationToken));
     }
 
     /// <inheritdoc />
@@ -1908,7 +1963,9 @@ public sealed class AuthService : IAuthService
                 pending.ToSchoolId,
                 pending.ToCampusId,
                 pending.RequestedAt.ToString("O"),
-                pending.Status.ToString());
+                pending.Status.ToString(),
+                pending.RequesterRole.ToString(),
+                IsAccountFullyLocked: !user.IsActive);
         }
 
         var pendingRole = await _roleRequests.GetPendingForUserAsync(user.Id, cancellationToken);
@@ -1928,17 +1985,97 @@ public sealed class AuthService : IAuthService
         return user.ToCurrentUserResponse(activeRole, pendingDto, pendingRoleDto);
     }
 
+    private async Task<UserRole?> GetPendingSchoolChangeLockedRoleAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var pending = await _schoolChanges.GetPendingForUserAsync(userId, cancellationToken);
+        return pending?.RequesterRole;
+    }
+
+    /// <summary>
+    /// Older school-change flow deactivated the whole account. For multi-role users with a
+    /// pending transfer, reopen the account and keep only the requesting role locked.
+    /// </summary>
+    private async Task<bool> TryConvertFullSchoolChangeLockToRoleScopedAsync(
+        User user,
+        CancellationToken cancellationToken)
+    {
+        if (user.IsActive)
+        {
+            return false;
+        }
+
+        var pending = await _schoolChanges.GetPendingForUserAsync(user.Id, cancellationToken);
+        if (pending is null)
+        {
+            return false;
+        }
+
+        if (!user.Roles.Any(role => role != pending.RequesterRole))
+        {
+            return false;
+        }
+
+        user.SetActive(true);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Picks a session role that is assigned and not locked by a pending school-change.
+    /// </summary>
+    private static UserRole ResolveUsableSessionRole(
+        User user,
+        UserRole? preferredRole,
+        UserRole? lockedRole)
+    {
+        if (preferredRole.HasValue
+            && user.HasRole(preferredRole.Value)
+            && preferredRole != lockedRole)
+        {
+            return preferredRole.Value;
+        }
+
+        var unlocked = user.Roles
+            .Where(role => lockedRole is null || role != lockedRole)
+            .ToList();
+        if (unlocked.Count > 0)
+        {
+            return unlocked[0];
+        }
+
+        // Fallback (should only happen if locked role is the sole role — login already blocked).
+        return user.Role;
+    }
+
     private async Task<string?> TryGetPendingSchoolChangeLockMessageAsync(
         User user,
         CancellationToken cancellationToken)
     {
-        if (user.IsActive || user.IsPendingRegistration || user.IsRejectedRegistration)
+        if (user.IsPendingRegistration || user.IsRejectedRegistration)
         {
             return null;
         }
 
         var pending = await _schoolChanges.GetPendingForUserAsync(user.Id, cancellationToken);
-        return pending is null ? null : LockedPendingSchoolChangeMessage;
+        if (pending is null)
+        {
+            return null;
+        }
+
+        // Multi-role: other roles remain usable — do not treat as full-account lock.
+        if (user.Roles.Any(role => role != pending.RequesterRole))
+        {
+            return null;
+        }
+
+        if (user.IsActive)
+        {
+            return null;
+        }
+
+        return LockedPendingSchoolChangeMessage;
     }
 
     private async Task<UserSchoolChangeRequest?> MaybeQueueSchoolChangeAsync(

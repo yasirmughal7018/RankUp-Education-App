@@ -76,11 +76,26 @@ public interface IDirectoryRepository
         int pageSize,
         CancellationToken cancellationToken);
 
-    /// <summary>Page of parents with optional search filter.</summary>
+    /// <summary>
+    /// Page of parents with optional search. When schoolId/campusId are set, only parents
+    /// linked to at least one student in that school/campus are returned.
+    /// </summary>
     Task<(IReadOnlyList<DirectoryParentResponse> Items, int TotalCount)> ListParentsAsync(
         string? search,
+        int? schoolId,
+        int? campusId,
         int pageNumber,
         int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns whether the parent has an active link to a student in the given school/campus.
+    /// When schoolId is null, any linked student counts (Portal Admin).
+    /// </summary>
+    Task<bool> ParentHasStudentInScopeAsync(
+        long parentId,
+        int? schoolId,
+        int? campusId,
         CancellationToken cancellationToken);
 
     /// <summary>Loads the student profile entity for updates and activation checks.</summary>
@@ -139,6 +154,15 @@ public interface IDirectoryRepository
     /// <summary>Counts users in a role by account-status buckets for the directory summary.</summary>
     Task<DirectoryStatusCounts> CountUsersByStatusAsync(
         UserRole role,
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Counts parent accounts by status, scoped via linked students' school/campus
+    /// (parents themselves usually have no school affiliation on the user row).
+    /// </summary>
+    Task<DirectoryStatusCounts> CountParentsLinkedToStudentsByStatusAsync(
         int? schoolId,
         int? campusId,
         CancellationToken cancellationToken);

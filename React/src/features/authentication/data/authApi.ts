@@ -156,6 +156,14 @@ export interface RequestSchoolChangeResponse {
   requestId: number;
   isLocked: boolean;
   message: string;
+  /** True when the account was fully deactivated (only one role). */
+  isAccountFullyLocked?: boolean;
+  /** Role locked by this request (e.g. Teacher). */
+  lockedRole?: string | null;
+  /** When role-scoped lock: continue session as another role. */
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  user?: CurrentUser | null;
 }
 
 /** Submit a school/campus change request (may lock the account). */

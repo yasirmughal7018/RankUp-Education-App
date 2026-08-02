@@ -542,8 +542,9 @@ def build_doc():
     doc.add_heading("8. School / Campus Change Lock", level=1)
     for item in [
         "Who may request: Teacher, Student, CampusAdmin. Cannot: PortalAdmin, SchoolAdmin, Parent.",
-        "POST /api/auth/me/school-change → pending request → is_active=false → revoke all refresh tokens → locked messaging.",
-        "login-status → LockedPendingSchoolChange.",
+        "POST /api/auth/me/school-change → pending request with requester_role.",
+        "Single role: is_active=false, revoke all tokens, login-status LockedPendingSchoolChange.",
+        "Multi-role (e.g. Teacher+Parent): account stays active; only requester_role locked; other roles usable.",
         "Request UI: React /account and Flutter Mobile Profile (eligible roles).",
         "Admin apply/reject queue: Web only — /admin/directory/school-changes. Mobile does not implement it.",
     ]:

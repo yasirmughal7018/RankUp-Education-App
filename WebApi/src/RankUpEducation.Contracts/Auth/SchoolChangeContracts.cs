@@ -23,10 +23,14 @@ public sealed record ApproveSchoolChangeResponse(
     bool IsApplied,
     string Message);
 
-/// <summary>Embedded in current-user when the account is locked for a pending transfer.</summary>
+/// <summary>Embedded in current-user when a school/campus transfer is pending.</summary>
 public sealed record CurrentUserPendingSchoolChange(
     long Id,
     int? ToSchoolId,
     int? ToCampusId,
     string RequestedAt,
-    string Status);
+    string Status,
+    /// <summary>Role locked by the pending request (RequesterRole).</summary>
+    string LockedRole,
+    /// <summary>True when the whole account is deactivated (only that role existed).</summary>
+    bool IsAccountFullyLocked);

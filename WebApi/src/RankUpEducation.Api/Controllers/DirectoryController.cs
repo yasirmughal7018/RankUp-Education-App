@@ -318,7 +318,9 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<BulkActionResponse>.Ok(response, "Teachers deactivated."));
     }
 
-    /// <summary>Lists parents with optional search filter.</summary>
+    /// <summary>
+    /// Lists parents. School/Campus Admin only see parents linked to students in their school/campus.
+    /// </summary>
     [HttpGet("parents")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentListResponse>>> ListParentsAsync(

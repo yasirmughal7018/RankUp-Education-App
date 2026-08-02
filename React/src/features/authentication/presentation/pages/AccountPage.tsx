@@ -136,8 +136,15 @@ function SectionCard({
 
 /** Profile, roles, school change, avatar, password, and deactivation settings. */
 export function AccountPage() {
-  const { user, updateUser, logout, switchRole, removeMyRole, isSubmitting } =
-    useAuth();
+  const {
+    user,
+    updateUser,
+    logout,
+    switchRole,
+    removeMyRole,
+    applySession,
+    isSubmitting,
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -441,6 +448,12 @@ export function AccountPage() {
     if (!profile || role === profile.role) {
       return;
     }
+    if (profile.pendingSchoolChange?.lockedRole === role) {
+      setRoleError(
+        `${getRoleLabel(role)} is locked pending school/campus change approval.`,
+      );
+      return;
+    }
     setRoleError(null);
     setRoleSuccess(null);
     try {
@@ -514,6 +527,31 @@ export function AccountPage() {
         campusId: schoolForm.campusId ? Number(schoolForm.campusId) : null,
       });
       setConfirmSchoolChangeOpen(false);
+
+      const fullyLocked = result.isAccountFullyLocked === true;
+      const canContinueAsOtherRole =
+        !fullyLocked &&
+        !!result.accessToken &&
+        !!result.refreshToken &&
+        !!result.user;
+
+      if (canContinueAsOtherRole && result.user) {
+        applySession({
+          accessToken: result.accessToken!,
+          refreshToken: result.refreshToken!,
+          user: result.user,
+        });
+        setProfile(result.user);
+        setForm(toProfileForm(result.user));
+        setSchoolForm(toSchoolChangeForm(result.user));
+        setRoleSuccess(
+          result.message ||
+            `${getRoleLabel((result.lockedRole as UserRole) || profile.role)} is locked pending approval. You can keep using your other role.`,
+        );
+        navigate(dashboardPathForRole(result.user.role), { replace: true });
+        return;
+      }
+
       await logout();
       navigate("/account-locked", {
         replace: true,
@@ -768,29 +806,42 @@ export function AccountPage() {
             <ul className="space-y-2">
               {accountRoles.map((role) => {
                 const isCurrentSession = role === profile.role;
+                const lockedRole =
+                  profile.pendingSchoolChange?.lockedRole ?? null;
+                const isRoleLocked = lockedRole === role;
                 const canRemove =
-                  accountRoles.length > 1 && REMOVABLE_ROLES.includes(role);
+                  accountRoles.length > 1 &&
+                  REMOVABLE_ROLES.includes(role) &&
+                  !isRoleLocked;
                 const busy = isSubmitting || isRemovingRole || isSubmittingRole;
 
                 return (
                   <li
                     key={role}
                     className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
-                      isCurrentSession
-                        ? "border-primary/30 bg-primary/5 text-foreground"
-                        : "border-border bg-muted/40 text-muted-foreground"
+                      isRoleLocked
+                        ? "border-amber-300/70 bg-amber-50 text-amber-950"
+                        : isCurrentSession
+                          ? "border-primary/30 bg-primary/5 text-foreground"
+                          : "border-border bg-muted/40 text-muted-foreground"
                     }`}
                   >
                     <span className="min-w-0">
                       <span className="font-medium">{getRoleLabel(role)}</span>
-                      {isCurrentSession ? (
+                      {isRoleLocked ? (
+                        <span className="ml-2 shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                          Locked
+                        </span>
+                      ) : isCurrentSession ? (
                         <span className="ml-2 shrink-0 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                           Current
                         </span>
                       ) : null}
                     </span>
                     <span className="flex shrink-0 flex-wrap items-center gap-2">
-                      {!isCurrentSession && accountRoles.length > 1 ? (
+                      {!isCurrentSession &&
+                      !isRoleLocked &&
+                      accountRoles.length > 1 ? (
                         <Button
                           type="button"
                           size="sm"
@@ -1016,17 +1067,26 @@ export function AccountPage() {
               id="school-campus"
               title="School / campus"
               description={
-                isCampusAdminOnly
-                  ? "Campus only — confirming locks your login for admin review."
-                  : "Confirming locks your login until an admin reviews the request."
+                accountRoles.length > 1
+                  ? isCampusAdminOnly
+                    ? "Campus only — confirming locks this role for admin review. Your other role(s) stay usable."
+                    : "Confirming locks this role until an admin reviews the request. Your other role(s) stay usable."
+                  : isCampusAdminOnly
+                    ? "Campus only — confirming locks your login for admin review."
+                    : "Confirming locks your login until an admin reviews the request."
               }
             >
               {profile.pendingSchoolChange ? (
                 <Notice tone="warn">
-                  Pending change → school{" "}
-                  {profile.pendingSchoolChange.toSchoolId ?? "—"} / campus{" "}
-                  {profile.pendingSchoolChange.toCampusId ?? "—"} (
+                  {profile.pendingSchoolChange.lockedRole
+                    ? `${getRoleLabel(profile.pendingSchoolChange.lockedRole as UserRole)} is locked`
+                    : "Pending change"}{" "}
+                  → school {profile.pendingSchoolChange.toSchoolId ?? "—"} /
+                  campus {profile.pendingSchoolChange.toCampusId ?? "—"} (
                   {profile.pendingSchoolChange.status})
+                  {profile.pendingSchoolChange.isAccountFullyLocked === false
+                    ? ". Other roles remain available."
+                    : "."}
                 </Notice>
               ) : null}
               {schoolError ? <Notice tone="error">{schoolError}</Notice> : null}
@@ -1234,8 +1294,16 @@ export function AccountPage() {
       <AppConfirmDialog
         open={confirmSchoolChangeOpen}
         onOpenChange={setConfirmSchoolChangeOpen}
-        title="Lock account for school change?"
-        description="Your account will lock until an admin for the destination school or campus approves or rejects this request. You will be signed out now."
+        title={
+          accountRoles.length > 1
+            ? "Lock this role for school change?"
+            : "Lock account for school change?"
+        }
+        description={
+          accountRoles.length > 1 && profile
+            ? `Your ${getRoleLabel(profile.role)} role will lock until an admin for the destination school or campus approves or rejects this request. Your other role(s) stay available.`
+            : "Your account will lock until an admin for the destination school or campus approves or rejects this request. You will be signed out now."
+        }
         confirmLabel="Confirm & lock"
         loading={isSavingSchoolChange}
         onConfirm={() => void confirmSchoolChangeRequest()}

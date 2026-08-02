@@ -36,6 +36,8 @@ interface AuthContextValue {
   setInitialPassword: (username: string, newPassword: string) => Promise<void>;
   switchRole: (role: UserRole) => Promise<CurrentUser>;
   removeMyRole: (role: UserRole) => Promise<CurrentUser>;
+  /** Replace the stored session (e.g. after role-scoped school-change lock). */
+  applySession: (session: AuthSession) => void;
   logout: () => Promise<void>;
   clearError: () => void;
   updateUser: (user: CurrentUser) => void;
@@ -268,6 +270,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setActiveSession],
   );
 
+  const applySession = useCallback(
+    (nextSession: AuthSession) => {
+      saveStoredSession(nextSession);
+      setActiveSession(nextSession);
+    },
+    [setActiveSession],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
@@ -279,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setInitialPassword,
       switchRole,
       removeMyRole,
+      applySession,
       logout,
       clearError: () => setError(null),
       updateUser,
@@ -292,6 +303,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setInitialPassword,
       switchRole,
       removeMyRole,
+      applySession,
       logout,
       updateUser,
     ],

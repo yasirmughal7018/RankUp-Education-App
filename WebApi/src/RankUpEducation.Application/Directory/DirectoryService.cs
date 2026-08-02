@@ -68,11 +68,10 @@ public sealed class DirectoryService : IDirectoryService
             campusId,
             cancellationToken);
 
-        // Parents are not school/campus scoped in directory list today — keep the same scope.
-        var parents = await _directory.CountUsersByStatusAsync(
-            UserRole.Parent,
-            schoolId: null,
-            campusId: null,
+        // Parents are scoped via linked students (they usually have no school on the user row).
+        var parents = await _directory.CountParentsLinkedToStudentsByStatusAsync(
+            schoolId,
+            campusId,
             cancellationToken);
 
         var visibleSections = new List<string>
@@ -668,8 +667,11 @@ public sealed class DirectoryService : IDirectoryService
     {
         EnsureAdmin();
         var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
+        var (resolvedSchoolId, resolvedCampusId) = ResolveParentVisibilityScope();
         var (items, totalCount) = await _directory.ListParentsAsync(
             search,
+            resolvedSchoolId,
+            resolvedCampusId,
             safePageNumber,
             safePageSize,
             cancellationToken);
@@ -744,6 +746,8 @@ public sealed class DirectoryService : IDirectoryService
         var parent = await _directory.GetParentEntityAsync(parentId, cancellationToken)
             ?? throw new NotFoundAppException("Parent was not found.");
 
+        await EnsureParentAccessibleInScopeAsync(parentId, cancellationToken);
+
         var user = await _users.GetByIdAsync(parentId, cancellationToken)
             ?? throw new NotFoundAppException("Parent was not found.");
 
@@ -799,6 +803,11 @@ public sealed class DirectoryService : IDirectoryService
                 continue;
             }
 
+            if (!await IsParentAccessibleInScopeAsync(parentId, cancellationToken))
+            {
+                continue;
+            }
+
             await DeactivateDirectoryUserAsync(parentId, cancellationToken);
             affected++;
         }
@@ -824,6 +833,7 @@ public sealed class DirectoryService : IDirectoryService
         var studentUser = await _users.GetByIdAsync(request.StudentId, cancellationToken)
             ?? throw new NotFoundAppException("Student was not found.");
         EnsureSchoolAccess(studentUser.SchoolId);
+        EnsureCampusAccess(studentUser.CampusId);
 
         var relationship = request.Relationship.AsTrimmedOrDefault("Guardian");
 
@@ -841,6 +851,7 @@ public sealed class DirectoryService : IDirectoryService
         {
             var studentUser = await _users.GetByIdAsync(studentId, cancellationToken);
             EnsureSchoolAccess(studentUser?.SchoolId);
+            EnsureCampusAccess(studentUser?.CampusId);
         }
 
         await _directory.UnlinkParentStudentAsync(parentId, studentId, cancellationToken);
@@ -894,6 +905,8 @@ public sealed class DirectoryService : IDirectoryService
         {
             throw new NotFoundAppException("Parent was not found.");
         }
+
+        await EnsureParentAccessibleInScopeAsync(parentId, cancellationToken);
 
         await _directory.SetUserActiveAsync(parentId, isActive, cancellationToken);
         if (!isActive)
@@ -2008,6 +2021,55 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         return (schoolId, campusId);
+    }
+
+    /// <summary>
+    /// School/Campus Admin only see parents linked to students in their school/campus.
+    /// Portal Admin sees all parents. School Admin covers the whole school (not a single campus).
+    /// </summary>
+    private (int? SchoolId, int? CampusId) ResolveParentVisibilityScope()
+    {
+        var role = ParseRole();
+        if (role == UserRole.CampusAdmin)
+        {
+            var scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            var scopedCampusId = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+            return (scopedSchoolId, scopedCampusId);
+        }
+
+        if (role == UserRole.SchoolAdmin)
+        {
+            var scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            return (scopedSchoolId, null);
+        }
+
+        return (null, null);
+    }
+
+    private async Task EnsureParentAccessibleInScopeAsync(
+        long parentId,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsParentAccessibleInScopeAsync(parentId, cancellationToken))
+        {
+            throw new ForbiddenAppException(
+                "You can only manage parents linked to students in your school or campus.");
+        }
+    }
+
+    private async Task<bool> IsParentAccessibleInScopeAsync(
+        long parentId,
+        CancellationToken cancellationToken)
+    {
+        var (schoolId, campusId) = ResolveParentVisibilityScope();
+        return await _directory.ParentHasStudentInScopeAsync(
+            parentId,
+            schoolId,
+            campusId,
+            cancellationToken);
     }
 
     private UserRole ParseRole()
