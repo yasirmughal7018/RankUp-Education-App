@@ -3,12 +3,14 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Questions;
+using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
 /// <summary>
 /// Maps <see cref="Approval"/> to app_approval — the generic review queue + workflow trail
-/// shared by registration (EntityType.User) and the question bank (EntityType.Question).
+/// shared by registration (EntityType.User), the question bank (EntityType.Question),
+/// and quizzes (EntityType.Quiz).
 /// </summary>
 public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
 {
@@ -29,6 +31,7 @@ public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
         // Exactly one target column is set, matching EntityType (enforced by a DB CHECK).
         builder.Property(approval => approval.UserId).HasColumnName("user_id");
         builder.Property(approval => approval.QuestionId).HasColumnName("question_id");
+        builder.Property(approval => approval.QuizId).HasColumnName("quiz_id");
 
         builder.Property(approval => approval.ApprovedByUserId).HasColumnName("approved_by_user_id").IsRequired();
         builder.Property(approval => approval.ApprovedByRole)
@@ -39,7 +42,7 @@ public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
                 value => (UserRole)value)
             .IsRequired();
 
-        // Null while a user queue row is pending; always set on question trail rows.
+        // Null while a user queue row is pending; always set on question/quiz trail rows.
         builder.Property(approval => approval.Action)
             .HasColumnName("action")
             .HasColumnType("smallint")
@@ -60,12 +63,13 @@ public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
         builder.HasIndex(approval => approval.EntityType);
         builder.HasIndex(approval => approval.UserId);
         builder.HasIndex(approval => approval.QuestionId);
+        builder.HasIndex(approval => approval.QuizId);
         builder.HasIndex(approval => approval.ApprovedByUserId);
         builder.HasIndex(approval => approval.ApprovedAt);
         builder.HasIndex(approval => approval.IsApproved);
 
-        // Registration keeps one row per approver. Question trails allow repeats from the
-        // same admin (approve → deactivate → activate), so the constraint is User-only.
+        // Registration keeps one row per approver. Question/quiz trails allow repeats from the
+        // same admin (approve → archive → unarchive), so the constraint is User-only.
         builder.HasIndex(approval => new
             {
                 approval.UserId,
@@ -83,6 +87,11 @@ public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
         builder.HasOne<Question>()
             .WithMany()
             .HasForeignKey(approval => approval.QuestionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<Quiz>()
+            .WithMany()
+            .HasForeignKey(approval => approval.QuizId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne<User>()

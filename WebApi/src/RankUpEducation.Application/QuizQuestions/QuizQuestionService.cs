@@ -29,7 +29,7 @@ public interface IQuizQuestionService
 
     /// <summary>
     /// Attaches an existing Approved + active bank question that is visible in the caller's
-    /// org scope (Public / School / Campus) and matches quiz class/subject.
+    /// org scope (Public / School / Campus) and matches the quiz subject.
     /// </summary>
     Task<ManageQuizResponse> AttachBankQuestionAsync(
         long quizId,
@@ -169,7 +169,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         var existingQuestions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
         var displayOrder = (short)(existingQuestions.Count + 1);
         await _quizQuestions.AddQuizQuestionAsync(
-            new QuizQuestion(quizId, question.Id, displayOrder, request.Marks, quiz.ShuffleOptions),
+            new QuizQuestion(quizId, question.Id, displayOrder, request.Marks, request.EstimatedTimeSeconds),
             cancellationToken);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -227,10 +227,10 @@ public sealed class QuizQuestionService : IQuizQuestionService
                 "This question is outside your visibility scope and cannot be attached to the quiz.");
         }
 
-        if (question.ClassId != quiz.ClassId || question.SubjectId != quiz.SubjectId)
+        if (question.SubjectId != quiz.SubjectId)
         {
             throw new BusinessRuleException(
-                "Question class/subject must match the quiz class/subject.");
+                "Question subject must match the quiz subject.");
         }
 
         var existingLink = await _quizQuestions.GetQuizQuestionLinkAsync(
@@ -254,7 +254,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             includeInactive: true);
         var displayOrder = (short)(existingQuestions.Count + 1);
         await _quizQuestions.AddQuizQuestionAsync(
-            new QuizQuestion(quizId, question.Id, displayOrder, marks, quiz.ShuffleOptions),
+            new QuizQuestion(quizId, question.Id, displayOrder, marks, question.EstimatedTimeSeconds),
             cancellationToken);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -303,6 +303,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             request.AcceptedAnswers,
             cancellationToken);
         link.SetMarks(request.Marks);
+        link.SetTimeInSec(request.EstimatedTimeSeconds);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
         await _questions.AddApprovalEventAsync(
             Approval.RecordQuestionEvent(

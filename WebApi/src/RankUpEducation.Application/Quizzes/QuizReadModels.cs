@@ -1,3 +1,6 @@
+using RankUpEducation.Domain.Approvals;
+using RankUpEducation.Domain.Auth;
+
 namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>Repository projection and service-layer DTOs for quiz list, detail, attempt, assign, and review flows.</summary>
@@ -78,7 +81,18 @@ public sealed record QuizDetailItem(
     string? QuizResultStatusName = null,
     string ReviewDisplayMode = "ScoreOnly",
     string ApprovalStatus = "Pending",
-    string? RejectionReason = null);
+    string? RejectionReason = null,
+    IReadOnlyList<QuizApprovalEventItem>? ApprovalHistory = null);
+
+/// <summary>One quiz workflow event projected from app_approval.</summary>
+public sealed record QuizApprovalEventItem(
+    long ApprovalId,
+    ApprovalAction Action,
+    long ActorUserId,
+    string ActorName,
+    UserRole ActorRole,
+    string? Reason,
+    DateTimeOffset OccurredAt);
 
 /// <summary>School and campus resolved from a linked student when a parent creates a quiz.</summary>
 public sealed record StudentSchoolContext(
@@ -112,8 +126,7 @@ public sealed record QuizQuestionItem(
     string? Explanation,
     short EstimatedTimeSeconds,
     IReadOnlyList<QuizQuestionOptionItem> Options,
-    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers,
-    bool ShuffleOptions = true);
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
 
 /// <summary>Server-side Fill scoring model — never returned on student attempt start.</summary>
 public sealed record QuestionAcceptedAnswerScoreItem(
@@ -270,8 +283,7 @@ public sealed record QuizQuestionCopyItem(
     string? Explanation,
     short DisplayOrder,
     IReadOnlyList<QuizQuestionOptionItem> Options,
-    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers,
-    bool ShuffleOptions = true);
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem> AcceptedAnswers);
 
 /// <summary>Whether subjective review is required and completed for an assignment.</summary>
 public sealed record QuizAssignmentReviewState(

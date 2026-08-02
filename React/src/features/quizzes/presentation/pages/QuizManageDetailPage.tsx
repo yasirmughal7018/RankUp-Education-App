@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { AttachBankQuestionsDialog } from "@/features/quizzes/presentation/components/AttachBankQuestionsDialog";
@@ -45,6 +46,72 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+const HISTORY_ACTION_LABELS: Record<string, string> = {
+  Created: "Created",
+  SubmittedForReview: "Submitted for review",
+  Endorsed: "Endorsed",
+  Approved: "Approved",
+  Published: "Published",
+  Rejected: "Rejected",
+  Activated: "Activated",
+  Deactivated: "Deactivated",
+  Archived: "Archived",
+  Unarchived: "Unarchived",
+  Modified: "Modified",
+};
+
+function historyDotClass(action: string): string {
+  switch (action) {
+    case "Published":
+    case "Approved":
+    case "Activated":
+    case "Unarchived":
+      return "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)]";
+    case "Endorsed":
+    case "SubmittedForReview":
+      return "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)]";
+    case "Rejected":
+      return "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)]";
+    case "Modified":
+    case "Created":
+      return "border-primary/40 bg-primary/10";
+    default:
+      return "border-border bg-muted";
+  }
+}
+
+function historyChipClass(action: string): string {
+  switch (action) {
+    case "Published":
+    case "Approved":
+    case "Activated":
+    case "Unarchived":
+      return "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] text-[var(--status-approved-text)]";
+    case "Endorsed":
+    case "SubmittedForReview":
+      return "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]";
+    case "Rejected":
+      return "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] text-[var(--status-rejected-text)]";
+    case "Modified":
+    case "Created":
+      return "border-primary/30 bg-primary/5 text-primary";
+    default:
+      return "border-border bg-muted text-muted-foreground";
+  }
+}
+
+/** "CampusAdmin" → "Campus Admin". */
+function humanizeRole(role: string): string {
+  return role.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+function formatHistoryDate(occurredAt: string): string {
+  const date = new Date(occurredAt);
+  return Number.isNaN(date.getTime())
+    ? occurredAt
+    : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 function canAllowRetry(assignment: {
   isReviewDone: boolean;
   attemptCount: number;
@@ -71,6 +138,7 @@ export function QuizManageDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [showBankDialog, setShowBankDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [approvalHistoryExpanded, setApprovalHistoryExpanded] = useState(false);
 
   const publishQuiz = usePublishQuizMutation(numericQuizId);
   const deleteQuiz = useDeleteQuizMutation(numericQuizId);
@@ -637,9 +705,85 @@ export function QuizManageDetailPage() {
         </section>
       ) : null}
 
+      <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <button
+          type="button"
+          aria-expanded={approvalHistoryExpanded}
+          onClick={() => setApprovalHistoryExpanded((open) => !open)}
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground">
+              Approval history
+              {(quiz.approvalHistory?.length ?? 0) > 0 ? (
+                <span className="ml-2 font-normal text-muted-foreground">
+                  ({quiz.approvalHistory!.length})
+                </span>
+              ) : null}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Full trail for every role — create, endorse/publish, modify, activate,
+              deactivate, archive, and unarchive.
+            </p>
+          </div>
+          <ChevronDown
+            aria-hidden
+            className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+              approvalHistoryExpanded ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        {approvalHistoryExpanded ? (
+          <div className="mt-4">
+            {(quiz.approvalHistory?.length ?? 0) === 0 ? (
+              <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3.5 py-3 text-sm text-muted-foreground">
+                No history recorded yet. New actions will appear here for Teacher,
+                Campus Admin, School Admin, and Portal Admin.
+              </p>
+            ) : (
+              <ol className="relative space-y-3 border-l border-border pl-5">
+                {quiz.approvalHistory!.map((entry) => (
+                  <li key={entry.approvalId} className="relative">
+                    <span
+                      aria-hidden
+                      className={`absolute -left-[1.6rem] top-3 h-3 w-3 rounded-full border-2 ${historyDotClass(entry.action)}`}
+                    />
+                    <div className="rounded-xl border border-border bg-background px-3.5 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {entry.actorName}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {humanizeRole(entry.actorRole)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatHistoryDate(entry.occurredAt)}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${historyChipClass(entry.action)}`}
+                        >
+                          {HISTORY_ACTION_LABELS[entry.action] ?? entry.action}
+                        </span>
+                      </div>
+                      {entry.reason ? (
+                        <p className="mt-2 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)]/60 px-3 py-2 text-xs text-[var(--status-rejected-text)]">
+                          {entry.reason}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        ) : null}
+      </section>
+
       {showBankDialog ? (
         <AttachBankQuestionsDialog
-          classId={quiz.classId}
           subjectId={quiz.subjectId}
           excludeQuestionIds={quiz.questions.map((item) => item.questionId)}
           isSubmitting={attachBankQuestion.isPending}

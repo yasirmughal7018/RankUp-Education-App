@@ -88,7 +88,7 @@ public sealed class QuizQuestionConfiguration : IEntityTypeConfiguration<QuizQue
         builder.Property(quizQuestion => quizQuestion.QuestionId).HasColumnName("question_id").IsRequired();
         builder.Property(quizQuestion => quizQuestion.DisplayOrder).HasColumnName("display_order").IsRequired();
         builder.Property(quizQuestion => quizQuestion.Marks).HasColumnName("marks").IsRequired();
-        builder.Property(quizQuestion => quizQuestion.ShuffleOptions).HasColumnName("shuffle_options").HasDefaultValue(true);
+        builder.Property(quizQuestion => quizQuestion.TimeInSec).HasColumnName("time_in_sec").HasDefaultValue((short)0);
         builder.HasIndex(quizQuestion => new { quizQuestion.QuizId, quizQuestion.QuestionId }).IsUnique();
     }
 }

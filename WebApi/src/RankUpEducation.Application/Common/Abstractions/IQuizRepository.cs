@@ -1,4 +1,5 @@
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Common.Abstractions;
@@ -64,6 +65,9 @@ public interface IQuizRepository
 
     /// <summary>Manage detail by quiz id (ownership already checked by the service).</summary>
     Task<QuizDetailItem?> GetDetailForManageAsync(long quizId, CancellationToken cancellationToken);
+
+    /// <summary>Appends one workflow event to the quiz's app_approval trail.</summary>
+    Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken);
 
     Task<bool> HasStartedAssignmentsAsync(long quizId, DateTimeOffset now, CancellationToken cancellationToken);
 

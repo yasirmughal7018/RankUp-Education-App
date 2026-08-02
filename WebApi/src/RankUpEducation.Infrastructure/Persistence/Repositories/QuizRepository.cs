@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
@@ -567,6 +568,23 @@ public sealed class QuizRepository : IQuizRepository
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
         var schools = await QuizQueryHelper.LoadSchoolNamesAsync(_dbContext, [quiz.SchoolId], cancellationToken);
 
+        var approvalHistory = await (
+            from approval in _dbContext.Approvals.AsNoTracking()
+            join actor in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals actor.Id
+            where approval.EntityType == ApprovalEntityType.Quiz
+                && approval.QuizId == quiz.Id
+                && approval.Action != null
+            orderby approval.CreatedAt, approval.Id
+            select new QuizApprovalEventItem(
+                approval.Id,
+                approval.Action!.Value,
+                approval.ApprovedByUserId,
+                actor.FullName,
+                approval.ApprovedByRole,
+                approval.Reason,
+                approval.CreatedAt)
+        ).ToListAsync(cancellationToken);
+
         return new QuizDetailItem(
             quiz.Id,
             null,
@@ -601,7 +619,13 @@ public sealed class QuizRepository : IQuizRepository
             lifecycleName,
             ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
             ApprovalStatus: approvalName,
-            RejectionReason: quiz.RejectionReason);
+            RejectionReason: quiz.RejectionReason,
+            ApprovalHistory: approvalHistory);
+    }
+
+    public async Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken)
+    {
+        await _dbContext.Approvals.AddAsync(approval, cancellationToken);
     }
 
     public async Task<bool> IsParentPrivateQuizTypeAsync(short quizTypeId, CancellationToken cancellationToken)

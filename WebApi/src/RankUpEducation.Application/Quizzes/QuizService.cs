@@ -386,9 +386,8 @@ public sealed class QuizService : IQuizService
         {
             var source = orderedQuestions.First(question => question.QuestionId == attemptQuestion.QuestionId);
             var options = source.Options.ToList();
-            // Quiz-level enables shuffling; per-question ShuffleOptions can opt a question out.
+            // Option shuffle is controlled only at quiz level.
             var shouldShuffleOptions = quiz.ShuffleOptions
-                && source.ShuffleOptions
                 && !QuizQuestionHelper.IsFillBlankType(source.QuestionTypeName)
                 && !QuizQuestionHelper.IsMatchingType(source.QuestionTypeName)
                 && !QuizQuestionHelper.IsOrderingType(source.QuestionTypeName)

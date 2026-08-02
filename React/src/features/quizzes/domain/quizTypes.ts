@@ -102,6 +102,20 @@ export interface ManageQuiz {
   createdBy: string;
   schoolName: string;
   questions: QuizQuestionItem[];
+  /** Workflow trail from app_approval, oldest first. */
+  approvalHistory?: QuizApprovalHistoryEntry[];
+}
+
+/** One entry in a quiz's approval trail. */
+export interface QuizApprovalHistoryEntry {
+  approvalId: number;
+  /** Created | SubmittedForReview | Endorsed | Approved | Rejected | Archived | Unarchived | Modified. */
+  action: string;
+  actorUserId: number;
+  actorName: string;
+  actorRole: string;
+  reason: string | null;
+  occurredAt: string;
 }
 
 export interface QuizFormValues {

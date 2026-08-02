@@ -13,7 +13,6 @@ import {
 
 interface AttachBankQuestionsDialogProps {
   isSubmitting: boolean;
-  classId?: number;
   subjectId?: number;
   excludeQuestionIds?: number[];
   onClose: () => void;
@@ -30,7 +29,6 @@ function resolveEstimatedTimeSeconds(
 /** Attach one or more Public + Active bank questions to a quiz. */
 export function AttachBankQuestionsDialog({
   isSubmitting,
-  classId,
   subjectId,
   excludeQuestionIds = [],
   onClose,
@@ -65,10 +63,11 @@ export function AttachBankQuestionsDialog({
       pendingOnly: false,
       activeFilter: "true" as const,
       subjectId: subjectId && subjectId > 0 ? subjectId : ("" as const),
-      classId: classId && classId > 0 ? classId : ("" as const),
+      // Grade/class is optional for bank browse — only subject must match the quiz.
+      classId: "" as const,
       eligibleForQuizOnly: true,
     }),
-    [classId, subjectId],
+    [subjectId],
   );
 
   const {
@@ -238,8 +237,8 @@ export function AttachBankQuestionsDialog({
               </h2>
               <p className="mt-1 text-sm text-slate-600">
                 Select quiz-ready Public questions
-                {classId || subjectId
-                  ? " matching this quiz class and subject."
+                {subjectId
+                  ? " matching this quiz subject."
                   : "."}
               </p>
             </div>

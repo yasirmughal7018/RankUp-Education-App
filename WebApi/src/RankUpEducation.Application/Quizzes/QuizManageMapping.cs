@@ -38,7 +38,17 @@ internal static class QuizManageMapping
             detail.ReviewDisplayMode,
             detail.CreatedByName,
             detail.SchoolName,
-            questions.Select(QuizQuestionMapping.ToQuestionResponse).ToArray());
+            questions.Select(QuizQuestionMapping.ToQuestionResponse).ToArray(),
+            (detail.ApprovalHistory ?? Array.Empty<QuizApprovalEventItem>())
+                .Select(entry => new QuizApprovalHistoryItem(
+                    entry.ApprovalId,
+                    entry.Action.ToString(),
+                    entry.ActorUserId,
+                    entry.ActorName,
+                    entry.ActorRole.ToString(),
+                    entry.Reason,
+                    entry.OccurredAt))
+                .ToArray());
     }
 
     public static QuizAssignmentResponse ToAssignmentResponse(QuizAssignmentListItem item)

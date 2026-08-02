@@ -6,6 +6,7 @@
  */
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useLookups } from "@/core/hooks/useLookups";
 import { PageHeader } from "@/core/components/PageHeader";
@@ -149,6 +150,7 @@ export function QuestionDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [approvalHistoryExpanded, setApprovalHistoryExpanded] = useState(false);
 
   const canApprove = user ? canApproveQuestions(user.role) : false;
   const isOwner =
@@ -450,58 +452,6 @@ export function QuestionDetailPage() {
         ) : null}
       </section>
 
-      <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <h2 className="mb-1 text-sm font-semibold text-foreground">
-          Approval history
-        </h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Full trail for every role — create, endorse/publish, modify, activate,
-          deactivate, archive, and unarchive.
-        </p>
-        {(question.approvalHistory?.length ?? 0) === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3.5 py-3 text-sm text-muted-foreground">
-            No history recorded yet. New actions will appear here for Teacher,
-            Campus Admin, School Admin, and Portal Admin.
-          </p>
-        ) : (
-          <ol className="relative space-y-3 border-l border-border pl-5">
-            {question.approvalHistory!.map((entry) => (
-              <li key={entry.approvalId} className="relative">
-                <span
-                  aria-hidden
-                  className={`absolute -left-[1.6rem] top-3 h-3 w-3 rounded-full border-2 ${historyDotClass(entry.action)}`}
-                />
-                <div className="rounded-xl border border-border bg-background px-3.5 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {entry.actorName}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {humanizeRole(entry.actorRole)}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatHistoryDate(entry.occurredAt)}
-                      </p>
-                    </div>
-                    <span
-                      className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${historyChipClass(entry.action)}`}
-                    >
-                      {HISTORY_ACTION_LABELS[entry.action] ?? entry.action}
-                    </span>
-                  </div>
-                  {entry.reason ? (
-                    <p className="mt-2 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)]/60 px-3 py-2 text-xs text-[var(--status-rejected-text)]">
-                      {entry.reason}
-                    </p>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-
       <section className="flex flex-wrap gap-2">
         {showApproveAction ? (
           <>
@@ -693,6 +643,83 @@ export function QuestionDetailPage() {
           >
             Delete
           </button>
+        ) : null}
+      </section>
+
+      <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <button
+          type="button"
+          aria-expanded={approvalHistoryExpanded}
+          onClick={() => setApprovalHistoryExpanded((open) => !open)}
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground">
+              Approval history
+              {(question.approvalHistory?.length ?? 0) > 0 ? (
+                <span className="ml-2 font-normal text-muted-foreground">
+                  ({question.approvalHistory!.length})
+                </span>
+              ) : null}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Full trail for every role — create, endorse/publish, modify, activate,
+              deactivate, archive, and unarchive.
+            </p>
+          </div>
+          <ChevronDown
+            aria-hidden
+            className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+              approvalHistoryExpanded ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        {approvalHistoryExpanded ? (
+          <div className="mt-4">
+            {(question.approvalHistory?.length ?? 0) === 0 ? (
+              <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3.5 py-3 text-sm text-muted-foreground">
+                No history recorded yet. New actions will appear here for Teacher,
+                Campus Admin, School Admin, and Portal Admin.
+              </p>
+            ) : (
+              <ol className="relative space-y-3 border-l border-border pl-5">
+                {question.approvalHistory!.map((entry) => (
+                  <li key={entry.approvalId} className="relative">
+                    <span
+                      aria-hidden
+                      className={`absolute -left-[1.6rem] top-3 h-3 w-3 rounded-full border-2 ${historyDotClass(entry.action)}`}
+                    />
+                    <div className="rounded-xl border border-border bg-background px-3.5 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {entry.actorName}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {humanizeRole(entry.actorRole)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatHistoryDate(entry.occurredAt)}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${historyChipClass(entry.action)}`}
+                        >
+                          {HISTORY_ACTION_LABELS[entry.action] ?? entry.action}
+                        </span>
+                      </div>
+                      {entry.reason ? (
+                        <p className="mt-2 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)]/60 px-3 py-2 text-xs text-[var(--status-rejected-text)]">
+                          {entry.reason}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         ) : null}
       </section>
     </div>

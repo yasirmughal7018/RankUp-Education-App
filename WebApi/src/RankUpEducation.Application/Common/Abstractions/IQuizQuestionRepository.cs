@@ -18,7 +18,7 @@ public interface IQuizQuestionRepository
 
     /// <summary>
     /// Recalculates quiz TotalQuestions, TotalMarks, and TimeLimitMinutes
-    /// (ceil of Σ question EstimatedTimeSeconds / 60) after question set changes.
+    /// (ceil of Σ quiz_questions.time_in_sec / 60) after question set changes.
     /// </summary>
     Task RecalculateQuizTotalsAsync(long quizId, CancellationToken cancellationToken);
 

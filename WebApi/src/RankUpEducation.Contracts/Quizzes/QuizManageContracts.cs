@@ -75,7 +75,21 @@ public sealed record ManageQuizResponse(
     string ReviewDisplayMode,
     string CreatedBy,
     string SchoolName,
-    IReadOnlyList<ManageQuizQuestionResponse> Questions);
+    IReadOnlyList<ManageQuizQuestionResponse> Questions,
+    IReadOnlyList<QuizApprovalHistoryItem> ApprovalHistory);
+
+/// <summary>One entry in a quiz's approval trail.</summary>
+public sealed record QuizApprovalHistoryItem(
+    long ApprovalId,
+    /// <summary>Created | SubmittedForReview | Endorsed | Approved | Rejected | Archived | Unarchived | Modified.</summary>
+    string Action,
+    long ActorUserId,
+    string ActorName,
+    /// <summary>PortalAdmin | SchoolAdmin | CampusAdmin | Teacher | Parent | Student.</summary>
+    string ActorRole,
+    /// <summary>Rejection reason, or null.</summary>
+    string? Reason,
+    DateTimeOffset OccurredAt);
 
 /// <summary>
 /// Assignment request. Modes: one, selected, group, allLinked (parent), allInGrade / allInSection (teacher),

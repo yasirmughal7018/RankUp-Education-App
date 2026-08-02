@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Lookups;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Questions;
@@ -146,6 +147,8 @@ public sealed class QuizManageService : IQuizManageService
 
         await _quizzes.AddQuizAsync(quiz, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await RecordTrailEventAsync(quiz.Id, scope, ApprovalAction.Created, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await BuildManageResponseAsync(quiz.Id, cancellationToken);
     }
@@ -176,6 +179,7 @@ public sealed class QuizManageService : IQuizManageService
             QuizReviewDisplay.Full);
 
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
+        await RecordTrailEventAsync(quizId, scope, ApprovalAction.Modified, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await BuildManageResponseAsync(quizId, cancellationToken);
     }
@@ -214,6 +218,7 @@ public sealed class QuizManageService : IQuizManageService
                 LookupNames.PendingApprovalStatusNames,
                 cancellationToken);
             quiz.SubmitForApproval(publishedStatusId, pendingApprovalStatusId);
+            await RecordTrailEventAsync(quizId, scope, ApprovalAction.SubmittedForReview, cancellationToken);
         }
         else if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
@@ -222,6 +227,7 @@ public sealed class QuizManageService : IQuizManageService
                 LookupNames.SchoolApprovedStatusNames,
                 cancellationToken);
             quiz.Publish(publishedStatusId, schoolApprovedStatusId, scope.UserId.ToString());
+            await RecordTrailEventAsync(quizId, scope, ApprovalAction.Endorsed, cancellationToken);
         }
         else
         {
@@ -231,6 +237,7 @@ public sealed class QuizManageService : IQuizManageService
                 LookupNames.ApprovedStatusNames,
                 cancellationToken);
             quiz.Publish(publishedStatusId, approvedStatusId, scope.UserId.ToString());
+            await RecordTrailEventAsync(quizId, scope, ApprovalAction.Approved, cancellationToken);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -297,6 +304,13 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         quiz.Approve(nextStatusId, scope.UserId.ToString());
+        await RecordTrailEventAsync(
+            quizId,
+            scope,
+            scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
+                ? ApprovalAction.Endorsed
+                : ApprovalAction.Approved,
+            cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
@@ -347,6 +361,12 @@ public sealed class QuizManageService : IQuizManageService
             cancellationToken);
 
         quiz.Reject(rejectedStatusId, request.Reason);
+        await RecordTrailEventAsync(
+            quizId,
+            scope,
+            ApprovalAction.Rejected,
+            cancellationToken,
+            request.Reason);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var reason = quiz.RejectionReason;
@@ -472,6 +492,8 @@ public sealed class QuizManageService : IQuizManageService
             throw new InvalidOperationException("Duplicated quiz was not assigned a database id.");
         }
 
+        await RecordTrailEventAsync(copy.Id, scope, ApprovalAction.Created, cancellationToken);
+
         var sourceQuestions = await _quizQuestions.GetQuizQuestionsForCopyAsync(quizId, cancellationToken);
         if (sourceQuestions.Count == 0)
         {
@@ -509,7 +531,7 @@ public sealed class QuizManageService : IQuizManageService
                     question.Id,
                     sourceQuestion.DisplayOrder,
                     sourceQuestion.Marks,
-                    sourceQuestion.ShuffleOptions),
+                    sourceQuestion.EstimatedTimeSeconds),
                 cancellationToken);
         }
 
@@ -550,6 +572,7 @@ public sealed class QuizManageService : IQuizManageService
             cancellationToken);
 
         quiz.Archive(archivedStatusId);
+        await RecordTrailEventAsync(quizId, scope, ApprovalAction.Archived, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var archivedName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
@@ -576,11 +599,29 @@ public sealed class QuizManageService : IQuizManageService
             cancellationToken);
 
         quiz.Unarchive(restoredStatusId);
+        await RecordTrailEventAsync(quizId, scope, ApprovalAction.Unarchived, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var restoredName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new UnarchiveQuizResponse(quizId, restoredName);
     }
+
+    /// <summary>Queues one app_approval trail row; persisted by the caller's SaveChanges.</summary>
+    private Task RecordTrailEventAsync(
+        long quizId,
+        QuizManageScope scope,
+        ApprovalAction action,
+        CancellationToken cancellationToken,
+        string? reason = null)
+        => _quizzes.AddApprovalEventAsync(
+            Approval.RecordQuizEvent(
+                quizId,
+                scope.UserId,
+                scope.Role,
+                action,
+                DateTimeOffset.UtcNow,
+                reason),
+            cancellationToken);
 
     private async Task<ManageQuizResponse> BuildManageResponseAsync(long quizId, CancellationToken cancellationToken)
     {

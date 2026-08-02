@@ -39,6 +39,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(DifficultyLevelLookupSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizAttemptQuestionMarksSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizQuestionTimeInSecSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizRejectionReasonSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizOptionalScopeLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizNavigationAndMarkReviewSupportSql, cancellationToken);
@@ -50,6 +51,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(ApprovalLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(ApprovalSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizApprovalTrailSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionApprovalTrailBackfillSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserAvatarAndSchoolChangeSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
@@ -704,6 +706,25 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
           AND qq.marks > 0;
         """;
 
+    /// <summary>
+    /// Per-question time lives on quiz_questions (time_in_sec). Option shuffle is quiz-level only.
+    /// Backfills time from the bank question estimated_time_seconds when missing.
+    /// </summary>
+    private const string QuizQuestionTimeInSecSupportSql = """
+        ALTER TABLE public.quiz_questions
+            ADD COLUMN IF NOT EXISTS time_in_sec smallint NOT NULL DEFAULT 0;
+
+        UPDATE public.quiz_questions AS qq
+        SET time_in_sec = q.estimated_time_seconds
+        FROM public.questions AS q
+        WHERE qq.question_id = q.id
+          AND (qq.time_in_sec IS NULL OR qq.time_in_sec = 0)
+          AND q.estimated_time_seconds > 0;
+
+        ALTER TABLE public.quiz_questions
+            DROP COLUMN IF EXISTS shuffle_options;
+        """;
+
     private const string QuizRejectionReasonSupportSql = """
         ALTER TABLE public.quizzes
             ADD COLUMN IF NOT EXISTS rejection_reason varchar(1000) NULL;
@@ -1097,6 +1118,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             VALUES
                 (2101::smallint, 'User'::varchar,     'ApprovalEntityType'::varchar, 1::smallint),
                 (2102,           'Question',           'ApprovalEntityType',          2),
+                (2103,           'Quiz',               'ApprovalEntityType',          3),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),
@@ -1122,6 +1144,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             VALUES
                 (2101::smallint, 'User'::varchar,     'ApprovalEntityType'::varchar, 1::smallint),
                 (2102,           'Question',           'ApprovalEntityType',          2),
+                (2103,           'Quiz',               'ApprovalEntityType',          3),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),
@@ -1248,6 +1271,9 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         DROP INDEX IF EXISTS ix_app_approval_pending;
         DROP INDEX IF EXISTS ix_app_approval_question_trail;
 
+        ALTER TABLE public.app_approval
+            ADD COLUMN IF NOT EXISTS quiz_id bigint NULL;
+
         -- Remap legacy entity_type: 1→User(2101), 2→Question(2102).
         UPDATE public.app_approval SET entity_type = 2101 WHERE entity_type = 1;
         UPDATE public.app_approval SET entity_type = 2102 WHERE entity_type = 2;
@@ -1274,8 +1300,9 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         -- Exactly one typed target, matching the discriminator (lookup-backed IDs).
         ALTER TABLE public.app_approval
             ADD CONSTRAINT chk_app_approval_target CHECK (
-                (entity_type = 2101 AND user_id IS NOT NULL AND question_id IS NULL)
-                OR (entity_type = 2102 AND question_id IS NOT NULL AND user_id IS NULL)
+                (entity_type = 2101 AND user_id IS NOT NULL AND question_id IS NULL AND quiz_id IS NULL)
+                OR (entity_type = 2102 AND question_id IS NOT NULL AND user_id IS NULL AND quiz_id IS NULL)
+                OR (entity_type = 2103 AND quiz_id IS NOT NULL AND user_id IS NULL AND question_id IS NULL)
             );
 
         DROP INDEX IF EXISTS ix_app_user_approval_user_id;
@@ -1336,6 +1363,44 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             END IF;
         END
         $approval_lookup_fks$;
+        """;
+
+    /// <summary>
+    /// Quiz workflow trail on app_approval: typed quiz_id FK, entity_type Quiz (2103),
+    /// and widened target CHECK so User / Question / Quiz rows stay mutually exclusive.
+    /// </summary>
+    private const string QuizApprovalTrailSupportSql = """
+        ALTER TABLE public.app_approval
+            ADD COLUMN IF NOT EXISTS quiz_id bigint NULL;
+
+        DO $quiz_fk$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'app_approval_quiz_id_fkey'
+            ) THEN
+                ALTER TABLE public.app_approval
+                    ADD CONSTRAINT app_approval_quiz_id_fkey
+                    FOREIGN KEY (quiz_id) REFERENCES public.quizzes(id) ON DELETE CASCADE;
+            END IF;
+        END
+        $quiz_fk$;
+
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
+        ALTER TABLE public.app_approval
+            ADD CONSTRAINT chk_app_approval_target CHECK (
+                (entity_type = 2101 AND user_id IS NOT NULL AND question_id IS NULL AND quiz_id IS NULL)
+                OR (entity_type = 2102 AND question_id IS NOT NULL AND user_id IS NULL AND quiz_id IS NULL)
+                OR (entity_type = 2103 AND quiz_id IS NOT NULL AND user_id IS NULL AND question_id IS NULL)
+            );
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_id
+            ON public.app_approval (quiz_id);
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_trail
+            ON public.app_approval (quiz_id, created_at DESC)
+            WHERE entity_type = 2103;
         """;
 
     /// <summary>

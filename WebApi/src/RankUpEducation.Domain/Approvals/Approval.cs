@@ -10,8 +10,8 @@ namespace RankUpEducation.Domain.Approvals;
 /// </para>
 /// <para>
 /// User rows behave as a <em>queue</em>: one row per eligible approver, pending until decided
-/// (<see cref="IsApproved"/> null and <see cref="ApprovedAt"/> null). Question rows behave as an
-/// append-only <em>trail</em>: one row per workflow event, always already decided.
+/// (<see cref="IsApproved"/> null and <see cref="ApprovedAt"/> null). Question and Quiz rows
+/// behave as an append-only <em>trail</em>: one row per workflow event, always already decided.
 /// </para>
 /// </summary>
 public sealed class Approval
@@ -26,6 +26,7 @@ public sealed class Approval
         ApprovalEntityType entityType,
         long? userId,
         long? questionId,
+        long? quizId,
         long actorUserId,
         UserRole actorRole,
         ApprovalAction? action,
@@ -37,6 +38,7 @@ public sealed class Approval
         EntityType = entityType;
         UserId = userId;
         QuestionId = questionId;
+        QuizId = quizId;
         ApprovedByUserId = actorUserId;
         ApprovedByRole = actorRole;
         Action = action;
@@ -56,6 +58,9 @@ public sealed class Approval
 
     /// <summary>Reviewed question, when <see cref="EntityType"/> is Question.</summary>
     public long? QuestionId { get; private set; }
+
+    /// <summary>Reviewed quiz, when <see cref="EntityType"/> is Quiz.</summary>
+    public long? QuizId { get; private set; }
 
     /// <summary>Assigned / acting admin for this row.</summary>
     public long ApprovedByUserId { get; private set; }
@@ -88,6 +93,7 @@ public sealed class Approval
             ApprovalEntityType.User,
             userId,
             questionId: null,
+            quizId: null,
             approverUserId,
             approverRole,
             action: null,
@@ -119,6 +125,40 @@ public sealed class Approval
             ApprovalEntityType.Question,
             userId: null,
             questionId,
+            quizId: null,
+            actorUserId,
+            actorRole,
+            action,
+            reason,
+            createdAt: occurredAt,
+            approvedAt: occurredAt,
+            isApproved: DecisionFor(action));
+    }
+
+    /// <summary>Appends one quiz workflow event to the trail.</summary>
+    public static Approval RecordQuizEvent(
+        long quizId,
+        long actorUserId,
+        UserRole actorRole,
+        ApprovalAction action,
+        DateTimeOffset occurredAt,
+        string? reason = null)
+    {
+        if (quizId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quizId), "Quiz id is required.");
+        }
+
+        if (actorUserId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(actorUserId), "Actor user id is required.");
+        }
+
+        return new Approval(
+            ApprovalEntityType.Quiz,
+            userId: null,
+            questionId: null,
+            quizId,
             actorUserId,
             actorRole,
             action,

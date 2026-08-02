@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Quizzes;
-using RankUpEducation.Domain.Questions;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
@@ -33,10 +32,9 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 question.QuestionTypeId,
                 quizQuestion.Marks,
                 quizQuestion.DisplayOrder,
-                quizQuestion.ShuffleOptions,
                 question.Hint,
                 question.Explanation,
-                question.EstimatedTimeSeconds
+                TimeInSec = quizQuestion.TimeInSec
             }).ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -68,7 +66,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             row.DisplayOrder,
             row.Hint,
             row.Explanation,
-            row.EstimatedTimeSeconds,
+            row.TimeInSec,
             options
                 .Where(option => option.QuestionId == row.QuestionId)
                 .Select(option => new QuizQuestionOptionItem(
@@ -89,8 +87,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.MaximumLength,
                     answer.AllowAiReview,
                     answer.AllowTeacherReview))
-                .ToArray(),
-            row.ShuffleOptions)).ToArray();
+                .ToArray())).ToArray();
     }
 
     public async Task AddQuizQuestionAsync(QuizQuestion quizQuestion, CancellationToken cancellationToken)
@@ -121,6 +118,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             .ToHashSet();
 
         var marksByQuestionId = new Dictionary<long, short>();
+        var timeByQuestionId = new Dictionary<long, short>();
         foreach (var entry in _dbContext.ChangeTracker.Entries<QuizQuestion>())
         {
             if (entry.Entity.QuizId != quizId)
@@ -134,21 +132,19 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             }
 
             marksByQuestionId[entry.Entity.QuestionId] = entry.Entity.Marks;
+            timeByQuestionId[entry.Entity.QuestionId] = entry.Entity.TimeInSec;
         }
 
-        var dbRows = await (
-            from link in _dbContext.QuizQuestions.AsNoTracking()
-            join question in _dbContext.Questions.AsNoTracking() on link.QuestionId equals question.Id
-            where link.QuizId == quizId
-            select new
+        var dbRows = await _dbContext.QuizQuestions.AsNoTracking()
+            .Where(link => link.QuizId == quizId)
+            .Select(link => new
             {
                 link.QuestionId,
                 link.Marks,
-                question.EstimatedTimeSeconds
+                link.TimeInSec
             })
             .ToListAsync(cancellationToken);
 
-        var estimatedSecondsByQuestionId = new Dictionary<long, short>();
         foreach (var row in dbRows)
         {
             if (deletedQuestionIds.Contains(row.QuestionId))
@@ -161,36 +157,9 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 marksByQuestionId[row.QuestionId] = row.Marks;
             }
 
-            estimatedSecondsByQuestionId[row.QuestionId] = row.EstimatedTimeSeconds;
-        }
-
-        // Pending attaches may reference questions not yet joined above (link Added, question already saved).
-        var missingTimeIds = marksByQuestionId.Keys
-            .Where(id => !estimatedSecondsByQuestionId.ContainsKey(id))
-            .ToArray();
-        if (missingTimeIds.Length > 0)
-        {
-            var missingTimes = await _dbContext.Questions.AsNoTracking()
-                .Where(question => missingTimeIds.Contains(question.Id))
-                .Select(question => new { question.Id, question.EstimatedTimeSeconds })
-                .ToListAsync(cancellationToken);
-            foreach (var row in missingTimes)
+            if (!timeByQuestionId.ContainsKey(row.QuestionId))
             {
-                estimatedSecondsByQuestionId[row.Id] = row.EstimatedTimeSeconds;
-            }
-        }
-
-        // Prefer tracked question edits for estimated time when the entity is loaded.
-        foreach (var entry in _dbContext.ChangeTracker.Entries<Question>())
-        {
-            if (entry.State is EntityState.Deleted or EntityState.Detached)
-            {
-                continue;
-            }
-
-            if (marksByQuestionId.ContainsKey(entry.Entity.Id))
-            {
-                estimatedSecondsByQuestionId[entry.Entity.Id] = entry.Entity.EstimatedTimeSeconds;
+                timeByQuestionId[row.QuestionId] = row.TimeInSec;
             }
         }
 
@@ -199,7 +168,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             marksByQuestionId.Values.Sum(value => (int)value),
             0,
             short.MaxValue);
-        var estimatedSeconds = estimatedSecondsByQuestionId
+        var estimatedSeconds = timeByQuestionId
             .Where(pair => marksByQuestionId.ContainsKey(pair.Key))
             .Sum(pair => (int)pair.Value);
 
@@ -242,12 +211,11 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 question.SubjectId,
                 question.TopicId,
                 question.DifficultyLevel,
-                question.EstimatedTimeSeconds,
+                TimeInSec = quizQuestion.TimeInSec,
                 quizQuestion.Marks,
                 question.Hint,
                 question.Explanation,
-                quizQuestion.DisplayOrder,
-                quizQuestion.ShuffleOptions
+                quizQuestion.DisplayOrder
             }).ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -272,7 +240,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             row.SubjectId,
             row.TopicId,
             row.DifficultyLevel,
-            row.EstimatedTimeSeconds,
+            row.TimeInSec,
             row.Marks,
             row.Hint,
             row.Explanation,
@@ -297,7 +265,6 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.MaximumLength,
                     answer.AllowAiReview,
                     answer.AllowTeacherReview))
-                .ToArray(),
-            row.ShuffleOptions)).ToArray();
+                .ToArray())).ToArray();
     }
 }

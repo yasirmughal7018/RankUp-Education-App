@@ -418,7 +418,7 @@ CREATE TABLE public.quiz_questions (
 	question_id int8 NOT NULL,
 	display_order int2 NOT NULL,
 	marks int2 NOT NULL,
-	shuffle_options bool DEFAULT true NOT NULL,
+	time_in_sec int2 DEFAULT 0 NOT NULL,
 	CONSTRAINT quiz_questions_pkey PRIMARY KEY (id),
 	CONSTRAINT quiz_questions_quiz_question_key UNIQUE (quiz_id, question_id),
 	CONSTRAINT quiz_questions_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.questions(id),

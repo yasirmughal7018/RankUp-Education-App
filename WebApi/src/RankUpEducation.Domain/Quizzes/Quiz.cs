@@ -154,7 +154,7 @@ public sealed class Quiz : SoftDeleteEntity
     }
 
     /// <summary>
-    /// Recalculates aggregate question count, marks, and time limit (ceil of Σ EstimatedTimeSeconds / 60)
+    /// Recalculates aggregate question count, marks, and time limit (ceil of Σ quiz_questions.time_in_sec / 60)
     /// after bank attach or inline add/update/remove. Includes unsaved link changes in the current unit of work.
     /// </summary>
     public void SetQuestionTotals(short totalQuestions, short totalMarks, short? timeLimitMinutes)
