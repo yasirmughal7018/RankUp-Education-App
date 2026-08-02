@@ -112,9 +112,21 @@ export async function duplicateQuiz(quizId: number): Promise<ManageQuiz> {
   return { ...quiz, id };
 }
 
-/** Soft-archive a published quiz. */
-export async function archiveQuiz(quizId: number): Promise<void> {
-  await apiRequest(`/quizzes/${quizId}/archive`, { method: "POST" });
+/** Archive started quizzes, or permanently delete when unassigned / not started. */
+export async function archiveQuiz(
+  quizId: number,
+): Promise<{ quizId: number; lifecycleStatus: string; permanentlyDeleted: boolean }> {
+  const response = await apiRequest<{
+    quizId: number;
+    lifecycleStatus: string;
+    permanentlyDeleted?: boolean;
+  }>(`/quizzes/${quizId}/archive`, { method: "POST" });
+
+  return {
+    quizId: response.quizId,
+    lifecycleStatus: response.lifecycleStatus,
+    permanentlyDeleted: Boolean(response.permanentlyDeleted),
+  };
 }
 
 /** Admin queue: quizzes awaiting approval. */

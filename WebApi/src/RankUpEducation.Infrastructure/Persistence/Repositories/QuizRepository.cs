@@ -400,14 +400,37 @@ public sealed class QuizRepository : IQuizRepository
         return _dbContext.Quizzes.FirstOrDefaultAsync(quiz => quiz.Id == quizId && !quiz.IsDeleted, cancellationToken);
     }
 
-    public Task DeleteQuizAsync(Quiz quiz, CancellationToken cancellationToken)
+    public async Task DeleteQuizAsync(Quiz quiz, CancellationToken cancellationToken)
     {
+        var quizId = quiz.Id;
+
+        var questionLinks = await _dbContext.QuizQuestions
+            .Where(link => link.QuizId == quizId)
+            .ToListAsync(cancellationToken);
+        _dbContext.QuizQuestions.RemoveRange(questionLinks);
+
+        var assignments = await _dbContext.QuizAssignments
+            .Where(assignment => assignment.QuizId == quizId)
+            .ToListAsync(cancellationToken);
+        _dbContext.QuizAssignments.RemoveRange(assignments);
+
+        // quiz_reviews cascade on quiz delete; attempts must not exist for hard-delete callers.
         _dbContext.Quizzes.Remove(quiz);
-        return Task.CompletedTask;
     }
 
     public async Task<bool> HasStartedAssignmentsAsync(long quizId, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        var quiz = await _dbContext.Quizzes.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == quizId && !item.IsDeleted, cancellationToken);
+
+        if (quiz is not null
+            && quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
+            && quiz.AudienceStartAt is not null
+            && quiz.AudienceStartAt <= now)
+        {
+            return true;
+        }
+
         var hasStartedWindow = await _dbContext.QuizAssignments.AsNoTracking()
             .AnyAsync(assignment => assignment.QuizId == quizId && assignment.StartDateTime <= now, cancellationToken);
 

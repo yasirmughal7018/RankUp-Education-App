@@ -227,7 +227,7 @@ public sealed class Quiz : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
-    /// <summary>Soft-deletes a draft quiz; only allowed when no assignments exist.</summary>
+    /// <summary>Soft-deletes a draft quiz (legacy path; prefer hard delete when unassigned).</summary>
     public void MarkDeleted(DateTimeOffset deletedAt, long? deletedBy)
     {
         SoftDelete(deletedAt, deletedBy);

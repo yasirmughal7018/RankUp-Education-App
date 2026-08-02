@@ -349,9 +349,23 @@ export function QuizManageDetailPage() {
                 <button
                   type="button"
                   disabled={isSubmitting}
-                  onClick={() =>
-                    void runAction(() => archiveQuiz.mutateAsync(), "Quiz archived.")
-                  }
+                  onClick={() => {
+                    void (async () => {
+                      setActionError(null);
+                      setSuccessMessage(null);
+                      try {
+                        const result = await archiveQuiz.mutateAsync();
+                        if (result.permanentlyDeleted) {
+                          navigate("/quizzes");
+                          return;
+                        }
+                        setSuccessMessage("Quiz archived.");
+                      } catch (caught) {
+                        const apiError = caught as { message?: string };
+                        setActionError(apiError.message || "Action failed.");
+                      }
+                    })();
+                  }}
                   className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
                 >
                   Archive

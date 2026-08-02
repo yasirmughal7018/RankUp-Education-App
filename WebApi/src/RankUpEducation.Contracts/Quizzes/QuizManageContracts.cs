@@ -125,10 +125,14 @@ public sealed record DuplicateQuizResponse(
     long SourceQuizId,
     ManageQuizResponse Quiz);
 
-/// <summary>Archive confirmation with updated lifecycle status.</summary>
+/// <summary>
+/// Archive confirmation. When <see cref="PermanentlyDeleted"/> is true, the quiz row was removed
+/// because it was unassigned or not started yet.
+/// </summary>
 public sealed record ArchiveQuizResponse(
     long QuizId,
-    string LifecycleStatus);
+    string LifecycleStatus,
+    bool PermanentlyDeleted = false);
 
 /// <summary>Extra attempts to grant after review finalization.</summary>
 public sealed record AllowRetryRequest(short ExtraAttempts = 1);

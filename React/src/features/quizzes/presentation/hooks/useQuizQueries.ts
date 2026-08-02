@@ -128,13 +128,22 @@ export function useDuplicateQuizMutation(quizId: number) {
   });
 }
 
-/** Archive a published quiz. */
+/** Archive a published quiz (hard-deletes when not started / unassigned). */
 export function useArchiveQuizMutation(quizId: number) {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateQuizDetail(quizId);
 
   return useMutation({
     mutationFn: () => quizApi.archiveQuiz(quizId),
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      if (result.permanentlyDeleted) {
+        queryClient.removeQueries({ queryKey: queryKeys.manageQuiz(quizId) });
+        return;
+      }
+
+      invalidate();
+    },
   });
 }
 

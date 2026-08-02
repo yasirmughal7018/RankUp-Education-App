@@ -21,7 +21,7 @@ public interface IQuizManageService
     /// <summary>Updates quiz metadata while draft/published and no assignment window has started.</summary>
     Task<ManageQuizResponse> UpdateAsync(long quizId, UpdateQuizRequest request, CancellationToken cancellationToken);
 
-    /// <summary>Soft-deletes a draft quiz with no assignments.</summary>
+    /// <summary>Permanently deletes a draft quiz with no assignments or attempts.</summary>
     Task DeleteAsync(long quizId, CancellationToken cancellationToken);
 
     /// <summary>
@@ -38,7 +38,9 @@ public interface IQuizManageService
     /// </summary>
     Task<DuplicateQuizResponse> DuplicateAsync(long quizId, CancellationToken cancellationToken);
 
-    /// <summary>Archives a published/assigned quiz (drafts must be deleted instead).</summary>
+    /// <summary>
+    /// Archives a started quiz. When the quiz is unassigned or not started yet, permanently deletes it instead.
+    /// </summary>
     Task<ArchiveQuizResponse> ArchiveAsync(long quizId, CancellationToken cancellationToken);
 
     /// <summary>School admin approves a teacher quiz pending approval.</summary>
@@ -180,12 +182,13 @@ public sealed class QuizManageService : IQuizManageService
         var quiz = await _guard.RequireOwnedQuizAsync(quizId, scope, cancellationToken);
         await _guard.EnsureDraftOnlyAsync(quiz, cancellationToken);
 
-        if (await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken))
+        if (await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken)
+            || await _quizzes.HasAnyAttemptsAsync(quizId, cancellationToken))
         {
-            throw new BusinessRuleException("Quiz cannot be deleted after assignments exist.");
+            throw new BusinessRuleException("Quiz cannot be deleted after assignments or attempts exist.");
         }
 
-        quiz.MarkDeleted(DateTimeOffset.UtcNow, scope.UserId);
+        await _quizzes.DeleteQuizAsync(quiz, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -463,6 +466,14 @@ public sealed class QuizManageService : IQuizManageService
             throw new BusinessRuleException("Draft quizzes should be deleted instead of archived.");
         }
 
+        // Unassigned or not-yet-started: remove from DB instead of soft-archiving.
+        if (!await _quizzes.HasStartedAssignmentsAsync(quizId, DateTimeOffset.UtcNow, cancellationToken))
+        {
+            await _quizzes.DeleteQuizAsync(quiz, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return new ArchiveQuizResponse(quizId, "Deleted", PermanentlyDeleted: true);
+        }
+
         var archivedStatusId = await _guard.RequireLookupAsync(
             QuizLookupNames.QuizLifecycleStatus,
             QuizLookupNames.ArchivedLifecycleNames,
@@ -472,7 +483,7 @@ public sealed class QuizManageService : IQuizManageService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var archivedName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
-        return new ArchiveQuizResponse(quizId, archivedName);
+        return new ArchiveQuizResponse(quizId, archivedName, PermanentlyDeleted: false);
     }
 
     private async Task<ManageQuizResponse> BuildManageResponseAsync(long quizId, CancellationToken cancellationToken)

@@ -177,7 +177,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Quiz updated."));
     }
 
-    /// <summary>Deletes a draft quiz with no assignments.</summary>
+    /// <summary>Permanently deletes a draft quiz with no assignments.</summary>
     [HttpDelete("{quizId:long}")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAsync(
         long quizId,
@@ -294,14 +294,19 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response.Quiz, "Quiz duplicated."));
     }
 
-    /// <summary>Archives a published or assigned quiz.</summary>
+    /// <summary>
+    /// Archives a started quiz, or permanently deletes it when unassigned / not started yet.
+    /// </summary>
     [HttpPost("{quizId:long}/archive")]
     public async Task<ActionResult<ApiResponse<ArchiveQuizResponse>>> ArchiveAsync(
         long quizId,
         CancellationToken cancellationToken)
     {
         var response = await _quizManageService.ArchiveAsync(quizId, cancellationToken);
-        return Ok(ApiResponse<ArchiveQuizResponse>.Ok(response, "Quiz archived."));
+        var message = response.PermanentlyDeleted
+            ? "Quiz deleted."
+            : "Quiz archived.";
+        return Ok(ApiResponse<ArchiveQuizResponse>.Ok(response, message));
     }
 
     /// <summary>Grants additional attempts after review is finalized.</summary>
