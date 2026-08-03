@@ -1,5 +1,5 @@
 SELECT au.id, au.display_name, au.username, l."name" AS Role, au.password_hash, au.must_change_password, au.is_active, aur.created_at AS RoleDate, 
-	s."name" AS SchoolName, sc."name" AS CampusName, au.mobile_number , au.cnic
+	s."name" AS SchoolName, sc."name" AS CampusName, au.mobile_number , au.cnic, au.email 
 FROM  app_users au
 LEFT JOIN app_user_roles aur ON au.id = aur.user_id 
 LEFT JOIN lookups l ON aur."role" = l.id AND l."type" = 'UserRole'
