@@ -32,10 +32,9 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
 
     public DbSet<User> Users => Set<User>();
     public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
-    /// <summary>Generic review queue + workflow trail (users and questions).</summary>
+    /// <summary>Generic review queue + workflow trail (users, questions, quizzes, school changes).</summary>
     public DbSet<Approval> Approvals => Set<Approval>();
     public DbSet<UserSchoolChangeRequest> UserSchoolChangeRequests => Set<UserSchoolChangeRequest>();
-    public DbSet<UserSchoolChangeApproval> UserSchoolChangeApprovals => Set<UserSchoolChangeApproval>();
     public DbSet<UserRoleRequest> UserRoleRequests => Set<UserRoleRequest>();
     public DbSet<UserPasswordResetRequest> UserPasswordResetRequests => Set<UserPasswordResetRequest>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();

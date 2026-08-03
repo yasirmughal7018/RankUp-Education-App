@@ -1597,7 +1597,7 @@ public sealed class AuthService : IAuthService
         }
         else
         {
-            var approval = UserSchoolChangeApproval.CreatePending(request.Id, approverId, approverRole);
+            var approval = Approval.CreatePendingSchoolChange(request.Id, approverId, approverRole);
             approval.MarkApproved(_dateTimeProvider.UtcNow);
             await _schoolChanges.AddApprovalsAsync([approval], cancellationToken);
         }
@@ -1671,7 +1671,7 @@ public sealed class AuthService : IAuthService
         }
         else
         {
-            var approval = UserSchoolChangeApproval.CreatePending(request.Id, approverId, approverRole);
+            var approval = Approval.CreatePendingSchoolChange(request.Id, approverId, approverRole);
             approval.RecordRejected(_dateTimeProvider.UtcNow);
             await _schoolChanges.AddApprovalsAsync([approval], cancellationToken);
         }
@@ -2174,7 +2174,7 @@ public sealed class AuthService : IAuthService
             }
 
             var approvals = candidates
-                .Select(candidate => UserSchoolChangeApproval.CreatePending(
+                .Select(candidate => Approval.CreatePendingSchoolChange(
                     changeRequest.Id,
                     candidate.UserId,
                     candidate.Role))

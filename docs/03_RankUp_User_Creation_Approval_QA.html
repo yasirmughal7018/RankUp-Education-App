@@ -186,7 +186,7 @@
     <li>Roles live only in <code>app_user_roles</code>. Columns <code>app_users.role</code> and <code>app_users.admin_target</code> are <strong>removed</strong>.</li>
     <li>Default login role = earliest role assignment in <code>app_user_roles</code> (by <code>created_at</code>).</li>
     <li>JWT <code>role</code> claim = <strong>active</strong> session role; <code>roles</code> = all assigned roles.</li>
-    <li>Registration routing: <code>app_approval</code> — a generic approval table shared with the question bank (<code>entity_type=1</code> user registration rows with <code>user_id</code>; <code>entity_type=2</code> question workflow-trail rows with <code>question_id</code>). School/campus change routing: <code>app_user_school_change_request</code> + <code>app_user_school_change_approval</code>.</li>
+    <li>Registration routing: <code>app_approval</code> — generic approval table (<code>entity_type=User</code> with <code>user_id</code>; Question/Quiz/SchoolChange use shared <code>request_id</code>). School/campus change request payload stays in <code>app_user_school_change_request</code>.</li>
     <li>Registration reject is a <strong>soft-reject</strong> (no hard delete). Unique indexes on username/email/CNIC/mobile ignore rows where <code>rejected_at IS NOT NULL</code> — the same email may re-register after reject.</li>
   </ul>
 
@@ -1195,7 +1195,7 @@
     Self-deactivate Web-only — QA-39. Active-role school-change — QA-40.
     Directory badges: <code>ApprovedInactive</code> = NeedsPasswordSetup; <code>Active</code> = Ready.
     Tables: <code>app_user_roles</code>, <code>app_approval</code>,
-    <code>app_user_school_change_request</code>, <code>app_user_school_change_approval</code>,
+    <code>app_user_school_change_request</code>,
     <code>app_user_password_reset_request</code>, <code>app_users.last_login_at</code>.
     Companion DOCX (if present): <code>docs/03_RankUp_User_Creation_Approval_QA.docx</code> — update manually or rebuild when a generator script is available.
   </footer>

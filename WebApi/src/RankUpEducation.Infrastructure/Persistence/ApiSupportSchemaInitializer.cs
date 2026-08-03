@@ -54,6 +54,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuizApprovalTrailSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionApprovalTrailBackfillSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserAvatarAndSchoolChangeSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(SchoolChangeApprovalOnAppApprovalSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(ApprovalRequestIdUnificationSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(PasswordResetRequestSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
@@ -133,24 +135,178 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         CREATE INDEX IF NOT EXISTS ix_app_user_school_change_request_status
             ON public.app_user_school_change_request (status);
+        """;
 
-        CREATE TABLE IF NOT EXISTS public.app_user_school_change_approval (
-            id BIGSERIAL PRIMARY KEY,
-            request_id BIGINT NOT NULL
-                REFERENCES public.app_user_school_change_request (id) ON DELETE CASCADE,
-            approved_by_user_id BIGINT NOT NULL
-                REFERENCES public.app_users (id) ON DELETE RESTRICT,
-            approved_by_role SMALLINT NOT NULL,
-            approved_at TIMESTAMPTZ NULL,
-            is_approved BOOLEAN NULL
-        );
+    /// <summary>
+    /// Moves school/campus change approvals into app_approval (entity_type 2104) via request_id,
+    /// then drops the legacy app_user_school_change_approval table when it still exists.
+    /// </summary>
+    private const string SchoolChangeApprovalOnAppApprovalSupportSql = """
+        ALTER TABLE public.app_approval
+            ADD COLUMN IF NOT EXISTS request_id bigint NULL;
 
-        CREATE INDEX IF NOT EXISTS ix_app_user_school_change_approval_request_id
-            ON public.app_user_school_change_approval (request_id);
+        -- Leave chk_app_approval_target dropped until unification backfills request_id.
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
 
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_app_user_school_change_approval_unique
-            ON public.app_user_school_change_approval (
-                request_id, approved_by_user_id, approved_by_role);
+        DO $migrate_school_change_approvals$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name = 'app_user_school_change_approval'
+            ) THEN
+                INSERT INTO public.app_approval (
+                    entity_type,
+                    request_id,
+                    approved_by_user_id,
+                    approved_by_role,
+                    action,
+                    created_at,
+                    approved_at,
+                    is_approved)
+                SELECT
+                    2104,
+                    a.request_id,
+                    a.approved_by_user_id,
+                    a.approved_by_role,
+                    CASE
+                        WHEN a.is_approved = TRUE THEN 2203
+                        WHEN a.is_approved = FALSE THEN 2206
+                        ELSE NULL
+                    END,
+                    COALESCE(a.approved_at, r.requested_at, now()),
+                    a.approved_at,
+                    a.is_approved
+                FROM public.app_user_school_change_approval a
+                JOIN public.app_user_school_change_request r ON r.id = a.request_id
+                WHERE EXISTS (SELECT 1 FROM public.app_users u WHERE u.id = a.approved_by_user_id)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM public.app_approval existing
+                      WHERE existing.entity_type = 2104
+                        AND existing.request_id = a.request_id
+                        AND existing.approved_by_user_id = a.approved_by_user_id
+                        AND existing.approved_by_role = a.approved_by_role);
+
+                DROP TABLE public.app_user_school_change_approval;
+            END IF;
+        END
+        $migrate_school_change_approvals$;
+        """;
+
+    /// <summary>
+    /// Collapses question_id / quiz_id / school_change_request_id into a single request_id.
+    /// Registration continues to use user_id; entity_type tells what request_id means.
+    /// </summary>
+    private const string ApprovalRequestIdUnificationSupportSql = """
+        ALTER TABLE public.app_approval
+            ADD COLUMN IF NOT EXISTS request_id bigint NULL;
+
+        -- Backfill request_id from the legacy typed columns (idempotent).
+        DO $backfill_request_id$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'question_id'
+            ) THEN
+                UPDATE public.app_approval
+                SET request_id = question_id
+                WHERE entity_type = 2102
+                  AND question_id IS NOT NULL
+                  AND (request_id IS NULL OR request_id IS DISTINCT FROM question_id);
+            END IF;
+
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'quiz_id'
+            ) THEN
+                UPDATE public.app_approval
+                SET request_id = quiz_id
+                WHERE entity_type = 2103
+                  AND quiz_id IS NOT NULL
+                  AND (request_id IS NULL OR request_id IS DISTINCT FROM quiz_id);
+            END IF;
+
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'school_change_request_id'
+            ) THEN
+                UPDATE public.app_approval
+                SET request_id = school_change_request_id
+                WHERE entity_type = 2104
+                  AND school_change_request_id IS NOT NULL
+                  AND (request_id IS NULL OR request_id IS DISTINCT FROM school_change_request_id);
+            END IF;
+        END
+        $backfill_request_id$;
+
+        -- Heal rows so the final CHECK can be applied safely.
+        UPDATE public.app_approval
+        SET request_id = NULL
+        WHERE entity_type = 2101
+          AND request_id IS NOT NULL;
+
+        UPDATE public.app_approval
+        SET user_id = NULL
+        WHERE entity_type IN (2102, 2103, 2104)
+          AND user_id IS NOT NULL;
+
+        -- Drop orphan trail/queue rows that have no target after backfill.
+        DELETE FROM public.app_approval
+        WHERE entity_type IN (2102, 2103, 2104)
+          AND request_id IS NULL;
+
+        -- Registration rows must have user_id; drop impossible orphans.
+        DELETE FROM public.app_approval
+        WHERE entity_type = 2101
+          AND user_id IS NULL;
+
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
+        ALTER TABLE public.app_approval
+            ADD CONSTRAINT chk_app_approval_target CHECK (
+                (entity_type = 2101 AND user_id IS NOT NULL AND request_id IS NULL)
+                OR (entity_type IN (2102, 2103, 2104) AND request_id IS NOT NULL AND user_id IS NULL)
+            );
+
+        -- Drop legacy typed FKs + columns (request_id is polymorphic — no single FK).
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS app_approval_question_id_fkey;
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS app_approval_quiz_id_fkey;
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS app_approval_school_change_request_id_fkey;
+
+        DROP INDEX IF EXISTS ix_app_approval_question_id;
+        DROP INDEX IF EXISTS ix_app_approval_quiz_id;
+        DROP INDEX IF EXISTS ix_app_approval_school_change_request_id;
+        DROP INDEX IF EXISTS ix_app_approval_question_trail;
+        DROP INDEX IF EXISTS ix_app_approval_quiz_trail;
+        DROP INDEX IF EXISTS ix_app_approval_school_change_approver_role;
+        DROP INDEX IF EXISTS ix_app_approval_school_change_pending;
+
+        ALTER TABLE public.app_approval DROP COLUMN IF EXISTS question_id;
+        ALTER TABLE public.app_approval DROP COLUMN IF EXISTS quiz_id;
+        ALTER TABLE public.app_approval DROP COLUMN IF EXISTS school_change_request_id;
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_request_id
+            ON public.app_approval (request_id);
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_question_trail
+            ON public.app_approval (request_id, created_at DESC)
+            WHERE entity_type = 2102;
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_trail
+            ON public.app_approval (request_id, created_at DESC)
+            WHERE entity_type = 2103;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_approval_school_change_approver_role
+            ON public.app_approval (request_id, approved_by_user_id, approved_by_role)
+            WHERE entity_type = 2104;
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_school_change_pending
+            ON public.app_approval (request_id)
+            WHERE entity_type = 2104 AND approved_at IS NULL AND is_approved IS NULL;
         """;
 
     private const string SchoolSoftDeleteSupportSql = """
@@ -1172,6 +1328,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2101::smallint, 'User'::varchar,     'ApprovalEntityType'::varchar, 1::smallint),
                 (2102,           'Question',           'ApprovalEntityType',          2),
                 (2103,           'Quiz',               'ApprovalEntityType',          3),
+                (2104,           'SchoolChangeRequest','ApprovalEntityType',          4),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),
@@ -1198,6 +1355,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2101::smallint, 'User'::varchar,     'ApprovalEntityType'::varchar, 1::smallint),
                 (2102,           'Question',           'ApprovalEntityType',          2),
                 (2103,           'Quiz',               'ApprovalEntityType',          3),
+                (2104,           'SchoolChangeRequest','ApprovalEntityType',          4),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),
@@ -1272,8 +1430,33 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_approval
             ALTER COLUMN entity_type SET DEFAULT 2101;
 
-        ALTER TABLE public.app_approval
-            ADD COLUMN IF NOT EXISTS question_id bigint NULL;
+        -- Legacy typed column (skipped once unified onto request_id).
+        DO $legacy_question_id$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'request_id'
+            ) AND NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'question_id'
+            ) THEN
+                NULL;
+            ELSE
+                ALTER TABLE public.app_approval
+                    ADD COLUMN IF NOT EXISTS question_id bigint NULL;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'app_approval_question_id_fkey'
+                ) THEN
+                    ALTER TABLE public.app_approval
+                        ADD CONSTRAINT app_approval_question_id_fkey
+                        FOREIGN KEY (question_id) REFERENCES public.questions(id) ON DELETE CASCADE;
+                END IF;
+            END IF;
+        END
+        $legacy_question_id$;
 
         ALTER TABLE public.app_approval
             ADD COLUMN IF NOT EXISTS action int2 NULL;
@@ -1298,19 +1481,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_approval
             ALTER COLUMN approved_at DROP DEFAULT;
 
-        DO $question_fk$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1
-                FROM pg_constraint
-                WHERE conname = 'app_approval_question_id_fkey'
-            ) THEN
-                ALTER TABLE public.app_approval
-                    ADD CONSTRAINT app_approval_question_id_fkey
-                    FOREIGN KEY (question_id) REFERENCES public.questions(id) ON DELETE CASCADE;
-            END IF;
-        END
-        $question_fk$;
+        -- question_id FK is created in $legacy_question_id$ above when needed.
 
         -- Backfill: rows that already have approved_at were approvals (not rejections).
         UPDATE public.app_approval
@@ -1324,8 +1495,24 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         DROP INDEX IF EXISTS ix_app_approval_pending;
         DROP INDEX IF EXISTS ix_app_approval_question_trail;
 
-        ALTER TABLE public.app_approval
-            ADD COLUMN IF NOT EXISTS quiz_id bigint NULL;
+        DO $legacy_quiz_id_early$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'request_id'
+            ) AND NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'question_id'
+            ) THEN
+                NULL;
+            ELSE
+                ALTER TABLE public.app_approval
+                    ADD COLUMN IF NOT EXISTS quiz_id bigint NULL;
+            END IF;
+        END
+        $legacy_quiz_id_early$;
 
         -- Remap legacy entity_type: 1→User(2101), 2→Question(2102).
         UPDATE public.app_approval SET entity_type = 2101 WHERE entity_type = 1;
@@ -1350,13 +1537,9 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         WHERE approved_at IS NOT NULL
           AND created_at > approved_at;
 
-        -- Exactly one typed target, matching the discriminator (lookup-backed IDs).
-        ALTER TABLE public.app_approval
-            ADD CONSTRAINT chk_app_approval_target CHECK (
-                (entity_type = 2101 AND user_id IS NOT NULL AND question_id IS NULL AND quiz_id IS NULL)
-                OR (entity_type = 2102 AND question_id IS NOT NULL AND user_id IS NULL AND quiz_id IS NULL)
-                OR (entity_type = 2103 AND quiz_id IS NOT NULL AND user_id IS NULL AND question_id IS NULL)
-            );
+        -- Do not recreate chk_app_approval_target here: mixed legacy/unified rows
+        -- (e.g. entity_type 2104) violate the old 2101–2103 check. Unification owns it.
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
 
         DROP INDEX IF EXISTS ix_app_user_approval_user_id;
         DROP INDEX IF EXISTS ix_app_user_approval_approved_by;
@@ -1371,8 +1554,22 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         CREATE INDEX IF NOT EXISTS ix_app_approval_user_id
             ON public.app_approval (user_id);
 
-        CREATE INDEX IF NOT EXISTS ix_app_approval_question_id
-            ON public.app_approval (question_id);
+        DO $legacy_question_indexes$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'question_id'
+            ) THEN
+                CREATE INDEX IF NOT EXISTS ix_app_approval_question_id
+                    ON public.app_approval (question_id);
+
+                CREATE INDEX IF NOT EXISTS ix_app_approval_question_trail
+                    ON public.app_approval (question_id, created_at DESC)
+                    WHERE entity_type = 2102;
+            END IF;
+        END
+        $legacy_question_indexes$;
 
         CREATE INDEX IF NOT EXISTS ix_app_approval_approved_by
             ON public.app_approval (approved_by_user_id);
@@ -1391,10 +1588,6 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         CREATE INDEX IF NOT EXISTS ix_app_approval_pending
             ON public.app_approval (user_id)
             WHERE entity_type = 2101 AND approved_at IS NULL AND is_approved IS NULL;
-
-        CREATE INDEX IF NOT EXISTS ix_app_approval_question_trail
-            ON public.app_approval (question_id, created_at DESC)
-            WHERE entity_type = 2102;
 
         -- Optional integrity: entity_type / action resolve to lookup names.
         DO $approval_lookup_fks$
@@ -1419,101 +1612,167 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         """;
 
     /// <summary>
-    /// Quiz workflow trail on app_approval: typed quiz_id FK, entity_type Quiz (2103),
-    /// and widened target CHECK so User / Question / Quiz rows stay mutually exclusive.
+    /// Quiz workflow trail on app_approval (legacy quiz_id column until request_id unification).
     /// </summary>
     private const string QuizApprovalTrailSupportSql = """
-        ALTER TABLE public.app_approval
-            ADD COLUMN IF NOT EXISTS quiz_id bigint NULL;
-
-        DO $quiz_fk$
+        DO $legacy_quiz_col$
         BEGIN
-            IF NOT EXISTS (
-                SELECT 1
-                FROM pg_constraint
-                WHERE conname = 'app_approval_quiz_id_fkey'
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'request_id'
+            ) AND NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'question_id'
             ) THEN
+                NULL;
+            ELSE
                 ALTER TABLE public.app_approval
-                    ADD CONSTRAINT app_approval_quiz_id_fkey
-                    FOREIGN KEY (quiz_id) REFERENCES public.quizzes(id) ON DELETE CASCADE;
+                    ADD COLUMN IF NOT EXISTS quiz_id bigint NULL;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'app_approval_quiz_id_fkey'
+                ) THEN
+                    ALTER TABLE public.app_approval
+                        ADD CONSTRAINT app_approval_quiz_id_fkey
+                        FOREIGN KEY (quiz_id) REFERENCES public.quizzes(id) ON DELETE CASCADE;
+                END IF;
+
+                CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_id
+                    ON public.app_approval (quiz_id);
+
+                CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_trail
+                    ON public.app_approval (quiz_id, created_at DESC)
+                    WHERE entity_type = 2103;
             END IF;
         END
-        $quiz_fk$;
+        $legacy_quiz_col$;
 
+        -- chk_app_approval_target is owned by ApprovalRequestIdUnificationSupportSql.
         ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
-        ALTER TABLE public.app_approval
-            ADD CONSTRAINT chk_app_approval_target CHECK (
-                (entity_type = 2101 AND user_id IS NOT NULL AND question_id IS NULL AND quiz_id IS NULL)
-                OR (entity_type = 2102 AND question_id IS NOT NULL AND user_id IS NULL AND quiz_id IS NULL)
-                OR (entity_type = 2103 AND quiz_id IS NOT NULL AND user_id IS NULL AND question_id IS NULL)
-            );
-
-        CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_id
-            ON public.app_approval (quiz_id);
-
-        CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_trail
-            ON public.app_approval (quiz_id, created_at DESC)
-            WHERE entity_type = 2103;
         """;
 
     /// <summary>
     /// Seeds a starting trail for questions that pre-date app_approval, so their history is not
-    /// blank. Each insert is guarded by action so re-running the initializer is a no-op.
-    /// Rejections are skipped: Question.Reject clears approved_by, so the rejector is unknown.
+    /// blank. Uses request_id (final shape) or legacy question_id.
     /// </summary>
     private const string QuestionApprovalTrailBackfillSql = """
-        -- Creation event, attributed to the recorded creator + creator role.
-        INSERT INTO public.app_approval (
-            entity_type, question_id, approved_by_user_id, approved_by_role,
-            action, created_at, approved_at, is_approved)
-        SELECT
-            2102, -- Question
-            q.id,
-            q.created_by,
-            q.created_by_role,
-            2201, -- Created
-            q.created_date::timestamptz,
-            q.created_date::timestamptz,
-            NULL
-        FROM public.questions q
-        WHERE EXISTS (SELECT 1 FROM public.app_users u WHERE u.id = q.created_by)
-          AND NOT EXISTS (
-              SELECT 1
-              FROM public.app_approval a
-              WHERE a.entity_type = 2102 AND a.question_id = q.id AND a.action = 2201);
+        DO $question_trail_backfill$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'request_id'
+            ) THEN
+                INSERT INTO public.app_approval (
+                    entity_type, request_id, approved_by_user_id, approved_by_role,
+                    action, created_at, approved_at, is_approved)
+                SELECT
+                    2102,
+                    q.id,
+                    q.created_by,
+                    q.created_by_role,
+                    2201,
+                    q.created_date::timestamptz,
+                    q.created_date::timestamptz,
+                    NULL
+                FROM public.questions q
+                WHERE EXISTS (SELECT 1 FROM public.app_users u WHERE u.id = q.created_by)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM public.app_approval a
+                      WHERE a.entity_type = 2102 AND a.request_id = q.id AND a.action = 2201);
 
-        -- Endorse / publish event for questions that carry an approver.
-        INSERT INTO public.app_approval (
-            entity_type, question_id, approved_by_user_id, approved_by_role,
-            action, created_at, approved_at, is_approved)
-        SELECT
-            2102, -- Question
-            q.id,
-            q.approved_by,
-            COALESCE(
-                (
-                    SELECT CASE
-                        WHEN BOOL_OR(r.role = 2010) THEN 2010 -- PortalAdmin
-                        WHEN BOOL_OR(r.role = 2011) THEN 2011 -- SchoolAdmin
-                        WHEN BOOL_OR(r.role = 2012) THEN 2012 -- CampusAdmin
-                        ELSE 2014 -- Teacher
-                    END
-                    FROM public.app_user_roles r
-                    WHERE r.user_id = q.approved_by
-                ),
-                2010
-            ),
-            CASE WHEN q.visibility_level = 3 THEN 2205 ELSE 2204 END, -- Published : Endorsed
-            q.modified_date::timestamptz,
-            q.modified_date::timestamptz,
-            TRUE
-        FROM public.questions q
-        WHERE q.approved_by IS NOT NULL
-          AND EXISTS (SELECT 1 FROM public.app_users u WHERE u.id = q.approved_by)
-          AND NOT EXISTS (
-              SELECT 1
-              FROM public.app_approval a
-              WHERE a.entity_type = 2102 AND a.question_id = q.id AND a.action IN (2204, 2205));
+                INSERT INTO public.app_approval (
+                    entity_type, request_id, approved_by_user_id, approved_by_role,
+                    action, created_at, approved_at, is_approved)
+                SELECT
+                    2102,
+                    q.id,
+                    q.approved_by,
+                    COALESCE(
+                        (
+                            SELECT CASE
+                                WHEN BOOL_OR(r.role = 2010) THEN 2010
+                                WHEN BOOL_OR(r.role = 2011) THEN 2011
+                                WHEN BOOL_OR(r.role = 2012) THEN 2012
+                                ELSE 2014
+                            END
+                            FROM public.app_user_roles r
+                            WHERE r.user_id = q.approved_by
+                        ),
+                        2010
+                    ),
+                    CASE WHEN q.visibility_level = 3 THEN 2205 ELSE 2204 END,
+                    q.modified_date::timestamptz,
+                    q.modified_date::timestamptz,
+                    TRUE
+                FROM public.questions q
+                WHERE q.approved_by IS NOT NULL
+                  AND EXISTS (SELECT 1 FROM public.app_users u WHERE u.id = q.approved_by)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM public.app_approval a
+                      WHERE a.entity_type = 2102 AND a.request_id = q.id AND a.action IN (2204, 2205));
+            ELSIF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_approval'
+                  AND column_name = 'question_id'
+            ) THEN
+                INSERT INTO public.app_approval (
+                    entity_type, question_id, approved_by_user_id, approved_by_role,
+                    action, created_at, approved_at, is_approved)
+                SELECT
+                    2102,
+                    q.id,
+                    q.created_by,
+                    q.created_by_role,
+                    2201,
+                    q.created_date::timestamptz,
+                    q.created_date::timestamptz,
+                    NULL
+                FROM public.questions q
+                WHERE EXISTS (SELECT 1 FROM public.app_users u WHERE u.id = q.created_by)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM public.app_approval a
+                      WHERE a.entity_type = 2102 AND a.question_id = q.id AND a.action = 2201);
+
+                INSERT INTO public.app_approval (
+                    entity_type, question_id, approved_by_user_id, approved_by_role,
+                    action, created_at, approved_at, is_approved)
+                SELECT
+                    2102,
+                    q.id,
+                    q.approved_by,
+                    COALESCE(
+                        (
+                            SELECT CASE
+                                WHEN BOOL_OR(r.role = 2010) THEN 2010
+                                WHEN BOOL_OR(r.role = 2011) THEN 2011
+                                WHEN BOOL_OR(r.role = 2012) THEN 2012
+                                ELSE 2014
+                            END
+                            FROM public.app_user_roles r
+                            WHERE r.user_id = q.approved_by
+                        ),
+                        2010
+                    ),
+                    CASE WHEN q.visibility_level = 3 THEN 2205 ELSE 2204 END,
+                    q.modified_date::timestamptz,
+                    q.modified_date::timestamptz,
+                    TRUE
+                FROM public.questions q
+                WHERE q.approved_by IS NOT NULL
+                  AND EXISTS (SELECT 1 FROM public.app_users u WHERE u.id = q.approved_by)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM public.app_approval a
+                      WHERE a.entity_type = 2102 AND a.question_id = q.id AND a.action IN (2204, 2205));
+            END IF;
+        END
+        $question_trail_backfill$;
         """;
 
     private const string RegistrationSupportSql = """

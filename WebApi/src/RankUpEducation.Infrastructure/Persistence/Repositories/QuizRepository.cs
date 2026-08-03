@@ -572,7 +572,7 @@ public sealed class QuizRepository : IQuizRepository
             from approval in _dbContext.Approvals.AsNoTracking()
             join actor in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals actor.Id
             where approval.EntityType == ApprovalEntityType.Quiz
-                && approval.QuizId == quiz.Id
+                && approval.RequestId == quiz.Id
                 && approval.Action != null
             orderby approval.CreatedAt, approval.Id
             select new QuizApprovalEventItem(

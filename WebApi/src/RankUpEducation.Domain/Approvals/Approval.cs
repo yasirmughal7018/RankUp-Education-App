@@ -5,13 +5,15 @@ namespace RankUpEducation.Domain.Approvals;
 /// <summary>
 /// Generic approval queue + trail. Table: app_approval.
 /// <para>
-/// <see cref="EntityType"/> selects which typed foreign key carries the target row, so the
-/// table keeps real referential integrity instead of an untyped entity id.
+/// <see cref="EntityType"/> selects how the target is identified:
+/// registration uses <see cref="UserId"/>; question, quiz, and school-change rows use
+/// <see cref="RequestId"/> (question id, quiz id, or school-change request id).
 /// </para>
 /// <para>
-/// User rows behave as a <em>queue</em>: one row per eligible approver, pending until decided
-/// (<see cref="IsApproved"/> null and <see cref="ApprovedAt"/> null). Question and Quiz rows
-/// behave as an append-only <em>trail</em>: one row per workflow event, always already decided.
+/// User and SchoolChangeRequest rows behave as a <em>queue</em>: one row per eligible
+/// approver, pending until decided (<see cref="IsApproved"/> null and <see cref="ApprovedAt"/> null).
+/// Question and Quiz rows behave as an append-only <em>trail</em>: one row per workflow event,
+/// always already decided.
 /// </para>
 /// </summary>
 public sealed class Approval
@@ -25,8 +27,7 @@ public sealed class Approval
     private Approval(
         ApprovalEntityType entityType,
         long? userId,
-        long? questionId,
-        long? quizId,
+        long? requestId,
         long actorUserId,
         UserRole actorRole,
         ApprovalAction? action,
@@ -37,8 +38,7 @@ public sealed class Approval
     {
         EntityType = entityType;
         UserId = userId;
-        QuestionId = questionId;
-        QuizId = quizId;
+        RequestId = requestId;
         ApprovedByUserId = actorUserId;
         ApprovedByRole = actorRole;
         Action = action;
@@ -50,17 +50,17 @@ public sealed class Approval
 
     public long Id { get; private set; }
 
-    /// <summary>Which target column is populated.</summary>
+    /// <summary>Which target <see cref="UserId"/> or <see cref="RequestId"/> represents.</summary>
     public ApprovalEntityType EntityType { get; private set; }
 
     /// <summary>Reviewed user, when <see cref="EntityType"/> is User.</summary>
     public long? UserId { get; private set; }
 
-    /// <summary>Reviewed question, when <see cref="EntityType"/> is Question.</summary>
-    public long? QuestionId { get; private set; }
-
-    /// <summary>Reviewed quiz, when <see cref="EntityType"/> is Quiz.</summary>
-    public long? QuizId { get; private set; }
+    /// <summary>
+    /// Target id when <see cref="EntityType"/> is Question, Quiz, or SchoolChangeRequest
+    /// (question id, quiz id, or school-change request id respectively).
+    /// </summary>
+    public long? RequestId { get; private set; }
 
     /// <summary>Assigned / acting admin for this row.</summary>
     public long ApprovedByUserId { get; private set; }
@@ -92,8 +92,24 @@ public sealed class Approval
         => new(
             ApprovalEntityType.User,
             userId,
-            questionId: null,
-            quizId: null,
+            requestId: null,
+            approverUserId,
+            approverRole,
+            action: null,
+            reason: null,
+            createdAt: DateTimeOffset.UtcNow,
+            approvedAt: null,
+            isApproved: null);
+
+    /// <summary>Queues a school/campus change review row for one eligible approver.</summary>
+    public static Approval CreatePendingSchoolChange(
+        long schoolChangeRequestId,
+        long approverUserId,
+        UserRole approverRole)
+        => new(
+            ApprovalEntityType.SchoolChangeRequest,
+            userId: null,
+            requestId: schoolChangeRequestId,
             approverUserId,
             approverRole,
             action: null,
@@ -124,8 +140,7 @@ public sealed class Approval
         return new Approval(
             ApprovalEntityType.Question,
             userId: null,
-            questionId,
-            quizId: null,
+            requestId: questionId,
             actorUserId,
             actorRole,
             action,
@@ -157,8 +172,7 @@ public sealed class Approval
         return new Approval(
             ApprovalEntityType.Quiz,
             userId: null,
-            questionId: null,
-            quizId,
+            requestId: quizId,
             actorUserId,
             actorRole,
             action,

@@ -505,7 +505,8 @@
     <tr><td><code>app_user_role_request</code></td><td>Pending self-service Parent/Teacher additional-role requests</td></tr>
     <tr><td><code>app_approval</code></td><td>Registration approval queue per reviewer</td></tr>
     <tr><td><code>app_user_school_change_request</code></td><td>Pending school/campus moves + lock</td></tr>
-    <tr><td><code>app_user_school_change_approval</code></td><td>Reviewer trail for school-change</td></tr>
+    <tr><td><code>app_user_school_change_request</code></td><td>School/campus change request payload + status</td></tr>
+    <tr><td><code>app_approval</code> (<code>entity_type=SchoolChangeRequest</code>)</td><td>Reviewer queue for school-change (<code>request_id</code>)</td></tr>
     <tr><td><code>app_user_password_reset_request</code></td><td>Forgot-password pending request; first completion wins</td></tr>
   </table>
 

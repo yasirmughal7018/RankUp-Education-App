@@ -1,14 +1,18 @@
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Common.Abstractions;
 
-/// <summary>Persistence for school/campus change requests and their approval queue.</summary>
+/// <summary>
+/// Persistence for school/campus change requests. Approver queue rows live in app_approval
+/// (<see cref="ApprovalEntityType.SchoolChangeRequest"/>).
+/// </summary>
 public interface ISchoolChangeRequestRepository
 {
     Task AddAsync(UserSchoolChangeRequest request, CancellationToken cancellationToken);
 
     Task AddApprovalsAsync(
-        IEnumerable<UserSchoolChangeApproval> approvals,
+        IEnumerable<Approval> approvals,
         CancellationToken cancellationToken);
 
     Task<UserSchoolChangeRequest?> GetByIdAsync(long requestId, CancellationToken cancellationToken);
@@ -31,7 +35,7 @@ public interface ISchoolChangeRequestRepository
         int? campusIdFilter,
         CancellationToken cancellationToken);
 
-    Task<UserSchoolChangeApproval?> GetPendingApprovalAsync(
+    Task<Approval?> GetPendingApprovalAsync(
         long requestId,
         long approverUserId,
         UserRole approverRole,

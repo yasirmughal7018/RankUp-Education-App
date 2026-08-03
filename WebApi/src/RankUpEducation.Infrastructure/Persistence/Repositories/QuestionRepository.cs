@@ -348,7 +348,7 @@ public sealed class QuestionRepository : IQuestionRepository
             from approval in _dbContext.Approvals.AsNoTracking()
             join actor in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals actor.Id
             where approval.EntityType == ApprovalEntityType.Question
-                && approval.QuestionId == questionId
+                && approval.RequestId == questionId
                 && approval.Action != null
             orderby approval.CreatedAt, approval.Id
             select new QuestionApprovalEventItem(

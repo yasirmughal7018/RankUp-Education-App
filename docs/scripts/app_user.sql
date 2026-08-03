@@ -16,14 +16,14 @@ INNER JOIN lookups l ON aua."approved_by_role" = l.id AND l."type" = 'UserRole'
 WHERE aua.entity_type = 2101
 ORDER BY aua.user_id;
 
--- Question workflow trail (entity_type 2102 = Question).
+-- Question workflow trail (entity_type 2102 = Question; request_id = question id).
 SELECT q.id AS question_id, aua."action", au.display_name AS actor, l."name" AS actor_role, aua.reason, aua.created_at
 FROM app_approval aua
-INNER JOIN questions q ON aua.question_id = q.id
+INNER JOIN questions q ON aua.request_id = q.id
 INNER JOIN app_users au ON aua.approved_by_user_id = au.id
 INNER JOIN lookups l ON aua."approved_by_role" = l.id AND l."type" = 'UserRole'
 WHERE aua.entity_type = 2102
-ORDER BY aua.question_id, aua.created_at;
+ORDER BY aua.request_id, aua.created_at;
 
 /*
 INSERT INTO public.app_users
