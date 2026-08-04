@@ -10,5 +10,6 @@ public enum UserRole
     CampusAdmin = 2012,
     Parent = 2013,
     Teacher = 2014,
-    Student = 2015
+    Student = 2015,
+    Coordinator = 2016,
 }

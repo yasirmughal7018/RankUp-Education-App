@@ -8,12 +8,13 @@ LEFT JOIN school_campuses sc ON au.campus_id  = sc.id
 ORDER BY id;
 
 -- Registration queue rows (entity_type 2101 = User) in the generic app_approval table.
-SELECT au.display_name , au.username, au2.display_name , au2.username, aua."approved_by_role", l."name" AS ApprovedBy, aua.approved_at, aua.is_approved
+SELECT au.display_name , au.username, au2.display_name , au2.username, aua."approved_by_role", l."name" AS ApprovedBy, aua.approved_at, aua.is_approved, aua.request_id 
 FROM app_approval aua 
-INNER JOIN app_users au ON aua.user_id = au.id 
+LEFT JOIN app_users au ON aua.user_id = au.id 
 INNER JOIN app_users au2 ON aua.approved_by_user_id  = au2.id 
 INNER JOIN lookups l ON aua."approved_by_role" = l.id AND l."type" = 'UserRole'
-WHERE aua.entity_type = 2101
+LEFT JOIN lookups lu ON  aua.entity_type = lu.id  AND lu."type" = 'ApprovalEntityType'
+LEFT JOIN app_user_school_change_request aucr ON aua.request_id = aucr.id 
 ORDER BY aua.user_id;
 
 -- Question workflow trail (entity_type 2102 = Question; request_id = question id).

@@ -5,6 +5,18 @@ namespace RankUpEducation.Domain.Auth;
 /// <summary>Which role combinations are allowed on one account.</summary>
 public static class UserRoleRules
 {
+    /// <summary>
+    /// Roles that may share one login (any subset). Student and PortalAdmin stay exclusive.
+    /// </summary>
+    private static readonly HashSet<UserRole> CombinableRoles =
+    [
+        UserRole.SchoolAdmin,
+        UserRole.CampusAdmin,
+        UserRole.Teacher,
+        UserRole.Parent,
+        UserRole.Coordinator,
+    ];
+
     /// <summary>Returns whether the role may be added given existing assignments.</summary>
     public static bool CanAddRole(IReadOnlyCollection<UserRole> existingRoles, UserRole roleToAdd)
     {
@@ -25,11 +37,9 @@ public static class UserRoleRules
             return existingRoles.Count == 0 && roleToAdd == UserRole.PortalAdmin;
         }
 
-        // SchoolAdmin, CampusAdmin, Teacher, Parent may combine freely.
-        return roleToAdd is UserRole.SchoolAdmin
-            or UserRole.CampusAdmin
-            or UserRole.Teacher
-            or UserRole.Parent;
+        // SchoolAdmin, CampusAdmin, Teacher, Parent, Coordinator may all share one account.
+        return CombinableRoles.Contains(roleToAdd)
+            && existingRoles.All(CombinableRoles.Contains);
     }
 
     /// <summary>Throws when the role combination would violate account rules.</summary>

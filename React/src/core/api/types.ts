@@ -17,7 +17,8 @@ export type UserRole =
   | "CampusAdmin"
   | "Teacher"
   | "Student"
-  | "Parent";
+  | "Parent"
+  | "Coordinator";
 
 export interface PendingSchoolChange {
   id: number;
@@ -97,6 +98,8 @@ export function getDashboardLabel(role: UserRole): string {
       return "School Administration";
     case "CampusAdmin":
       return "Campus Administration";
+    case "Coordinator":
+      return "Coordinator Dashboard";
     case "Teacher":
       return "Teacher Dashboard";
     case "Student":
@@ -108,7 +111,7 @@ export function getDashboardLabel(role: UserRole): string {
   }
 }
 
-/** Display label for admin roles (e.g. PortalAdmin → Portal Admin). */
+/** Display label for roles (e.g. PortalAdmin → Portal Admin). */
 export function getRoleLabel(role: UserRole): string {
   switch (role) {
     case "PortalAdmin":
@@ -117,6 +120,8 @@ export function getRoleLabel(role: UserRole): string {
       return "School Admin";
     case "CampusAdmin":
       return "Campus Admin";
+    case "Coordinator":
+      return "Coordinator";
     default:
       return role;
   }
@@ -133,7 +138,7 @@ export function dashboardPathForRole(role: UserRole): string {
   if (role === "Student") {
     return "/student/quizzes";
   }
-  if (role === "Teacher") {
+  if (role === "Teacher" || role === "Coordinator") {
     return "/quizzes";
   }
   return "/dashboard";

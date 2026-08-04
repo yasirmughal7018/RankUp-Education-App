@@ -30,7 +30,7 @@ public static class QuizScopeResolver
     public static QuizManageScope RequireManageScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("Your role cannot manage quizzes.");
         }
@@ -40,12 +40,12 @@ public static class QuizScopeResolver
 
         var profileId = currentUser.ProfileId ?? userId;
 
-        if (role == UserRole.Teacher)
+        if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             var schoolId = currentUser.SchoolId
-                ?? throw new ForbiddenAppException("Teacher school context was not found.");
+                ?? throw new ForbiddenAppException($"{role} school context was not found.");
             var campusId = currentUser.CampusId
-                ?? throw new ForbiddenAppException("Teacher campus context was not found.");
+                ?? throw new ForbiddenAppException($"{role} campus context was not found.");
 
             return new QuizManageScope(role, userId, profileId, schoolId, campusId);
         }
@@ -96,11 +96,11 @@ public static class QuizScopeResolver
         return new QuizManageScope(role, userId, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
-    /// <summary>Requires Parent, Teacher, SchoolAdmin, or PortalAdmin for assignment operations.</summary>
+    /// <summary>Requires Parent, Teacher, Coordinator, SchoolAdmin, or PortalAdmin for assignment operations.</summary>
     public static QuizManageScope RequireAssignScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("Your role cannot assign quizzes.");
         }
@@ -110,12 +110,12 @@ public static class QuizScopeResolver
 
         var profileId = currentUser.ProfileId ?? userId;
 
-        if (role == UserRole.Teacher)
+        if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             var schoolId = currentUser.SchoolId
-                ?? throw new ForbiddenAppException("Teacher school context was not found.");
+                ?? throw new ForbiddenAppException($"{role} school context was not found.");
             var campusId = currentUser.CampusId
-                ?? throw new ForbiddenAppException("Teacher campus context was not found.");
+                ?? throw new ForbiddenAppException($"{role} campus context was not found.");
 
             return new QuizManageScope(role, userId, profileId, schoolId, campusId);
         }
@@ -163,7 +163,7 @@ public static class QuizScopeResolver
             throw new ForbiddenAppException("You do not have access to this quiz.");
         }
 
-        if (scope.Role == UserRole.Teacher)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
         {
             if (scope.SchoolId != quiz.SchoolId || scope.CampusId != quiz.SchoolCampusId)
             {

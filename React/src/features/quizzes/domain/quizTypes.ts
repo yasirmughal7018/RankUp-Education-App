@@ -217,19 +217,21 @@ export interface QuizAssignment {
 export const QUIZ_MANAGER_ROLES: UserRole[] = [
   "Teacher",
   "Parent",
+  "Coordinator",
   "SchoolAdmin",
   "PortalAdmin",
 ];
 
-/** Roles that author/create quizzes (Teacher, Parent, and school/platform admins). */
+/** Roles that author/create quizzes (Teacher, Parent, Coordinator, and school/platform admins). */
 export const QUIZ_AUTHOR_ROLES: UserRole[] = [
   "Teacher",
   "Parent",
+  "Coordinator",
   "SchoolAdmin",
   "PortalAdmin",
 ];
 
-/** True for Teacher, Parent, SchoolAdmin, and PortalAdmin. */
+/** True for Teacher, Parent, Coordinator, SchoolAdmin, and PortalAdmin. */
 export function canManageQuizzes(role: UserRole): boolean {
   return QUIZ_MANAGER_ROLES.includes(role);
 }
