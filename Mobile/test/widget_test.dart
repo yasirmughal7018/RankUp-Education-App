@@ -20,7 +20,7 @@ void main() {
     await _pumpLoginApp(tester);
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'CNIC or mobile number'),
+      find.byType(TextField).first,
       'teacher-demo',
     );
     await tester.pump();
@@ -34,7 +34,7 @@ void main() {
     await tester.tap(find.text('Forgot password?'));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Username or ID'),
+      find.byType(TextFormField).first,
       'parent-demo',
     );
     await tester.pump();
@@ -49,11 +49,11 @@ void main() {
     await tester.tap(find.text('Request account access'));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Full Name *'),
+      find.byType(TextFormField).at(0),
       'Teacher Demo',
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Mobile Number *'),
+      find.byType(TextFormField).at(1),
       '+923001234567',
     );
     await tester.pump();
