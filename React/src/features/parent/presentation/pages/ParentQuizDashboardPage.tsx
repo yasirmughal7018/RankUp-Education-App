@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { QuizSummary } from "@/features/quizzes/domain/quizTypes";
 import { Link } from "react-router-dom";
 import {
   ClipboardList,
@@ -70,6 +71,8 @@ export function ParentQuizDashboardPage() {
       children: childrenQuery.data?.length ?? 0,
     };
   }, [quizzesQuery.data, childrenQuery.data]);
+
+  const quizzes: QuizSummary[] = quizzesQuery.data ?? [];
 
   return (
     <div className="space-y-6">
