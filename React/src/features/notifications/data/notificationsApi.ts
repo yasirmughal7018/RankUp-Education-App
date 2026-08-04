@@ -1,3 +1,4 @@
+/** In-app notifications HTTP client. */
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 
 export interface NotificationItem {
@@ -13,6 +14,7 @@ export interface NotificationListResponse {
   items: NotificationItem[];
 }
 
+/** Recent notifications for the current user. */
 export async function listNotifications(
   take = 20,
 ): Promise<NotificationListResponse> {
@@ -21,12 +23,14 @@ export async function listNotifications(
   );
 }
 
+/** Mark one notification as read. */
 export async function markNotificationRead(notificationId: number): Promise<void> {
   await apiRequestVoid(`/notifications/${notificationId}/read`, {
     method: "POST",
   });
 }
 
+/** Mark all notifications in a category read. */
 export async function markNotificationCategoryRead(
   category: string,
 ): Promise<void> {

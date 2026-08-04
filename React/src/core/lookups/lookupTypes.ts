@@ -11,6 +11,7 @@ export const LOOKUP_TYPES = {
   TOPIC: "Topic",
   DIFFICULTY: "DifficultyLevel",
   QUESTION_TYPE: "QuestionType",
+  QUIZ_TYPE: "QuizType",
 } as const;
 
 export type LookupType = (typeof LOOKUP_TYPES)[keyof typeof LOOKUP_TYPES];

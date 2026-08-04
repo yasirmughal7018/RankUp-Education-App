@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Leaderboard rankings preview screen.
 class RankingsPage extends StatelessWidget {
   const RankingsPage({super.key});
 

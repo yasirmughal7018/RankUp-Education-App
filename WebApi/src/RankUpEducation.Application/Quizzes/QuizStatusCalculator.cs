@@ -2,8 +2,10 @@ using RankUpEducation.Common.Utilities;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>Derives list, result, and monitor status strings from assignment timing and attempt stats.</summary>
 public static class QuizStatusCalculator
 {
+    /// <summary>Student list card status: upcoming, assigned, available, or completed.</summary>
     public static string ResolveListStatus(
         DateTimeOffset now,
         DateTimeOffset? startAt,
@@ -40,6 +42,7 @@ public static class QuizStatusCalculator
         return "completed";
     }
 
+    /// <summary>Human-readable result line shown on quiz detail and summary cards.</summary>
     public static string ResolveResultStatus(int attemptCount, int attemptLimit, short? bestPercentage, DateTimeOffset? lastSubmittedAt)
     {
         if (attemptCount == 0 || lastSubmittedAt is null)
@@ -55,6 +58,7 @@ public static class QuizStatusCalculator
         return bestPercentage is null ? "Submitted" : "Completed";
     }
 
+    /// <summary>Splits newline-separated instruction text into a list for API responses.</summary>
     public static IReadOnlyList<string> ParseInstructions(string instructions)
     {
         if (!instructions.HasTrimmedText())
@@ -67,6 +71,7 @@ public static class QuizStatusCalculator
             .ToArray();
     }
 
+    /// <summary>Teacher monitor chip: pending_review takes precedence over attempt/window state.</summary>
     public static string ResolveMonitorStatus(
         DateTimeOffset now,
         DateTimeOffset startAt,

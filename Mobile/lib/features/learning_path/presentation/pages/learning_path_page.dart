@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rankup_education/core/widgets/feature_placeholder_page.dart';
 
+/// AI-guided learning path placeholder screen.
 class LearningPathPage extends StatelessWidget {
   const LearningPathPage({super.key});
 

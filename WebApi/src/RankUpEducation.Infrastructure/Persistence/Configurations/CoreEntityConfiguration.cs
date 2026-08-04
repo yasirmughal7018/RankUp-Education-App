@@ -156,7 +156,7 @@ public sealed class StudentGroupConfiguration : IEntityTypeConfiguration<Student
         builder.ToTable("student_groups");
         builder.HasKey(group => group.Id);
         builder.Property(group => group.Id).HasColumnName("id").ValueGeneratedOnAdd();
-        builder.Property(group => group.ReferralId).HasColumnName("refral_id");
+        builder.Property(group => group.ReferralId).HasColumnName("referral_id");
         builder.Property(group => group.GroupName).HasColumnName("group_name").HasMaxLength(50).IsRequired();
         builder.Property(group => group.Description).HasColumnName("description").HasMaxLength(200).IsRequired();
         builder.Property(group => group.IsTeacherGroup).HasColumnName("is_teacher_group").HasDefaultValue(true);

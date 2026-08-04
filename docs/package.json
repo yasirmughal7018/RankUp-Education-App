@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:user-qa-docx": "node build_user_creation_qa_docx.mjs"
+    "build:auth-logic-docx": "node build_authentication_logic_docx.mjs",
+    "build:user-qa-docx": "node build_user_creation_qa_docx.mjs",
+    "build:questions-qa": "node build_questions_business_qa.mjs",
+    "build:quiz-qa": "node build_quiz_business_qa.mjs"
   },
   "dependencies": {
     "docx": "^9.7.1"

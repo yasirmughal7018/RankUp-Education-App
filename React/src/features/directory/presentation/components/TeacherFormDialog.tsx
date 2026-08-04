@@ -9,6 +9,7 @@ import type {
   UpdateDirectoryTeacherInput,
 } from "@/features/directory/domain/directoryTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 type TeacherFormSubmit =
   | { mode: "create"; input: CreateDirectoryTeacherInput }
@@ -22,9 +23,9 @@ interface TeacherFormDialogProps {
   onSubmit: (payload: TeacherFormSubmit) => Promise<void>;
 }
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
+/** Modal form to create or update a teacher with school/campus assignment. */
 export function TeacherFormDialog({
   teacher,
   schools,
@@ -42,7 +43,7 @@ export function TeacherFormDialog({
     teacher?.campusId ? String(teacher.campusId) : "",
   );
   const [teacherCode, setTeacherCode] = useState(teacher?.teacherCode ?? "");
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [mobileNumber, setMobileNumber] = useState(teacher?.mobileNumber ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;
@@ -97,10 +98,10 @@ export function TeacherFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
+        const trimmedEmail = username.trim();
         const parsedSchoolId = Number(schoolId);
-        if (!trimmedUsername) {
-          setError("Username is required.");
+        if (!trimmedEmail) {
+          setError("Email address is required (it is the username).");
           return;
         }
         if (!parsedSchoolId || parsedSchoolId < 1) {
@@ -111,7 +112,8 @@ export function TeacherFormDialog({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: trimmedEmail,
+            emailAddress: trimmedEmail,
             schoolId: parsedSchoolId,
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
@@ -143,7 +145,7 @@ export function TeacherFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${teacher.fullName}.`
-              : "Add a new teacher to the directory. User must set password on first login."}
+              : "Add a teacher to the directory. If email or mobile matches an existing Parent (or other non-Student) account, the Teacher role is added to that same login. User must set password on first login."}
           </p>
         </div>
 
@@ -173,16 +175,17 @@ export function TeacherFormDialog({
             <>
               <div>
                 <FieldLabel htmlFor="teacher-username" required>
-                  Username
+                  Email (username)
                 </FieldLabel>
                 <input
                   id="teacher-username"
-                  type="text"
+                  type="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className={inputClassName}
                   required
                   disabled={isSubmitting}
+                  placeholder="you@example.com"
                 />
               </div>
               <div>
@@ -208,7 +211,7 @@ export function TeacherFormDialog({
             </>
           ) : (
             <p className="text-sm text-slate-500">
-              Username {teacher.username} · School ID {teacher.schoolId}
+              Username {teacher.username} · {teacher.schoolName || "—"}
             </p>
           )}
 
@@ -237,7 +240,7 @@ export function TeacherFormDialog({
                   : ([
                       {
                         id: teacher.campusId,
-                        name: `Campus ${teacher.campusId}`,
+                        name: teacher.campusName || "Current campus",
                       },
                     ] as Pick<DirectoryCampus, "id" | "name">[])
                 : campuses

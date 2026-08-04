@@ -16,5 +16,6 @@ public sealed class UserRoleAssignment
 
     public long UserId { get; private set; }
     public UserRole Role { get; private set; }
+    /// <summary>Used to pick the default role when none is specified at login.</summary>
     public DateTimeOffset CreatedAt { get; private set; }
 }

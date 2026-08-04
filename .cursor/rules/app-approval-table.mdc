@@ -1,0 +1,26 @@
+---
+description: All approval workflows must use the shared app_approval table
+alwaysApply: true
+---
+
+# Approvals go through `app_approval`
+
+Any approval / review queue / workflow trail **must** use `app_approval` (`Approval` domain entity). Do **not** create parallel `*_approval` tables.
+
+## Pattern
+
+1. Keep a **request / target** table for the thing being reviewed when needed (e.g. `app_user_school_change_request`, registration on `app_users`, questions, quizzes).
+2. Store every approver decision or trail event in **`app_approval`** with:
+   - `entity_type` (`ApprovalEntityType`) — what the row is about
+   - `user_id` — only for registration (`entity_type = User`)
+   - `request_id` — shared target id for Question (question id), Quiz (quiz id), and SchoolChangeRequest (school-change request id)
+   - shared columns: `approved_by_user_id`, `approved_by_role`, `action`, `reason`, `created_at`, `approved_at`, `is_approved`
+3. Seed new `ApprovalEntityType` values in `lookups`, widen `chk_app_approval_target`, and update indexes in `ApiSupportSchemaInitializer`.
+4. Queue style (registration, school change): one pending row per eligible approver; decide with `MarkApproved` / `MarkRejected`.
+5. Trail style (question, quiz): append-only decided events via `Record*Event`.
+
+## Do not
+
+- Create tables like `app_user_school_change_approval` or other per-feature approval tables
+- Add separate columns like `question_id` / `quiz_id` / `school_change_request_id` on `app_approval` — use `request_id` + `entity_type` instead
+- Bypass `app_approval` for admin approve/reject flows that already have a type there

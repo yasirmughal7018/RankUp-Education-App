@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Lookups;
@@ -13,6 +14,7 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Infrastructure.Persistence;
 
+/// <summary>EF Core database context for RankUp Education; also acts as the unit-of-work.</summary>
 public sealed class RankUpDbContext : DbContext, IUnitOfWork
 {
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -30,9 +32,11 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
 
     public DbSet<User> Users => Set<User>();
     public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
-    public DbSet<UserApproval> UserApprovals => Set<UserApproval>();
+    /// <summary>Generic review queue + workflow trail (users, questions, quizzes, school changes).</summary>
+    public DbSet<Approval> Approvals => Set<Approval>();
     public DbSet<UserSchoolChangeRequest> UserSchoolChangeRequests => Set<UserSchoolChangeRequest>();
-    public DbSet<UserSchoolChangeApproval> UserSchoolChangeApprovals => Set<UserSchoolChangeApproval>();
+    public DbSet<UserRoleRequest> UserRoleRequests => Set<UserRoleRequest>();
+    public DbSet<UserPasswordResetRequest> UserPasswordResetRequests => Set<UserPasswordResetRequest>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<DeviceSession> DeviceSessions => Set<DeviceSession>();
     public DbSet<Notification> Notifications => Set<Notification>();
@@ -54,13 +58,17 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<QuizReview> QuizReviews => Set<QuizReview>();
     public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
     public DbSet<QuizAttemptQuestion> QuizAttemptQuestions => Set<QuizAttemptQuestion>();
+    public DbSet<QuizAttemptQuestionOption> QuizAttemptQuestionOptions => Set<QuizAttemptQuestionOption>();
+    public DbSet<QuizAttemptAcceptedAnswer> QuizAttemptAcceptedAnswers => Set<QuizAttemptAcceptedAnswer>();
     public DbSet<QuizAttemptAnswer> QuizAttemptAnswers => Set<QuizAttemptAnswer>();
 
+    /// <summary>Applies entity configurations from this assembly.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(RankUpDbContext).Assembly);
     }
 
+    /// <summary>Stamps audit columns on auditable entities before save.</summary>
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditValues();

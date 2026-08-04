@@ -1,6 +1,7 @@
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 
+/// Contract for sign-in, registration, and session lifecycle operations.
 abstract class AuthRepository {
   Future<AuthSession> login({
     required String identifier,
@@ -43,6 +44,12 @@ abstract class AuthRepository {
   Future<AppUser> changePassword({
     required String newPassword,
     String? currentPassword,
+  });
+
+  /// Teacher / Student / CampusAdmin: request school or campus move (locks account).
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
   });
 
   Future<void> logout();

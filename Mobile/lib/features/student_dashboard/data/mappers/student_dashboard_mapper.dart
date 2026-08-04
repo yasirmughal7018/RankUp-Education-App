@@ -4,6 +4,7 @@ import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
 
+/// Maps API JSON into [StudentDashboardModel] domain shapes.
 class StudentDashboardMapper {
   const StudentDashboardMapper._();
 

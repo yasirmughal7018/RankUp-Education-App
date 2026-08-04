@@ -4,6 +4,7 @@ import 'package:rankup_education/features/product_stubs/data/product_stub_models
 import 'package:rankup_education/features/product_stubs/presentation/providers/product_stub_providers.dart';
 import 'package:rankup_education/features/product_stubs/presentation/widgets/async_product_page.dart';
 
+/// School and platform competitions list.
 class CompetitionsPage extends ConsumerWidget {
   const CompetitionsPage({super.key});
 

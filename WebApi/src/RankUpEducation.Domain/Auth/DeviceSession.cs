@@ -3,6 +3,7 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Auth;
 
+/// <summary>Push-notification device registration for a signed-in user.</summary>
 public sealed class DeviceSession : BaseEntity
 {
     private DeviceSession()
@@ -33,6 +34,7 @@ public sealed class DeviceSession : BaseEntity
     public string? AppVersion { get; private set; }
     public DateTimeOffset LastSeenAt { get; private set; }
 
+    /// <summary>Updates metadata when the same device reconnects.</summary>
     public void Update(string? platform, string? pushToken, string? appVersion, DateTimeOffset lastSeenAt)
     {
         Platform = platform;

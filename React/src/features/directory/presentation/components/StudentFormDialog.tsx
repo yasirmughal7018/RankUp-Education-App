@@ -9,6 +9,7 @@ import type {
   UpdateDirectoryStudentInput,
 } from "@/features/directory/domain/directoryTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 type StudentFormSubmit =
   | { mode: "create"; input: CreateDirectoryStudentInput }
@@ -22,9 +23,9 @@ interface StudentFormDialogProps {
   onSubmit: (payload: StudentFormSubmit) => Promise<void>;
 }
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
+/** Modal form to create or update a student with school/campus placement. */
 export function StudentFormDialog({
   student,
   schools,
@@ -44,7 +45,7 @@ export function StudentFormDialog({
   const [rollNumber, setRollNumber] = useState(student?.rollNumber ?? "");
   const [grade, setGrade] = useState(student?.grade ? String(student.grade) : "");
   const [section, setSection] = useState(student?.section ?? "");
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [mobileNumber, setMobileNumber] = useState(student?.mobileNumber ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;
@@ -107,10 +108,10 @@ export function StudentFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
+        const trimmedEmail = username.trim();
         const parsedSchoolId = Number(schoolId);
-        if (!trimmedUsername) {
-          setError("Username is required.");
+        if (!trimmedEmail) {
+          setError("Email address is required (it is the username).");
           return;
         }
         if (!parsedSchoolId || parsedSchoolId < 1) {
@@ -121,7 +122,8 @@ export function StudentFormDialog({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: trimmedEmail,
+            emailAddress: trimmedEmail,
             schoolId: parsedSchoolId,
             campusId: parsedCampusId,
             rollNumber: trimmedRoll,
@@ -185,16 +187,17 @@ export function StudentFormDialog({
             <>
               <div>
                 <FieldLabel htmlFor="student-username" required>
-                  Username
+                  Email (username)
                 </FieldLabel>
                 <input
                   id="student-username"
-                  type="text"
+                  type="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className={inputClassName}
                   required
                   disabled={isSubmitting}
+                  placeholder="you@example.com"
                 />
               </div>
               <div>
@@ -220,7 +223,7 @@ export function StudentFormDialog({
             </>
           ) : (
             <p className="text-sm text-slate-500">
-              Username {student.username} · School ID {student.schoolId}
+              Username {student.username} · {student.schoolName || "—"}
             </p>
           )}
 
@@ -249,7 +252,7 @@ export function StudentFormDialog({
                   : ([
                       {
                         id: student.campusId,
-                        name: `Campus ${student.campusId}`,
+                        name: student.campusName || "Current campus",
                       },
                     ] as Pick<DirectoryCampus, "id" | "name">[])
                 : campuses

@@ -1,0 +1,39 @@
+---
+description: Back chevron must sit beside the page title in RankUp React UI
+alwaysApply: true
+---
+
+# Page back control placement
+
+When a page has a back control (chevron/link), place it **inline with the page title** — same row, left of the title. Do not put the back control on a row above or below the title.
+
+## Pattern
+
+Prefer `PageHeader` / `AppPageHeader` with `backTo` or `onBack`:
+
+```tsx
+<PageHeader
+  title="…"
+  backTo="/parent"
+  backAriaLabel="Back …"
+  action={/* primary actions only */}
+/>
+```
+
+Or match `DirectoryListChrome` manually:
+
+```tsx
+<div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+  <Link to="…" aria-label="Back …" className="… rounded-full …">
+    <ChevronLeft className="h-5 w-5 …" />
+  </Link>
+  <h1 className="truncate …">{title}</h1>
+</div>
+```
+
+## Rules
+
+- Back chevron + title share one horizontal flex row (`items-center`).
+- Primary actions (Create, Import, Refresh, etc.) stay on the opposite side of the header, not between back and title.
+- Prefer a circular icon button with `ChevronLeft`; no separate “Back” text link in the action slot or stacked under the title.
+- Apply this on list child pages, detail/edit/create/import flows, and any new page headers that navigate up.

@@ -1,0 +1,32 @@
+---
+description: Quiz lifecycle Draft / Published / Assigned / Archived
+globs: WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,React/src/features/quizzes/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Quiz lifecycle statuses
+
+Canonical `QuizLifecycleStatus` IDs:
+
+| ID | Status | Meaning |
+|----|--------|---------|
+| **60** | **Draft** | Initial; only **owner** and **PortalAdmin** can see |
+| **61** | **Published** | Visible by school/campus/portal rules; **Public** audience → everyone can view & assign |
+| **62** | **Assigned** | Has assignment rows; assigned students can take it |
+| **63** | **Archived** | Soft-archive when assignments exist; otherwise hard-delete |
+
+Do **not** use Completed, In Progress, or Cancelled as quiz lifecycle statuses (retired lookups 64/65/66).
+
+## Visibility
+
+- **PortalAdmin**: all quizzes including drafts
+- **SchoolAdmin**: own school (all campuses) + Public; not other teachers' drafts
+- **CampusAdmin**: own campus + Public; not other teachers' drafts
+- **Teacher**: own quizzes + Public catalog
+- **Student**: assigned quizzes + open Public window
+
+## Archive / cancel
+
+- Archive with **no assignments** → hard delete
+- Archive with assignments → lifecycle Archived (`IsActive=false`)
+- Cancel upcoming assignments → restore **Assigned** or **Published** (never Cancelled)

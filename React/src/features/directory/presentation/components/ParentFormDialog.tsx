@@ -6,6 +6,7 @@ import type {
   DirectoryParent,
   UpdateDirectoryParentInput,
 } from "@/features/directory/domain/directoryTypes";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 type ParentFormSubmit =
   | { mode: "create"; input: CreateDirectoryParentInput }
@@ -18,9 +19,9 @@ interface ParentFormDialogProps {
   onSubmit: (payload: ParentFormSubmit) => Promise<void>;
 }
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
+/** Modal form to create or update a parent account. */
 export function ParentFormDialog({
   parent,
   isSubmitting,
@@ -30,8 +31,8 @@ export function ParentFormDialog({
   const isEdit = parent != null;
   const [fullName, setFullName] = useState(parent?.fullName ?? "");
   const [username, setUsername] = useState(parent?.username ?? "");
-  const [cnic, setCnic] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
+  const [cnic, setCnic] = useState(parent?.cnic ?? "");
+  const [mobileNumber, setMobileNumber] = useState(parent?.mobileNumber ?? "");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,16 +70,17 @@ export function ParentFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
-        if (!trimmedUsername) {
-          setError("Username is required.");
+        const trimmedEmail = username.trim();
+        if (!trimmedEmail) {
+          setError("Email address is required (it is the username).");
           return;
         }
         await onSubmit({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: trimmedEmail,
+            emailAddress: trimmedEmail,
             cnic: trimmedCnic,
             mobileNumber: mobile,
           },
@@ -108,7 +110,7 @@ export function ParentFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${parent.fullName}.`
-              : "Add a new parent to the directory. User must set password on first login."}
+              : "Add a parent to the directory. If email, mobile, or CNIC matches an existing Teacher (or other non-Student) account, the Parent role is added to that same login. User must set password on first login."}
           </p>
         </div>
 
@@ -138,16 +140,17 @@ export function ParentFormDialog({
             <>
               <div>
                 <FieldLabel htmlFor="parent-username" required>
-                  Username
+                  Email (username)
                 </FieldLabel>
                 <input
                   id="parent-username"
-                  type="text"
+                  type="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className={inputClassName}
                   required
                   disabled={isSubmitting}
+                  placeholder="you@example.com"
                 />
               </div>
             </>

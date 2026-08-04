@@ -1,3 +1,4 @@
+/// Admin user eligible to approve a pending registration.
 class PendingApprover {
   const PendingApprover({
     required this.userId,
@@ -30,6 +31,7 @@ class PendingApprover {
   }
 }
 
+/// Account registration awaiting admin approval.
 class PendingRegistration {
   const PendingRegistration({
     required this.id,

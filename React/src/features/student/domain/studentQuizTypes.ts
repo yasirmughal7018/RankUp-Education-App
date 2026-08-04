@@ -40,12 +40,18 @@ export interface QuizAttemptQuestion {
   displayOrder: number;
   hint: string | null;
   options: QuizAttemptOption[];
+  estimatedTimeSeconds?: number;
+  timeSpentSeconds?: number;
 }
+
+export type QuizNavigationMode = "Free" | "Sequential" | "Locked";
 
 export interface SavedQuizAnswer {
   questionId: number;
   selectedOptionId: number | null;
   submittedText: string | null;
+  selectedOptionIds?: number[] | null;
+  isMarkedForReview?: boolean;
 }
 
 export interface StartQuizAttempt {
@@ -57,22 +63,60 @@ export interface StartQuizAttempt {
   resumed: boolean;
   questions: QuizAttemptQuestion[];
   savedAnswers: SavedQuizAnswer[];
+  navigationMode?: QuizNavigationMode | string;
+  enforceDeviceLock?: boolean;
+  focusLossCount?: number;
+  clipboardPasteCount?: number;
+  enablePerQuestionTimer?: boolean;
 }
 
 export interface SubmitQuizAnswer {
   questionId: number;
   selectedOptionId: number | null;
   submittedText: string | null;
+  selectedOptionIds?: number[] | null;
+  isMarkedForReview?: boolean | null;
+  timeSpentSeconds?: number | null;
 }
 
 export interface SaveQuizDraftInput {
   answers: SubmitQuizAnswer[];
   timeSpentSeconds?: number | null;
+  focusLossDelta?: number | null;
+  clipboardPasteDelta?: number | null;
+  deviceId?: string | null;
+  isOfflineSync?: boolean | null;
+  clientSyncId?: string | null;
 }
 
 export interface SaveQuizDraftResult {
   attemptId: number;
   savedCount: number;
+  focusLossCount?: number;
+  clipboardPasteCount?: number;
+  isOfflineAttempt?: boolean;
+  clientSyncId?: string | null;
+}
+
+export interface SyncOfflineQuizAttemptInput {
+  clientSyncId: string;
+  answers: SubmitQuizAnswer[];
+  timeSpentSeconds: number;
+  deviceId?: string | null;
+  submit?: boolean;
+  isAutoSubmit?: boolean;
+  focusLossDelta?: number | null;
+  clipboardPasteDelta?: number | null;
+}
+
+export interface SyncOfflineQuizAttemptResult {
+  attemptId: number;
+  alreadySynced: boolean;
+  submitted: boolean;
+  isOfflineAttempt: boolean;
+  clientSyncId: string;
+  draft?: SaveQuizDraftResult | null;
+  result?: QuizAttemptResult | null;
 }
 
 export interface QuizResultQuestion {
@@ -85,6 +129,8 @@ export interface QuizResultQuestion {
   selectedOptionId: number | null;
   correctOptionId: number | null;
   submittedText: string | null;
+  selectedOptionIds?: number[] | null;
+  correctOptionIds?: number[] | null;
 }
 
 export interface QuizAttemptResult {
@@ -98,26 +144,92 @@ export interface QuizAttemptResult {
   timeSpentSeconds: number;
   resultStatus: string;
   reviewAvailable: boolean;
+  reviewPending?: boolean;
+  reviewDisplayMode?: string;
   questions: QuizResultQuestion[];
 }
 
-export const STUDENT_DEVICE_ID = "rankup-web";
+export const STUDENT_DEVICE_ID_STORAGE_KEY = "rankup-student-device-id";
+const DEVICE_ID_MAX_LENGTH = 100;
 
+function createWebDeviceId(): string {
+  const uuid =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `web-${uuid}`.slice(0, DEVICE_ID_MAX_LENGTH);
+}
+
+/**
+ * Stable per-browser device id for Competition attempt lock.
+ * Persisted in localStorage so resume/submit on another browser/profile is blocked.
+ */
+export function getStudentDeviceId(): string {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return createWebDeviceId();
+  }
+
+  try {
+    const existing = localStorage.getItem(STUDENT_DEVICE_ID_STORAGE_KEY)?.trim();
+    if (existing) {
+      return existing.slice(0, DEVICE_ID_MAX_LENGTH);
+    }
+
+    const created = createWebDeviceId();
+    localStorage.setItem(STUDENT_DEVICE_ID_STORAGE_KEY, created);
+    return created;
+  } catch {
+    return createWebDeviceId();
+  }
+}
+
+/** True only for Student role. */
 export function canTakeStudentQuizzes(role: string): boolean {
   return role === "Student";
 }
 
+/** Question requires free-text answer (Fill / Descriptive / File / essay-style). */
 export function isTextQuestionType(questionType: string): boolean {
-  const normalized = questionType.toLowerCase();
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
   return (
+    normalized.includes("fill") ||
+    normalized.includes("blank") ||
     normalized.includes("text") ||
     normalized.includes("short") ||
     normalized.includes("long") ||
     normalized.includes("essay") ||
-    normalized.includes("descriptive")
+    normalized.includes("descriptive") ||
+    normalized.includes("file")
   );
 }
 
+/** Multiple Choice — students may select more than one option. */
+export function isMultiSelectQuestionType(questionType: string): boolean {
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
+  return (
+    normalized.includes("multiplechoice") ||
+    normalized.includes("multiselect") ||
+    normalized === "multiple"
+  );
+}
+
+/** Matching — left items paired to right items. */
+export function isMatchingQuestionType(questionType: string): boolean {
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
+  return normalized === "matching" || normalized === "match";
+}
+
+/** Ordering — rearrange items into the correct sequence. */
+export function isOrderingQuestionType(questionType: string): boolean {
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
+  return (
+    normalized === "ordering" ||
+    normalized === "order" ||
+    normalized === "sequence"
+  );
+}
+
+/** Student has an unfinished attempt. */
 export function hasInProgressAttempt(quiz: QuizDetail): boolean {
   const result = quiz.resultStatus.toLowerCase();
   return result.includes("in progress") || result.includes("inprogress");

@@ -4,6 +4,7 @@ import 'package:rankup_education/core/api/api_response.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
 import 'package:rankup_education/features/admin/domain/pending_registration.dart';
 
+/// REST client for pending registration approval workflows.
 class RegistrationRemoteDataSource {
   const RegistrationRemoteDataSource(this._dio);
 
@@ -36,10 +37,11 @@ class RegistrationRemoteDataSource {
     }
   }
 
-  Future<void> reject(int userId) async {
+  Future<void> reject(int userId, {required String reason}) async {
     try {
       await _dio.post<Map<String, dynamic>>(
         '/auth/registrations/$userId/reject',
+        data: {'reason': reason},
       );
     } on DioException catch (error) {
       throw mapDioException(error);
@@ -75,6 +77,7 @@ List<dynamic> _unwrapList(Map<String, dynamic>? json) {
   return response.data;
 }
 
+/// API response after approving a registration request.
 class ApproveRegistrationResult {
   const ApproveRegistrationResult({
     required this.userId,

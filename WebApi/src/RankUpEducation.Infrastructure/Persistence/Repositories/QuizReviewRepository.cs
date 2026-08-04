@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>Review list/detail queries, monitoring aggregates, and review entity persistence.</summary>
 public sealed class QuizReviewRepository : IQuizReviewRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -19,13 +21,11 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
 
     public async Task<IReadOnlyList<QuizMonitoringStudentItem>> ListMonitoringForQuizAsync(
         long quizId,
-        long creatorUserId,
         CancellationToken cancellationToken)
     {
-        var creatorKey = creatorUserId.ToString();
         var quizExists = await _dbContext.Quizzes.AsNoTracking()
             .AnyAsync(
-                quiz => quiz.Id == quizId && quiz.CreatedByName == creatorKey && quiz.IsActive && !quiz.IsDeleted,
+                quiz => quiz.Id == quizId && !quiz.IsDeleted,
                 cancellationToken);
 
         if (!quizExists)
@@ -43,38 +43,60 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             assignments.Select(item => item.StudentId),
             cancellationToken);
 
+        var attempts = await _dbContext.QuizAttempts.AsNoTracking()
+            .Where(attempt => attempt.QuizId == quizId)
+            .Select(attempt => new
+            {
+                attempt.StudentId,
+                attempt.Percentage,
+                attempt.SubmittedDate,
+                attempt.StartedDate,
+                attempt.FocusLossCount,
+                attempt.ClipboardPasteCount
+            })
+            .ToListAsync(cancellationToken);
+
         var items = new List<QuizMonitoringStudentItem>();
         foreach (var assignment in assignments)
         {
-            var stats = await QuizQueryHelper.GetAttemptStatsAsync(
-                _dbContext,
-                quizId,
-                assignment.StudentId,
-                cancellationToken);
+            var studentAttempts = attempts
+                .Where(attempt => attempt.StudentId == assignment.StudentId)
+                .ToArray();
+            var latestAttempt = studentAttempts
+                .OrderByDescending(attempt => attempt.SubmittedDate)
+                .ThenByDescending(attempt => attempt.StartedDate)
+                .FirstOrDefault();
+
             items.Add(new QuizMonitoringStudentItem(
                 assignment.StudentId,
                 studentNames.GetValueOrDefault(assignment.StudentId, $"Student {assignment.StudentId}"),
                 assignment.Id,
-                stats.AttemptCount,
-                stats.BestPercentage,
+                studentAttempts.Length,
+                studentAttempts.Length == 0
+                    ? null
+                    : studentAttempts.Max(attempt => (short?)attempt.Percentage),
                 assignment.IsReviewDone,
-                stats.LastSubmittedAt,
+                studentAttempts.Length == 0
+                    ? null
+                    : studentAttempts.Max(attempt => (DateTimeOffset?)attempt.SubmittedDate),
                 assignment.StartDateTime,
-                assignment.EndDateTime));
+                assignment.EndDateTime,
+                latestAttempt?.FocusLossCount ?? 0,
+                latestAttempt?.ClipboardPasteCount ?? 0));
         }
 
         return items;
     }
 
-    public async Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsForCreatorAsync(
-        long creatorUserId,
+    public async Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsAsync(
+        long? creatorUserId,
+        int? schoolId,
         CancellationToken cancellationToken)
     {
-        var creatorKey = creatorUserId.ToString();
         var submittedStatusIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
             "QuizAttemptStatus",
-            QuizLookupNames.SubmittedAttemptStatusNames,
+            LookupNames.SubmittedAttemptStatusNames,
             cancellationToken);
 
         if (submittedStatusIds.Count == 0)
@@ -82,29 +104,43 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             return Array.Empty<PendingReviewItem>();
         }
 
-        var rows = await (
+        var query =
             from attempt in _dbContext.QuizAttempts.AsNoTracking()
             join quiz in _dbContext.Quizzes.AsNoTracking() on attempt.QuizId equals quiz.Id
             join assignment in _dbContext.QuizAssignments.AsNoTracking()
                 on new { attempt.QuizId, attempt.StudentId } equals new { assignment.QuizId, assignment.StudentId }
-            where quiz.CreatedByName == creatorKey
-                && quiz.IsActive
+            where quiz.IsActive
                 && !quiz.IsDeleted
                 && quiz.IsReviewRequired
                 && !assignment.IsReviewDone
                 && submittedStatusIds.Contains(attempt.StatusId)
                 && attempt.SubmittedDate != default
-            orderby attempt.SubmittedDate descending
-            select new
+            select new { attempt, quiz };
+
+        if (creatorUserId is not null)
+        {
+            var creatorKey = creatorUserId.Value.ToString();
+            query = query.Where(row => row.quiz.CreatedByName == creatorKey);
+        }
+
+        if (schoolId is not null)
+        {
+            query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
+        }
+
+        var rows = await query
+            .OrderByDescending(row => row.attempt.SubmittedDate)
+            .Select(row => new
             {
-                QuizId = quiz.Id,
-                quiz.QuizTitle,
-                AttemptId = attempt.Id,
-                attempt.StudentId,
-                attempt.NumberOfQuestionAttempt,
-                attempt.SubmittedDate,
-                attempt.ObtainedMarks
-            }).ToListAsync(cancellationToken);
+                QuizId = row.quiz.Id,
+                row.quiz.QuizTitle,
+                AttemptId = row.attempt.Id,
+                row.attempt.StudentId,
+                row.attempt.AttemptNumber,
+                row.attempt.SubmittedDate,
+                row.attempt.ObtainedMarks
+            })
+            .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
         {
@@ -119,8 +155,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
         var items = new List<PendingReviewItem>();
         foreach (var row in rows)
         {
-            var totalMarks = await _dbContext.QuizQuestions.AsNoTracking()
-                .Where(link => link.QuizId == row.QuizId)
+            var totalMarks = await _dbContext.QuizAttemptQuestions.AsNoTracking()
+                .Where(link => link.QuizAttemptId == row.AttemptId)
                 .SumAsync(link => (short?)link.Marks, cancellationToken) ?? 0;
 
             items.Add(new PendingReviewItem(
@@ -129,7 +165,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 row.AttemptId,
                 row.StudentId,
                 studentNames.GetValueOrDefault(row.StudentId, $"Student {row.StudentId}"),
-                row.NumberOfQuestionAttempt,
+                row.AttemptNumber,
                 row.SubmittedDate,
                 (short)totalMarks,
                 row.ObtainedMarks));
@@ -174,16 +210,16 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             {
                 attemptQuestion.Id,
                 attemptQuestion.QuestionId,
-                question.QuestionText,
+                QuestionText = string.IsNullOrWhiteSpace(attemptQuestion.QuestionText)
+                    ? question.QuestionText
+                    : attemptQuestion.QuestionText,
                 question.QuestionTypeId,
-                attemptQuestion.QuizReviewId
+                AttemptQuestionTypeName = attemptQuestion.QuestionTypeName,
+                attemptQuestion.QuizReviewId,
+                attemptQuestion.Marks
             }).ToListAsync(cancellationToken);
 
         var questionIds = attemptQuestions.Select(item => item.QuestionId).ToArray();
-        var quizQuestions = await _dbContext.QuizQuestions.AsNoTracking()
-            .Where(item => item.QuizId == quizId && questionIds.Contains(item.QuestionId))
-            .ToDictionaryAsync(item => item.QuestionId, item => item.Marks, cancellationToken);
-
         var typeNames = await _dbContext.Lookups.AsNoTracking()
             .Where(lookup => attemptQuestions.Select(item => item.QuestionTypeId).Contains(lookup.Id))
             .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
@@ -192,28 +228,61 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             .Where(answer => attemptQuestions.Select(item => item.Id).Contains(answer.QuizAttemptQuestionId))
             .ToListAsync(cancellationToken);
 
+        var fillQuestionIds = attemptQuestions
+            .Where(item =>
+            {
+                var typeName = !string.IsNullOrWhiteSpace(item.AttemptQuestionTypeName)
+                    ? item.AttemptQuestionTypeName
+                    : typeNames.GetValueOrDefault(item.QuestionTypeId, string.Empty);
+                return QuizQuestionHelper.IsFillBlankType(typeName);
+            })
+            .Select(item => item.QuestionId)
+            .ToArray();
+
+        var teacherReviewFlags = fillQuestionIds.Length == 0
+            ? new Dictionary<long, bool>()
+            : await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+                .Where(answer => fillQuestionIds.Contains(answer.QuestionId))
+                .GroupBy(answer => answer.QuestionId)
+                .ToDictionaryAsync(
+                    group => group.Key,
+                    group => group.Any(answer => answer.AllowTeacherReview),
+                    cancellationToken);
+
         var reviewIds = attemptQuestions
             .Where(item => item.QuizReviewId is not null)
             .Select(item => item.QuizReviewId!.Value)
             .ToArray();
 
         var reviews = reviewIds.Length == 0
-            ? new Dictionary<long, string>()
+            ? new Dictionary<long, (string Feedback, string? AiFeedback, bool HasHumanFeedback)>()
             : await _dbContext.QuizReviews.AsNoTracking()
                 .Where(review => reviewIds.Contains(review.Id))
                 .ToDictionaryAsync(
                     review => review.Id,
-                    review => !string.IsNullOrWhiteSpace(review.ParentReviewComment)
-                        ? review.ParentReviewComment!
-                        : review.TeacherReviewComment ?? string.Empty,
+                    review =>
+                    {
+                        var feedback = !string.IsNullOrWhiteSpace(review.ParentReviewComment)
+                            ? review.ParentReviewComment!
+                            : review.TeacherReviewComment ?? string.Empty;
+                        var hasHuman = !string.IsNullOrWhiteSpace(review.TeacherReviewComment)
+                            || !string.IsNullOrWhiteSpace(review.ParentReviewComment)
+                            || review.TeacherReviewStatus is not null
+                            || review.ParentReviewStatus is not null;
+                        return (
+                            Feedback: feedback,
+                            AiFeedback: review.AiReviewComment,
+                            HasHumanFeedback: hasHuman);
+                    },
                     cancellationToken);
 
-        var totalMarks = quizQuestions.Values.DefaultIfEmpty((short)0).Sum(marks => marks);
-        var studentName = await _dbContext.Users.AsNoTracking()
-            .Where(user => user.Id == attempt.StudentId)
-            .Select(user => user.FullName)
-            .FirstOrDefaultAsync(cancellationToken)
+        var studentName = await (
+            from student in _dbContext.Users.AsNoTracking()
+            where student.Id == attempt.StudentId
+            select student.FullName).FirstOrDefaultAsync(cancellationToken)
             ?? $"Student {attempt.StudentId}";
+
+        var totalMarks = attemptQuestions.Sum(item => (int)item.Marks);
 
         return new AttemptReviewDetailItem(
             attempt.Id,
@@ -221,7 +290,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             quiz.QuizTitle,
             attempt.StudentId,
             studentName,
-            attempt.NumberOfQuestionAttempt,
+            attempt.AttemptNumber,
             (short)totalMarks,
             attempt.ObtainedMarks,
             attempt.Percentage,
@@ -238,15 +307,25 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 var primaryAnswer = questionAnswers.FirstOrDefault();
                 var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
                     ?? primaryAnswer;
-                var typeName = typeNames.GetValueOrDefault(item.QuestionTypeId, "Multiple Choice");
+                var typeName = !string.IsNullOrWhiteSpace(item.AttemptQuestionTypeName)
+                    ? item.AttemptQuestionTypeName
+                    : typeNames.GetValueOrDefault(item.QuestionTypeId, "Multiple Choice");
+                var isFillBlank = QuizQuestionHelper.IsFillBlankType(typeName);
                 var requiresReview = QuizQuestionHelper.IsDescriptiveType(typeName)
-                    || (selectedOptionIds.Count == 0
+                    || QuizQuestionHelper.IsFileUploadType(typeName)
+                    || (isFillBlank
+                        && teacherReviewFlags.GetValueOrDefault(item.QuestionId)
                         && !string.IsNullOrWhiteSpace(primaryAnswer?.SubmittedText));
 
                 string? feedback = null;
-                if (item.QuizReviewId is not null)
+                string? aiFeedback = null;
+                var hasHumanReviewFeedback = false;
+                if (item.QuizReviewId is not null
+                    && reviews.TryGetValue(item.QuizReviewId.Value, out var reviewInfo))
                 {
-                    reviews.TryGetValue(item.QuizReviewId.Value, out feedback);
+                    feedback = reviewInfo.Feedback.AsTrimmedOrNull();
+                    aiFeedback = reviewInfo.AiFeedback.AsTrimmedOrNull();
+                    hasHumanReviewFeedback = reviewInfo.HasHumanFeedback;
                 }
 
                 var submittedText = questionAnswers
@@ -258,16 +337,20 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     item.QuestionId,
                     item.QuestionText,
                     typeName,
-                    quizQuestions.GetValueOrDefault(item.QuestionId, (short)0),
+                    item.Marks,
                     marked?.AwardedMarks ?? 0,
                     marked?.IsCorrect ?? false,
                     selectedOptionIds.Count > 0 ? selectedOptionIds[0] : null,
                     submittedText,
-                    feedback.AsTrimmedOrNull(),
+                    feedback,
                     requiresReview,
                     item.QuizReviewId,
-                    selectedOptionIds);
-            }).ToArray());
+                    selectedOptionIds,
+                    hasHumanReviewFeedback,
+                    aiFeedback);
+            }).ToArray(),
+            attempt.FocusLossCount,
+            attempt.ClipboardPasteCount);
     }
 
     public Task<QuizReview?> GetQuestionReviewEntityAsync(long reviewId, CancellationToken cancellationToken)

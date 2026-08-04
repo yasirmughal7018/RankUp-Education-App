@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Common.Utilities;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
@@ -8,6 +9,7 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>EF Core implementation of <see cref="IUserRepository"/>.</summary>
 public sealed class UserRepository : IUserRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -39,7 +41,7 @@ public sealed class UserRepository : IUserRepository
     {
         var normalized = identifier.AsLowercase();
 
-        // Priority: username → CNIC → mobile number.
+        // Priority: username → email address → CNIC → mobile number.
         // Prefer non-rejected rows so a re-request after soft-reject is found first.
         var byUsername = await PreferActiveRegistrationAsync(
             UsersWithRoles().Where(user => user.Username.ToLower() == normalized),
@@ -47,6 +49,15 @@ public sealed class UserRepository : IUserRepository
         if (byUsername is not null)
         {
             return await WithProfileContextAsync(Task.FromResult<User?>(byUsername), null, cancellationToken);
+        }
+
+        var byEmail = await PreferActiveRegistrationAsync(
+            UsersWithRoles().Where(
+                user => user.EmailAddress != null && user.EmailAddress.ToLower() == normalized),
+            cancellationToken);
+        if (byEmail is not null)
+        {
+            return await WithProfileContextAsync(Task.FromResult<User?>(byEmail), null, cancellationToken);
         }
 
         var byCnic = await PreferActiveRegistrationAsync(
@@ -206,6 +217,8 @@ public sealed class UserRepository : IUserRepository
         // - no school → PortalAdmin
         // - school only → SchoolAdmin + PortalAdmin
         // - campus → CampusAdmin + SchoolAdmin + PortalAdmin
+        // Any of those queued admins may activate Student/Teacher in their scope;
+        // PortalAdmin can activate any (and is required when there is no school).
         var includeSchoolAdmins = schoolId.HasValue;
         var includeCampusAdmins = schoolId.HasValue && campusId.HasValue;
 
@@ -254,27 +267,28 @@ public sealed class UserRepository : IUserRepository
             .ToList();
     }
 
-    public async Task AddApprovalAsync(UserApproval approval, CancellationToken cancellationToken)
+    public async Task AddApprovalAsync(Approval approval, CancellationToken cancellationToken)
     {
-        await _dbContext.UserApprovals.AddAsync(approval, cancellationToken);
+        await _dbContext.Approvals.AddAsync(approval, cancellationToken);
     }
 
     public async Task AddApprovalsAsync(
-        IEnumerable<UserApproval> approvals,
+        IEnumerable<Approval> approvals,
         CancellationToken cancellationToken)
     {
-        await _dbContext.UserApprovals.AddRangeAsync(approvals, cancellationToken);
+        await _dbContext.Approvals.AddRangeAsync(approvals, cancellationToken);
     }
 
-    public Task<UserApproval?> GetPendingApprovalAsync(
+    public Task<Approval?> GetPendingApprovalAsync(
         long userId,
         long approverUserId,
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+        return _dbContext.Approvals.FirstOrDefaultAsync(
             approval =>
-                approval.UserId == userId
+                approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
                 && approval.IsApproved == null
@@ -282,15 +296,16 @@ public sealed class UserRepository : IUserRepository
             cancellationToken);
     }
 
-    public Task<UserApproval?> GetApprovalAsync(
+    public Task<Approval?> GetApprovalAsync(
         long userId,
         long approverUserId,
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserApprovals.FirstOrDefaultAsync(
+        return _dbContext.Approvals.FirstOrDefaultAsync(
             approval =>
-                approval.UserId == userId
+                approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole,
             cancellationToken);
@@ -302,9 +317,10 @@ public sealed class UserRepository : IUserRepository
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserApprovals.AnyAsync(
+        return _dbContext.Approvals.AnyAsync(
             approval =>
-                approval.UserId == userId
+                approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
                 && approval.IsApproved == true,
@@ -316,9 +332,10 @@ public sealed class UserRepository : IUserRepository
         CancellationToken cancellationToken)
     {
         var pending = await (
-            from approval in _dbContext.UserApprovals.AsNoTracking()
+            from approval in _dbContext.Approvals.AsNoTracking()
             join admin in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals admin.Id
-            where approval.UserId == userId
+            where approval.EntityType == ApprovalEntityType.User
+                && approval.UserId == userId
                 && approval.IsApproved == null
                 && approval.ApprovedAt == null
             orderby approval.ApprovedByRole, admin.FullName
@@ -330,10 +347,11 @@ public sealed class UserRepository : IUserRepository
         ).ToListAsync(cancellationToken);
 
         // CampusAdmin approval covers SchoolAdmin — SchoolAdmin is no longer required.
-        var campusAdminAlreadyApproved = await _dbContext.UserApprovals.AsNoTracking()
+        var campusAdminAlreadyApproved = await _dbContext.Approvals.AsNoTracking()
             .AnyAsync(
                 approval =>
-                    approval.UserId == userId
+                    approval.EntityType == ApprovalEntityType.User
+                    && approval.UserId == userId
                     && approval.ApprovedByRole == UserRole.CampusAdmin
                     && approval.IsApproved == true,
                 cancellationToken);
@@ -377,6 +395,16 @@ public sealed class UserRepository : IUserRepository
         await _dbContext.Parents.AddAsync(parent, cancellationToken);
     }
 
+    public Task<bool> HasStudentGroupsForRoleAsync(
+        long userId,
+        UserRole role,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.StudentGroups.AnyAsync(
+            group => group.ReferralId == userId && group.CreatorRole == role,
+            cancellationToken);
+    }
+
     public Task DeleteAsync(User user, CancellationToken cancellationToken)
     {
         _dbContext.Users.Remove(user);
@@ -396,6 +424,37 @@ public sealed class UserRepository : IUserRepository
         {
             token.Revoke(revokedAt);
         }
+    }
+
+    public async Task RevokeRefreshTokensForRoleAsync(
+        long userId,
+        UserRole role,
+        DateTimeOffset revokedAt,
+        CancellationToken cancellationToken)
+    {
+        var tokens = await _dbContext.RefreshTokens
+            .Where(token =>
+                token.UserId == userId
+                && token.RevokedAt == null
+                && token.ActiveRole == role)
+            .ToListAsync(cancellationToken);
+
+        foreach (var token in tokens)
+        {
+            token.Revoke(revokedAt);
+        }
+    }
+
+    public Task UpdateLastLoginAtAsync(
+        long userId,
+        DateTimeOffset loginAt,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.Users
+            .Where(user => user.Id == userId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(user => user.LastLoginAt, loginAt),
+                cancellationToken);
     }
 
     private IQueryable<User> UsersWithRoles()

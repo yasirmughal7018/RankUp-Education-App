@@ -5,6 +5,7 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>Quiz question links, bank attach, totals recalculation, and copy helpers.</summary>
 public sealed class QuizQuestionRepository : IQuizQuestionRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -31,7 +32,9 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 question.QuestionTypeId,
                 quizQuestion.Marks,
                 quizQuestion.DisplayOrder,
-                question.Hint
+                question.Hint,
+                question.Explanation,
+                TimeInSec = quizQuestion.TimeInSec
             }).ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -62,6 +65,8 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             row.Marks,
             row.DisplayOrder,
             row.Hint,
+            row.Explanation,
+            row.TimeInSec,
             options
                 .Where(option => option.QuestionId == row.QuestionId)
                 .Select(option => new QuizQuestionOptionItem(
@@ -79,7 +84,9 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.AllowPartialMatch,
                     answer.NormalizedAnswer,
                     answer.MinimumLength,
-                    answer.MaximumLength))
+                    answer.MaximumLength,
+                    answer.AllowAiReview,
+                    answer.AllowTeacherReview))
                 .ToArray())).ToArray();
     }
 
@@ -103,15 +110,67 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
 
     public async Task RecalculateQuizTotalsAsync(long quizId, CancellationToken cancellationToken)
     {
-        var totals = await _dbContext.QuizQuestions.AsNoTracking()
-            .Where(link => link.QuizId == quizId)
-            .GroupBy(link => link.QuizId)
-            .Select(group => new
+        // Include pending Added/Modified/Deleted links — AsNoTracking DB queries miss unsaved changes.
+        var deletedQuestionIds = _dbContext.ChangeTracker.Entries<QuizQuestion>()
+            .Where(entry =>
+                entry.Entity.QuizId == quizId && entry.State == EntityState.Deleted)
+            .Select(entry => entry.Entity.QuestionId)
+            .ToHashSet();
+
+        var marksByQuestionId = new Dictionary<long, short>();
+        var timeByQuestionId = new Dictionary<long, short>();
+        foreach (var entry in _dbContext.ChangeTracker.Entries<QuizQuestion>())
+        {
+            if (entry.Entity.QuizId != quizId)
             {
-                Count = (short)group.Count(),
-                Marks = (short)group.Sum(item => item.Marks)
+                continue;
+            }
+
+            if (entry.State is EntityState.Deleted or EntityState.Detached)
+            {
+                continue;
+            }
+
+            marksByQuestionId[entry.Entity.QuestionId] = entry.Entity.Marks;
+            timeByQuestionId[entry.Entity.QuestionId] = entry.Entity.TimeInSec;
+        }
+
+        var dbRows = await _dbContext.QuizQuestions.AsNoTracking()
+            .Where(link => link.QuizId == quizId)
+            .Select(link => new
+            {
+                link.QuestionId,
+                link.Marks,
+                link.TimeInSec
             })
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in dbRows)
+        {
+            if (deletedQuestionIds.Contains(row.QuestionId))
+            {
+                continue;
+            }
+
+            if (!marksByQuestionId.ContainsKey(row.QuestionId))
+            {
+                marksByQuestionId[row.QuestionId] = row.Marks;
+            }
+
+            if (!timeByQuestionId.ContainsKey(row.QuestionId))
+            {
+                timeByQuestionId[row.QuestionId] = row.TimeInSec;
+            }
+        }
+
+        var count = (short)marksByQuestionId.Count;
+        var marks = (short)Math.Clamp(
+            marksByQuestionId.Values.Sum(value => (int)value),
+            0,
+            short.MaxValue);
+        var estimatedSeconds = timeByQuestionId
+            .Where(pair => marksByQuestionId.ContainsKey(pair.Key))
+            .Sum(pair => (int)pair.Value);
 
         var quiz = await _dbContext.Quizzes.FirstOrDefaultAsync(item => item.Id == quizId, cancellationToken);
         if (quiz is null)
@@ -119,7 +178,19 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             return;
         }
 
-        quiz.SetQuestionTotals(totals?.Count ?? 0, totals?.Marks ?? 0);
+        short? timeLimitMinutes = null;
+        if (estimatedSeconds > 0)
+        {
+            // Persist whole minutes for legacy attempt budget APIs, but keep ceiling so
+            // 70 seconds → 2 minutes still covers the exact Σ duration.
+            // Manage UI shows exact "1 min 10 sec" from question times.
+            timeLimitMinutes = (short)Math.Clamp(
+                (int)Math.Ceiling(estimatedSeconds / 60d),
+                1,
+                short.MaxValue);
+        }
+
+        quiz.SetQuestionTotals(count, marks, timeLimitMinutes);
     }
 
     public async Task<IReadOnlyList<QuizQuestionCopyItem>> GetQuizQuestionsForCopyAsync(
@@ -140,7 +211,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                 question.SubjectId,
                 question.TopicId,
                 question.DifficultyLevel,
-                question.EstimatedTimeSeconds,
+                TimeInSec = quizQuestion.TimeInSec,
                 quizQuestion.Marks,
                 question.Hint,
                 question.Explanation,
@@ -169,7 +240,7 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
             row.SubjectId,
             row.TopicId,
             row.DifficultyLevel,
-            row.EstimatedTimeSeconds,
+            row.TimeInSec,
             row.Marks,
             row.Hint,
             row.Explanation,
@@ -191,7 +262,9 @@ public sealed class QuizQuestionRepository : IQuizQuestionRepository
                     answer.AllowPartialMatch,
                     answer.NormalizedAnswer,
                     answer.MinimumLength,
-                    answer.MaximumLength))
+                    answer.MaximumLength,
+                    answer.AllowAiReview,
+                    answer.AllowTeacherReview))
                 .ToArray())).ToArray();
     }
 }

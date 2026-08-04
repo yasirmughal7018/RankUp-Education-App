@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rankup_education/core/widgets/stat_card.dart';
 
+/// Teacher home with class stats and activity shortcuts.
 class TeacherDashboardPage extends StatelessWidget {
   const TeacherDashboardPage({super.key});
 

@@ -29,32 +29,32 @@ const panelCopy: Record<
   },
   "request-access": {
     headline: "Request access to RankUp Education",
-    lead: "New students, parents, and teachers can request an account. School and campus admins review requests; Portal Admin activates access.",
+    lead: "New students, parents, and teachers can request an account. Campus and School admins can activate students in their scope; Portal Admin can activate any request (and must for accounts without a school).",
     points: [
-      "Choose Student, Parent, or Teacher when you apply",
+      "Email address is required and becomes the username for every role",
       "Optional school and campus route your approval queue",
+      "Student roll number is required only when a school is selected",
       "After approval, set your password and sign in",
-      "Your data stays scoped to your school and role",
     ],
   },
   "forgot-password": {
-    headline: "Reset access with help from your school",
-    lead: "Enter the CNIC or mobile number on your account. Your school admin will be notified so they can help restore secure access.",
+    headline: "Reset your RankUp password",
+    lead: "Enter your username. We send a reset link and notify the right School Admin, Campus Admin, Parent, or Portal Admin. Only the first completion counts.",
     points: [
-      "Use the same CNIC or mobile number you sign in with",
-      "Your request is sent to school administrators",
-      "An admin can help you regain access safely",
-      "After reset, sign in again with your new password",
+      "Email link lets you choose a new password yourself",
+      "Student requests go to School, Campus, Parent, and Portal Admin",
+      "Teacher / Campus / School Admin requests escalate by role",
+      "Once one person finishes the reset, others cannot redo it",
     ],
   },
   "account-locked": {
     headline: "Your account is temporarily locked",
-    lead: "School or campus change requests lock your login until School Admin or Portal Admin reviews them.",
+    lead: "School or campus change requests lock your login until a destination school or campus admin reviews them.",
     points: [
       "Your request is waiting in the admin approval queue",
-      "School Admin or Portal Admin can approve or reject",
+      "Campus, School, or Portal Admin can approve or reject in their scope",
       "Approval applies the new school/campus and unlocks you",
-      "Rejection keeps your current school/campus and unlocks you",
+      "Rejection unlocks you with your previous school, or without a school",
     ],
   },
 };
@@ -67,8 +67,8 @@ export function AuthSplitLayout({ variant, children }: AuthSplitLayoutProps) {
     <div
       className={
         isRequestAccess
-          ? "flex h-dvh overflow-hidden bg-slate-50"
-          : "flex min-h-screen bg-slate-50"
+          ? "flex h-dvh overflow-hidden bg-background"
+          : "flex min-h-screen bg-background"
       }
     >
       <aside className="relative hidden w-[46%] overflow-hidden lg:flex lg:flex-col">
@@ -159,14 +159,14 @@ export function AuthSplitLayout({ variant, children }: AuthSplitLayoutProps) {
       </aside>
 
       <div className="flex min-h-0 w-full flex-1 flex-col lg:w-[54%]">
-        <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
-          <Link to="/" className="inline-flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
+          <Link to="/" className="inline-flex min-h-11 items-center gap-2.5">
             <img
               src="/rankup-mark.svg?v=3"
               alt=""
               className="h-9 w-9 rounded-xl shadow-sm"
             />
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-foreground">
               {environment.appName}
             </span>
           </Link>

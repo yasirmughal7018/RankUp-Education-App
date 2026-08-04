@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FieldHint } from "@/core/components/FieldHint";
 import { RequiredMark } from "@/core/components/RequiredMark";
 
 interface FieldLabelProps {
@@ -6,6 +7,8 @@ interface FieldLabelProps {
   children: ReactNode;
   required?: boolean;
   optional?: boolean;
+  /** Clickable help icon shown beside the label. */
+  hint?: string;
   className?: string;
 }
 
@@ -17,6 +20,7 @@ export function FieldLabel({
   children,
   required = false,
   optional = false,
+  hint,
   className = defaultClassName,
 }: FieldLabelProps) {
   return (
@@ -28,6 +32,7 @@ export function FieldLabel({
           (optional)
         </span>
       ) : null}
+      {hint ? <FieldHint text={hint} /> : null}
     </label>
   );
 }

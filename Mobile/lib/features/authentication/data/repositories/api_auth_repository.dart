@@ -6,6 +6,7 @@ import 'package:rankup_education/features/authentication/domain/entities/app_use
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
+/// Production auth repository backed by remote API and secure token storage.
 class ApiAuthRepository implements AuthRepository {
   ApiAuthRepository(
     this._remoteDataSource,
@@ -143,9 +144,21 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) {
+    return _remoteDataSource.requestSchoolChange(
+      schoolId: schoolId,
+      campusId: campusId,
+    );
+  }
+
+  @override
   Future<void> logout() async {
+    final refreshToken = await _tokenStore.readRefreshToken();
     try {
-      await _remoteDataSource.logout();
+      await _remoteDataSource.logout(refreshToken: refreshToken);
     } finally {
       await _tokenStore.clear();
       await _localDataSource.clear();

@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>EF Core implementation of <see cref="ISchoolChangeRequestRepository"/>.</summary>
 public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -19,10 +21,10 @@ public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestReposito
     }
 
     public async Task AddApprovalsAsync(
-        IEnumerable<UserSchoolChangeApproval> approvals,
+        IEnumerable<Approval> approvals,
         CancellationToken cancellationToken)
     {
-        await _dbContext.UserSchoolChangeApprovals.AddRangeAsync(approvals, cancellationToken);
+        await _dbContext.Approvals.AddRangeAsync(approvals, cancellationToken);
     }
 
     public Task<UserSchoolChangeRequest?> GetByIdAsync(
@@ -89,15 +91,16 @@ public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestReposito
             .ToListAsync(cancellationToken);
     }
 
-    public Task<UserSchoolChangeApproval?> GetPendingApprovalAsync(
+    public Task<Approval?> GetPendingApprovalAsync(
         long requestId,
         long approverUserId,
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserSchoolChangeApprovals.FirstOrDefaultAsync(
+        return _dbContext.Approvals.FirstOrDefaultAsync(
             approval =>
-                approval.RequestId == requestId
+                approval.EntityType == ApprovalEntityType.SchoolChangeRequest
+                && approval.RequestId == requestId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
                 && approval.IsApproved == null
@@ -111,9 +114,10 @@ public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestReposito
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserSchoolChangeApprovals.AnyAsync(
+        return _dbContext.Approvals.AnyAsync(
             approval =>
-                approval.RequestId == requestId
+                approval.EntityType == ApprovalEntityType.SchoolChangeRequest
+                && approval.RequestId == requestId
                 && approval.ApprovedByUserId == approverUserId
                 && approval.ApprovedByRole == approverRole
                 && approval.IsApproved == true,
@@ -125,9 +129,10 @@ public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestReposito
         UserRole approverRole,
         CancellationToken cancellationToken)
     {
-        return _dbContext.UserSchoolChangeApprovals.AnyAsync(
+        return _dbContext.Approvals.AnyAsync(
             approval =>
-                approval.RequestId == requestId
+                approval.EntityType == ApprovalEntityType.SchoolChangeRequest
+                && approval.RequestId == requestId
                 && approval.ApprovedByRole == approverRole
                 && approval.IsApproved == true,
             cancellationToken);
@@ -138,9 +143,10 @@ public sealed class SchoolChangeRequestRepository : ISchoolChangeRequestReposito
         CancellationToken cancellationToken)
     {
         var rows = await (
-            from approval in _dbContext.UserSchoolChangeApprovals.AsNoTracking()
+            from approval in _dbContext.Approvals.AsNoTracking()
             join user in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals user.Id
-            where approval.RequestId == requestId
+            where approval.EntityType == ApprovalEntityType.SchoolChangeRequest
+                  && approval.RequestId == requestId
                   && approval.IsApproved == null
                   && approval.ApprovedAt == null
             select new

@@ -13,6 +13,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+/** Queue of quiz attempts awaiting manual grading. */
 export function PendingReviewsPage() {
   const { data: items = [], isLoading, error, refetch, isFetching } =
     usePendingReviewsQuery();

@@ -3,6 +3,7 @@ import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.d
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
+/// Live API implementation of [QuizRepository].
 class ApiQuizRepository implements QuizRepository {
   const ApiQuizRepository(this._remoteDataSource);
 
@@ -30,8 +31,13 @@ class ApiQuizRepository implements QuizRepository {
   Future<QuizAttemptSession> startAttempt({
     required String quizId,
     required String deviceId,
+    bool instructionsAcknowledged = false,
   }) {
-    return _remoteDataSource.startAttempt(quizId: quizId, deviceId: deviceId);
+    return _remoteDataSource.startAttempt(
+      quizId: quizId,
+      deviceId: deviceId,
+      instructionsAcknowledged: instructionsAcknowledged,
+    );
   }
 
   @override
@@ -40,12 +46,18 @@ class ApiQuizRepository implements QuizRepository {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     int? timeSpentSeconds,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+    String? deviceId,
   }) {
     return _remoteDataSource.saveDraft(
       quizId: quizId,
       attemptId: attemptId,
       answers: answers,
       timeSpentSeconds: timeSpentSeconds,
+      focusLossDelta: focusLossDelta,
+      clipboardPasteDelta: clipboardPasteDelta,
+      deviceId: deviceId,
     );
   }
 
@@ -55,12 +67,16 @@ class ApiQuizRepository implements QuizRepository {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     required int timeSpentSeconds,
+    bool isAutoSubmit = false,
+    String? deviceId,
   }) {
     return _remoteDataSource.submitAttempt(
       quizId: quizId,
       attemptId: attemptId,
       answers: answers,
       timeSpentSeconds: timeSpentSeconds,
+      isAutoSubmit: isAutoSubmit,
+      deviceId: deviceId,
     );
   }
 
@@ -72,6 +88,33 @@ class ApiQuizRepository implements QuizRepository {
     return _remoteDataSource.getAttemptResult(
       quizId: quizId,
       attemptId: attemptId,
+    );
+  }
+
+  @override
+  Future<OfflineQuizSyncResult> syncOfflineAttempt({
+    required String quizId,
+    required String attemptId,
+    required String clientSyncId,
+    required List<QuizAnswerSubmission> answers,
+    required int timeSpentSeconds,
+    required String deviceId,
+    bool submit = false,
+    bool isAutoSubmit = false,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+  }) {
+    return _remoteDataSource.syncOfflineAttempt(
+      quizId: quizId,
+      attemptId: attemptId,
+      clientSyncId: clientSyncId,
+      answers: answers,
+      timeSpentSeconds: timeSpentSeconds,
+      deviceId: deviceId,
+      submit: submit,
+      isAutoSubmit: isAutoSubmit,
+      focusLossDelta: focusLossDelta,
+      clipboardPasteDelta: clipboardPasteDelta,
     );
   }
 }

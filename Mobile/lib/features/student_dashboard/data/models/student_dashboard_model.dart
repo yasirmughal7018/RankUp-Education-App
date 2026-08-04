@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Aggregated student dashboard payload from the API.
 class StudentDashboardModel {
   const StudentDashboardModel({
     required this.student,
@@ -327,6 +328,7 @@ class StudentDashboardModel {
   final DateTime lastSyncedAt;
 }
 
+/// Student identity and greeting header data.
 class StudentSummaryModel {
   const StudentSummaryModel({
     required this.name,
@@ -343,6 +345,7 @@ class StudentSummaryModel {
   final String avatarInitials;
 }
 
+/// XP level and progress ring for the dashboard hero.
 class StudentLevelModel {
   const StudentLevelModel({
     required this.currentLevel,
@@ -363,6 +366,7 @@ class StudentLevelModel {
   final int weeklyRankChange;
 }
 
+/// Class or school ranking snapshot.
 class RankingSummaryModel {
   const RankingSummaryModel({
     required this.classRank,
@@ -379,6 +383,7 @@ class RankingSummaryModel {
   final int weeklyMove;
 }
 
+/// Daily learning streak calendar data.
 class LearningStreakModel {
   const LearningStreakModel({
     required this.currentDays,
@@ -395,6 +400,7 @@ class LearningStreakModel {
   final String reward;
 }
 
+/// Compact numeric stat shown in the quick strip.
 class QuickStatModel {
   const QuickStatModel({
     required this.title,
@@ -411,6 +417,7 @@ class QuickStatModel {
   final DashboardTone tone;
 }
 
+/// Recent quiz, worksheet, or lesson activity row.
 class LearningActivityModel {
   const LearningActivityModel({
     required this.id,
@@ -437,6 +444,7 @@ class LearningActivityModel {
   final IconData icon;
 }
 
+/// Subject mastery percentage for performance cards.
 class SubjectPerformanceModel {
   const SubjectPerformanceModel({
     required this.subject,
@@ -457,6 +465,7 @@ class SubjectPerformanceModel {
   final IconData icon;
 }
 
+/// Topic chip within a subject performance card.
 class TopicModel {
   const TopicModel({
     required this.title,
@@ -469,6 +478,7 @@ class TopicModel {
   final String? recommendation;
 }
 
+/// AI-generated study recommendation card payload.
 class AiRecommendationModel {
   const AiRecommendationModel({
     required this.reason,
@@ -483,6 +493,7 @@ class AiRecommendationModel {
   final String expectedImprovement;
 }
 
+/// Recent quiz or exam result summary.
 class ResultModel {
   const ResultModel({
     required this.title,
@@ -503,6 +514,7 @@ class ResultModel {
   final String statusLabel;
 }
 
+/// Active learning goal with progress percentage.
 class LearningGoalModel {
   const LearningGoalModel({
     required this.title,
@@ -517,6 +529,7 @@ class LearningGoalModel {
   final String assignedBy;
 }
 
+/// Badge or milestone achievement entry.
 class AchievementModel {
   const AchievementModel({
     required this.title,
@@ -531,6 +544,7 @@ class AchievementModel {
   final DashboardTone tone;
 }
 
+/// Scheduled quiz, class, or event on the upcoming list.
 class UpcomingActivityModel {
   const UpcomingActivityModel({required this.day, required this.title});
 
@@ -538,6 +552,7 @@ class UpcomingActivityModel {
   final String title;
 }
 
+/// Teacher comment surfaced on the student dashboard.
 class TeacherFeedbackModel {
   const TeacherFeedbackModel({
     required this.teacherName,
@@ -552,6 +567,7 @@ class TeacherFeedbackModel {
   final String feedback;
 }
 
+/// Recent discussion thread activity snippet.
 class DiscussionActivityModel {
   const DiscussionActivityModel({
     required this.title,
@@ -564,4 +580,5 @@ class DiscussionActivityModel {
   final String actionLabel;
 }
 
+/// Semantic color tones used by dashboard cards.
 enum DashboardTone { blue, green, amber, red, purple, gold }

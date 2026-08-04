@@ -2,8 +2,10 @@ using RankUpEducation.Contracts.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>Normalizes submitted option ids and scores multi-select answers.</summary>
 public static class QuizAnswerSelection
 {
+    /// <summary>Prefers <c>SelectedOptionIds</c> array; falls back to legacy single <c>SelectedOptionId</c>.</summary>
     public static IReadOnlyList<long> ResolveSelectedOptionIds(SubmitQuizAnswerRequest answer)
     {
         if (answer.SelectedOptionIds is { Count: > 0 })
@@ -41,6 +43,7 @@ public static class QuizAnswerSelection
         return isExactMatch ? (true, marks) : (false, (short)0);
     }
 
+    /// <summary>Collects distinct option ids from multiple attempt-answer rows (multi-select storage).</summary>
     public static IReadOnlyList<long> AggregateSelectedOptionIds(
         IEnumerable<long?> optionIds)
     {

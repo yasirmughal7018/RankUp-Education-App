@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
 
+/// Section title row for grouped dashboard cards.
 class DashboardSectionHeader extends StatelessWidget {
   const DashboardSectionHeader({
     required this.title,
@@ -34,6 +35,7 @@ class DashboardSectionHeader extends StatelessWidget {
   }
 }
 
+/// Hero header with student name, avatar, and level badge.
 class StudentHeaderCard extends StatelessWidget {
   const StudentHeaderCard({
     required this.dashboard,
@@ -109,6 +111,7 @@ class StudentHeaderCard extends StatelessWidget {
   }
 }
 
+/// Level progress ring paired with rank position.
 class LevelRankCard extends StatelessWidget {
   const LevelRankCard({required this.level, super.key});
 
@@ -214,6 +217,7 @@ class LevelRankCard extends StatelessWidget {
   }
 }
 
+/// Horizontally scrollable row of quick numeric stats.
 class QuickStatStrip extends StatelessWidget {
   const QuickStatStrip({required this.stats, super.key});
 
@@ -272,6 +276,7 @@ class QuickStatStrip extends StatelessWidget {
   }
 }
 
+/// Recent learning activity list item card.
 class LearningActivityCard extends StatelessWidget {
   const LearningActivityCard({
     required this.activity,
@@ -334,6 +339,7 @@ class LearningActivityCard extends StatelessWidget {
   }
 }
 
+/// AI study tip or next-step recommendation card.
 class AiRecommendationCard extends StatelessWidget {
   const AiRecommendationCard({
     required this.recommendation,
@@ -418,6 +424,7 @@ class AiRecommendationCard extends StatelessWidget {
   }
 }
 
+/// Subject mastery card with topic chips.
 class SubjectPerformanceCard extends StatelessWidget {
   const SubjectPerformanceCard({
     required this.subject,
@@ -475,6 +482,7 @@ class SubjectPerformanceCard extends StatelessWidget {
   }
 }
 
+/// Individual topic progress chip.
 class TopicCard extends StatelessWidget {
   const TopicCard({required this.topic, required this.weak, super.key});
 
@@ -528,6 +536,7 @@ class TopicCard extends StatelessWidget {
   }
 }
 
+/// Leaderboard position summary card.
 class RankingCard extends StatelessWidget {
   const RankingCard({required this.rankings, super.key});
 
@@ -563,6 +572,7 @@ class RankingCard extends StatelessWidget {
   }
 }
 
+/// Calendar heatmap for learning streaks.
 class StreakCalendarCard extends StatelessWidget {
   const StreakCalendarCard({required this.streak, super.key});
 
@@ -615,6 +625,7 @@ class StreakCalendarCard extends StatelessWidget {
   }
 }
 
+/// Recent scored assessment result card.
 class ResultCard extends StatelessWidget {
   const ResultCard({required this.result, super.key});
 
@@ -652,6 +663,7 @@ class ResultCard extends StatelessWidget {
   }
 }
 
+/// Goal progress bar with target label.
 class GoalProgressCard extends StatelessWidget {
   const GoalProgressCard({required this.goal, super.key});
 
@@ -684,6 +696,7 @@ class GoalProgressCard extends StatelessWidget {
   }
 }
 
+/// Earned badge or milestone card.
 class AchievementCard extends StatelessWidget {
   const AchievementCard({required this.achievement, super.key});
 
@@ -716,6 +729,7 @@ class AchievementCard extends StatelessWidget {
   }
 }
 
+/// Teacher feedback snippet card.
 class TeacherFeedbackCard extends StatelessWidget {
   const TeacherFeedbackCard({required this.feedback, super.key});
 
@@ -745,6 +759,7 @@ class TeacherFeedbackCard extends StatelessWidget {
   }
 }
 
+/// Upcoming quizzes and events list card.
 class UpcomingListCard extends StatelessWidget {
   const UpcomingListCard({required this.items, super.key});
 
@@ -776,6 +791,7 @@ class UpcomingListCard extends StatelessWidget {
   }
 }
 
+/// Recent discussion activity preview card.
 class DiscussionActivityCard extends StatelessWidget {
   const DiscussionActivityCard({required this.items, super.key});
 
@@ -804,6 +820,7 @@ class DiscussionActivityCard extends StatelessWidget {
   }
 }
 
+/// Banner shown when dashboard data is loaded from cache while offline.
 class OfflineIndicator extends StatelessWidget {
   const OfflineIndicator({required this.dashboard, super.key});
 
@@ -832,6 +849,7 @@ class OfflineIndicator extends StatelessWidget {
   }
 }
 
+/// Full-width error state with retry action.
 class DashboardErrorState extends StatelessWidget {
   const DashboardErrorState({
     required this.message,
@@ -871,6 +889,7 @@ class DashboardErrorState extends StatelessWidget {
   }
 }
 
+/// Skeleton placeholder layout while dashboard loads.
 class DashboardSkeleton extends StatelessWidget {
   const DashboardSkeleton({super.key});
 

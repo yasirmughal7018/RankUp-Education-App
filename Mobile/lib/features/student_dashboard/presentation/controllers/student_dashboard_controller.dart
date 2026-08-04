@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
 import 'package:rankup_education/features/student_dashboard/domain/usecases/get_student_dashboard_usecase.dart';
 
+/// Loaded student dashboard data and refresh/error flags.
 class StudentDashboardState {
   const StudentDashboardState({
     this.dashboard,
@@ -31,12 +32,14 @@ class StudentDashboardState {
   }
 }
 
+/// Loads and refreshes the student dashboard aggregate payload.
 class StudentDashboardController extends StateNotifier<StudentDashboardState> {
   StudentDashboardController(this._getDashboard)
       : super(const StudentDashboardState());
 
   final GetStudentDashboardUseCase _getDashboard;
 
+  /// Loads dashboard from repository, preferring cache when offline.
   Future<void> load() async {
     if (state.dashboard == null) {
       state = state.copyWith(isLoading: true, clearError: true);

@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { AuthSplitLayout } from "@/features/authentication/presentation/components/AuthSplitLayout";
 
 const DEFAULT_MESSAGE =
-  "Your account is locked because you requested a school or campus change. School Admin or Portal Admin must approve (or reject) the change before you can sign in again.";
+  "Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.";
 
 export function AccountLockedPage() {
   const location = useLocation();

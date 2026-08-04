@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
+/// Signed-in user profile with role, scope, and permission claims.
 class AppUser {
   const AppUser({
     required this.id,

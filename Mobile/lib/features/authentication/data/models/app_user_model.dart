@@ -1,6 +1,7 @@
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
+/// JSON-serializable user model with tolerant field name parsing.
 class AppUserModel extends AppUser {
   const AppUserModel({
     required super.id,

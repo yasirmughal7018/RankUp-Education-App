@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 
+/// Active login session pairing the user with JWT tokens.
 class AuthSession {
   const AuthSession({
     required this.user,

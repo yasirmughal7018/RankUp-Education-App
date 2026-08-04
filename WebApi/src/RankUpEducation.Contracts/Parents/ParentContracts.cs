@@ -3,6 +3,7 @@ namespace RankUpEducation.Contracts.Parents;
 public sealed record LinkedStudentResponse(
     long StudentId,
     string FullName,
+    string Username,
     string RollNumber,
     short Grade,
     string Section,

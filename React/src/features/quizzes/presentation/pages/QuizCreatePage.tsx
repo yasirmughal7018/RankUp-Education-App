@@ -6,24 +6,40 @@ import * as quizApi from "@/features/quizzes/data/quizApi";
 import { createEmptyQuizForm } from "@/features/quizzes/domain/quizTypes";
 import { QuizForm } from "@/features/quizzes/presentation/components/QuizForm";
 
+/** New quiz draft page wrapping the shared quiz metadata form. */
 export function QuizCreatePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isPortalAdmin = user?.role === "PortalAdmin";
+  const isSchoolAdmin = user?.role === "SchoolAdmin";
+
+  const initialValues = {
+    ...createEmptyQuizForm(),
+    schoolId: isPortalAdmin ? null : (user?.schoolId ?? null),
+    campusId: user?.campusId ?? null,
+  };
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Create quiz"
-        description="Start with quiz details. You can add questions after the quiz is created."
+        description="Start with quiz details and questions. Who can take it (public catalog, school, grade, section, or selected students) is chosen later when you Assign — after publish and approval when required."
+        backTo="/quizzes"
+        backAriaLabel="Back to quizzes"
       />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <QuizForm
-          initialValues={createEmptyQuizForm()}
+          initialValues={initialValues}
           submitLabel="Create quiz"
           isSubmitting={isSubmitting}
           showContextStudentId={user?.role === "Parent"}
+          showSchoolCampusFields={isPortalAdmin || isSchoolAdmin}
+          requireSchoolId={false}
+          requireCampusId={false}
+          schoolEditable={isPortalAdmin}
+          requireQuizType
           onSubmit={async (values) => {
             setIsSubmitting(true);
             try {

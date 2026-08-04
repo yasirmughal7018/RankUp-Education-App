@@ -1,7 +1,11 @@
+/** Central React Query key factory for cache invalidation. */
 export const queryKeys = {
   lookups: (type?: string, parentId?: number | null) =>
     ["lookups", type ?? "all", parentId ?? null] as const,
   lookupTypes: () => ["lookup-types"] as const,
+  scopeSchools: () => ["scope", "schools"] as const,
+  scopeCampuses: (schoolId: number) =>
+    ["scope", "schools", schoolId, "campuses"] as const,
   quizzes: (search?: string) => ["quizzes", search ?? ""] as const,
   pendingQuizApprovals: () => ["quizzes", "pending-approval"] as const,
   manageQuiz: (quizId: number) => ["quizzes", "manage", quizId] as const,

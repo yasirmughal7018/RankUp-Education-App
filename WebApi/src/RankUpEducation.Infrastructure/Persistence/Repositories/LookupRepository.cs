@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Abstractions;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <inheritdoc cref="RankUpEducation.Application.Common.Abstractions.ILookupRepository"/>
 public sealed class LookupRepository : ILookupRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -42,6 +43,7 @@ public sealed class LookupRepository : ILookupRepository
         short fallback,
         CancellationToken cancellationToken)
     {
+        // Prefer first synonym match when importing legacy display names.
         foreach (var name in names)
         {
             var id = await ResolveLookupIdAsync(type, name, 0, cancellationToken);
@@ -66,6 +68,33 @@ public sealed class LookupRepository : ILookupRepository
                 lookup.Name,
                 lookup.Type,
                 lookup.LookupRefId))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<short> ResolveLookupIdOrNameAsync(
+        string type,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var normalized = token.Trim();
+        if (normalized.Length == 0)
+        {
+            return 0;
+        }
+
+        if (short.TryParse(normalized, out var id))
+        {
+            var byId = await GetByIdAndTypeAsync(id, type, cancellationToken);
+            if (byId is not null)
+            {
+                return byId.Id;
+            }
+        }
+
+        var lower = normalized.ToLowerInvariant();
+        return await _dbContext.Lookups.AsNoTracking()
+            .Where(lookup => lookup.Type == type && lookup.Name.ToLower() == lower)
+            .Select(lookup => lookup.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }
 

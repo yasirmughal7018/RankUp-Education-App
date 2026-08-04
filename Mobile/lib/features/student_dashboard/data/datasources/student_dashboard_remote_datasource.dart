@@ -7,6 +7,7 @@ import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model
 import 'package:rankup_education/features/student_dashboard/data/mappers/student_dashboard_mapper.dart';
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
 
+/// REST client for `/student/dashboard` aggregate endpoint.
 class StudentDashboardRemoteDataSource {
   const StudentDashboardRemoteDataSource(this._dio);
 

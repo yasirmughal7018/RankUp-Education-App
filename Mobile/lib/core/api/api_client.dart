@@ -5,6 +5,7 @@ import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/api/api_exception_mapper.dart';
 import 'package:rankup_education/core/storage/token_store.dart';
 
+/// Configured [Dio] client with auth headers and automatic token refresh.
 final dioProvider = Provider<Dio>((ref) {
   final environment = ref.watch(appEnvironmentProvider);
   final tokenStore = ref.watch(tokenStoreProvider);
@@ -47,6 +48,7 @@ final dioProvider = Provider<Dio>((ref) {
         handler.next(options);
       },
       onError: (error, handler) async {
+        // Avoid refresh loops on the refresh endpoint itself.
         final shouldRefresh = error.response?.statusCode == 401 &&
             error.requestOptions.extra['skipAuthRefresh'] != true;
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
 
+/// Generic async list/detail scaffold for stub-backed feature pages.
 class AsyncProductPage extends ConsumerWidget {
   const AsyncProductPage({
     required this.title,

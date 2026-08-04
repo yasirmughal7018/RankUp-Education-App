@@ -167,19 +167,13 @@ Content-Type: application/json
 
 ###
 
-# Approve question (school admin)
+# Approve question (CampusAdmin → Campus, SchoolAdmin → School, PortalAdmin → Public)
 POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/approve
 Authorization: Bearer {{accessToken}}
 
 ###
 
-# AI-approve question (super admin)
-POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/approve-ai
-Authorization: Bearer {{accessToken}}
-
-###
-
-# Reject question (school admin)
+# Reject question (CampusAdmin / SchoolAdmin / PortalAdmin in scope)
 POST {{RankUpEducation.Api_HostAddress}}/api/questions/{{questionId}}/reject
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json

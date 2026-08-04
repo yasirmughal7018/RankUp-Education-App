@@ -20,6 +20,8 @@ internal static class QuizManageMapping
             detail.QuizTypeName,
             detail.DifficultyName,
             detail.LifecycleStatusName,
+            detail.ApprovalStatus,
+            detail.RejectionReason,
             detail.ClassId,
             detail.SubjectId,
             detail.TopicId,
@@ -32,9 +34,23 @@ internal static class QuizManageMapping
             detail.ShuffleQuestions,
             detail.ShuffleOptions,
             detail.IsReviewRequired,
+            detail.NavigationMode,
+            detail.ReviewDisplayMode,
             detail.CreatedByName,
             detail.SchoolName,
-            questions.Select(QuizQuestionMapping.ToQuestionResponse).ToArray());
+            detail.SchoolId,
+            detail.CampusId,
+            questions.Select(QuizQuestionMapping.ToQuestionResponse).ToArray(),
+            (detail.ApprovalHistory ?? Array.Empty<QuizApprovalEventItem>())
+                .Select(entry => new QuizApprovalHistoryItem(
+                    entry.ApprovalId,
+                    entry.Action.ToString(),
+                    entry.ActorUserId,
+                    entry.ActorName,
+                    entry.ActorRole.ToString(),
+                    entry.Reason,
+                    entry.OccurredAt))
+                .ToArray());
     }
 
     public static QuizAssignmentResponse ToAssignmentResponse(QuizAssignmentListItem item)

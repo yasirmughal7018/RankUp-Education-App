@@ -1,3 +1,6 @@
+/**
+ * Question bank HTTP client — list/CRUD, 3-tier approve/reject, PortalAdmin lifecycle, Excel import.
+ */
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 import { environment } from "@/app/environment";
 import { readStoredSession } from "@/core/auth/tokenStorage";
@@ -9,6 +12,7 @@ import type {
 } from "@/features/questions/domain/questionTypes";
 import { buildQuestionPayload } from "@/features/questions/domain/questionTypes";
 
+/** Build GET /questions query string from optional filters. */
 function buildListQuery(filters: QuestionListFilters = {}): string {
   const params = new URLSearchParams();
 
@@ -36,6 +40,7 @@ function buildListQuery(filters: QuestionListFilters = {}): string {
   return query ? `?${query}` : "";
 }
 
+/** List questions visible to the current user (server applies org scope). */
 export async function listQuestions(
   filters: QuestionListFilters = {},
 ): Promise<QuestionSummary[]> {
@@ -46,6 +51,7 @@ export async function listQuestions(
   return response.items;
 }
 
+/** Dedicated pending-approval endpoint for approver queues. */
 export async function listPendingApprovalQuestions(): Promise<QuestionSummary[]> {
   const response = await apiRequest<{ items: QuestionSummary[] }>(
     "/questions/pending-approval",
@@ -58,6 +64,9 @@ export async function getQuestion(questionId: number): Promise<QuestionDetail> {
   return apiRequest<QuestionDetail>(`/questions/${questionId}`);
 }
 
+/**
+ * Create a question. Non–PortalAdmin → PendingReview; PortalAdmin → auto-published Public.
+ */
 export async function createQuestion(
   values: QuestionFormValues,
   submitForReview = true,
@@ -81,6 +90,7 @@ export async function updateQuestion(
   });
 }
 
+/** Move Rejected (or draft) back into PendingReview. */
 export async function submitQuestionForReview(
   questionId: number,
 ): Promise<QuestionDetail> {
@@ -89,6 +99,10 @@ export async function submitQuestionForReview(
   });
 }
 
+/**
+ * Endorse (CampusAdmin/SchoolAdmin) or publish (PortalAdmin).
+ * Campus → Campus inactive; School → School inactive; Portal → Public active.
+ */
 export async function approveQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/approve`, { method: "POST" });
 }
@@ -103,16 +117,24 @@ export async function rejectQuestion(
   });
 }
 
+/** PortalAdmin-only: set IsActive=true. */
 export async function activateQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/activate`, { method: "POST" });
 }
 
+/** PortalAdmin-only: set IsActive=false. */
 export async function deactivateQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/deactivate`, { method: "POST" });
 }
 
+/** PortalAdmin-only: archive the question. */
 export async function archiveQuestion(questionId: number): Promise<void> {
   await apiRequest(`/questions/${questionId}/archive`, { method: "POST" });
+}
+
+/** PortalAdmin-only: restore an archived question. */
+export async function unarchiveQuestion(questionId: number): Promise<void> {
+  await apiRequest(`/questions/${questionId}/unarchive`, { method: "POST" });
 }
 
 export async function deleteQuestion(questionId: number): Promise<void> {
@@ -124,8 +146,14 @@ export interface ImportQuestionsResult {
   createdCount: number;
   errorCount: number;
   errors: Array<{ rowNumber: number; message: string }>;
+  created?: Array<{ status?: string }>;
 }
 
+/**
+ * Multipart Excel import. dryRun validates without writing;
+ * commit always creates PendingReview (never Approved).
+ * Uses fetch + FormData (not apiRequest) for file upload.
+ */
 export async function importQuestionsFromExcel(
   file: File,
   dryRun = false,
@@ -146,7 +174,10 @@ export async function importQuestionsFromExcel(
   const payload = (await response.json()) as {
     success?: boolean;
     message?: string;
-    data?: ImportQuestionsResult;
+    data?: ImportQuestionsResult & {
+      created?: Array<{ status?: string; Status?: string }>;
+      Created?: Array<{ status?: string; Status?: string }>;
+    };
     errors?: string[];
   };
 
@@ -158,9 +189,25 @@ export async function importQuestionsFromExcel(
     );
   }
 
-  return payload.data as ImportQuestionsResult;
+  const data = payload.data;
+  if (!data) {
+    throw new Error("Unable to import questions from Excel.");
+  }
+
+  // Normalize PascalCase / camelCase created rows from the API envelope.
+  const rawCreated = data.created ?? data.Created ?? [];
+  return {
+    dryRun: data.dryRun,
+    createdCount: data.createdCount,
+    errorCount: data.errorCount,
+    errors: data.errors ?? [],
+    created: rawCreated.map((item) => ({
+      status: item.status ?? item.Status,
+    })),
+  };
 }
 
+/** Absolute URL for the blank Excel import template download. */
 export function getQuestionImportTemplateUrl(): string {
   return `${environment.apiBaseUrl}/questions/import-template`;
 }

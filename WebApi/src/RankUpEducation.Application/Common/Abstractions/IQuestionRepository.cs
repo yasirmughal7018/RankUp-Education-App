@@ -1,16 +1,33 @@
 using RankUpEducation.Application.Questions;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Questions;
 
 namespace RankUpEducation.Application.Common.Abstractions;
 
+/// <summary>
+/// Persistence for the question bank: CRUD, list filtering by org visibility, and answer children.
+/// </summary>
 public interface IQuestionRepository
 {
     Task AddQuestionAsync(Question question, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Detach a tracked question so later option/answer replaces do not fight an empty
+    /// navigation collection on the same tracked instance.
+    /// </summary>
+    void DetachQuestion(Question question);
+
+    /// <summary>Active-only entity load (legacy callers).</summary>
     Task<Question?> GetQuestionEntityAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>Manage load including inactive / pending (with options).</summary>
     Task<Question?> GetQuestionEntityForManageAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Lists bank questions with optional filters.
+    /// When <paramref name="visibilityScope"/> is set (non–PortalAdmin): own rows plus Approved
+    /// rows matching Public / School / Campus rules; pending queues are org-scoped.
+    /// </summary>
     Task<IReadOnlyList<QuestionListItem>> ListQuestionsAsync(
         long? createdByUserId,
         bool? isActive,
@@ -18,10 +35,13 @@ public interface IQuestionRepository
         short? classId,
         bool pendingApprovalOnly,
         bool eligibleForQuizOnly,
-        bool includeAllApprovedForOwnerScope,
+        QuestionListVisibilityScope? visibilityScope,
         CancellationToken cancellationToken);
 
     Task<QuestionDetailItem?> GetQuestionDetailAsync(long questionId, CancellationToken cancellationToken);
+
+    /// <summary>Appends one workflow event to the question's app_approval trail.</summary>
+    Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken);
 
     Task<int> CountQuizLinksAsync(long questionId, CancellationToken cancellationToken);
 

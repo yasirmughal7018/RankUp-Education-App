@@ -22,7 +22,7 @@ export interface PendingRegistration {
   reasonMessage: string | null;
   rollNumberTeacherCode: string | null;
   pendingApprovers: PendingApprover[];
-  /** True when this admin already approved and the request still awaits Portal Admin. */
+  /** True when this admin already approved and the request still awaits activation. */
   currentUserHasApproved: boolean;
 }
 
@@ -31,6 +31,7 @@ export type RegistrationActionRole = Extract<
   "Student" | "Teacher" | "Parent"
 >;
 
+/** Roles admins can approve (Student/Teacher/Parent). */
 export function isRegistrationActionRole(
   role: UserRole,
 ): role is RegistrationActionRole {

@@ -17,7 +17,8 @@ export type UserRole =
   | "CampusAdmin"
   | "Teacher"
   | "Student"
-  | "Parent";
+  | "Parent"
+  | "Coordinator";
 
 export interface PendingSchoolChange {
   id: number;
@@ -25,6 +26,10 @@ export interface PendingSchoolChange {
   toCampusId: number | null;
   requestedAt: string;
   status: string;
+  /** Role locked by the pending school/campus change (e.g. Teacher). */
+  lockedRole?: string | null;
+  /** True when the whole account was deactivated (single-role case). */
+  isAccountFullyLocked?: boolean | null;
 }
 
 export interface CurrentUser {
@@ -43,8 +48,19 @@ export interface CurrentUser {
   cnic?: string | null;
   avatarUrl?: string | null;
   pendingSchoolChange?: PendingSchoolChange | null;
+  pendingRoleRequest?: PendingRoleRequest | null;
   permissions: string[];
   mustChangePassword?: boolean | null;
+}
+
+export interface PendingRoleRequest {
+  id: number;
+  requestedRole: string;
+  schoolId?: number | null;
+  campusId?: number | null;
+  teacherCode?: string | null;
+  reasonMessage?: string | null;
+  requestedAt: string;
 }
 
 export interface AuthTokensResponse {
@@ -68,10 +84,12 @@ export const ADMIN_ROLES: UserRole[] = [
   "CampusAdmin",
 ];
 
+/** True when the role can access admin/directory pages. */
 export function isAdminRole(role: UserRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
+/** Human-readable dashboard title for the active role. */
 export function getDashboardLabel(role: UserRole): string {
   switch (role) {
     case "PortalAdmin":
@@ -80,6 +98,8 @@ export function getDashboardLabel(role: UserRole): string {
       return "School Administration";
     case "CampusAdmin":
       return "Campus Administration";
+    case "Coordinator":
+      return "Coordinator Dashboard";
     case "Teacher":
       return "Teacher Dashboard";
     case "Student":
@@ -91,6 +111,7 @@ export function getDashboardLabel(role: UserRole): string {
   }
 }
 
+/** Display label for roles (e.g. PortalAdmin → Portal Admin). */
 export function getRoleLabel(role: UserRole): string {
   switch (role) {
     case "PortalAdmin":
@@ -99,11 +120,14 @@ export function getRoleLabel(role: UserRole): string {
       return "School Admin";
     case "CampusAdmin":
       return "Campus Admin";
+    case "Coordinator":
+      return "Coordinator";
     default:
       return role;
   }
 }
 
+/** Default landing route after login for each role. */
 export function dashboardPathForRole(role: UserRole): string {
   if (isAdminRole(role)) {
     return "/admin";
@@ -114,7 +138,7 @@ export function dashboardPathForRole(role: UserRole): string {
   if (role === "Student") {
     return "/student/quizzes";
   }
-  if (role === "Teacher") {
+  if (role === "Teacher" || role === "Coordinator") {
     return "/quizzes";
   }
   return "/dashboard";

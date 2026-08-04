@@ -4,6 +4,7 @@ using RankUpEducation.Domain.Notifications;
 
 namespace RankUpEducation.Application.Notifications;
 
+/// <inheritdoc cref="INotificationService"/>
 public sealed class NotificationService : INotificationService
 {
     private readonly INotificationRepository _notifications;

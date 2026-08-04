@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
 
+/// Selectable answer choice within a quiz question.
 class QuizOption {
   const QuizOption({
     required this.id,
@@ -12,6 +13,7 @@ class QuizOption {
   final String? imageUrl;
 }
 
+/// Single question payload for an in-progress or review attempt.
 class QuizQuestion {
   const QuizQuestion({
     required this.id,
@@ -21,6 +23,8 @@ class QuizQuestion {
     required this.displayOrder,
     this.hint,
     this.options = const [],
+    this.estimatedTimeSeconds = 0,
+    this.timeSpentSeconds = 0,
   });
 
   final String id;
@@ -30,6 +34,8 @@ class QuizQuestion {
   final int displayOrder;
   final String? hint;
   final List<QuizOption> options;
+  final int estimatedTimeSeconds;
+  final int timeSpentSeconds;
 
   int get questionTypeId => questionTypeIdFromName(questionType);
 
@@ -37,6 +43,7 @@ class QuizQuestion {
       options.map((option) => option.text).toList(growable: false);
 }
 
+/// Full quiz metadata plus question list for attempt and review flows.
 class QuizDetail extends QuizSummary {
   const QuizDetail({
     required super.id,
@@ -106,20 +113,24 @@ class QuizDetail extends QuizSummary {
   final bool shuffleOptions;
 }
 
+/// Locally cached answer draft before submit or sync.
 class SavedQuizAnswer {
   const SavedQuizAnswer({
     required this.questionId,
     this.selectedOptionId,
     this.selectedOptionIds = const [],
     this.submittedText,
+    this.isMarkedForReview = false,
   });
 
   final String questionId;
   final String? selectedOptionId;
   final List<String> selectedOptionIds;
   final String? submittedText;
+  final bool isMarkedForReview;
 }
 
+/// Server-issued attempt session with timing and draft answers.
 class QuizAttemptSession {
   const QuizAttemptSession({
     required this.attemptId,
@@ -130,6 +141,11 @@ class QuizAttemptSession {
     this.timeLimitMinutes,
     this.resumed = false,
     this.savedAnswers = const [],
+    this.navigationMode = 'Free',
+    this.enforceDeviceLock = false,
+    this.focusLossCount = 0,
+    this.clipboardPasteCount = 0,
+    this.enablePerQuestionTimer = false,
   });
 
   final String attemptId;
@@ -140,8 +156,14 @@ class QuizAttemptSession {
   final int? timeLimitMinutes;
   final bool resumed;
   final List<SavedQuizAnswer> savedAnswers;
+  final String navigationMode;
+  final bool enforceDeviceLock;
+  final int focusLossCount;
+  final int clipboardPasteCount;
+  final bool enablePerQuestionTimer;
 }
 
+/// Per-question grading breakdown after submission.
 class QuizResultQuestion {
   const QuizResultQuestion({
     required this.id,
@@ -166,6 +188,7 @@ class QuizResultQuestion {
   final String? submittedText;
 }
 
+/// Final scored attempt returned after submit or result fetch.
 class QuizAttemptResult {
   const QuizAttemptResult({
     required this.attemptId,
@@ -208,8 +231,22 @@ int questionTypeIdFromName(String questionType) {
   }
   if (normalized.contains('descriptive') ||
       normalized.contains('shortanswer') ||
-      normalized.contains('short')) {
+      (normalized.contains('short') && !normalized.contains('file'))) {
     return 44;
+  }
+  if (normalized.contains('file')) {
+    return 45;
+  }
+  if (normalized == 'matching' || normalized == 'match') {
+    return 46;
+  }
+  if (normalized == 'ordering' ||
+      normalized == 'order' ||
+      normalized == 'sequence') {
+    return 47;
+  }
+  if (normalized.contains('media') || normalized.contains('imagechoice')) {
+    return 48;
   }
 
   return 40;

@@ -1,7 +1,11 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Pencil, Power, PowerOff } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
-import { PageHeader } from "@/core/components/PageHeader";
+import { AppCard } from "@/components/ui/app-card";
+import { AppEmptyState } from "@/components/ui/app-empty-state";
+import { AppErrorState } from "@/components/ui/app-error-state";
+import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
+import { Button } from "@/components/ui/button";
 import type {
   DirectoryCampus,
   DirectorySchool,
@@ -9,6 +13,13 @@ import type {
   UpsertSchoolInput,
 } from "@/features/directory/domain/directoryTypes";
 import { CampusFormDialog } from "@/features/directory/presentation/components/CampusFormDialog";
+import {
+  DirectoryFilterPanel,
+  DirectoryFlash,
+  DirectoryIconAction,
+  DirectoryPageShell,
+  directorySelectClassName,
+} from "@/features/directory/presentation/components/DirectoryListChrome";
 import { SchoolFormDialog } from "@/features/directory/presentation/components/SchoolFormDialog";
 import {
   useActivateCampusMutation,
@@ -22,9 +33,18 @@ import {
   useUpdateCampusMutation,
   useUpdateSchoolMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import {
+  directoryReadyStatusClass,
+  matchesReadyStatusFilter,
+  READY_STATUS_FILTER_OPTIONS,
+  type ReadyStatusFilter,
+} from "@/features/directory/presentation/utils/accountStatus";
+import { cn } from "@/lib/utils";
 
+/** Schools and campuses master list with create, edit, and activate/deactivate. */
 export function DirectorySchoolsPage() {
   const [selectedSchoolId, setSelectedSchoolId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ReadyStatusFilter>("all");
   const [schoolDialog, setSchoolDialog] = useState<
     "create" | DirectorySchool | null
   >(null);
@@ -39,13 +59,28 @@ export function DirectorySchoolsPage() {
     isLoading,
     error,
     refetch,
-    isFetching,
   } = useDirectorySchoolsQuery();
   const {
     data: campuses = [],
     isLoading: campusesLoading,
     error: campusesError,
   } = useDirectoryCampusesQuery(selectedSchoolId ?? 0, selectedSchoolId != null);
+
+  const visibleSchools = useMemo(
+    () =>
+      schools.filter((school) =>
+        matchesReadyStatusFilter(school.isActive, statusFilter),
+      ),
+    [schools, statusFilter],
+  );
+
+  const visibleCampuses = useMemo(
+    () =>
+      campuses.filter((campus) =>
+        matchesReadyStatusFilter(campus.isActive, statusFilter),
+      ),
+    [campuses, statusFilter],
+  );
 
   const createSchoolMutation = useCreateSchoolMutation();
   const updateSchoolMutation = useUpdateSchoolMutation();
@@ -163,206 +198,242 @@ export function DirectorySchoolsPage() {
     }
   }
 
+  function schoolActions(school: DirectorySchool) {
+    return (
+      <>
+        <DirectoryIconAction
+          icon={Pencil}
+          label={`Edit ${school.name}`}
+          disabled={schoolBusy}
+          onClick={() => {
+            clearMessages();
+            setSchoolDialog(school);
+          }}
+        />
+        <DirectoryIconAction
+          icon={school.isActive ? PowerOff : Power}
+          label={
+            school.isActive
+              ? `Deactivate ${school.name}`
+              : `Activate ${school.name}`
+          }
+          disabled={schoolBusy}
+          onClick={() => void toggleSchoolActive(school)}
+        />
+      </>
+    );
+  }
+
+  function campusActions(campus: DirectoryCampus) {
+    return (
+      <>
+        <DirectoryIconAction
+          icon={Pencil}
+          label={`Edit ${campus.name}`}
+          disabled={campusBusy}
+          onClick={() => {
+            clearMessages();
+            setCampusDialog(campus);
+          }}
+        />
+        <DirectoryIconAction
+          icon={campus.isActive ? PowerOff : Power}
+          label={
+            campus.isActive
+              ? `Deactivate ${campus.name}`
+              : `Activate ${campus.name}`
+          }
+          disabled={campusBusy}
+          onClick={() => void toggleCampusActive(campus)}
+        />
+      </>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title="Schools"
-        description="Manage schools and campuses. PortalAdmin and SchoolAdmin can create, edit, and activate."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                clearMessages();
-                setSchoolDialog("create");
-              }}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              Create school
-            </button>
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Refresh
-            </button>
-            <Link
-              to="/admin/directory"
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Directory home
-            </Link>
-          </div>
-        }
+    <DirectoryPageShell
+      title="Schools"
+      primaryAction={
+        <Button
+          type="button"
+          size="sm"
+          className="h-9 whitespace-nowrap"
+          onClick={() => {
+            clearMessages();
+            setSchoolDialog("create");
+          }}
+        >
+          Create school
+        </Button>
+      }
+    >
+      <DirectoryFilterPanel>
+        <select
+          value={statusFilter}
+          onChange={(event) =>
+            setStatusFilter(event.target.value as ReadyStatusFilter)
+          }
+          className={cn(directorySelectClassName, "lg:w-48")}
+          aria-label="Filter by status"
+        >
+          {READY_STATUS_FILTER_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </DirectoryFilterPanel>
+
+      <DirectoryFlash
+        error={error?.message ?? actionError}
+        success={successMessage}
+        onRetry={error ? () => void refetch() : undefined}
       />
 
-      {error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error.message}
-        </div>
-      ) : null}
-
-      {actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {actionError}
-        </div>
-      ) : null}
-
-      {successMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {successMessage}
-        </div>
-      ) : null}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Schools</h2>
+      <div className="grid gap-5 lg:grid-cols-2 lg:gap-6">
+        <AppCard padded={false} className="overflow-hidden">
+          <div className="border-b border-border px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-semibold text-foreground">Schools</h2>
           </div>
           {isLoading ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-600">
-              Loading schools...
+            <div className="p-4 sm:p-5">
+              <AppLoadingSkeleton variant="table" count={4} />
             </div>
-          ) : schools.length === 0 ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-600">
-              No schools found.
+          ) : visibleSchools.length === 0 ? (
+            <div className="p-4 sm:p-5">
+              <AppEmptyState
+                title="No schools found"
+                description="Try a different status filter or create a school."
+                actionLabel="Create school"
+                onAction={() => {
+                  clearMessages();
+                  setSchoolDialog("create");
+                }}
+              />
             </div>
           ) : (
-            <ul className="divide-y divide-slate-200">
-              {schools.map((school) => (
-                <li key={school.id} className="px-5 py-4">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSchoolId(school.id)}
-                    className={`flex w-full items-start justify-between gap-3 rounded-lg px-2 py-1 text-left transition hover:bg-slate-50 ${
-                      selectedSchoolId === school.id ? "bg-brand-50" : ""
-                    }`}
-                  >
-                    <div>
-                      <p className="font-medium text-slate-900">{school.name}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Code {school.code} · ID {school.id}
-                      </p>
-                    </div>
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        school.isActive
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
+            <ul className="space-y-3 p-3 sm:p-4">
+              {visibleSchools.map((school) => {
+                const isSelected = selectedSchoolId === school.id;
+                return (
+                  <li key={school.id}>
+                    <article
+                      className={cn(
+                        "rounded-xl border px-4 py-3.5 shadow-sm transition",
+                        isSelected
+                          ? "border-primary bg-primary/5"
+                          : "border-border/80 bg-card hover:bg-muted/30",
+                      )}
                     >
-                      {school.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </button>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        clearMessages();
-                        setSchoolDialog(school);
-                      }}
-                      disabled={schoolBusy}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void toggleSchoolActive(school)}
-                      disabled={schoolBusy}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                    >
-                      {school.isActive ? "Deactivate" : "Activate"}
-                    </button>
-                  </div>
-                </li>
-              ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSchoolId(school.id)}
+                        className="flex w-full items-start justify-between gap-3 text-left"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {school.name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Code {school.code}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium ${directoryReadyStatusClass(
+                            school.isActive,
+                          )}`}
+                        >
+                          {school.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {schoolActions(school)}
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
             </ul>
           )}
-        </div>
+        </AppCard>
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Campuses</h2>
+        <AppCard padded={false} className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-semibold text-foreground">Campuses</h2>
             {selectedSchoolId ? (
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={() => {
                   clearMessages();
                   setCampusDialog("create");
                 }}
-                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
               >
                 Add campus
-              </button>
+              </Button>
             ) : null}
           </div>
           {!selectedSchoolId ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-600">
-              Select a school to load campuses.
+            <div className="p-4 sm:p-5">
+              <AppEmptyState
+                title="Select a school"
+                description="Choose a school from the list to view and manage its campuses."
+              />
             </div>
           ) : campusesLoading ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-600">
-              Loading campuses...
+            <div className="p-4 sm:p-5">
+              <AppLoadingSkeleton variant="table" count={4} />
             </div>
           ) : campusesError ? (
-            <div className="px-6 py-10 text-center text-sm text-red-700">
-              {campusesError.message}
+            <div className="p-4 sm:p-5">
+              <AppErrorState
+                message={campusesError.message}
+                onRetry={() => void refetch()}
+              />
             </div>
-          ) : campuses.length === 0 ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-600">
-              No campuses for this school.
+          ) : visibleCampuses.length === 0 ? (
+            <div className="p-4 sm:p-5">
+              <AppEmptyState
+                title="No campuses for this school"
+                description="Add a campus or adjust the status filter."
+                actionLabel="Add campus"
+                onAction={() => {
+                  clearMessages();
+                  setCampusDialog("create");
+                }}
+              />
             </div>
           ) : (
-            <ul className="divide-y divide-slate-200">
-              {campuses.map((campus) => (
-                <li key={campus.id} className="px-5 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-slate-900">{campus.name}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        ID {campus.id}
-                        {campus.address ? ` · ${campus.address}` : ""}
-                      </p>
+            <ul className="space-y-3 p-3 sm:p-4">
+              {visibleCampuses.map((campus) => (
+                <li key={campus.id}>
+                  <article className="rounded-xl border border-border/80 bg-card px-4 py-3.5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {campus.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {campus.address || "No address added"}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium ${directoryReadyStatusClass(
+                          campus.isActive,
+                        )}`}
+                      >
+                        {campus.isActive ? "Active" : "Inactive"}
+                      </span>
                     </div>
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        campus.isActive
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {campus.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        clearMessages();
-                        setCampusDialog(campus);
-                      }}
-                      disabled={campusBusy}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void toggleCampusActive(campus)}
-                      disabled={campusBusy}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                    >
-                      {campus.isActive ? "Deactivate" : "Activate"}
-                    </button>
-                  </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {campusActions(campus)}
+                    </div>
+                  </article>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+        </AppCard>
       </div>
 
       {schoolDialog ? (
@@ -387,6 +458,6 @@ export function DirectorySchoolsPage() {
           onSubmit={handleCampusSubmit}
         />
       ) : null}
-    </div>
+    </DirectoryPageShell>
   );
 }

@@ -2,8 +2,10 @@ using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Auth;
 
+/// <summary>Permission strings embedded in the current-user payload per active role.</summary>
 public static class AuthPermissions
 {
+    /// <summary>Returns the permission list for the given session role.</summary>
     public static IReadOnlyList<string> ForRole(UserRole role)
     {
         return role switch

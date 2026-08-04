@@ -1,5 +1,6 @@
 namespace RankUpEducation.Contracts.Auth;
 
+/// <summary>Signed-in user session profile returned by login and profile endpoints.</summary>
 public sealed record CurrentUserResponse(
     long Id,
     string Username,
@@ -16,5 +17,6 @@ public sealed record CurrentUserResponse(
     string? AvatarUrl,
     CurrentUserPendingSchoolChange? PendingSchoolChange,
     IReadOnlyList<string> Permissions,
-    bool? MustChangePassword);
+    bool? MustChangePassword,
+    CurrentUserPendingRoleRequest? PendingRoleRequest = null);
 

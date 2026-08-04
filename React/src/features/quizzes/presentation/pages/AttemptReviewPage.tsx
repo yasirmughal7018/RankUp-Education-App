@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import type { MarkAttemptAnswerInput } from "@/features/quizzes/domain/quizMonitorTypes";
+import { formatIntegrityCounters } from "@/features/quizzes/domain/quizMonitorTypes";
 import {
   useAttemptReviewQuery,
   useFinalizeAttemptReviewMutation,
@@ -11,9 +12,9 @@ import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -22,6 +23,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+/** Manual grading page: mark answers and finalize attempt review. */
 export function AttemptReviewPage() {
   const { quizId, attemptId } = useParams();
   const navigate = useNavigate();
@@ -140,13 +142,9 @@ export function AttemptReviewPage() {
         <PageHeader
           title="Review not found"
           description={error?.message ?? "Unable to load attempt review."}
+          backTo="/quizzes/reviews/pending"
+          backAriaLabel="Back to pending reviews"
         />
-        <Link
-          to="/quizzes/reviews/pending"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to pending reviews
-        </Link>
       </div>
     );
   }
@@ -156,14 +154,8 @@ export function AttemptReviewPage() {
       <PageHeader
         title={`Review attempt #${review.attemptNumber}`}
         description={`${review.quizTitle} · ${review.studentName?.trim() || `Student ${review.studentId}`}`}
-        action={
-          <Link
-            to="/quizzes/reviews/pending"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Back to list
-          </Link>
-        }
+        backTo="/quizzes/reviews/pending"
+        backAriaLabel="Back to list"
       />
 
       {successMessage ? (
@@ -186,6 +178,25 @@ export function AttemptReviewPage() {
           />
           {review.isReviewDone ? (
             <StatusBadge label="Finalized" tone="success" />
+          ) : null}
+          {formatIntegrityCounters(
+            review.focusLossCount,
+            review.clipboardPasteCount,
+          ) ? (
+            <StatusBadge
+              label={
+                formatIntegrityCounters(
+                  review.focusLossCount,
+                  review.clipboardPasteCount,
+                )!
+              }
+              tone={
+                (review.focusLossCount ?? 0) > 2 ||
+                (review.clipboardPasteCount ?? 0) > 0
+                  ? "warning"
+                  : "default"
+              }
+            />
           ) : null}
         </div>
 
@@ -225,6 +236,35 @@ export function AttemptReviewPage() {
                   Student answer
                 </p>
                 {question.submittedText}
+              </div>
+            ) : null}
+
+            {question.aiFeedback?.trim() ? (
+              <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase text-sky-700">
+                    AI suggestion
+                  </p>
+                  {!review.isReviewDone ? (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() =>
+                        setFeedback((current) => ({
+                          ...current,
+                          [question.questionId]: question.aiFeedback!.trim(),
+                        }))
+                      }
+                      className="rounded border border-sky-300 bg-white px-2 py-0.5 text-[11px] font-medium text-sky-800 transition hover:bg-sky-100 disabled:opacity-60"
+                    >
+                      Use as feedback
+                    </button>
+                  ) : null}
+                </div>
+                <p className="whitespace-pre-wrap">{question.aiFeedback}</p>
+                <p className="mt-2 text-[11px] text-sky-700/80">
+                  Suggestion only — confirm marks and feedback before finalizing.
+                </p>
               </div>
             ) : null}
 

@@ -10,22 +10,28 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Application.Directory;
 
+/// <summary>
+/// Orchestrates school directory CRUD and user provisioning with role-based school/campus scoping.
+/// </summary>
 public sealed class DirectoryService : IDirectoryService
 {
     private readonly IDirectoryRepository _directory;
     private readonly IUserRepository _users;
     private readonly ICurrentUserService _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUnitOfWork _unitOfWork;
 
     public DirectoryService(
         IDirectoryRepository directory,
         IUserRepository users,
         ICurrentUserService currentUser,
+        IDateTimeProvider dateTimeProvider,
         IUnitOfWork unitOfWork)
     {
         _directory = directory;
         _users = users;
         _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
         _unitOfWork = unitOfWork;
     }
 
@@ -62,11 +68,10 @@ public sealed class DirectoryService : IDirectoryService
             campusId,
             cancellationToken);
 
-        // Parents are not school/campus scoped in directory list today — keep the same scope.
-        var parents = await _directory.CountUsersByStatusAsync(
-            UserRole.Parent,
-            schoolId: null,
-            campusId: null,
+        // Parents are scoped via linked students (they usually have no school on the user row).
+        var parents = await _directory.CountParentsLinkedToStudentsByStatusAsync(
+            schoolId,
+            campusId,
             cancellationToken);
 
         var visibleSections = new List<string>
@@ -310,10 +315,10 @@ public sealed class DirectoryService : IDirectoryService
         var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
         await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
 
-        var username = request.Username.AsTrimmedString();
-        if (await _users.UsernameExistsAsync(username, cancellationToken))
+        var emailAddress = ResolveEmailUsername(request.EmailAddress, request.Username);
+        if (await _users.UsernameExistsAsync(emailAddress, cancellationToken))
         {
-            throw new ValidationAppException(["Username is already taken."]);
+            throw new ValidationAppException(["An account already exists for this email address."]);
         }
 
         var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
@@ -322,14 +327,15 @@ public sealed class DirectoryService : IDirectoryService
             throw new ValidationAppException(["An account already exists for this mobile number."]);
         }
 
-        // Auto-approved; user sets password on first login.
+        // Auto-approved; user sets password on first login. Username = email.
         var user = User.CreateProvisionedAccount(
-            username,
+            emailAddress,
             request.FullName.AsTrimmedString(),
             UserRole.Student,
             schoolId,
             campusId,
-            mobileNumber);
+            mobileNumber,
+            emailAddress: emailAddress);
         user.SetRollNumberTeacherCode(request.RollNumber.AsTrimmedString());
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -351,6 +357,20 @@ public sealed class DirectoryService : IDirectoryService
             schoolId,
             campusId,
             user.IsActive,
+            user.AvatarUrl,
+            "—",
+            "—",
+            Array.Empty<string>(),
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -394,6 +414,20 @@ public sealed class DirectoryService : IDirectoryService
             user.SchoolId ?? 0,
             user.CampusId ?? 0,
             user.IsActive,
+            user.AvatarUrl,
+            "—",
+            "—",
+            Array.Empty<string>(),
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -423,12 +457,12 @@ public sealed class DirectoryService : IDirectoryService
             }
 
             var user = await _users.GetByIdAsync(studentId, cancellationToken);
-            if (IsSchoolAdmin() && (user is null || _currentUser.SchoolId != user.SchoolId))
+            if (user is null || !CanManageUserInCurrentScope(user))
             {
                 continue;
             }
 
-            await _directory.SetUserActiveAsync(studentId, false, cancellationToken);
+            await DeactivateDirectoryUserAsync(studentId, cancellationToken);
             affected++;
         }
 
@@ -468,7 +502,12 @@ public sealed class DirectoryService : IDirectoryService
         await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
 
         var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
-        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic: null, cancellationToken);
+        var emailAddress = ResolveEmailUsername(request.EmailAddress, request.Username);
+        var existing = await FindExistingUserForAdditionalRoleAsync(
+            mobileNumber,
+            cnic: null,
+            emailOrUsername: emailAddress,
+            cancellationToken);
         if (existing is not null)
         {
             return await AddTeacherRoleToExistingUserAsync(
@@ -480,20 +519,15 @@ public sealed class DirectoryService : IDirectoryService
                 cancellationToken);
         }
 
-        var username = request.Username.AsTrimmedString();
-        if (await _users.UsernameExistsAsync(username, cancellationToken))
-        {
-            throw new ValidationAppException(["Username is already taken."]);
-        }
-
-        // Auto-approved; user sets password on first login.
+        // Auto-approved; user sets password on first login. Username = email.
         var user = User.CreateProvisionedAccount(
-            username,
+            emailAddress,
             request.FullName.AsTrimmedString(),
             UserRole.Teacher,
             schoolId,
             campusId,
-            mobileNumber);
+            mobileNumber,
+            emailAddress: emailAddress);
         user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -512,7 +546,22 @@ public sealed class DirectoryService : IDirectoryService
             schoolId,
             campusId,
             user.IsActive,
-            DirectoryAccountStatuses.FromUser(user));
+            user.AvatarUrl,
+            "—",
+            "—",
+            0,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(user),
+            RoleNames(user));
     }
 
     public async Task<DirectoryTeacherResponse> UpdateTeacherAsync(
@@ -553,7 +602,22 @@ public sealed class DirectoryService : IDirectoryService
             user.SchoolId ?? 0,
             user.CampusId ?? 0,
             user.IsActive,
-            DirectoryAccountStatuses.FromUser(user));
+            user.AvatarUrl,
+            "—",
+            "—",
+            0,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(user),
+            RoleNames(user));
     }
 
     public async Task ActivateTeacherAsync(long teacherId, CancellationToken cancellationToken)
@@ -582,12 +646,12 @@ public sealed class DirectoryService : IDirectoryService
             }
 
             var user = await _users.GetByIdAsync(teacherId, cancellationToken);
-            if (IsSchoolAdmin() && (user is null || _currentUser.SchoolId != user.SchoolId))
+            if (user is null || !CanManageUserInCurrentScope(user))
             {
                 continue;
             }
 
-            await _directory.SetUserActiveAsync(teacherId, false, cancellationToken);
+            await DeactivateDirectoryUserAsync(teacherId, cancellationToken);
             affected++;
         }
 
@@ -603,8 +667,11 @@ public sealed class DirectoryService : IDirectoryService
     {
         EnsureAdmin();
         var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
+        var (resolvedSchoolId, resolvedCampusId) = ResolveParentVisibilityScope();
         var (items, totalCount) = await _directory.ListParentsAsync(
             search,
+            resolvedSchoolId,
+            resolvedCampusId,
             safePageNumber,
             safePageSize,
             cancellationToken);
@@ -620,25 +687,25 @@ public sealed class DirectoryService : IDirectoryService
 
         var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
         var cnic = request.Cnic.AsTrimmedOrNull();
-        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic, cancellationToken);
+        var emailAddress = ResolveEmailUsername(request.EmailAddress, request.Username);
+        var existing = await FindExistingUserForAdditionalRoleAsync(
+            mobileNumber,
+            cnic,
+            emailOrUsername: emailAddress,
+            cancellationToken);
         if (existing is not null)
         {
             return await AddParentRoleToExistingUserAsync(existing, request, mobileNumber, cnic, cancellationToken);
         }
 
-        var username = request.Username.AsTrimmedString();
-        if (await _users.UsernameExistsAsync(username, cancellationToken))
-        {
-            throw new ValidationAppException(["Username is already taken."]);
-        }
-
-        // Auto-approved; user sets password on first login.
+        // Auto-approved; user sets password on first login. Username = email.
         var user = User.CreateProvisionedAccount(
-            username,
+            emailAddress,
             request.FullName.AsTrimmedString(),
             UserRole.Parent,
             mobileNumber: mobileNumber,
-            cnic: cnic);
+            cnic: cnic,
+            emailAddress: emailAddress);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -651,8 +718,21 @@ public sealed class DirectoryService : IDirectoryService
             user.FullName,
             user.Username,
             0,
+            Array.Empty<string>(),
             user.IsActive,
-            DirectoryAccountStatuses.FromUser(user));
+            user.AvatarUrl,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(user),
+            RoleNames(user));
     }
 
     public async Task<DirectoryParentResponse> UpdateParentAsync(
@@ -665,6 +745,8 @@ public sealed class DirectoryService : IDirectoryService
 
         var parent = await _directory.GetParentEntityAsync(parentId, cancellationToken)
             ?? throw new NotFoundAppException("Parent was not found.");
+
+        await EnsureParentAccessibleInScopeAsync(parentId, cancellationToken);
 
         var user = await _users.GetByIdAsync(parentId, cancellationToken)
             ?? throw new NotFoundAppException("Parent was not found.");
@@ -680,8 +762,21 @@ public sealed class DirectoryService : IDirectoryService
             user.FullName,
             user.Username,
             linkedCount,
+            Array.Empty<string>(),
             user.IsActive,
-            DirectoryAccountStatuses.FromUser(user));
+            user.AvatarUrl,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(user),
+            RoleNames(user));
     }
 
     public async Task ActivateParentAsync(long parentId, CancellationToken cancellationToken)
@@ -708,7 +803,12 @@ public sealed class DirectoryService : IDirectoryService
                 continue;
             }
 
-            await _directory.SetUserActiveAsync(parentId, false, cancellationToken);
+            if (!await IsParentAccessibleInScopeAsync(parentId, cancellationToken))
+            {
+                continue;
+            }
+
+            await DeactivateDirectoryUserAsync(parentId, cancellationToken);
             affected++;
         }
 
@@ -733,6 +833,7 @@ public sealed class DirectoryService : IDirectoryService
         var studentUser = await _users.GetByIdAsync(request.StudentId, cancellationToken)
             ?? throw new NotFoundAppException("Student was not found.");
         EnsureSchoolAccess(studentUser.SchoolId);
+        EnsureCampusAccess(studentUser.CampusId);
 
         var relationship = request.Relationship.AsTrimmedOrDefault("Guardian");
 
@@ -750,6 +851,7 @@ public sealed class DirectoryService : IDirectoryService
         {
             var studentUser = await _users.GetByIdAsync(studentId, cancellationToken);
             EnsureSchoolAccess(studentUser?.SchoolId);
+            EnsureCampusAccess(studentUser?.CampusId);
         }
 
         await _directory.UnlinkParentStudentAsync(parentId, studentId, cancellationToken);
@@ -766,6 +868,13 @@ public sealed class DirectoryService : IDirectoryService
         EnsureSchoolAccess(user.SchoolId);
         EnsureCampusAccess(user.CampusId);
         await _directory.SetUserActiveAsync(studentId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                studentId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -779,6 +888,13 @@ public sealed class DirectoryService : IDirectoryService
         EnsureSchoolAccess(user.SchoolId);
         EnsureCampusAccess(user.CampusId);
         await _directory.SetUserActiveAsync(teacherId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                teacherId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -790,7 +906,16 @@ public sealed class DirectoryService : IDirectoryService
             throw new NotFoundAppException("Parent was not found.");
         }
 
+        await EnsureParentAccessibleInScopeAsync(parentId, cancellationToken);
+
         await _directory.SetUserActiveAsync(parentId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                parentId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -879,7 +1004,12 @@ public sealed class DirectoryService : IDirectoryService
 
         var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
         var cnic = request.Cnic.AsTrimmedOrNull();
-        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic, cancellationToken);
+        var emailAddress = ResolveEmailUsername(request.EmailAddress, request.Username);
+        var existing = await FindExistingUserForAdditionalRoleAsync(
+            mobileNumber,
+            cnic,
+            emailAddress,
+            cancellationToken);
         if (existing is not null)
         {
             try
@@ -905,27 +1035,37 @@ public sealed class DirectoryService : IDirectoryService
                 existingSchool?.Name ?? "—",
                 existing.MobileNumber,
                 existing.Cnic,
+                existing.EmailAddress,
                 existing.IsActive,
                 existing.NeedsPasswordSetup,
+                existing.AvatarUrl,
+                0,
+                0,
+                0,
+                existing.CreatedDate,
+                existing.RequestedAt,
+                existing.RejectedAt,
+                existing.LastLoginAt,
+                existing.ReasonMessage,
+                Array.Empty<DirectoryApprovalHistoryItem>(),
                 DirectoryAccountStatuses.FromUser(existing));
         }
 
-        var username = request.Username.AsTrimmedString();
-        if (await _users.UsernameExistsAsync(username, cancellationToken))
+        if (await _users.UsernameExistsAsync(emailAddress, cancellationToken))
         {
-            throw new ValidationAppException(["Username is already taken."]);
+            throw new ValidationAppException(["An account already exists for this email address."]);
         }
 
-        // Auto-approved; School Admin sets password on first login.
+        // Auto-approved; School Admin sets password on first login. Username = email.
         var user = User.CreateProvisionedAccount(
-            username,
+            emailAddress,
             request.FullName.AsTrimmedString(),
             UserRole.SchoolAdmin,
             request.SchoolId,
             campusId: null,
             mobileNumber,
             cnic,
-            request.EmailAddress);
+            emailAddress);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -938,8 +1078,19 @@ public sealed class DirectoryService : IDirectoryService
             school?.Name ?? "—",
             user.MobileNumber,
             user.Cnic,
+            user.EmailAddress,
             user.IsActive,
             user.NeedsPasswordSetup,
+            user.AvatarUrl,
+            0,
+            0,
+            0,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -965,7 +1116,11 @@ public sealed class DirectoryService : IDirectoryService
 
         user.UpdateProfile(request.FullName);
         user.AssignSchoolCampus(request.SchoolId, null);
-        user.UpdateContactInfo(request.MobileNumber, request.Cnic, request.EmailAddress ?? string.Empty);
+        var emailAddress = request.EmailAddress.AsNormalizedEmailOrNull()
+            ?? throw new ValidationAppException(["Email address is required (it is the username)."]);
+        await EnsureEmailUsernameAvailableAsync(user.Id, emailAddress, cancellationToken);
+        user.SetUsername(emailAddress);
+        user.UpdateContactInfo(request.MobileNumber, request.Cnic, emailAddress);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var school = await _directory.GetSchoolAsync(request.SchoolId, cancellationToken);
@@ -977,8 +1132,19 @@ public sealed class DirectoryService : IDirectoryService
             school?.Name ?? "—",
             user.MobileNumber,
             user.Cnic,
+            user.EmailAddress,
             user.IsActive,
             user.NeedsPasswordSetup,
+            user.AvatarUrl,
+            0,
+            0,
+            0,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -1042,7 +1208,12 @@ public sealed class DirectoryService : IDirectoryService
 
         var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
         var cnic = request.Cnic.AsTrimmedOrNull();
-        var existing = await FindExistingUserForAdditionalRoleAsync(mobileNumber, cnic, cancellationToken);
+        var emailAddress = ResolveEmailUsername(request.EmailAddress, request.Username);
+        var existing = await FindExistingUserForAdditionalRoleAsync(
+            mobileNumber,
+            cnic,
+            emailAddress,
+            cancellationToken);
         if (existing is not null)
         {
             try
@@ -1061,21 +1232,20 @@ public sealed class DirectoryService : IDirectoryService
             return await ToCampusAdminResponseAsync(existing, cancellationToken);
         }
 
-        var username = request.Username.AsTrimmedString();
-        if (await _users.UsernameExistsAsync(username, cancellationToken))
+        if (await _users.UsernameExistsAsync(emailAddress, cancellationToken))
         {
-            throw new ValidationAppException(["Username is already taken."]);
+            throw new ValidationAppException(["An account already exists for this email address."]);
         }
 
         var user = User.CreateProvisionedAccount(
-            username,
+            emailAddress,
             request.FullName.AsTrimmedString(),
             UserRole.CampusAdmin,
             schoolId,
             campusId,
             mobileNumber,
             cnic,
-            request.EmailAddress);
+            emailAddress);
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -1115,7 +1285,11 @@ public sealed class DirectoryService : IDirectoryService
 
         user.UpdateProfile(request.FullName);
         user.AssignSchoolCampus(schoolId, campusId);
-        user.UpdateContactInfo(request.MobileNumber, request.Cnic, request.EmailAddress ?? string.Empty);
+        var emailAddress = request.EmailAddress.AsNormalizedEmailOrNull()
+            ?? throw new ValidationAppException(["Email address is required (it is the username)."]);
+        await EnsureEmailUsernameAvailableAsync(user.Id, emailAddress, cancellationToken);
+        user.SetUsername(emailAddress);
+        user.UpdateContactInfo(request.MobileNumber, request.Cnic, emailAddress);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await ToCampusAdminResponseAsync(user, cancellationToken);
@@ -1143,6 +1317,13 @@ public sealed class DirectoryService : IDirectoryService
 
         EnsureSchoolAccess(user.SchoolId);
         await _directory.SetUserActiveAsync(userId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                userId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -1164,8 +1345,18 @@ public sealed class DirectoryService : IDirectoryService
             campus?.Name ?? "—",
             user.MobileNumber,
             user.Cnic,
+            user.EmailAddress,
             user.IsActive,
             user.NeedsPasswordSetup,
+            user.AvatarUrl,
+            0,
+            0,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user));
     }
 
@@ -1186,9 +1377,9 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Full name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Username))
+        if (ResolveEmailUsernameOrNull(request.EmailAddress, request.Username) is null)
         {
-            errors.Add("Username is required.");
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (request.SchoolId <= 0)
@@ -1213,6 +1404,11 @@ public sealed class DirectoryService : IDirectoryService
         if (string.IsNullOrWhiteSpace(request.FullName))
         {
             errors.Add("Full name is required.");
+        }
+
+        if (request.EmailAddress.AsNormalizedEmailOrNull() is null)
+        {
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (request.SchoolId <= 0)
@@ -1242,6 +1438,13 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         await _directory.SetUserActiveAsync(userId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                userId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -1253,9 +1456,9 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Full name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Username))
+        if (ResolveEmailUsernameOrNull(request.EmailAddress, request.Username) is null)
         {
-            errors.Add("Username is required.");
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (request.SchoolId <= 0)
@@ -1275,6 +1478,11 @@ public sealed class DirectoryService : IDirectoryService
         if (string.IsNullOrWhiteSpace(request.FullName))
         {
             errors.Add("Full name is required.");
+        }
+
+        if (request.EmailAddress.AsNormalizedEmailOrNull() is null)
+        {
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (request.SchoolId <= 0)
@@ -1348,9 +1556,9 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Full name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Username))
+        if (ResolveEmailUsernameOrNull(request.EmailAddress, request.Username) is null)
         {
-            errors.Add("Username is required.");
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (string.IsNullOrWhiteSpace(request.RollNumber))
@@ -1411,9 +1619,9 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Full name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Username))
+        if (ResolveEmailUsernameOrNull(request.EmailAddress, request.Username) is null)
         {
-            errors.Add("Username is required.");
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (string.IsNullOrWhiteSpace(request.TeacherCode))
@@ -1454,9 +1662,9 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Full name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Username))
+        if (ResolveEmailUsernameOrNull(request.EmailAddress, request.Username) is null)
         {
-            errors.Add("Username is required.");
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (errors.Count > 0)
@@ -1488,9 +1696,45 @@ public sealed class DirectoryService : IDirectoryService
     private bool IsCampusAdmin()
         => ParseRole() == UserRole.CampusAdmin;
 
+    private bool CanManageUserInCurrentScope(User user)
+    {
+        var role = ParseRole();
+        if (role == UserRole.PortalAdmin)
+        {
+            return true;
+        }
+
+        var schoolId = _currentUser.SchoolId;
+        if (!schoolId.HasValue || user.SchoolId != schoolId)
+        {
+            return false;
+        }
+
+        if (role == UserRole.SchoolAdmin)
+        {
+            return true;
+        }
+
+        return role == UserRole.CampusAdmin
+            && _currentUser.CampusId.HasValue
+            && user.CampusId == _currentUser.CampusId;
+    }
+
+    private async Task DeactivateDirectoryUserAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        await _directory.SetUserActiveAsync(userId, false, cancellationToken);
+        await _users.RevokeRefreshTokensForUserAsync(
+            userId,
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
+    }
+
     private async Task<User?> FindExistingUserForAdditionalRoleAsync(
         string? mobileNumber,
         string? cnic,
+        string? emailOrUsername,
         CancellationToken cancellationToken)
     {
         if (mobileNumber.HasTrimmedText())
@@ -1504,11 +1748,23 @@ public sealed class DirectoryService : IDirectoryService
 
         if (cnic.HasTrimmedText())
         {
-            return await _users.GetByCnicAsync(cnic!, cancellationToken);
+            var byCnic = await _users.GetByCnicAsync(cnic!, cancellationToken);
+            if (byCnic is not null)
+            {
+                return byCnic;
+            }
+        }
+
+        if (emailOrUsername.HasTrimmedText())
+        {
+            return await _users.GetByUsernameAsync(emailOrUsername!, cancellationToken);
         }
 
         return null;
     }
+
+    private static IReadOnlyList<string> RoleNames(User user)
+        => user.Roles.Select(static role => role.ToString()).ToArray();
 
     private async Task<DirectoryTeacherResponse> AddTeacherRoleToExistingUserAsync(
         User existing,
@@ -1548,7 +1804,22 @@ public sealed class DirectoryService : IDirectoryService
             schoolId,
             campusId,
             existing.IsActive,
-            DirectoryAccountStatuses.FromUser(existing));
+            existing.AvatarUrl,
+            "—",
+            "—",
+            0,
+            existing.MobileNumber,
+            existing.Cnic,
+            existing.EmailAddress,
+            existing.CreatedDate,
+            existing.RequestedAt,
+            existing.RejectedAt,
+            existing.LastLoginAt,
+            existing.ReasonMessage,
+            existing.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(existing),
+            RoleNames(existing));
     }
 
     private async Task<DirectoryParentResponse> AddParentRoleToExistingUserAsync(
@@ -1582,8 +1853,105 @@ public sealed class DirectoryService : IDirectoryService
             existing.FullName,
             existing.Username,
             linkedCount,
+            Array.Empty<string>(),
             existing.IsActive,
-            DirectoryAccountStatuses.FromUser(existing));
+            existing.AvatarUrl,
+            existing.MobileNumber,
+            existing.Cnic,
+            existing.EmailAddress,
+            existing.CreatedDate,
+            existing.RequestedAt,
+            existing.RejectedAt,
+            existing.LastLoginAt,
+            existing.ReasonMessage,
+            existing.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(existing),
+            RoleNames(existing));
+    }
+
+    public async Task<DirectoryTeacherResponse> GrantTeacherRoleToParentAsync(
+        long parentId,
+        GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+
+        if (!request.TeacherCode.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Teacher code is required."]);
+        }
+
+        var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
+        await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
+
+        var user = await _users.GetByIdAsync(parentId, cancellationToken)
+            ?? throw new NotFoundAppException("Parent was not found.");
+
+        if (!user.HasRole(UserRole.Parent))
+        {
+            throw new ValidationAppException(["This account is not a Parent."]);
+        }
+
+        if (user.HasRole(UserRole.Teacher))
+        {
+            throw new ValidationAppException(["This account already has the Teacher role."]);
+        }
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull() ?? user.MobileNumber;
+        var createRequest = new CreateDirectoryTeacherRequest(
+            user.FullName,
+            user.Username,
+            schoolId,
+            campusId,
+            request.TeacherCode.AsTrimmedString(),
+            mobileNumber,
+            user.EmailAddress ?? user.Username);
+
+        return await AddTeacherRoleToExistingUserAsync(
+            user,
+            createRequest,
+            schoolId,
+            campusId,
+            mobileNumber,
+            cancellationToken);
+    }
+
+    public async Task<DirectoryParentResponse> GrantParentRoleToTeacherAsync(
+        long teacherId,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+
+        var user = await _users.GetByIdAsync(teacherId, cancellationToken)
+            ?? throw new NotFoundAppException("Teacher was not found.");
+
+        EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
+
+        if (!user.HasRole(UserRole.Teacher))
+        {
+            throw new ValidationAppException(["This account is not a Teacher."]);
+        }
+
+        if (user.HasRole(UserRole.Parent))
+        {
+            throw new ValidationAppException(["This account already has the Parent role."]);
+        }
+
+        var createRequest = new CreateDirectoryParentRequest(
+            user.FullName,
+            user.Username,
+            user.Cnic,
+            user.MobileNumber,
+            user.EmailAddress ?? user.Username);
+
+        return await AddParentRoleToExistingUserAsync(
+            user,
+            createRequest,
+            user.MobileNumber,
+            user.Cnic,
+            cancellationToken);
     }
 
     private void EnsureSchoolAccess(long schoolId)
@@ -1655,6 +2023,55 @@ public sealed class DirectoryService : IDirectoryService
         return (schoolId, campusId);
     }
 
+    /// <summary>
+    /// School/Campus Admin only see parents linked to students in their school/campus.
+    /// Portal Admin sees all parents. School Admin covers the whole school (not a single campus).
+    /// </summary>
+    private (int? SchoolId, int? CampusId) ResolveParentVisibilityScope()
+    {
+        var role = ParseRole();
+        if (role == UserRole.CampusAdmin)
+        {
+            var scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            var scopedCampusId = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+            return (scopedSchoolId, scopedCampusId);
+        }
+
+        if (role == UserRole.SchoolAdmin)
+        {
+            var scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            return (scopedSchoolId, null);
+        }
+
+        return (null, null);
+    }
+
+    private async Task EnsureParentAccessibleInScopeAsync(
+        long parentId,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsParentAccessibleInScopeAsync(parentId, cancellationToken))
+        {
+            throw new ForbiddenAppException(
+                "You can only manage parents linked to students in your school or campus.");
+        }
+    }
+
+    private async Task<bool> IsParentAccessibleInScopeAsync(
+        long parentId,
+        CancellationToken cancellationToken)
+    {
+        var (schoolId, campusId) = ResolveParentVisibilityScope();
+        return await _directory.ParentHasStudentInScopeAsync(
+            parentId,
+            schoolId,
+            campusId,
+            cancellationToken);
+    }
+
     private UserRole ParseRole()
     {
         if (string.IsNullOrWhiteSpace(_currentUser.Role))
@@ -1663,5 +2080,29 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         return Enum.Parse<UserRole>(_currentUser.Role, ignoreCase: true);
+    }
+
+    /// <summary>Email is the username for Student / Teacher / Parent / SchoolAdmin / CampusAdmin.</summary>
+    private static string ResolveEmailUsername(string? emailAddress, string? usernameFallback)
+        => ResolveEmailUsernameOrNull(emailAddress, usernameFallback)
+            ?? throw new ValidationAppException(["Email address is required (it is the username)."]);
+
+    private static string? ResolveEmailUsernameOrNull(string? emailAddress, string? usernameFallback)
+        => emailAddress.AsNormalizedEmailOrNull()
+            ?? usernameFallback.AsNormalizedEmailOrNull();
+
+    private async Task EnsureEmailUsernameAvailableAsync(
+        long userId,
+        string emailAddress,
+        CancellationToken cancellationToken)
+    {
+        if (await _users.UsernameExistsAsync(emailAddress, cancellationToken))
+        {
+            var existing = await _users.GetByLoginIdentifierAsync(emailAddress, cancellationToken);
+            if (existing is null || existing.Id != userId)
+            {
+                throw new ValidationAppException(["An account already exists for this email address."]);
+            }
+        }
     }
 }

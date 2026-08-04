@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { PageHeader } from "@/core/components/PageHeader";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type { PendingQuizApproval } from "@/features/quizzes/domain/quizTypes";
 import {
   getQuestionStatusTone,
@@ -11,7 +12,10 @@ import {
   useRejectQuizMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
+/** Admin queue to approve or reject teacher quizzes pending school/portal review. */
 export function AdminQuizApprovalsPage() {
+  const { user } = useAuth();
+  const isPortalAdmin = user?.role === "PortalAdmin";
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     usePendingQuizApprovalsQuery();
   const approveQuiz = useApproveQuizMutation();
@@ -30,7 +34,11 @@ export function AdminQuizApprovalsPage() {
 
     try {
       await approveQuiz.mutateAsync(quiz.quizId);
-      setSuccessMessage(`"${quiz.title}" approved.`);
+      setSuccessMessage(
+        isPortalAdmin
+          ? `"${quiz.title}" approved.`
+          : `"${quiz.title}" school-approved.`,
+      );
     } catch (caught) {
       const apiError = caught as { message?: string };
       setActionError(apiError.message || "Unable to approve quiz.");
@@ -38,13 +46,19 @@ export function AdminQuizApprovalsPage() {
   }
 
   async function handleReject(quiz: PendingQuizApproval) {
+    const reason = rejectReason.trim();
+    if (!reason) {
+      setActionError("Rejection reason is required.");
+      return;
+    }
+
     setActionError(null);
     setSuccessMessage(null);
 
     try {
       await rejectQuiz.mutateAsync({
         quizId: quiz.quizId,
-        reason: rejectReason.trim() || undefined,
+        reason,
       });
       setSuccessMessage(`"${quiz.title}" rejected.`);
       setRejectingQuizId(null);
@@ -59,7 +73,11 @@ export function AdminQuizApprovalsPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Quiz approvals"
-        description="Review and approve teacher quizzes submitted for school approval."
+        description={
+          isPortalAdmin
+            ? "Pending quizzes need school/campus review or your final approval. SchoolApproved quizzes need portal approval. Rejected quizzes cannot be approved until the teacher resubmits."
+            : "Approve pending teacher quizzes (SchoolApproved) or reject with a required reason. Rejected quizzes cannot be approved by anyone until resubmitted."
+        }
         action={
           <button
             type="button"
@@ -91,7 +109,7 @@ export function AdminQuizApprovalsPage() {
           </div>
         ) : quizzes.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No quizzes pending approval.
+            No quizzes waiting for approval.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -135,6 +153,11 @@ export function AdminQuizApprovalsPage() {
                           true,
                         )}
                       />
+                      {quiz.rejectionReason ? (
+                        <p className="mt-1 max-w-xs text-xs text-red-700">
+                          {quiz.rejectionReason}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {rejectingQuizId === quiz.quizId ? (
@@ -146,8 +169,9 @@ export function AdminQuizApprovalsPage() {
                             onChange={(event) =>
                               setRejectReason(event.target.value)
                             }
-                            placeholder="Optional reason"
-                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+                            placeholder="Rejection reason (required)"
+                            className="rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
+                            required
                           />
                           <div className="flex justify-end gap-2">
                             <button
@@ -163,7 +187,7 @@ export function AdminQuizApprovalsPage() {
                             </button>
                             <button
                               type="button"
-                              disabled={isSubmitting}
+                              disabled={isSubmitting || !rejectReason.trim()}
                               onClick={() => void handleReject(quiz)}
                               className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
                             >
@@ -179,7 +203,7 @@ export function AdminQuizApprovalsPage() {
                             onClick={() => void handleApprove(quiz)}
                             className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
                           >
-                            Approve
+                            {isPortalAdmin ? "Approve" : "School approve"}
                           </button>
                           <button
                             type="button"

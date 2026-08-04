@@ -4,10 +4,14 @@ import { FieldLabel } from "@/core/components/FieldLabel";
 import { PageHeader } from "@/core/components/PageHeader";
 import * as authApi from "@/features/authentication/data/authApi";
 import { AuthSplitLayout } from "@/features/authentication/presentation/components/AuthSplitLayout";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
+/**
+ * Forgot password: enter username. Sends reset email and notifies
+ * role-scoped School Admin / Campus Admin / Parent / Portal Admin.
+ */
 export function ForgotPasswordPage() {
   const [username, setUsername] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,12 +22,18 @@ export function ForgotPasswordPage() {
     event.preventDefault();
     setError(null);
     setSuccessMessage(null);
-    setIsSubmitting(true);
 
+    const trimmed = username.trim();
+    if (!trimmed) {
+      setError("Username is required.");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      await authApi.requestPasswordReset(username.trim());
+      await authApi.requestPasswordReset(trimmed);
       setSuccessMessage(
-        "If the account exists, the school admin has been notified.",
+        "If the account exists, a reset email was sent and the appropriate admins were notified. Only the first person to complete the reset can finish it.",
       );
       setUsername("");
     } catch (caught) {
@@ -60,7 +70,7 @@ export function ForgotPasswordPage() {
 
         <PageHeader
           title="Forgot password"
-          description="Request a password reset. Your school admin will be notified to help restore access."
+          description="Enter your username. We email you a reset link and notify the right admins. The first completion wins."
         />
 
         {successMessage ? (
@@ -78,10 +88,10 @@ export function ForgotPasswordPage() {
           </div>
         ) : null}
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
           <div>
             <FieldLabel htmlFor="username" required>
-              CNIC or mobile number
+              Username
             </FieldLabel>
             <input
               id="username"
@@ -91,7 +101,7 @@ export function ForgotPasswordPage() {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               className={inputClassName}
-              placeholder="Enter CNIC or mobile number"
+              placeholder="Username"
               required
               disabled={isSubmitting}
               autoFocus
@@ -103,7 +113,7 @@ export function ForgotPasswordPage() {
             disabled={isSubmitting}
             className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isSubmitting ? "Submitting..." : "Request reset"}
+            {isSubmitting ? "Submitting..." : "Send reset request"}
           </button>
         </form>
 

@@ -14,7 +14,11 @@ public sealed class NoOpEmailService : IEmailService
 
     public Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Email provider is not configured. Skipped email to {Recipient}.", to);
+        _logger.LogInformation(
+            "Email provider is not configured. Skipped email to {Recipient}. Subject: {Subject}. Body: {Body}",
+            to,
+            subject,
+            body);
         return Task.CompletedTask;
     }
 }

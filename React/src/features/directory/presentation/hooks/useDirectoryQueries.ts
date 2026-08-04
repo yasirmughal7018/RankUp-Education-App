@@ -1,3 +1,4 @@
+/** React Query hooks for directory CRUD and summaries. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as directoryApi from "@/features/directory/data/directoryApi";
@@ -7,6 +8,7 @@ import type {
   CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
   CreateDirectoryTeacherInput,
+  GrantTeacherRoleInput,
   DirectoryCampusAdminFilters,
   DirectoryParentFilters,
   DirectorySchoolAdminFilters,
@@ -46,6 +48,7 @@ function invalidateCampusAdmins(queryClient: ReturnType<typeof useQueryClient>) 
   });
 }
 
+/** Directory overview hero counts. */
 export function useDirectorySummaryQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.directorySummary(),
@@ -54,6 +57,7 @@ export function useDirectorySummaryQuery(enabled = true) {
   });
 }
 
+/** School list for filters and forms. */
 export function useDirectorySchoolsQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.directorySchools(),
@@ -62,6 +66,7 @@ export function useDirectorySchoolsQuery(enabled = true) {
   });
 }
 
+/** Campuses for a selected school. */
 export function useDirectoryCampusesQuery(schoolId: number, enabled = true) {
   return useQuery({
     queryKey: queryKeys.directoryCampuses(schoolId),
@@ -70,6 +75,7 @@ export function useDirectoryCampusesQuery(schoolId: number, enabled = true) {
   });
 }
 
+/** Paginated students with filters. */
 export function useDirectoryStudentsQuery(
   filters: DirectoryStudentFilters,
   enabled = true,
@@ -81,6 +87,7 @@ export function useDirectoryStudentsQuery(
   });
 }
 
+/** Paginated teachers with filters. */
 export function useDirectoryTeachersQuery(
   filters: DirectoryTeacherFilters,
   enabled = true,
@@ -92,6 +99,7 @@ export function useDirectoryTeachersQuery(
   });
 }
 
+/** Paginated parents with filters. */
 export function useDirectoryParentsQuery(
   filters: DirectoryParentFilters = {},
   enabled = true,
@@ -103,6 +111,7 @@ export function useDirectoryParentsQuery(
   });
 }
 
+/** Create school. */
 export function useCreateSchoolMutation() {
   const queryClient = useQueryClient();
 
@@ -114,6 +123,7 @@ export function useCreateSchoolMutation() {
   });
 }
 
+/** Update school. */
 export function useUpdateSchoolMutation() {
   const queryClient = useQueryClient();
 
@@ -131,6 +141,7 @@ export function useUpdateSchoolMutation() {
   });
 }
 
+/** Activate school. */
 export function useActivateSchoolMutation() {
   const queryClient = useQueryClient();
 
@@ -142,6 +153,7 @@ export function useActivateSchoolMutation() {
   });
 }
 
+/** Deactivate school. */
 export function useDeactivateSchoolMutation() {
   const queryClient = useQueryClient();
 
@@ -153,6 +165,7 @@ export function useDeactivateSchoolMutation() {
   });
 }
 
+/** Create campus. */
 export function useCreateCampusMutation() {
   const queryClient = useQueryClient();
 
@@ -172,6 +185,7 @@ export function useCreateCampusMutation() {
   });
 }
 
+/** Update campus. */
 export function useUpdateCampusMutation() {
   const queryClient = useQueryClient();
 
@@ -192,6 +206,7 @@ export function useUpdateCampusMutation() {
   });
 }
 
+/** Activate campus. */
 export function useActivateCampusMutation() {
   const queryClient = useQueryClient();
 
@@ -206,6 +221,7 @@ export function useActivateCampusMutation() {
   });
 }
 
+/** Deactivate campus. */
 export function useDeactivateCampusMutation() {
   const queryClient = useQueryClient();
 
@@ -220,6 +236,7 @@ export function useDeactivateCampusMutation() {
   });
 }
 
+/** Create student. */
 export function useCreateStudentMutation() {
   const queryClient = useQueryClient();
 
@@ -230,6 +247,7 @@ export function useCreateStudentMutation() {
   });
 }
 
+/** Update student. */
 export function useUpdateStudentMutation() {
   const queryClient = useQueryClient();
 
@@ -245,6 +263,7 @@ export function useUpdateStudentMutation() {
   });
 }
 
+/** Activate student. */
 export function useActivateStudentMutation() {
   const queryClient = useQueryClient();
 
@@ -254,6 +273,7 @@ export function useActivateStudentMutation() {
   });
 }
 
+/** Deactivate student. */
 export function useDeactivateStudentMutation() {
   const queryClient = useQueryClient();
 
@@ -264,6 +284,7 @@ export function useDeactivateStudentMutation() {
   });
 }
 
+/** Bulk deactivate students. */
 export function useBulkDeactivateStudentsMutation() {
   const queryClient = useQueryClient();
 
@@ -274,16 +295,21 @@ export function useBulkDeactivateStudentsMutation() {
   });
 }
 
+/** Create teacher. */
 export function useCreateTeacherMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: CreateDirectoryTeacherInput) =>
       directoryApi.createTeacher(input),
-    onSuccess: () => invalidateTeachers(queryClient),
+    onSuccess: () => {
+      invalidateTeachers(queryClient);
+      invalidateParents(queryClient);
+    },
   });
 }
 
+/** Update teacher. */
 export function useUpdateTeacherMutation() {
   const queryClient = useQueryClient();
 
@@ -299,6 +325,7 @@ export function useUpdateTeacherMutation() {
   });
 }
 
+/** Activate teacher. */
 export function useActivateTeacherMutation() {
   const queryClient = useQueryClient();
 
@@ -308,6 +335,7 @@ export function useActivateTeacherMutation() {
   });
 }
 
+/** Deactivate teacher. */
 export function useDeactivateTeacherMutation() {
   const queryClient = useQueryClient();
 
@@ -318,6 +346,7 @@ export function useDeactivateTeacherMutation() {
   });
 }
 
+/** Bulk deactivate teachers. */
 export function useBulkDeactivateTeachersMutation() {
   const queryClient = useQueryClient();
 
@@ -328,16 +357,54 @@ export function useBulkDeactivateTeachersMutation() {
   });
 }
 
+/** Add Parent role to an existing Teacher. */
+export function useGrantParentRoleToTeacherMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (teacherId: number) =>
+      directoryApi.grantParentRoleToTeacher(teacherId),
+    onSuccess: () => {
+      invalidateTeachers(queryClient);
+      invalidateParents(queryClient);
+    },
+  });
+}
+
+/** Add Teacher role to an existing Parent. */
+export function useGrantTeacherRoleToParentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      parentId,
+      input,
+    }: {
+      parentId: number;
+      input: GrantTeacherRoleInput;
+    }) => directoryApi.grantTeacherRoleToParent(parentId, input),
+    onSuccess: () => {
+      invalidateParents(queryClient);
+      invalidateTeachers(queryClient);
+    },
+  });
+}
+
+/** Create parent. */
 export function useCreateParentMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: CreateDirectoryParentInput) =>
       directoryApi.createParent(input),
-    onSuccess: () => invalidateParents(queryClient),
+    onSuccess: () => {
+      invalidateParents(queryClient);
+      invalidateTeachers(queryClient);
+    },
   });
 }
 
+/** Update parent. */
 export function useUpdateParentMutation() {
   const queryClient = useQueryClient();
 
@@ -353,6 +420,7 @@ export function useUpdateParentMutation() {
   });
 }
 
+/** Activate parent. */
 export function useActivateParentMutation() {
   const queryClient = useQueryClient();
 
@@ -362,6 +430,7 @@ export function useActivateParentMutation() {
   });
 }
 
+/** Deactivate parent. */
 export function useDeactivateParentMutation() {
   const queryClient = useQueryClient();
 
@@ -371,6 +440,7 @@ export function useDeactivateParentMutation() {
   });
 }
 
+/** Bulk deactivate parents. */
 export function useBulkDeactivateParentsMutation() {
   const queryClient = useQueryClient();
 
@@ -380,6 +450,7 @@ export function useBulkDeactivateParentsMutation() {
   });
 }
 
+/** Link parent student. */
 export function useLinkParentStudentMutation() {
   const queryClient = useQueryClient();
 
@@ -395,6 +466,7 @@ export function useLinkParentStudentMutation() {
   });
 }
 
+/** Unlink parent student. */
 export function useUnlinkParentStudentMutation() {
   const queryClient = useQueryClient();
 
@@ -410,6 +482,7 @@ export function useUnlinkParentStudentMutation() {
   });
 }
 
+/** Paginated school admins. */
 export function useDirectorySchoolAdminsQuery(
   filters: DirectorySchoolAdminFilters = {},
   enabled = true,
@@ -421,6 +494,7 @@ export function useDirectorySchoolAdminsQuery(
   });
 }
 
+/** Create school admin. */
 export function useCreateSchoolAdminMutation() {
   const queryClient = useQueryClient();
 
@@ -431,6 +505,7 @@ export function useCreateSchoolAdminMutation() {
   });
 }
 
+/** Update school admin. */
 export function useUpdateSchoolAdminMutation() {
   const queryClient = useQueryClient();
 
@@ -446,6 +521,7 @@ export function useUpdateSchoolAdminMutation() {
   });
 }
 
+/** Activate school admin. */
 export function useActivateSchoolAdminMutation() {
   const queryClient = useQueryClient();
 
@@ -455,6 +531,7 @@ export function useActivateSchoolAdminMutation() {
   });
 }
 
+/** Deactivate school admin. */
 export function useDeactivateSchoolAdminMutation() {
   const queryClient = useQueryClient();
 
@@ -464,6 +541,7 @@ export function useDeactivateSchoolAdminMutation() {
   });
 }
 
+/** Paginated campus admins. */
 export function useDirectoryCampusAdminsQuery(
   filters: DirectoryCampusAdminFilters = {},
   enabled = true,
@@ -475,6 +553,7 @@ export function useDirectoryCampusAdminsQuery(
   });
 }
 
+/** Create campus admin. */
 export function useCreateCampusAdminMutation() {
   const queryClient = useQueryClient();
 
@@ -485,6 +564,7 @@ export function useCreateCampusAdminMutation() {
   });
 }
 
+/** Update campus admin. */
 export function useUpdateCampusAdminMutation() {
   const queryClient = useQueryClient();
 
@@ -500,6 +580,7 @@ export function useUpdateCampusAdminMutation() {
   });
 }
 
+/** Activate campus admin. */
 export function useActivateCampusAdminMutation() {
   const queryClient = useQueryClient();
 
@@ -509,6 +590,7 @@ export function useActivateCampusAdminMutation() {
   });
 }
 
+/** Deactivate campus admin. */
 export function useDeactivateCampusAdminMutation() {
   const queryClient = useQueryClient();
 

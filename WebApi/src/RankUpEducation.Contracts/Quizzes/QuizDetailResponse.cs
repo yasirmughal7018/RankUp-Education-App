@@ -1,5 +1,6 @@
 namespace RankUpEducation.Contracts.Quizzes;
 
+/// <summary>Quiz detail with attempt rules, shuffle flags, and result summary for the current viewer.</summary>
 public sealed record QuizDetailResponse(
     long Id,
     string Title,

@@ -1,5 +1,6 @@
 namespace RankUpEducation.Contracts.Quizzes;
 
+/// <summary>Quiz card for list views (student assignments, teacher campus, parent linked/created).</summary>
 public sealed record QuizSummaryResponse(
     long Id,
     string Title,

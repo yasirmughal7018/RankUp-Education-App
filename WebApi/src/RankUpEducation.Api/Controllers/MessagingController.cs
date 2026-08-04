@@ -5,11 +5,13 @@ using RankUpEducation.Contracts.Messaging;
 
 namespace RankUpEducation.Api.Controllers;
 
+/// <summary>Messaging inbox endpoints (stub until full messaging is implemented).</summary>
 [ApiController]
 [Authorize]
 [Route("api/messaging")]
 public sealed class MessagingController : ControllerBase
 {
+    /// <summary>Returns an empty thread list placeholder.</summary>
     [HttpGet("threads")]
     public ActionResult<ApiResponse<MessageThreadListResponse>> GetThreads()
     {

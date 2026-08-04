@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Directory;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Schools;
@@ -10,6 +11,7 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <inheritdoc cref="RankUpEducation.Application.Directory.IDirectoryRepository"/>
 public sealed class DirectoryRepository : IDirectoryRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -24,7 +26,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
         return await _dbContext.Schools.AsNoTracking()
             .Where(school => !school.IsDeleted)
             .OrderBy(school => school.Name)
-            .Select(school => new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive))
+            .Select(school => new SchoolResponse(
+                school.Id,
+                school.Name,
+                school.Code,
+                school.IsActive,
+                _dbContext.Campuses.Count(campus =>
+                    campus.SchoolId == school.Id && !campus.IsDeleted)))
             .ToListAsync(cancellationToken);
     }
 
@@ -32,7 +40,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
     {
         return await _dbContext.Schools.AsNoTracking()
             .Where(school => school.Id == schoolId && !school.IsDeleted)
-            .Select(school => new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive))
+            .Select(school => new SchoolResponse(
+                school.Id,
+                school.Name,
+                school.Code,
+                school.IsActive,
+                _dbContext.Campuses.Count(campus =>
+                    campus.SchoolId == school.Id && !campus.IsDeleted)))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -46,7 +60,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         school.SetActive(isActive);
         await _dbContext.Schools.AddAsync(school, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        return new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive);
+        return new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive, CampusCount: 0);
     }
 
     public async Task<SchoolResponse?> UpdateSchoolAsync(
@@ -66,7 +80,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
         school.Update(name, code);
         school.SetActive(isActive);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        return new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive);
+        var campusCount = await _dbContext.Campuses.AsNoTracking()
+            .CountAsync(campus => campus.SchoolId == school.Id && !campus.IsDeleted, cancellationToken);
+        return new SchoolResponse(school.Id, school.Name, school.Code, school.IsActive, campusCount);
     }
 
     public async Task<bool> SetSchoolActiveAsync(long schoolId, bool isActive, CancellationToken cancellationToken)
@@ -251,14 +267,31 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 SchoolId = row.user.SchoolId ?? 0,
                 CampusId = row.user.CampusId ?? 0,
                 row.user.IsActive,
-                row.user.PasswordHash,
+                row.user.AvatarUrl,
+                MobileNumber = row.user.MobileNumber ?? row.student.MobileNumber,
+                row.user.Cnic,
+                row.user.EmailAddress,
+                row.user.CreatedDate,
+                row.user.RequestedAt,
                 row.user.RejectedAt,
+                row.user.LastLoginAt,
+                row.user.ReasonMessage,
+                row.user.PasswordHash,
             })
             .ToListAsync(cancellationToken);
 
         var lockedSet = await GetLockedUserIdsAsync(
             rows.Select(row => row.Id).ToArray(),
             cancellationToken);
+
+        var schoolIds = rows.Select(row => row.SchoolId).Where(id => id > 0).Distinct().ToArray();
+        var campusIds = rows.Select(row => row.CampusId).Where(id => id > 0).Distinct().ToArray();
+        var studentIds = rows.Select(row => row.Id).ToArray();
+
+        var schoolNames = await GetSchoolNamesAsync(schoolIds, cancellationToken);
+        var campusNames = await GetCampusNamesAsync(campusIds, cancellationToken);
+        var teacherNamesByStudent = await GetTeacherNamesByStudentAsync(studentIds, cancellationToken);
+        var approvalHistory = await GetApprovalHistoryByUserIdsAsync(studentIds, cancellationToken);
 
         var items = rows
             .Select(row => new DirectoryStudentResponse(
@@ -271,6 +304,20 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 row.SchoolId,
                 row.CampusId,
                 row.IsActive,
+                row.AvatarUrl,
+                schoolNames.GetValueOrDefault(row.SchoolId, "—"),
+                campusNames.GetValueOrDefault(row.CampusId, "—"),
+                teacherNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
+                row.MobileNumber,
+                row.Cnic,
+                row.EmailAddress,
+                row.CreatedDate,
+                row.RequestedAt,
+                row.RejectedAt,
+                row.LastLoginAt,
+                row.ReasonMessage,
+                row.IsActive && string.IsNullOrWhiteSpace(row.PasswordHash),
+                approvalHistory.GetValueOrDefault(row.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
                 DirectoryAccountStatuses.Resolve(
                     row.IsActive,
                     !string.IsNullOrWhiteSpace(row.PasswordHash),
@@ -328,14 +375,32 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 SchoolId = row.user.SchoolId ?? 0,
                 CampusId = row.user.CampusId ?? 0,
                 row.user.IsActive,
-                row.user.PasswordHash,
+                row.user.AvatarUrl,
+                MobileNumber = row.user.MobileNumber ?? row.teacher.MobileNumber,
+                row.user.Cnic,
+                row.user.EmailAddress,
+                row.user.CreatedDate,
+                row.user.RequestedAt,
                 row.user.RejectedAt,
+                row.user.LastLoginAt,
+                row.user.ReasonMessage,
+                row.user.PasswordHash,
             })
             .ToListAsync(cancellationToken);
 
         var lockedSet = await GetLockedUserIdsAsync(
             rows.Select(row => row.Id).ToArray(),
             cancellationToken);
+
+        var schoolIds = rows.Select(row => row.SchoolId).Where(id => id > 0).Distinct().ToArray();
+        var campusIds = rows.Select(row => row.CampusId).Where(id => id > 0).Distinct().ToArray();
+        var teacherIds = rows.Select(row => row.Id).ToArray();
+
+        var schoolNames = await GetSchoolNamesAsync(schoolIds, cancellationToken);
+        var campusNames = await GetCampusNamesAsync(campusIds, cancellationToken);
+        var studentCounts = await GetTeacherStudentCountsAsync(teacherIds, cancellationToken);
+        var approvalHistory = await GetApprovalHistoryByUserIdsAsync(teacherIds, cancellationToken);
+        var rolesByUser = await GetRoleNamesByUserIdsAsync(teacherIds, cancellationToken);
 
         var items = rows
             .Select(row => new DirectoryTeacherResponse(
@@ -346,11 +411,26 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 row.SchoolId,
                 row.CampusId,
                 row.IsActive,
+                row.AvatarUrl,
+                schoolNames.GetValueOrDefault(row.SchoolId, "—"),
+                campusNames.GetValueOrDefault(row.CampusId, "—"),
+                studentCounts.GetValueOrDefault(row.Id),
+                row.MobileNumber,
+                row.Cnic,
+                row.EmailAddress,
+                row.CreatedDate,
+                row.RequestedAt,
+                row.RejectedAt,
+                row.LastLoginAt,
+                row.ReasonMessage,
+                row.IsActive && string.IsNullOrWhiteSpace(row.PasswordHash),
+                approvalHistory.GetValueOrDefault(row.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
                 DirectoryAccountStatuses.Resolve(
                     row.IsActive,
                     !string.IsNullOrWhiteSpace(row.PasswordHash),
                     row.RejectedAt is not null,
-                    lockedSet.Contains(row.Id))))
+                    lockedSet.Contains(row.Id)),
+                rolesByUser.GetValueOrDefault(row.Id, Array.Empty<string>())))
             .ToArray();
 
         return (items, totalCount);
@@ -358,6 +438,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
     public async Task<(IReadOnlyList<DirectoryParentResponse> Items, int TotalCount)> ListParentsAsync(
         string? search,
+        int? schoolId,
+        int? campusId,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken)
@@ -367,6 +449,16 @@ public sealed class DirectoryRepository : IDirectoryRepository
             join user in _dbContext.Users.AsNoTracking() on parent.Id equals user.Id
             where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Parent)
             select new { parent, user };
+
+        if (schoolId is not null)
+        {
+            var scopedStudentIds = ScopedStudentIdsQuery(schoolId.Value, campusId);
+            query = query.Where(row =>
+                _dbContext.ParentStudentRelations.Any(relation =>
+                    relation.ParentId == row.parent.Id
+                    && relation.IsActive
+                    && scopedStudentIds.Contains(relation.StudentId)));
+        }
 
         if (search.HasTrimmedText())
         {
@@ -388,25 +480,78 @@ public sealed class DirectoryRepository : IDirectoryRepository
         }
 
         var parentIds = rows.Select(row => row.parent.Id).ToArray();
-        var linkCounts = await _dbContext.ParentStudentRelations.AsNoTracking()
-            .Where(relation => parentIds.Contains(relation.ParentId) && relation.IsActive)
-            .GroupBy(relation => relation.ParentId)
-            .Select(group => new { ParentId = group.Key, Count = group.Count() })
-            .ToDictionaryAsync(item => item.ParentId, item => item.Count, cancellationToken);
+        var linkedStudentsQuery =
+            from relation in _dbContext.ParentStudentRelations.AsNoTracking()
+            join studentUser in _dbContext.Users.AsNoTracking() on relation.StudentId equals studentUser.Id
+            where parentIds.Contains(relation.ParentId) && relation.IsActive
+            select new { relation.ParentId, studentUser.FullName, studentUser.SchoolId, studentUser.CampusId };
 
-        var lockedSet = await GetLockedUserIdsAsync(
-            rows.Select(row => row.parent.Id).ToArray(),
-            cancellationToken);
+        if (schoolId is not null)
+        {
+            linkedStudentsQuery = linkedStudentsQuery.Where(row =>
+                row.SchoolId == schoolId.Value
+                && (campusId == null || row.CampusId == campusId.Value));
+        }
+
+        var linkedStudents = await linkedStudentsQuery
+            .OrderBy(row => row.FullName)
+            .Select(row => new { row.ParentId, row.FullName })
+            .ToListAsync(cancellationToken);
+
+        var linkedNamesByParent = linkedStudents
+            .GroupBy(item => item.ParentId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group.Select(item => item.FullName).ToArray());
+
+        var lockedSet = await GetLockedUserIdsAsync(parentIds, cancellationToken);
+        var approvalHistory = await GetApprovalHistoryByUserIdsAsync(parentIds, cancellationToken);
+        var rolesByUser = await GetRoleNamesByUserIdsAsync(parentIds, cancellationToken);
 
         var items = rows.Select(row => new DirectoryParentResponse(
             row.parent.Id,
             row.user.FullName,
             row.user.Username,
-            linkCounts.GetValueOrDefault(row.parent.Id),
+            linkedNamesByParent.GetValueOrDefault(row.parent.Id, Array.Empty<string>()).Count,
+            linkedNamesByParent.GetValueOrDefault(row.parent.Id, Array.Empty<string>()),
             row.user.IsActive,
-            DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.parent.Id)))).ToArray();
+            row.user.AvatarUrl,
+            row.user.MobileNumber ?? row.parent.MobileNumber,
+            row.user.Cnic,
+            row.user.EmailAddress,
+            row.user.CreatedDate,
+            row.user.RequestedAt,
+            row.user.RejectedAt,
+            row.user.LastLoginAt,
+            row.user.ReasonMessage,
+            row.user.NeedsPasswordSetup,
+            approvalHistory.GetValueOrDefault(row.parent.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
+            DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.parent.Id)),
+            rolesByUser.GetValueOrDefault(row.parent.Id, Array.Empty<string>()))).ToArray();
 
         return (items, totalCount);
+    }
+
+    public async Task<bool> ParentHasStudentInScopeAsync(
+        long parentId,
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        // No school filter = unrestricted (Portal Admin).
+        if (schoolId is null)
+        {
+            return true;
+        }
+
+        var scopedStudentIds = ScopedStudentIdsQuery(schoolId.Value, campusId);
+        return await _dbContext.ParentStudentRelations.AsNoTracking()
+            .AnyAsync(
+                relation =>
+                    relation.ParentId == parentId
+                    && relation.IsActive
+                    && scopedStudentIds.Contains(relation.StudentId),
+                cancellationToken);
     }
 
     public Task<Student?> GetStudentEntityAsync(long studentId, CancellationToken cancellationToken)
@@ -533,6 +678,18 @@ public sealed class DirectoryRepository : IDirectoryRepository
             users.Select(user => user.Id).ToArray(),
             cancellationToken);
 
+        var schoolIdKeys = users
+            .Select(user => user.SchoolId ?? 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+        var campusCounts = await CountActiveCampusesBySchoolAsync(schoolIdKeys, cancellationToken);
+        var teacherCounts = await CountReadyUsersBySchoolAsync(UserRole.Teacher, schoolIdKeys, cancellationToken);
+        var studentCounts = await CountReadyUsersBySchoolAsync(UserRole.Student, schoolIdKeys, cancellationToken);
+        var approvalHistory = await GetApprovalHistoryByUserIdsAsync(
+            users.Select(user => user.Id).ToArray(),
+            cancellationToken);
+
         var items = users
             .Select(user =>
             {
@@ -546,8 +703,19 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     schoolName,
                     user.MobileNumber,
                     user.Cnic,
+                    user.EmailAddress,
                     user.IsActive,
                     user.NeedsPasswordSetup,
+                    user.AvatarUrl,
+                    campusCounts.GetValueOrDefault(sid),
+                    teacherCounts.GetValueOrDefault(sid),
+                    studentCounts.GetValueOrDefault(sid),
+                    user.CreatedDate,
+                    user.RequestedAt,
+                    user.RejectedAt,
+                    user.LastLoginAt,
+                    user.ReasonMessage,
+                    approvalHistory.GetValueOrDefault(user.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
                     DirectoryAccountStatuses.FromUser(user, lockedSet.Contains(user.Id)));
             })
             .ToArray();
@@ -614,6 +782,17 @@ public sealed class DirectoryRepository : IDirectoryRepository
             users.Select(user => user.Id).ToArray(),
             cancellationToken);
 
+        var campusIdKeys = users
+            .Select(user => user.CampusId ?? 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+        var teacherCounts = await CountReadyUsersByCampusAsync(UserRole.Teacher, campusIdKeys, cancellationToken);
+        var studentCounts = await CountReadyUsersByCampusAsync(UserRole.Student, campusIdKeys, cancellationToken);
+        var approvalHistory = await GetApprovalHistoryByUserIdsAsync(
+            users.Select(user => user.Id).ToArray(),
+            cancellationToken);
+
         var items = users
             .Select(user =>
             {
@@ -629,13 +808,181 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     campusNames.TryGetValue(cid, out var campusName) ? campusName : "—",
                     user.MobileNumber,
                     user.Cnic,
+                    user.EmailAddress,
                     user.IsActive,
                     user.NeedsPasswordSetup,
+                    user.AvatarUrl,
+                    teacherCounts.GetValueOrDefault(cid),
+                    studentCounts.GetValueOrDefault(cid),
+                    user.CreatedDate,
+                    user.RequestedAt,
+                    user.RejectedAt,
+                    user.LastLoginAt,
+                    user.ReasonMessage,
+                    approvalHistory.GetValueOrDefault(user.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
                     DirectoryAccountStatuses.FromUser(user, lockedSet.Contains(user.Id)));
             })
             .ToArray();
 
         return (items, totalCount);
+    }
+
+    private async Task<Dictionary<int, string>> GetSchoolNamesAsync(
+        IReadOnlyList<int> schoolIds,
+        CancellationToken cancellationToken)
+    {
+        if (schoolIds.Count == 0)
+        {
+            return new Dictionary<int, string>();
+        }
+
+        var ids = schoolIds.Select(id => (long)id).ToArray();
+        return await _dbContext.Schools.AsNoTracking()
+            .Where(school => ids.Contains(school.Id) && !school.IsDeleted)
+            .ToDictionaryAsync(school => (int)school.Id, school => school.Name, cancellationToken);
+    }
+
+    private async Task<Dictionary<int, string>> GetCampusNamesAsync(
+        IReadOnlyList<int> campusIds,
+        CancellationToken cancellationToken)
+    {
+        if (campusIds.Count == 0)
+        {
+            return new Dictionary<int, string>();
+        }
+
+        var ids = campusIds.Select(id => (long)id).ToArray();
+        return await _dbContext.Campuses.AsNoTracking()
+            .Where(campus => ids.Contains(campus.Id) && !campus.IsDeleted)
+            .ToDictionaryAsync(campus => (int)campus.Id, campus => campus.Name, cancellationToken);
+    }
+
+    private async Task<Dictionary<int, int>> CountActiveCampusesBySchoolAsync(
+        IReadOnlyList<int> schoolIds,
+        CancellationToken cancellationToken)
+    {
+        if (schoolIds.Count == 0)
+        {
+            return new Dictionary<int, int>();
+        }
+
+        return await _dbContext.Campuses.AsNoTracking()
+            .Where(campus => schoolIds.Contains(campus.SchoolId) && !campus.IsDeleted && campus.IsActive)
+            .GroupBy(campus => campus.SchoolId)
+            .Select(group => new { SchoolId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.SchoolId, item => item.Count, cancellationToken);
+    }
+
+    private async Task<Dictionary<int, int>> CountReadyUsersBySchoolAsync(
+        UserRole role,
+        IReadOnlyList<int> schoolIds,
+        CancellationToken cancellationToken)
+    {
+        if (schoolIds.Count == 0)
+        {
+            return new Dictionary<int, int>();
+        }
+
+        return await _dbContext.Users.AsNoTracking()
+            .Where(user =>
+                user.SchoolId != null
+                && schoolIds.Contains(user.SchoolId.Value)
+                && user.IsActive
+                && user.RejectedAt == null
+                && user.PasswordHash != null
+                && user.PasswordHash != ""
+                && user.RoleAssignments.Any(assignment => assignment.Role == role))
+            .GroupBy(user => user.SchoolId!.Value)
+            .Select(group => new { SchoolId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.SchoolId, item => item.Count, cancellationToken);
+    }
+
+    private async Task<Dictionary<int, int>> CountReadyUsersByCampusAsync(
+        UserRole role,
+        IReadOnlyList<int> campusIds,
+        CancellationToken cancellationToken)
+    {
+        if (campusIds.Count == 0)
+        {
+            return new Dictionary<int, int>();
+        }
+
+        return await _dbContext.Users.AsNoTracking()
+            .Where(user =>
+                user.CampusId != null
+                && campusIds.Contains(user.CampusId.Value)
+                && user.IsActive
+                && user.RejectedAt == null
+                && user.PasswordHash != null
+                && user.PasswordHash != ""
+                && user.RoleAssignments.Any(assignment => assignment.Role == role))
+            .GroupBy(user => user.CampusId!.Value)
+            .Select(group => new { CampusId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.CampusId, item => item.Count, cancellationToken);
+    }
+
+    private async Task<Dictionary<long, int>> GetTeacherStudentCountsAsync(
+        IReadOnlyList<long> teacherIds,
+        CancellationToken cancellationToken)
+    {
+        if (teacherIds.Count == 0)
+        {
+            return new Dictionary<long, int>();
+        }
+
+        var rows = await (
+            from groupEntity in _dbContext.StudentGroups.AsNoTracking()
+            join member in _dbContext.StudentGroupMembers.AsNoTracking()
+                on groupEntity.Id equals member.StudentGroupId
+            join studentUser in _dbContext.Users.AsNoTracking() on member.StudentId equals studentUser.Id
+            where teacherIds.Contains(groupEntity.ReferralId)
+                && groupEntity.IsActive
+                && groupEntity.CreatorRole == UserRole.Teacher
+                && studentUser.IsActive
+                && studentUser.RejectedAt == null
+                && studentUser.PasswordHash != null
+                && studentUser.PasswordHash != ""
+                && studentUser.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+            select new { TeacherId = groupEntity.ReferralId, member.StudentId })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.TeacherId)
+            .ToDictionary(group => group.Key, group => group.Select(row => row.StudentId).Distinct().Count());
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<string>>> GetTeacherNamesByStudentAsync(
+        IReadOnlyList<long> studentIds,
+        CancellationToken cancellationToken)
+    {
+        if (studentIds.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<string>>();
+        }
+
+        var rows = await (
+            from member in _dbContext.StudentGroupMembers.AsNoTracking()
+            join groupEntity in _dbContext.StudentGroups.AsNoTracking()
+                on member.StudentGroupId equals groupEntity.Id
+            join teacherUser in _dbContext.Users.AsNoTracking() on groupEntity.ReferralId equals teacherUser.Id
+            where studentIds.Contains(member.StudentId)
+                && groupEntity.IsActive
+                && groupEntity.CreatorRole == UserRole.Teacher
+                && teacherUser.RoleAssignments.Any(assignment => assignment.Role == UserRole.Teacher)
+            select new { member.StudentId, teacherUser.FullName })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.StudentId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(row => row.FullName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name)
+                    .ToArray());
     }
 
     private async Task<HashSet<long>> GetLockedUserIdsAsync(
@@ -781,6 +1128,220 @@ public sealed class DirectoryRepository : IDirectoryRepository
             rejected,
             total);
     }
+
+    public async Task<DirectoryStatusCounts> CountParentsLinkedToStudentsByStatusAsync(
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        // Portal Admin: all parents (same buckets as CountUsersByStatusAsync for Parent).
+        if (schoolId is null)
+        {
+            return await CountUsersByStatusAsync(
+                UserRole.Parent,
+                schoolId: null,
+                campusId: null,
+                cancellationToken);
+        }
+
+        var scopedStudentIds = ScopedStudentIdsQuery(schoolId.Value, campusId);
+        var parentIds = await _dbContext.ParentStudentRelations.AsNoTracking()
+            .Where(relation =>
+                relation.IsActive && scopedStudentIds.Contains(relation.StudentId))
+            .Select(relation => relation.ParentId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (parentIds.Count == 0)
+        {
+            return new DirectoryStatusCounts(0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        var pendingChange = SchoolChangeRequestStatus.Pending;
+        var rows = await _dbContext.Users.AsNoTracking()
+            .Where(user =>
+                parentIds.Contains(user.Id)
+                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Parent))
+            .Select(user => new
+            {
+                user.Id,
+                user.IsActive,
+                user.PasswordHash,
+                user.RejectedAt,
+            })
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return new DirectoryStatusCounts(0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        var userIds = rows.Select(row => row.Id).ToArray();
+        var lockedUserIds = await _dbContext.UserSchoolChangeRequests.AsNoTracking()
+            .Where(request =>
+                request.Status == pendingChange && userIds.Contains(request.UserId))
+            .Select(request => request.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var lockedSet = lockedUserIds.ToHashSet();
+
+        var activeReady = 0;
+        var pendingApproval = 0;
+        var needsPasswordSetup = 0;
+        var locked = 0;
+        var deactivated = 0;
+        var rejected = 0;
+
+        foreach (var row in rows)
+        {
+            var hasPassword = !string.IsNullOrWhiteSpace(row.PasswordHash);
+
+            if (row.RejectedAt is not null)
+            {
+                rejected++;
+                continue;
+            }
+
+            if (row.IsActive && !hasPassword)
+            {
+                needsPasswordSetup++;
+                continue;
+            }
+
+            if (row.IsActive && hasPassword)
+            {
+                activeReady++;
+                continue;
+            }
+
+            if (!hasPassword)
+            {
+                pendingApproval++;
+                continue;
+            }
+
+            if (lockedSet.Contains(row.Id))
+            {
+                locked++;
+            }
+            else
+            {
+                deactivated++;
+            }
+        }
+
+        var active = activeReady;
+        var total = activeReady + pendingApproval + needsPasswordSetup + locked + deactivated + rejected;
+        return new DirectoryStatusCounts(
+            active,
+            activeReady,
+            pendingApproval,
+            needsPasswordSetup,
+            locked,
+            deactivated,
+            rejected,
+            total);
+    }
+
+    private IQueryable<long> ScopedStudentIdsQuery(int schoolId, int? campusId)
+    {
+        var students = _dbContext.Users.AsNoTracking()
+            .Where(user =>
+                user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+                && user.SchoolId == schoolId);
+
+        if (campusId is not null)
+        {
+            students = students.Where(user => user.CampusId == campusId.Value);
+        }
+
+        return students.Select(user => user.Id);
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<string>>> GetRoleNamesByUserIdsAsync(
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<string>>();
+        }
+
+        var rows = await _dbContext.UserRoleAssignments.AsNoTracking()
+            .Where(assignment => userIds.Contains(assignment.UserId))
+            .Select(assignment => new { assignment.UserId, assignment.Role })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.UserId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .OrderBy(row => row.Role)
+                    .Select(row => row.Role.ToString())
+                    .ToArray());
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<DirectoryApprovalHistoryItem>>> GetApprovalHistoryByUserIdsAsync(
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<DirectoryApprovalHistoryItem>>();
+        }
+
+        var rows = await (
+            from approval in _dbContext.Approvals.AsNoTracking()
+            join admin in _dbContext.Users.AsNoTracking() on approval.ApprovedByUserId equals admin.Id
+            where approval.EntityType == ApprovalEntityType.User
+                && approval.UserId != null
+                && userIds.Contains(approval.UserId.Value)
+            orderby approval.ApprovedAt descending, approval.Id descending
+            select new
+            {
+                UserId = approval.UserId.Value,
+                approval.ApprovedByUserId,
+                ApproverName = admin.FullName,
+                approval.ApprovedByRole,
+                approval.IsApproved,
+                approval.ApprovedAt,
+            }
+        ).ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.UserId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<DirectoryApprovalHistoryItem>)group
+                    .Select(row => new DirectoryApprovalHistoryItem(
+                        row.ApprovedByUserId,
+                        row.ApproverName,
+                        FormatApproverRole(row.ApprovedByRole),
+                        FormatApprovalDecision(row.IsApproved),
+                        row.ApprovedAt))
+                    .ToArray());
+    }
+
+    private static string FormatApproverRole(UserRole role)
+        => role switch
+        {
+            UserRole.PortalAdmin => "Portal Admin",
+            UserRole.SchoolAdmin => "School Admin",
+            UserRole.CampusAdmin => "Campus Admin",
+            UserRole.Teacher => "Teacher",
+            UserRole.Parent => "Parent",
+            UserRole.Student => "Student",
+            _ => role.ToString(),
+        };
+
+    private static string FormatApprovalDecision(bool? isApproved)
+        => isApproved switch
+        {
+            true => "Approved",
+            false => "Rejected",
+            null => "Pending",
+        };
 
     private IQueryable<User> BuildUserQueryForRole(UserRole role)
     {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rankup_education/features/admin/domain/pending_registration.dart';
 
 /// Read-only confirmation sheet — approve without editing fields or setting a password.
+/// Bottom sheet for reviewing and approving a registration.
 class ApproveRegistrationSheet extends StatelessWidget {
   const ApproveRegistrationSheet({
     required this.registration,

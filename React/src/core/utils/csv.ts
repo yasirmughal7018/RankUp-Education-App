@@ -1,3 +1,4 @@
+/** Escape a CSV cell value (quotes fields containing commas or newlines). */
 export function escapeCsvValue(value: string | number | null | undefined): string {
   if (value === null || value === undefined) {
     return "";
@@ -11,6 +12,7 @@ export function escapeCsvValue(value: string | number | null | undefined): strin
   return text;
 }
 
+/** Build a CSV string from headers and row arrays. */
 export function toCsv(
   headers: string[],
   rows: Array<Array<string | number | null | undefined>>,
@@ -22,6 +24,7 @@ export function toCsv(
   return `${lines.join("\n")}\n`;
 }
 
+/** Trigger a browser download of CSV content. */
 export function downloadCsv(filename: string, csvContent: string): void {
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

@@ -7,6 +7,7 @@ import type {
   DirectorySchoolAdmin,
   UpdateDirectorySchoolAdminInput,
 } from "@/features/directory/domain/directoryTypes";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 type SchoolAdminFormSubmit =
   | { mode: "create"; input: CreateDirectorySchoolAdminInput }
@@ -20,9 +21,9 @@ interface SchoolAdminFormDialogProps {
   onSubmit: (payload: SchoolAdminFormSubmit) => Promise<void>;
 }
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
+/** Modal form to create or update a school admin account. */
 export function SchoolAdminFormDialog({
   schoolAdmin,
   schools,
@@ -32,7 +33,6 @@ export function SchoolAdminFormDialog({
 }: SchoolAdminFormDialogProps) {
   const isEdit = schoolAdmin != null;
   const [fullName, setFullName] = useState(schoolAdmin?.fullName ?? "");
-  const [username, setUsername] = useState(schoolAdmin?.username ?? "");
   const [schoolId, setSchoolId] = useState(
     schoolAdmin?.schoolId ? String(schoolAdmin.schoolId) : "",
   );
@@ -40,7 +40,9 @@ export function SchoolAdminFormDialog({
     schoolAdmin?.mobileNumber ?? "",
   );
   const [cnic, setCnic] = useState(schoolAdmin?.cnic ?? "");
-  const [emailAddress, setEmailAddress] = useState("");
+  const [emailAddress, setEmailAddress] = useState(
+    schoolAdmin?.emailAddress ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,7 +73,11 @@ export function SchoolAdminFormDialog({
 
     const mobile = mobileNumber.trim() || null;
     const trimmedCnic = cnic.trim() || null;
-    const email = emailAddress.trim() || null;
+    const email = emailAddress.trim();
+    if (!email) {
+      setError("Email address is required (it is the username).");
+      return;
+    }
 
     try {
       if (isEdit) {
@@ -86,16 +92,11 @@ export function SchoolAdminFormDialog({
           },
         });
       } else {
-        const trimmedUsername = username.trim();
-        if (!trimmedUsername) {
-          setError("Username is required.");
-          return;
-        }
         await onSubmit({
           mode: "create",
           input: {
             fullName: trimmedName,
-            username: trimmedUsername,
+            username: email,
             schoolId: parsedSchoolId,
             mobileNumber: mobile,
             cnic: trimmedCnic,
@@ -153,22 +154,7 @@ export function SchoolAdminFormDialog({
             />
           </div>
 
-          {!isEdit ? (
-            <div>
-              <FieldLabel htmlFor="school-admin-username" required>
-                Username
-              </FieldLabel>
-              <input
-                id="school-admin-username"
-                type="text"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                className={inputClassName}
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-          ) : (
+          {!isEdit ? null : (
             <p className="text-sm text-slate-500">
               Username {schoolAdmin.username}
             </p>
@@ -224,8 +210,8 @@ export function SchoolAdminFormDialog({
           </div>
 
           <div>
-            <FieldLabel htmlFor="school-admin-email" optional>
-              Email
+            <FieldLabel htmlFor="school-admin-email" required>
+              Email (username)
             </FieldLabel>
             <input
               id="school-admin-email"
@@ -233,7 +219,9 @@ export function SchoolAdminFormDialog({
               value={emailAddress}
               onChange={(event) => setEmailAddress(event.target.value)}
               className={inputClassName}
+              required
               disabled={isSubmitting}
+              placeholder="you@example.com"
             />
           </div>
 

@@ -9,6 +9,7 @@ using RankUpEducation.Contracts.Notifications;
 
 namespace RankUpEducation.Api.Controllers;
 
+/// <summary>In-app notification inbox for the authenticated user.</summary>
 [ApiController]
 [Authorize]
 [Route("api/notifications")]
@@ -17,12 +18,14 @@ public sealed class NotificationsController : ControllerBase
     private readonly INotificationService _notifications;
     private readonly ICurrentUserService _currentUser;
 
+    /// <summary>Creates the notifications controller.</summary>
     public NotificationsController(INotificationService notifications, ICurrentUserService currentUser)
     {
         _notifications = notifications;
         _currentUser = currentUser;
     }
 
+    /// <summary>Lists recent notifications for the current user.</summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<NotificationListResponse>>> GetNotifications(
         [FromQuery] int take = 50,
@@ -35,6 +38,7 @@ public sealed class NotificationsController : ControllerBase
         return Ok(ApiResponse<NotificationListResponse>.Ok(response));
     }
 
+    /// <summary>Marks one notification as read.</summary>
     [HttpPost("{notificationId:long}/read")]
     public async Task<ActionResult<ApiResponse<object?>>> MarkReadAsync(
         long notificationId,
@@ -47,6 +51,7 @@ public sealed class NotificationsController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Notification marked as read."));
     }
 
+    /// <summary>Marks all unread notifications in a category as read.</summary>
     [HttpPost("read-category")]
     public async Task<ActionResult<ApiResponse<object?>>> MarkCategoryReadAsync(
         [FromQuery] string category,

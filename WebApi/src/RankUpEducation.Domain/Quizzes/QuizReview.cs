@@ -3,6 +3,10 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
 
+/// <summary>
+/// Feedback record for a quiz or a single question. Exactly one of <see cref="QuizId"/> or
+/// <see cref="QuestionId"/> must be set; attempt-level reviews use question-scoped rows.
+/// </summary>
 public sealed class QuizReview : BaseEntity
 {
     private QuizReview()
@@ -42,5 +46,11 @@ public sealed class QuizReview : BaseEntity
     {
         TeacherReviewStatus = statusId;
         TeacherReviewComment = comment.AsTrimmedOrNull();
+    }
+
+    public void SetAiReview(short? statusId, string? comment)
+    {
+        AiReviewStatus = statusId;
+        AiReviewComment = comment.AsTrimmedOrNull();
     }
 }

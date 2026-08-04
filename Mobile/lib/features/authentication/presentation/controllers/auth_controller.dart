@@ -5,6 +5,7 @@ import 'package:rankup_education/features/authentication/domain/entities/app_use
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
+/// Immutable auth UI state exposed to login and profile flows.
 class AuthState {
   const AuthState({
     this.user,
@@ -37,6 +38,7 @@ class AuthState {
   }
 }
 
+/// Coordinates auth repository calls and device registration after login.
 class AuthController extends StateNotifier<AuthState> {
   AuthController(this._repository, this._notifications)
       : super(const AuthState());
@@ -44,6 +46,7 @@ class AuthController extends StateNotifier<AuthState> {
   final AuthRepository _repository;
   final NotificationService _notifications;
 
+  /// Restores tokens and cached user on cold start.
   Future<void> restoreSession() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -58,6 +61,7 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  /// Signs in with username/mobile and password.
   Future<void> login({
     required String identifier,
     required String password,
@@ -242,6 +246,31 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearSuccess: true,
+    );
+    try {
+      final result = await _repository.requestSchoolChange(
+        schoolId: schoolId,
+        campusId: campusId,
+      );
+      state = state.copyWith(isLoading: false);
+      return result;
+    } on AppException catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.message);
+      rethrow;
+    } on Exception catch (error) {
+      state = state.copyWith(isLoading: false, errorMessage: error.toString());
+      rethrow;
+    }
+  }
+
   Future<void> refreshSession() async {
     state = state.copyWith(
       isLoading: true,
@@ -260,6 +289,7 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  /// Clears tokens and resets auth state.
   Future<void> logout() async {
     await _repository.logout();
     state = const AuthState();

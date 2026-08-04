@@ -1,14 +1,30 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { Pencil, UserCheck, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
-import { PageHeader } from "@/core/components/PageHeader";
+import { AppSearchInput } from "@/components/ui/app-search-input";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
-  ActiveStatusFilter,
   CreateDirectorySchoolAdminInput,
   DirectorySchoolAdmin,
   UpdateDirectorySchoolAdminInput,
 } from "@/features/directory/domain/directoryTypes";
+import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import {
+  DirectoryEntityCard,
+  DirectoryFilterPanel,
+  DirectoryFlash,
+  DirectoryIconAction,
+  DirectoryListPanel,
+  DirectoryMobileList,
+  DirectoryPageShell,
+  DirectoryTable,
+  DirectoryTableHead,
+  DirectoryTd,
+  DirectoryTh,
+  directorySelectClassName,
+} from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { SchoolAdminFormDialog } from "@/features/directory/presentation/components/SchoolAdminFormDialog";
 import {
@@ -19,29 +35,32 @@ import {
   useDirectorySchoolsQuery,
   useUpdateSchoolAdminMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
-import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import {
+  DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS,
+  matchesDirectoryAccountStatusFilter,
+  type DirectoryAccountStatusFilter,
+} from "@/features/directory/presentation/utils/accountStatus";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
 function ForbiddenScreen() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
-        <h1 className="text-2xl font-semibold text-slate-900">Access denied</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-600">
+      <div className="rounded-2xl border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] p-8 text-center">
+        <h1 className="text-2xl font-semibold text-foreground">Access denied</h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
           Only PortalAdmin accounts can manage school admins.
         </p>
-        <Link
-          to="/admin/directory"
-          className="mt-6 inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-        >
-          Back to directory
-        </Link>
+        <Button asChild type="button" variant="outline" className="mt-6">
+          <Link to="/admin/directory">Back to directory</Link>
+        </Button>
       </div>
     </div>
   );
 }
 
+/** PortalAdmin-only page to list and manage school admin accounts. */
 export function DirectorySchoolAdminsPage() {
   const { user } = useAuth();
   const isPortalAdmin = user?.role === "PortalAdmin";
@@ -51,7 +70,8 @@ export function DirectorySchoolAdminsPage() {
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
   const [schoolId, setSchoolId] = useState("");
-  const [activeFilter, setActiveFilter] = useState<ActiveStatusFilter>("all");
+  const [activeFilter, setActiveFilter] =
+    useState<DirectoryAccountStatusFilter>("all");
   const [pageNumber, setPageNumber] = useState(1);
   const [adminDialog, setAdminDialog] = useState<
     "create" | DirectorySchoolAdmin | null
@@ -81,16 +101,18 @@ export function DirectorySchoolAdminsPage() {
   const activateMutation = useActivateSchoolAdminMutation();
   const deactivateMutation = useDeactivateSchoolAdminMutation();
 
-  const schoolAdmins = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
   const visibleAdmins = useMemo(() => {
-    if (activeFilter === "all") {
-      return schoolAdmins;
-    }
-    const wantActive = activeFilter === "active";
-    return schoolAdmins.filter((admin) => admin.isActive === wantActive);
-  }, [schoolAdmins, activeFilter]);
+    const items = data?.items ?? [];
+    return items.filter((admin) =>
+      matchesDirectoryAccountStatusFilter(
+        admin.accountStatus,
+        admin.isActive,
+        activeFilter,
+      ),
+    );
+  }, [data?.items, activeFilter]);
 
   const busy =
     createMutation.isPending ||
@@ -155,45 +177,52 @@ export function DirectorySchoolAdminsPage() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title="School admins"
-        description="Create and manage school admin accounts. PortalAdmin only."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                clearMessages();
-                setAdminDialog("create");
-              }}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              Create school admin
-            </button>
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Refresh
-            </button>
-            <Link
-              to="/admin/directory"
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Directory home
-            </Link>
-          </div>
-        }
-      />
+  function rowActions(admin: DirectorySchoolAdmin) {
+    return (
+      <>
+        <DirectoryIconAction
+          icon={Pencil}
+          label={`Edit ${admin.fullName}`}
+          disabled={busy}
+          onClick={() => {
+            clearMessages();
+            setAdminDialog(admin);
+          }}
+        />
+        <DirectoryIconAction
+          icon={admin.isActive ? UserX : UserCheck}
+          label={
+            admin.isActive
+              ? `Deactivate ${admin.fullName}`
+              : `Activate ${admin.fullName}`
+          }
+          disabled={busy}
+          onClick={() => void toggleActive(admin)}
+        />
+      </>
+    );
+  }
 
-      <section className="mb-6 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="search"
+  return (
+    <DirectoryPageShell
+      title="School admins"
+      primaryAction={
+        <Button
+          type="button"
+          size="sm"
+          className="h-9 whitespace-nowrap"
+          onClick={() => {
+            clearMessages();
+            setAdminDialog("create");
+          }}
+        >
+          Create school admin
+        </Button>
+      }
+    >
+      <DirectoryFilterPanel>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <AppSearchInput
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
             onKeyDown={(event) => {
@@ -202,24 +231,16 @@ export function DirectorySchoolAdminsPage() {
               }
             }}
             placeholder="Search school admins..."
-            className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            containerClassName="min-w-0 flex-1 lg:min-w-[200px]"
           />
-          <button
-            type="button"
-            onClick={applyFilters}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-          >
-            Search
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
           <select
             value={schoolId}
             onChange={(event) => {
               setSchoolId(event.target.value);
               setPageNumber(1);
             }}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className={cn(directorySelectClassName, "lg:w-48")}
+            aria-label="Filter by school"
           >
             <option value="">All schools</option>
             {schools.map((school) => (
@@ -231,126 +252,111 @@ export function DirectorySchoolAdminsPage() {
           <select
             value={activeFilter}
             onChange={(event) =>
-              setActiveFilter(event.target.value as ActiveStatusFilter)
+              setActiveFilter(
+                event.target.value as DirectoryAccountStatusFilter,
+              )
             }
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className={cn(directorySelectClassName, "lg:w-40")}
+            aria-label="Filter by status"
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            {DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
+          <Button
+            type="button"
+            className="h-11 shrink-0 sm:h-10"
+            onClick={applyFilters}
+          >
+            Search
+          </Button>
         </div>
-      </section>
+      </DirectoryFilterPanel>
 
-      {error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error.message}
-        </div>
-      ) : null}
+      <DirectoryFlash
+        error={error?.message ?? actionError}
+        success={successMessage}
+        onRetry={error ? () => void refetch() : undefined}
+      />
 
-      {actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {actionError}
-        </div>
-      ) : null}
-
-      {successMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {successMessage}
-        </div>
-      ) : null}
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {isLoading ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            Loading school admins...
-          </div>
-        ) : visibleAdmins.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No school admins found.
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Username
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      School
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-slate-600">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {visibleAdmins.map((admin) => (
-                    <tr key={admin.userId} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {admin.fullName}
-                        <p className="text-xs font-normal text-slate-500">
-                          ID {admin.userId}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {admin.username}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {admin.schoolName}
-                      </td>
-                      <td className="px-4 py-3">
-                        <AccountStatusBadge
-                          accountStatus={admin.accountStatus}
-                          isActive={admin.isActive}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              clearMessages();
-                              setAdminDialog(admin);
-                            }}
-                            disabled={busy}
-                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void toggleActive(admin)}
-                            disabled={busy}
-                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                          >
-                            {admin.isActive ? "Deactivate" : "Activate"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <DirectoryPagination
-              pageNumber={pageNumber}
-              pageSize={PAGE_SIZE}
-              totalCount={totalCount}
-              onPageChange={setPageNumber}
-              disabled={isFetching}
+      <DirectoryListPanel
+        loading={isLoading}
+        empty={visibleAdmins.length === 0}
+        emptyTitle="No school admins found"
+        emptyDescription="Try a different search or clear filters."
+        emptyActionLabel="Create school admin"
+        onEmptyAction={() => {
+          clearMessages();
+          setAdminDialog("create");
+        }}
+        footer={
+          <DirectoryPagination
+            pageNumber={pageNumber}
+            pageSize={PAGE_SIZE}
+            totalCount={totalCount}
+            onPageChange={setPageNumber}
+            disabled={isFetching}
+          />
+        }
+      >
+        <DirectoryMobileList>
+          {visibleAdmins.map((admin) => (
+            <DirectoryEntityCard
+              key={admin.userId}
+              title={admin.fullName}
+              subtitle={`@${admin.username}`}
+              badge={
+                <AccountStatusBadge
+                  accountStatus={admin.accountStatus}
+                  isActive={admin.isActive}
+                />
+              }
+              meta={<p>{admin.schoolName}</p>}
+              actions={rowActions(admin)}
             />
-          </>
-        )}
-      </div>
+          ))}
+        </DirectoryMobileList>
+
+        <DirectoryTable>
+          <DirectoryTableHead>
+            <DirectoryTh>Name</DirectoryTh>
+            <DirectoryTh>School</DirectoryTh>
+            <DirectoryTh>Status</DirectoryTh>
+            <DirectoryTh align="right">Actions</DirectoryTh>
+          </DirectoryTableHead>
+          <tbody className="divide-y divide-border">
+            {visibleAdmins.map((admin) => (
+              <tr
+                key={admin.userId}
+                className="transition hover:bg-muted/40"
+              >
+                <DirectoryTd>
+                  <p className="font-medium">{admin.fullName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    @{admin.username}
+                  </p>
+                </DirectoryTd>
+                <DirectoryTd className="text-muted-foreground">
+                  {admin.schoolName}
+                </DirectoryTd>
+                <DirectoryTd>
+                  <AccountStatusBadge
+                    accountStatus={admin.accountStatus}
+                    isActive={admin.isActive}
+                  />
+                </DirectoryTd>
+                <DirectoryTd align="right">
+                  <div className="flex justify-end gap-2">
+                    {rowActions(admin)}
+                  </div>
+                </DirectoryTd>
+              </tr>
+            ))}
+          </tbody>
+        </DirectoryTable>
+      </DirectoryListPanel>
 
       {adminDialog ? (
         <SchoolAdminFormDialog
@@ -361,6 +367,6 @@ export function DirectorySchoolAdminsPage() {
           onSubmit={handleFormSubmit}
         />
       ) : null}
-    </div>
+    </DirectoryPageShell>
   );
 }

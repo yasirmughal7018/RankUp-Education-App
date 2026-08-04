@@ -1,16 +1,24 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Questions;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// EF mapping for <see cref="Question"/> including org scope and visibility_level
+/// (None / Campus / School / Public) used by bank list filters.
+/// </summary>
 public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
 {
     public void Configure(EntityTypeBuilder<Question> builder)
     {
         builder.ToTable("questions");
         builder.HasKey(question => question.Id);
-        builder.Property(question => question.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        // Matches PostgreSQL: id BIGINT GENERATED ALWAYS AS IDENTITY
+        builder.Property(question => question.Id)
+            .HasColumnName("id")
+            .UseIdentityAlwaysColumn();
         builder.Property(question => question.QuestionText).HasColumnName("question_text").HasMaxLength(1000).IsRequired();
         builder.Property(question => question.QuestionTypeId).HasColumnName("question_type_id").IsRequired();
         builder.Property(question => question.ClassId).HasColumnName("class_id").IsRequired();
@@ -23,14 +31,57 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(question => question.Marks).HasColumnName("marks").IsRequired();
         builder.Property(question => question.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(question => question.StatusId).HasColumnName("status_id").IsRequired();
-        builder.Property(question => question.CreatedBy).HasColumnName("created_by").HasMaxLength(100).IsRequired();
-        builder.Property(question => question.ApprovedBy).HasColumnName("approved_by").HasMaxLength(100);
+        builder.Property(question => question.CreatedBy).HasColumnName("created_by").IsRequired();
+        builder.Property(question => question.CreatedByRole)
+            .HasColumnName("created_by_role")
+            .HasColumnType("smallint")
+            .HasConversion(
+                role => (short)role,
+                value => (UserRole)value)
+            .IsRequired();
+        builder.Property(question => question.ApprovedBy).HasColumnName("approved_by");
         builder.Property(question => question.CreatedDate).HasColumnName("created_date");
         builder.Property(question => question.ModifiedDate).HasColumnName("modified_date");
         builder.Property(question => question.IsAiApproved).HasColumnName("is_ai_approved").HasDefaultValue(false);
         builder.Property(question => question.RejectionReason).HasColumnName("rejection_reason").HasMaxLength(1000);
+        // Creator/approver org stamp for pending queues and School/Campus visibility.
+        builder.Property(question => question.SchoolId).HasColumnName("school_id");
+        builder.Property(question => question.CampusId).HasColumnName("campus_id");
+        // 0=None, 1=Campus (endorsed), 2=School (endorsed), 3=Public (published).
+        builder.Property(question => question.VisibilityLevel).HasColumnName("visibility_level").HasDefaultValue((short)0);
         builder.HasIndex(question => new { question.ClassId, question.SubjectId, question.TopicId })
             .HasDatabaseName("idx_questions_lookup_ids");
+        // Speeds org-scoped list / pending-queue filters.
+        builder.HasIndex(question => new { question.SchoolId, question.CampusId, question.VisibilityLevel })
+            .HasDatabaseName("idx_questions_visibility_scope");
+        builder.HasIndex(question => question.CreatedByRole)
+            .HasDatabaseName("idx_questions_created_by_role");
+        builder.HasIndex(question => question.CreatedBy)
+            .HasDatabaseName("idx_questions_created_by");
+        builder.HasIndex(question => question.ApprovedBy)
+            .HasDatabaseName("idx_questions_approved_by");
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(question => question.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_questions_created_by_app_users");
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(question => question.ApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false)
+            .HasConstraintName("fk_questions_approved_by_app_users");
+
+        // Explicit relationships avoid EF confusing Options vs AcceptedAnswers (both use question_id).
+        builder.HasMany(question => question.Options)
+            .WithOne()
+            .HasForeignKey(option => option.QuestionId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(question => question.AcceptedAnswers)
+            .WithOne()
+            .HasForeignKey(answer => answer.QuestionId)
+            .OnDelete(DeleteBehavior.Cascade);
         builder.Navigation(question => question.Options).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(question => question.AcceptedAnswers).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
@@ -42,7 +93,9 @@ public sealed class QuestionOptionConfiguration : IEntityTypeConfiguration<Quest
     {
         builder.ToTable("question_options");
         builder.HasKey(option => option.Id);
-        builder.Property(option => option.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(option => option.Id)
+            .HasColumnName("id")
+            .UseIdentityAlwaysColumn();
         builder.Property(option => option.QuestionId).HasColumnName("question_id").IsRequired();
         builder.Property(option => option.OptionText).HasColumnName("option_text").HasMaxLength(1000).IsRequired();
         builder.Property(option => option.OptionImageUrl).HasColumnName("option_image_url").HasMaxLength(512);
@@ -58,7 +111,9 @@ public sealed class QuestionAcceptedAnswerConfiguration : IEntityTypeConfigurati
     {
         builder.ToTable("question_accepted_answers");
         builder.HasKey(answer => answer.Id);
-        builder.Property(answer => answer.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(answer => answer.Id)
+            .HasColumnName("id")
+            .UseIdentityAlwaysColumn();
         builder.Property(answer => answer.QuestionId).HasColumnName("question_id").IsRequired();
         builder.Property(answer => answer.AnswerText).HasColumnName("answer_text").HasMaxLength(1000).IsRequired();
         builder.Property(answer => answer.IsCaseSensitive).HasColumnName("is_case_sensitive").HasDefaultValue(false);

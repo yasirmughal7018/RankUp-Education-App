@@ -62,6 +62,7 @@ export interface DirectorySchool {
   name: string;
   code: string;
   isActive: boolean;
+  campusCount: number;
 }
 
 export interface UpsertSchoolInput {
@@ -93,7 +94,26 @@ export type DirectoryAccountStatus =
   | "Deactivated"
   | "Rejected";
 
-export interface DirectoryStudent {
+export interface DirectoryApprovalHistoryItem {
+  approverUserId: number;
+  approverName: string;
+  approverRole: string;
+  /** Pending | Approved | Rejected */
+  decision: string;
+  decidedAt?: string | null;
+}
+
+export interface DirectoryAccountAuditFields {
+  createdDate?: string | null;
+  requestedAt?: string | null;
+  rejectedAt?: string | null;
+  lastLoginAt?: string | null;
+  reasonMessage?: string | null;
+  needsPasswordSetup?: boolean;
+  approvalHistory?: DirectoryApprovalHistoryItem[];
+}
+
+export interface DirectoryStudent extends DirectoryAccountAuditFields {
   studentId: number;
   fullName: string;
   username: string;
@@ -103,10 +123,17 @@ export interface DirectoryStudent {
   schoolId: number;
   campusId: number;
   isActive: boolean;
+  avatarUrl?: string | null;
+  schoolName: string;
+  campusName: string;
+  teacherNames: string[];
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
   accountStatus: DirectoryAccountStatus;
 }
 
-export interface DirectoryTeacher {
+export interface DirectoryTeacher extends DirectoryAccountAuditFields {
   teacherId: number;
   fullName: string;
   username: string;
@@ -114,16 +141,32 @@ export interface DirectoryTeacher {
   schoolId: number;
   campusId: number;
   isActive: boolean;
+  avatarUrl?: string | null;
+  schoolName: string;
+  campusName: string;
+  studentCount: number;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
   accountStatus: DirectoryAccountStatus;
+  /** All roles on this account (e.g. Teacher, Parent). */
+  roles?: string[];
 }
 
-export interface DirectoryParent {
+export interface DirectoryParent extends DirectoryAccountAuditFields {
   parentId: number;
   fullName: string;
   username: string;
   linkedStudentCount: number;
+  linkedStudentNames?: string[];
   isActive: boolean;
+  avatarUrl?: string | null;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
   accountStatus: DirectoryAccountStatus;
+  /** All roles on this account (e.g. Parent, Teacher). */
+  roles?: string[];
 }
 
 export interface PagedDirectoryResult<T> {
@@ -142,6 +185,7 @@ export interface CreateDirectoryStudentInput {
   grade: number;
   section: string;
   mobileNumber?: string | null;
+  emailAddress?: string | null;
 }
 
 export interface UpdateDirectoryStudentInput {
@@ -160,6 +204,7 @@ export interface CreateDirectoryTeacherInput {
   campusId: number;
   teacherCode: string;
   mobileNumber?: string | null;
+  emailAddress?: string | null;
 }
 
 export interface UpdateDirectoryTeacherInput {
@@ -174,9 +219,18 @@ export interface CreateDirectoryParentInput {
   username: string;
   cnic?: string | null;
   mobileNumber?: string | null;
+  emailAddress?: string | null;
 }
 
-export interface DirectorySchoolAdmin {
+/** Grant Teacher role to an existing Parent account. */
+export interface GrantTeacherRoleInput {
+  schoolId: number;
+  campusId: number;
+  teacherCode: string;
+  mobileNumber?: string | null;
+}
+
+export interface DirectorySchoolAdmin extends DirectoryAccountAuditFields {
   userId: number;
   fullName: string;
   username: string;
@@ -184,8 +238,13 @@ export interface DirectorySchoolAdmin {
   schoolName: string;
   mobileNumber: string | null;
   cnic: string | null;
+  emailAddress?: string | null;
   isActive: boolean;
   needsPasswordSetup: boolean;
+  avatarUrl?: string | null;
+  activeCampusCount: number;
+  activeTeacherCount: number;
+  activeStudentCount: number;
   accountStatus: DirectoryAccountStatus;
 }
 
@@ -213,7 +272,7 @@ export interface DirectorySchoolAdminFilters {
   pageSize?: number;
 }
 
-export interface DirectoryCampusAdmin {
+export interface DirectoryCampusAdmin extends DirectoryAccountAuditFields {
   userId: number;
   fullName: string;
   username: string;
@@ -223,8 +282,12 @@ export interface DirectoryCampusAdmin {
   campusName: string;
   mobileNumber: string | null;
   cnic: string | null;
+  emailAddress?: string | null;
   isActive: boolean;
   needsPasswordSetup: boolean;
+  avatarUrl?: string | null;
+  activeTeacherCount: number;
+  activeStudentCount: number;
   accountStatus: DirectoryAccountStatus;
 }
 

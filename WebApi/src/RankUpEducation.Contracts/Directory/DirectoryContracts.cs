@@ -23,8 +23,10 @@ public sealed record DirectoryStatusCounts(
     int Rejected,
     int Total);
 
+/// <summary>Active/inactive school counts for the directory summary.</summary>
 public sealed record DirectorySchoolStatusCounts(int Active, int Inactive, int Total);
 
+/// <summary>Directory dashboard payload with per-section counts and UI section keys.</summary>
 public sealed record DirectorySummaryResponse(
     DirectorySchoolStatusCounts Schools,
     DirectoryStatusCounts Students,
@@ -34,24 +36,46 @@ public sealed record DirectorySummaryResponse(
     DirectoryStatusCounts CampusAdmins,
     IReadOnlyList<string> VisibleSections);
 
+/// <summary>Non-paged list of schools.</summary>
 public sealed record SchoolListResponse(IReadOnlyList<SchoolResponse> Items);
 
-public sealed record SchoolResponse(long Id, string Name, string Code, bool IsActive);
+/// <summary>School row for directory and registration pickers.</summary>
+public sealed record SchoolResponse(
+    long Id,
+    string Name,
+    string Code,
+    bool IsActive,
+    int CampusCount);
 
+/// <summary>Create or update school request body.</summary>
 public sealed record UpsertSchoolRequest(string Name, string Code, bool IsActive = true);
 
+/// <summary>Non-paged list of campuses.</summary>
 public sealed record CampusListResponse(IReadOnlyList<CampusResponse> Items);
 
+/// <summary>Campus row under a school.</summary>
 public sealed record CampusResponse(long Id, long SchoolId, string Name, string? Address, bool IsActive);
 
+/// <summary>Create or update campus request body.</summary>
 public sealed record UpsertCampusRequest(string Name, string? Address, bool IsActive = true);
 
+/// <summary>Paged student directory result.</summary>
 public sealed record DirectoryStudentListResponse(
     IReadOnlyList<DirectoryStudentResponse> Items,
     int PageNumber,
     int PageSize,
     int TotalCount);
 
+/// <summary>Approval decision recorded on a provisioned directory account.</summary>
+public sealed record DirectoryApprovalHistoryItem(
+    long ApproverUserId,
+    string ApproverName,
+    string ApproverRole,
+    /// <summary>Pending | Approved | Rejected</summary>
+    string Decision,
+    DateTimeOffset? DecidedAt);
+
+/// <summary>Student row in the school directory.</summary>
 public sealed record DirectoryStudentResponse(
     long StudentId,
     string FullName,
@@ -62,9 +86,24 @@ public sealed record DirectoryStudentResponse(
     int SchoolId,
     int CampusId,
     bool IsActive,
+    string? AvatarUrl,
+    string SchoolName,
+    string CampusName,
+    IReadOnlyList<string> TeacherNames,
+    string? MobileNumber,
+    string? Cnic,
+    string? EmailAddress,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    bool NeedsPasswordSetup,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
+/// <summary>Provision a student from the directory UI.</summary>
 public sealed record CreateDirectoryStudentRequest(
     string FullName,
     string Username,
@@ -73,8 +112,10 @@ public sealed record CreateDirectoryStudentRequest(
     string RollNumber,
     short Grade,
     string Section,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    string? EmailAddress = null);
 
+/// <summary>Update an existing student from the directory UI.</summary>
 public sealed record UpdateDirectoryStudentRequest(
     string FullName,
     int CampusId,
@@ -83,12 +124,14 @@ public sealed record UpdateDirectoryStudentRequest(
     string Section,
     string? MobileNumber = null);
 
+/// <summary>Paged teacher directory result.</summary>
 public sealed record DirectoryTeacherListResponse(
     IReadOnlyList<DirectoryTeacherResponse> Items,
     int PageNumber,
     int PageSize,
     int TotalCount);
 
+/// <summary>Teacher row in the school directory.</summary>
 public sealed record DirectoryTeacherResponse(
     long TeacherId,
     string FullName,
@@ -97,8 +140,24 @@ public sealed record DirectoryTeacherResponse(
     int SchoolId,
     int CampusId,
     bool IsActive,
+    string? AvatarUrl,
+    string SchoolName,
+    string CampusName,
+    int StudentCount,
+    string? MobileNumber,
+    string? Cnic,
+    string? EmailAddress,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    bool NeedsPasswordSetup,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
-    string AccountStatus);
+    string AccountStatus,
+    /// <summary>All roles on this account (e.g. Teacher, Parent).</summary>
+    IReadOnlyList<string> Roles);
 
 public sealed record CreateDirectoryTeacherRequest(
     string FullName,
@@ -106,10 +165,18 @@ public sealed record CreateDirectoryTeacherRequest(
     int SchoolId,
     int CampusId,
     string TeacherCode,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    string? EmailAddress = null);
 
 public sealed record UpdateDirectoryTeacherRequest(
     string FullName,
+    int CampusId,
+    string TeacherCode,
+    string? MobileNumber = null);
+
+/// <summary>Grant Teacher role to an existing Parent account.</summary>
+public sealed record GrantTeacherRoleRequest(
+    int SchoolId,
     int CampusId,
     string TeacherCode,
     string? MobileNumber = null);
@@ -125,15 +192,30 @@ public sealed record DirectoryParentResponse(
     string FullName,
     string Username,
     int LinkedStudentCount,
+    IReadOnlyList<string> LinkedStudentNames,
     bool IsActive,
+    string? AvatarUrl,
+    string? MobileNumber,
+    string? Cnic,
+    string? EmailAddress,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    bool NeedsPasswordSetup,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
-    string AccountStatus);
+    string AccountStatus,
+    /// <summary>All roles on this account (e.g. Parent, Teacher).</summary>
+    IReadOnlyList<string> Roles);
 
 public sealed record CreateDirectoryParentRequest(
     string FullName,
     string Username,
     string? Cnic = null,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    string? EmailAddress = null);
 
 public sealed record UpdateDirectoryParentRequest(
     string FullName,
@@ -148,8 +230,10 @@ public sealed record LinkParentStudentResponse(
     string Relationship,
     bool IsActive);
 
+/// <summary>Bulk deactivate request listing entity ids.</summary>
 public sealed record BulkDeactivateRequest(IReadOnlyList<long> Ids);
 
+/// <summary>Count of entities affected by a bulk directory action.</summary>
 public sealed record BulkActionResponse(int AffectedCount);
 
 public sealed record DirectorySchoolAdminListResponse(
@@ -166,8 +250,19 @@ public sealed record DirectorySchoolAdminResponse(
     string SchoolName,
     string? MobileNumber,
     string? Cnic,
+    string? EmailAddress,
     bool IsActive,
     bool NeedsPasswordSetup,
+    string? AvatarUrl,
+    int ActiveCampusCount,
+    int ActiveTeacherCount,
+    int ActiveStudentCount,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 
@@ -202,8 +297,18 @@ public sealed record DirectoryCampusAdminResponse(
     string CampusName,
     string? MobileNumber,
     string? Cnic,
+    string? EmailAddress,
     bool IsActive,
     bool NeedsPasswordSetup,
+    string? AvatarUrl,
+    int ActiveTeacherCount,
+    int ActiveStudentCount,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus);
 

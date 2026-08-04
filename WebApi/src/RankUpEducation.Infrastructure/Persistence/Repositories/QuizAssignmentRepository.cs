@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
+/// <summary>Assignment CRUD, access windows, review state, and assignment board queries.</summary>
 public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
 {
     private readonly RankUpDbContext _dbContext;
@@ -88,17 +90,28 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             .AnyAsync(assignment => assignment.QuizId == quizId && assignment.StudentId == studentId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardForCreatorAsync(
-        long creatorUserId,
+    public async Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardAsync(
+        long? creatorUserId,
+        int? schoolId,
         long? studentId,
         CancellationToken cancellationToken)
     {
-        var creatorKey = creatorUserId.ToString();
         var query =
             from assignment in _dbContext.QuizAssignments.AsNoTracking()
             join quiz in _dbContext.Quizzes.AsNoTracking() on assignment.QuizId equals quiz.Id
-            where quiz.CreatedByName == creatorKey && quiz.IsActive && !quiz.IsDeleted
+            where quiz.IsActive && !quiz.IsDeleted
             select new { assignment, quiz };
+
+        if (creatorUserId is not null)
+        {
+            var creatorKey = creatorUserId.Value.ToString();
+            query = query.Where(row => row.quiz.CreatedByName == creatorKey);
+        }
+
+        if (schoolId is not null)
+        {
+            query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
+        }
 
         if (studentId is not null)
         {
@@ -146,12 +159,12 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
         return items;
     }
 
-    public Task<QuizAssignmentAccess?> GetAssignmentAccessAsync(
+    public async Task<QuizAssignmentAccess?> GetAssignmentAccessAsync(
         long quizId,
         long studentId,
         CancellationToken cancellationToken)
     {
-        return _dbContext.QuizAssignments.AsNoTracking()
+        var existing = await _dbContext.QuizAssignments.AsNoTracking()
             .Where(assignment => assignment.QuizId == quizId && assignment.StudentId == studentId)
             .Select(assignment => new QuizAssignmentAccess(
                 assignment.Id,
@@ -162,6 +175,42 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 assignment.AllowedAttempts,
                 _dbContext.QuizAttempts.Count(attempt => attempt.QuizId == quizId && attempt.StudentId == studentId)))
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var quiz = await _dbContext.Quizzes.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == quizId && item.IsActive && !item.IsDeleted, cancellationToken);
+        if (quiz is null
+            || quiz.AudienceStartAt is null
+            || quiz.AudienceEndAt is null
+            || quiz.AudienceAllowedAttempts is null
+            || !quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var studentUser = await _dbContext.Users.AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Id == studentId, cancellationToken);
+        if (studentUser is null)
+        {
+            return null;
+        }
+
+        var attemptCount = await _dbContext.QuizAttempts.AsNoTracking()
+            .CountAsync(attempt => attempt.QuizId == quizId && attempt.StudentId == studentId, cancellationToken);
+
+        // AssignmentId 0 signals public catalog access without a materialized row yet.
+        return new QuizAssignmentAccess(
+            0,
+            quiz.Id,
+            studentId,
+            quiz.AudienceStartAt.Value,
+            quiz.AudienceEndAt.Value,
+            quiz.AudienceAllowedAttempts.Value,
+            attemptCount);
     }
 
     public Task<QuizAssignment?> GetAssignmentEntityAsync(long quizId, long studentId, CancellationToken cancellationToken)
@@ -195,5 +244,76 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 assignment.IsReviewDone,
                 quiz.IsReviewRequired))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<QuizAssignmentLifecycleMaintenanceResult> ExpireOverdueUnattemptedAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var changed = 0;
+        var newlyOpenedSurprise = new List<QuizAssignmentOpenedNotice>();
+
+        var dueUpcoming = await (
+            from assignment in _dbContext.QuizAssignments
+            join quiz in _dbContext.Quizzes on assignment.QuizId equals quiz.Id
+            where assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Upcoming
+                && assignment.StartDateTime <= now
+                && assignment.EndDateTime >= now
+                && !_dbContext.QuizAttempts.Any(attempt =>
+                    attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId)
+            select new { assignment, quiz }).ToListAsync(cancellationToken);
+
+        foreach (var row in dueUpcoming)
+        {
+            row.assignment.SetResultStatus(LookupNames.QuizResultStatusIds.NotAttempted);
+            changed++;
+
+            if (row.quiz.QuizTypeId == LookupNames.QuizTypeIds.Surprise)
+            {
+                newlyOpenedSurprise.Add(new QuizAssignmentOpenedNotice(
+                    row.quiz.Id,
+                    row.quiz.QuizTitle,
+                    row.assignment.StudentId));
+            }
+        }
+
+        var overdueUnattempted = await _dbContext.QuizAssignments
+            .Where(assignment =>
+                assignment.EndDateTime < now
+                && (assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.NotAttempted
+                    || assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Upcoming)
+                && !_dbContext.QuizAttempts.Any(attempt =>
+                    attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId))
+            .ToListAsync(cancellationToken);
+
+        foreach (var assignment in overdueUnattempted)
+        {
+            assignment.SetResultStatus(LookupNames.QuizResultStatusIds.Expired);
+            changed++;
+        }
+
+        var overdueInProgress = await (
+            from attempt in _dbContext.QuizAttempts
+            join assignment in _dbContext.QuizAssignments
+                on new { attempt.QuizId, attempt.StudentId }
+                equals new { assignment.QuizId, assignment.StudentId }
+            where attempt.StatusId == LookupNames.QuizAttemptStatusIds.InProgress
+                && assignment.EndDateTime < now
+            select new { attempt, assignment }).ToListAsync(cancellationToken);
+
+        foreach (var row in overdueInProgress)
+        {
+            row.attempt.MarkExpired(LookupNames.QuizAttemptStatusIds.Expired);
+            if (row.assignment.QuizResultStatus is LookupNames.QuizResultStatusIds.InProgress
+                or LookupNames.QuizResultStatusIds.NotAttempted
+                or LookupNames.QuizResultStatusIds.Upcoming)
+            {
+                row.assignment.SetResultStatus(LookupNames.QuizResultStatusIds.Expired);
+            }
+
+            changed++;
+        }
+
+        return new QuizAssignmentLifecycleMaintenanceResult(changed, newlyOpenedSurprise);
     }
 }

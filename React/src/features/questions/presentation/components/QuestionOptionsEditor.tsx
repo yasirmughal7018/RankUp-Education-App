@@ -1,12 +1,21 @@
+import { Check, Trash2 } from "lucide-react";
 import type { QuestionOptionInput } from "@/features/questions/domain/questionTypes";
 import {
+  addMatchingPair,
   isFillBlankType,
-  isMultipleChoiceType,
+  isMatchingType,
+  isMediaType,
+  isOrderingType,
   isSingleChoiceType,
   isTrueFalseType,
+  matchingPairCount,
   normalizeQuestionType,
+  removeMatchingPair,
+  updateMatchingPairSide,
 } from "@/features/questions/domain/questionTypes";
 import { RequiredMark } from "@/core/components/RequiredMark";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import { cn } from "@/lib/utils";
 
 interface QuestionOptionsEditorProps {
   questionType: string;
@@ -15,9 +24,64 @@ interface QuestionOptionsEditorProps {
   onChange: (options: QuestionOptionInput[]) => void;
 }
 
-const inputClassName =
-  "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30";
+const inputClassName = FORM_FIELD_CLASS;
 
+function CorrectToggle({
+  checked,
+  disabled,
+  singleSelect,
+  onToggle,
+  label = "Correct",
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  singleSelect: boolean;
+  onToggle: (next: boolean) => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role={singleSelect ? "radio" : "checkbox"}
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={() => {
+        if (disabled) return;
+        onToggle(singleSelect ? true : !checked);
+      }}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border transition",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        "w-9 sm:w-auto sm:px-3",
+        checked
+          ? "border-[var(--status-approved-border)] bg-[var(--status-approved-border)] text-white shadow-sm"
+          : "border-border bg-background text-muted-foreground hover:border-[var(--status-approved-border)] hover:text-[var(--status-approved-text)]",
+      )}
+    >
+      <Check className="h-4 w-4" strokeWidth={2.5} />
+      <span className="hidden text-xs font-semibold sm:inline">{label}</span>
+    </button>
+  );
+}
+
+function optionPlaceholder(
+  type: string,
+  index: number,
+  fillBlank: boolean,
+): string {
+  if (fillBlank) {
+    return `Accepted answer ${index + 1}`;
+  }
+  if (isOrderingType(type)) {
+    return `Item ${index + 1} (correct order)`;
+  }
+  return `Option ${String.fromCharCode(65 + index)}`;
+}
+
+/** Editable answer options for MCQ / True-False / Matching / Ordering; Fill uses accepted answers. */
 export function QuestionOptionsEditor({
   questionType,
   options,
@@ -26,9 +90,12 @@ export function QuestionOptionsEditor({
 }: QuestionOptionsEditorProps) {
   const type = normalizeQuestionType(questionType);
   const singleSelect = isSingleChoiceType(type) || isTrueFalseType(type);
-  const multiSelect = isMultipleChoiceType(type);
   const fillBlank = isFillBlankType(type);
   const trueFalse = isTrueFalseType(type);
+  const matching = isMatchingType(type);
+  const ordering = isOrderingType(type);
+  const media = isMediaType(type);
+  const hideCorrect = fillBlank || matching || ordering;
 
   function updateOption(index: number, patch: Partial<QuestionOptionInput>) {
     if (patch.isCorrect === true && singleSelect) {
@@ -49,6 +116,11 @@ export function QuestionOptionsEditor({
   }
 
   function addOption() {
+    if (matching) {
+      onChange(addMatchingPair(options));
+      return;
+    }
+
     onChange([
       ...options,
       { optionText: "", isCorrect: fillBlank ? true : false },
@@ -67,100 +139,261 @@ export function QuestionOptionsEditor({
     ? "Accepted answers"
     : trueFalse
       ? "True / False"
-      : "Answer options";
+      : matching
+        ? "Matching pairs"
+        : ordering
+          ? "Correct order"
+          : "Answer options";
 
   const helper = fillBlank
     ? "Students type an answer. Add every accepted spelling or wording."
-    : singleSelect
-      ? "Students can select only one option. Mark exactly one as correct."
-      : "Students can select multiple options. Mark every correct option.";
+    : matching
+      ? "Each row is one pair (left ↔ right). Stored as lefts first, then rights — option shuffle stays off."
+      : ordering
+        ? "List items top-to-bottom in the correct sequence. Students will rearrange them."
+        : media
+          ? "Each option needs an image URL. Optional caption text helps accessibility."
+          : singleSelect
+            ? "Students can select only one option. Mark exactly one as correct."
+            : "Students can select multiple options. Mark every correct option.";
+
+  const minCount = fillBlank ? 1 : 2;
+  const pairCount = matching ? matchingPairCount(options) : 0;
+  const canRemovePair = !disabled && pairCount > 2;
 
   return (
-    <section className="space-y-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
+    <section className="space-y-4 rounded-2xl border border-border bg-muted/30 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">
             {title} <RequiredMark />
           </h3>
-          <p className="mt-1 text-xs text-slate-500">{helper}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
         </div>
         {!trueFalse ? (
           <button
             type="button"
             disabled={disabled}
             onClick={addOption}
-            className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-70"
+            className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted disabled:opacity-70"
           >
-            {fillBlank ? "Add accepted answer" : "Add option"}
+            {fillBlank
+              ? "Add accepted answer"
+              : matching
+                ? "Add pair"
+                : ordering
+                  ? "Add item"
+                  : "Add option"}
           </button>
         ) : null}
       </div>
 
-      <div className="space-y-3">
-        {options.map((option, index) => (
-          <div
-            key={`option-${index}`}
-            className={`grid gap-3 rounded-2xl border p-4 transition ${
-              option.isCorrect
-                ? "border-emerald-300 bg-emerald-50/70"
-                : "border-slate-200 bg-white"
-            } ${trueFalse ? "md:grid-cols-[1fr_auto]" : "md:grid-cols-[1fr_auto_auto]"}`}
-          >
-            {trueFalse ? (
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
-                  {option.optionText.slice(0, 1) || "?"}
-                </span>
-                <span className="text-sm font-semibold text-slate-900">
-                  {option.optionText}
-                </span>
-              </div>
-            ) : (
-              <input
-                type="text"
-                value={option.optionText}
-                disabled={disabled}
-                onChange={(event) =>
-                  updateOption(index, { optionText: event.target.value })
-                }
-                className={inputClassName}
-                placeholder={
-                  fillBlank
-                    ? `Accepted answer ${index + 1}`
-                    : `Option ${String.fromCharCode(65 + index)}`
-                }
-              />
-            )}
+      {matching ? (
+        <div className="space-y-2.5 sm:space-y-3">
+          {Array.from({ length: pairCount }, (_, pairIndex) => {
+            const left = options[pairIndex];
+            const right = options[pairCount + pairIndex];
+            if (!left || !right) {
+              return null;
+            }
 
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              <input
-                type={singleSelect ? "radio" : "checkbox"}
-                name={singleSelect ? "correct-option" : undefined}
-                checked={option.isCorrect}
-                disabled={disabled || (fillBlank && true)}
-                onChange={(event) =>
-                  updateOption(index, {
-                    isCorrect: singleSelect ? true : event.target.checked,
-                  })
-                }
-                className="h-4 w-4 accent-brand-600"
-              />
-              {fillBlank ? "Accepted" : multiSelect ? "Correct" : "Correct"}
-            </label>
-
-            {!trueFalse ? (
-              <button
-                type="button"
-                disabled={disabled || options.length <= (fillBlank ? 1 : 2)}
-                onClick={() => removeOption(index)}
-                className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+            return (
+              <div
+                key={`pair-${pairIndex}`}
+                className="rounded-2xl border border-border bg-card p-3 sm:p-4"
               >
-                Remove
-              </button>
-            ) : null}
-          </div>
-        ))}
-      </div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Pair {pairIndex + 1}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!canRemovePair}
+                    onClick={() =>
+                      onChange(removeMatchingPair(options, pairIndex))
+                    }
+                    aria-label={`Remove pair ${pairIndex + 1}`}
+                    title="Remove pair"
+                    className={cn(
+                      "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition",
+                      "border-[var(--status-rejected-border)]/50 bg-card text-[var(--status-rejected-text)]",
+                      "hover:border-[var(--status-rejected-border)] hover:bg-[var(--status-rejected-bg)]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "disabled:cursor-not-allowed disabled:opacity-35",
+                    )}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-[11px] font-semibold text-muted-foreground">
+                      L{pairIndex + 1}
+                    </span>
+                    <input
+                      type="text"
+                      value={left.optionText}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        onChange(
+                          updateMatchingPairSide(
+                            options,
+                            pairIndex,
+                            "left",
+                            event.target.value,
+                          ),
+                        )
+                      }
+                      className={cn(inputClassName, "min-w-0 flex-1")}
+                      placeholder={`Left item ${pairIndex + 1}`}
+                    />
+                  </div>
+                  <span
+                    className="hidden text-center text-xs font-semibold text-muted-foreground sm:block"
+                    aria-hidden
+                  >
+                    ↔
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-[11px] font-semibold text-muted-foreground">
+                      R{pairIndex + 1}
+                    </span>
+                    <input
+                      type="text"
+                      value={right.optionText}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        onChange(
+                          updateMatchingPairSide(
+                            options,
+                            pairIndex,
+                            "right",
+                            event.target.value,
+                          ),
+                        )
+                      }
+                      className={cn(inputClassName, "min-w-0 flex-1")}
+                      placeholder={`Right item ${pairIndex + 1}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-2.5 sm:space-y-3">
+          {options.map((option, index) => {
+            const canRemove = !disabled && options.length > minCount;
+
+            return (
+              <div
+                key={`option-${index}`}
+                className={cn(
+                  "rounded-2xl border p-3 transition sm:p-4",
+                  !hideCorrect && option.isCorrect
+                    ? "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)]/70"
+                    : "border-border bg-card",
+                )}
+              >
+                {trueFalse ? (
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
+                      {option.optionText.slice(0, 1) || "?"}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">
+                      {option.optionText}
+                    </span>
+                    <CorrectToggle
+                      checked={option.isCorrect}
+                      disabled={disabled}
+                      singleSelect
+                      onToggle={() => updateOption(index, { isCorrect: true })}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      {ordering ? (
+                        <span className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-[11px] font-semibold text-muted-foreground">
+                          {index + 1}
+                        </span>
+                      ) : null}
+                      <input
+                        type="text"
+                        value={option.optionText}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          updateOption(index, {
+                            optionText: event.target.value,
+                          })
+                        }
+                        className={cn(inputClassName, "min-w-0 flex-1")}
+                        placeholder={
+                          media
+                            ? `Caption ${String.fromCharCode(65 + index)} (optional)`
+                            : optionPlaceholder(type, index, fillBlank)
+                        }
+                      />
+                      {!hideCorrect ? (
+                        <CorrectToggle
+                          checked={option.isCorrect}
+                          disabled={disabled}
+                          singleSelect={singleSelect}
+                          label="Correct"
+                          onToggle={(next) =>
+                            updateOption(index, { isCorrect: next })
+                          }
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={!canRemove}
+                        onClick={() => removeOption(index)}
+                        aria-label={`Remove option ${index + 1}`}
+                        title="Remove"
+                        className={cn(
+                          "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition",
+                          "border-[var(--status-rejected-border)]/50 bg-card text-[var(--status-rejected-text)]",
+                          "hover:border-[var(--status-rejected-border)] hover:bg-[var(--status-rejected-bg)]",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "disabled:cursor-not-allowed disabled:opacity-35",
+                        )}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {media ? (
+                      <div className="space-y-2 sm:pl-0">
+                        <input
+                          type="url"
+                          value={option.optionImageUrl ?? ""}
+                          disabled={disabled}
+                          onChange={(event) =>
+                            updateOption(index, {
+                              optionImageUrl: event.target.value,
+                            })
+                          }
+                          className={inputClassName}
+                          placeholder="https://… image URL (required)"
+                          required
+                        />
+                        {option.optionImageUrl?.trim() ? (
+                          <img
+                            src={option.optionImageUrl.trim()}
+                            alt=""
+                            className="max-h-28 rounded-xl border border-border object-contain"
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

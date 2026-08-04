@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 
+/** Shared QueryClient defaults (30s stale, single retry). */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

@@ -1,395 +1,660 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { PageHeader } from "@/core/components/PageHeader";
-import { LookupSelect } from "@/core/components/LookupSelect";
-import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
-import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+/**
+ * Question bank dashboard: workflow status and activity filters (kept separate),
+ * category overview, and navigate-only list. Excel import: /questions/import.
+ */
 import {
-  canMutateQuestion,
+  startTransition,
+  useDeferredValue,
+  useMemo,
+  useState,
+} from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ChevronDown,
+  FileSpreadsheet,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
+import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
+import { useLookups } from "@/core/hooks/useLookups";
+import {
+  displayQuestionListStatusLabel,
+  isApprovedQuestionStatus,
+  isArchivedQuestionStatus,
+  isDraftQuestionStatus,
+  isPendingQuestionStatus,
+  isRejectedQuestionStatus,
   type QuestionSummary,
 } from "@/features/questions/domain/questionTypes";
 import {
-  getQuestionStatusTone,
+  getQuestionListStatusKey,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
-import {
-  useDeleteQuestionMutation,
-  useImportQuestionsMutation,
-  useQuestionsQuery,
-} from "@/features/questions/presentation/hooks/useQuestionQueries";
-import {
-  getQuestionImportTemplateUrl,
-} from "@/features/questions/data/questionApi";
-import { readStoredSession } from "@/core/auth/tokenStorage";
+import { QuestionBankStatTile } from "@/features/questions/presentation/components/QuestionBankStatTile";
+import { QuestionCategoryColumn } from "@/features/questions/presentation/components/QuestionCategoryColumn";
+import { useQuestionsQuery } from "@/features/questions/presentation/hooks/useQuestionQueries";
+import { AppCard } from "@/components/ui/app-card";
+import { AppEmptyState } from "@/components/ui/app-empty-state";
+import { AppErrorState } from "@/components/ui/app-error-state";
+import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
+import { AppPageHeader } from "@/components/ui/app-page-header";
+import { AppSearchInput } from "@/components/ui/app-search-input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-function truncateText(value: string, maxLength = 90): string {
-  if (value.length <= maxLength) {
-    return value;
+/**
+ * List filter tiles. Active = Approved + IsActive only.
+ * Approved tile = Approved + inactive (deactivated Approved questions).
+ */
+type ListFilter =
+  | "all"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "archived"
+  | "active";
+
+function matchesListFilter(
+  question: QuestionSummary,
+  filter: ListFilter,
+): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "pending":
+      return (
+        isPendingQuestionStatus(question.status) ||
+        isDraftQuestionStatus(question.status)
+      );
+    case "approved":
+      return isApprovedQuestionStatus(question.status) && !question.isActive;
+    case "rejected":
+      return isRejectedQuestionStatus(question.status);
+    case "archived":
+      return isArchivedQuestionStatus(question.status);
+    case "active":
+      return isApprovedQuestionStatus(question.status) && question.isActive;
+    default:
+      return true;
   }
+}
 
-  return `${value.slice(0, maxLength)}...`;
+function listFilterLabel(filter: ListFilter): string {
+  switch (filter) {
+    case "pending":
+      return "Pending";
+    case "approved":
+      return "Approved";
+    case "rejected":
+      return "Rejected";
+    case "archived":
+      return "Archived";
+    case "active":
+      return "Active";
+    default:
+      return "all";
+  }
+}
+
+/** Read estimated time from list payload (camelCase or PascalCase). */
+function resolveEstimatedTimeSeconds(
+  question: QuestionSummary & { EstimatedTimeSeconds?: number },
+): number | null {
+  const value = question.estimatedTimeSeconds ?? question.EstimatedTimeSeconds;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Tally questions by a numeric foreign key (subject / class / difficulty). */
+function countById(
+  questions: QuestionSummary[],
+  pick: (q: QuestionSummary) => number,
+) {
+  const map = new Map<number, number>();
+  for (const question of questions) {
+    const id = pick(question);
+    if (!id) {
+      continue;
+    }
+    map.set(id, (map.get(id) ?? 0) + 1);
+  }
+  return map;
 }
 
 export function QuestionsPage() {
-  const { user } = useAuth();
-  const [pendingOnly, setPendingOnly] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
+  const navigate = useNavigate();
+
+  const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [subjectId, setSubjectId] = useState<number | "">("");
   const [classId, setClassId] = useState<number | "">("");
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [importErrors, setImportErrors] = useState<
-    Array<{ rowNumber: number; message: string }>
-  >([]);
-  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
-  const [lastDryRunOk, setLastDryRunOk] = useState(false);
+  const [difficultyId, setDifficultyId] = useState<number | "">("");
+  const [categoryExpanded, setCategoryExpanded] = useState(false);
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
   const { data: questions = [], isLoading, error, refetch, isFetching } =
-    useQuestionsQuery({ pendingOnly, activeFilter, subjectId, classId });
+    useQuestionsQuery({
+      pendingOnly: false,
+      activeFilter: "",
+      subjectId: "",
+      classId: "",
+    });
 
-  const deleteQuestion = useDeleteQuestionMutation();
-  const importQuestions = useImportQuestionsMutation();
+  const subjectsQuery = useLookups(LOOKUP_TYPES.SUBJECT);
+  const classesQuery = useLookups(LOOKUP_TYPES.CLASS);
+  const difficultiesQuery = useLookups(LOOKUP_TYPES.DIFFICULTY);
 
-  function canMutateRow(question: QuestionSummary): boolean {
-    if (!user) {
-      return false;
+  const lookupNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const item of subjectsQuery.data ?? []) {
+      map.set(item.id, item.name);
+    }
+    for (const item of classesQuery.data ?? []) {
+      map.set(item.id, item.name);
+    }
+    for (const item of difficultiesQuery.data ?? []) {
+      map.set(item.id, item.name);
+    }
+    return map;
+  }, [subjectsQuery.data, classesQuery.data, difficultiesQuery.data]);
+
+  const bankStats = useMemo(() => {
+    let active = 0;
+    let pending = 0;
+    let approved = 0;
+    let rejected = 0;
+    let archived = 0;
+
+    for (const question of questions) {
+      if (
+        isPendingQuestionStatus(question.status) ||
+        isDraftQuestionStatus(question.status)
+      ) {
+        pending += 1;
+      } else if (isApprovedQuestionStatus(question.status)) {
+        if (question.isActive) {
+          active += 1;
+        } else {
+          approved += 1;
+        }
+      } else if (isRejectedQuestionStatus(question.status)) {
+        rejected += 1;
+      } else if (isArchivedQuestionStatus(question.status)) {
+        archived += 1;
+      }
     }
 
-    return canMutateQuestion({
-      role: user.role,
-      userId: user.id,
-      createdBy: question.createdBy,
-      status: question.status,
+    return {
+      total: questions.length,
+      active,
+      pending,
+      approved,
+      rejected,
+      archived,
+    };
+  }, [questions]);
+
+  /** Questions in the current list filter — category counts follow. */
+  const lensQuestions = useMemo(
+    () => questions.filter((q) => matchesListFilter(q, listFilter)),
+    [questions, listFilter],
+  );
+
+  const categoryColumns = useMemo(() => {
+    const subjectCounts = countById(lensQuestions, (q) => q.subjectId);
+    const classCounts = countById(lensQuestions, (q) => q.classId);
+    const difficultyCounts = countById(lensQuestions, (q) => q.difficultyLevel);
+
+    const mergeLookupCounts = (
+      lookups: Array<{ id: number; name: string }> | undefined,
+      counts: Map<number, number>,
+      sortMode: "labelAsc" | "countDesc" = "countDesc",
+    ) => {
+      const items = new Map<
+        number,
+        { id: number; label: string; count: number }
+      >();
+
+      for (const lookup of lookups ?? []) {
+        items.set(lookup.id, {
+          id: lookup.id,
+          label: lookup.name,
+          count: counts.get(lookup.id) ?? 0,
+        });
+      }
+
+      for (const [id, count] of counts.entries()) {
+        if (!items.has(id)) {
+          items.set(id, {
+            id,
+            label: lookupNameById.get(id) ?? "Unknown",
+            count,
+          });
+        }
+      }
+
+      return [...items.values()].sort((a, b) => {
+        if (sortMode === "labelAsc") {
+          if (a.count === 0 && b.count > 0) return 1;
+          if (b.count === 0 && a.count > 0) return -1;
+          return a.label.localeCompare(b.label, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+        }
+        return b.count - a.count || a.label.localeCompare(b.label);
+      });
+    };
+
+    return {
+      subjects: mergeLookupCounts(subjectsQuery.data, subjectCounts, "labelAsc"),
+      classes: mergeLookupCounts(classesQuery.data, classCounts, "labelAsc"),
+      difficulties: mergeLookupCounts(difficultiesQuery.data, difficultyCounts),
+    };
+  }, [
+    lensQuestions,
+    lookupNameById,
+    subjectsQuery.data,
+    classesQuery.data,
+    difficultiesQuery.data,
+  ]);
+
+  const tableRows = useMemo(() => {
+    return lensQuestions.filter((question) => {
+      if (subjectId !== "" && question.subjectId !== subjectId) {
+        return false;
+      }
+      if (classId !== "" && question.classId !== classId) {
+        return false;
+      }
+      if (difficultyId !== "" && question.difficultyLevel !== difficultyId) {
+        return false;
+      }
+      if (deferredSearch) {
+        const subjectName = lookupNameById.get(question.subjectId) ?? "";
+        const className = lookupNameById.get(question.classId) ?? "";
+        const difficultyName =
+          lookupNameById.get(question.difficultyLevel) ?? "";
+        const statusName = displayQuestionListStatusLabel(
+          question.status,
+          question.isActive,
+        );
+        const haystack =
+          `${question.questionText} ${question.questionType} ${statusName} ${question.createdBy} ${question.createdByName ?? ""} ${subjectName} ${className} ${difficultyName}`.toLowerCase();
+        if (!haystack.includes(deferredSearch)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [
+    lensQuestions,
+    subjectId,
+    classId,
+    difficultyId,
+    deferredSearch,
+    lookupNameById,
+  ]);
+
+  function selectListFilter(next: ListFilter) {
+    startTransition(() => {
+      setListFilter((current) => (current === next ? "all" : next));
     });
   }
 
-  async function handleImport(file: File | null, dryRun: boolean) {
-    if (!file) {
-      return;
-    }
-
-    setActionError(null);
-    setImportMessage(null);
-    setImportErrors([]);
-    setPendingImportFile(file);
-    setLastDryRunOk(false);
-
-    try {
-      const result = await importQuestions.mutateAsync({ file, dryRun });
-      setImportErrors(result.errors);
-
-      if (dryRun) {
-        setImportMessage(
-          result.errorCount === 0
-            ? `Dry run OK — ${file.name} is ready to import (no row errors).`
-            : `Dry run found ${result.errorCount} row error(s). Fix the file or import anyway to skip bad rows.`,
-        );
-        setLastDryRunOk(result.errorCount === 0);
-        if (result.errors.length > 0) {
-          setActionError(
-            result.errors
-              .map((item) => `Row ${item.rowNumber}: ${item.message}`)
-              .join("\n"),
-          );
-        }
-        return;
-      }
-
-      setImportMessage(
-        `Imported ${result.createdCount} draft question(s). ${result.errorCount} row error(s).`,
-      );
-      setLastDryRunOk(false);
-      setPendingImportFile(null);
-      if (result.errors.length > 0) {
-        setActionError(
-          result.errors
-            .map((item) => `Row ${item.rowNumber}: ${item.message}`)
-            .join("\n"),
-        );
-      }
-    } catch (caught) {
-      const apiError = caught as { message?: string };
-      setActionError(apiError.message || "Unable to import questions.");
-      setLastDryRunOk(false);
-    }
+  function clearAllFilters() {
+    startTransition(() => {
+      setListFilter("all");
+      setSubjectId("");
+      setClassId("");
+      setDifficultyId("");
+      setSearch("");
+    });
   }
 
-  async function handleDelete(question: QuestionSummary) {
-    const confirmed = window.confirm(
-      `Delete question #${question.questionId}? This cannot be undone.`,
-    );
+  const hasFilters =
+    listFilter !== "all" ||
+    subjectId !== "" ||
+    classId !== "" ||
+    difficultyId !== "" ||
+    Boolean(search.trim());
 
-    if (!confirmed) {
-      return;
-    }
+  const activeCategoryFilters = [
+    subjectId !== "",
+    classId !== "",
+    difficultyId !== "",
+  ].filter(Boolean).length;
 
-    setActionError(null);
+  const lensSummary =
+    listFilter === "all" ? "all questions" : listFilterLabel(listFilter);
 
-    try {
-      await deleteQuestion.mutateAsync(question.questionId);
-    } catch (caught) {
-      const apiError = caught as { message?: string };
-      setActionError(apiError.message || "Unable to delete question.");
-    }
+  function categoryLabel(question: QuestionSummary) {
+    return {
+      subject: lookupNameById.get(question.subjectId) ?? "Unknown subject",
+      className: lookupNameById.get(question.classId) ?? "Unknown class",
+      difficulty: lookupNameById.get(question.difficultyLevel) ?? "Unknown",
+    };
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title="Question bank"
-        description="Create, review, and manage questions for quizzes and assessments."
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-6 sm:py-8 lg:py-10">
+      <AppPageHeader
+        title="Questions"
+        className="mb-0"
         action={
-          <div className="flex flex-wrap gap-2">
-            <button
+          <div className="flex items-center gap-2">
+            <Button
               type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
               onClick={() => void refetch()}
-              disabled={isFetching || deleteQuestion.isPending}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+              disabled={isFetching}
+              aria-label="Refresh questions"
+              title="Refresh"
             >
-              Refresh
-            </button>
-            <a
-              href={getQuestionImportTemplateUrl()}
-              onClick={(event) => {
-                event.preventDefault();
-                const token = readStoredSession()?.accessToken;
-                void (async () => {
-                  const response = await fetch(getQuestionImportTemplateUrl(), {
-                    headers: token
-                      ? { Authorization: `Bearer ${token}` }
-                      : undefined,
-                  });
-                  const blob = await response.blob();
-                  const url = URL.createObjectURL(blob);
-                  const anchor = document.createElement("a");
-                  anchor.href = url;
-                  anchor.download = "rankup-questions-import-template.xlsx";
-                  anchor.click();
-                  URL.revokeObjectURL(url);
-                })();
-              }}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Import template
-            </a>
-            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-              {importQuestions.isPending ? "Working..." : "Dry run Excel"}
-              <input
-                type="file"
-                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                className="hidden"
-                disabled={importQuestions.isPending}
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  event.target.value = "";
-                  void handleImport(file, true);
-                }}
+              <RefreshCw
+                className={cn("h-4 w-4", isFetching && "animate-spin")}
               />
-            </label>
-            <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-              {importQuestions.isPending ? "Importing..." : "Import Excel"}
-              <input
-                type="file"
-                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                className="hidden"
-                disabled={importQuestions.isPending}
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  event.target.value = "";
-                  void handleImport(file, false);
-                }}
-              />
-            </label>
-            {pendingImportFile && lastDryRunOk ? (
-              <button
-                type="button"
-                disabled={importQuestions.isPending}
-                onClick={() => void handleImport(pendingImportFile, false)}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-70"
-              >
-                Confirm import
-              </button>
-            ) : null}
-            <Link
-              to="/questions/new"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+            </Button>
+            <Button
+              asChild
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 whitespace-nowrap"
             >
-              New question
-            </Link>
+              <Link to="/questions/import">
+                <FileSpreadsheet className="h-4 w-4" />
+                Import
+              </Link>
+            </Button>
+            <Button asChild type="button" size="sm" className="h-9 whitespace-nowrap">
+              <Link to="/questions/new">
+                <Plus className="h-4 w-4" />
+                New question
+              </Link>
+            </Button>
           </div>
         }
       />
 
-      <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-4">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={pendingOnly}
-            onChange={(event) => setPendingOnly(event.target.checked)}
-          />
-          Pending approval only
-        </label>
-
-        <select
-          value={activeFilter}
-          onChange={(event) =>
-            setActiveFilter(event.target.value as "" | "true" | "false")
-          }
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          disabled={pendingOnly}
-        >
-          <option value="">All active states</option>
-          <option value="true">Active only</option>
-          <option value="false">Inactive only</option>
-        </select>
-
-        <LookupSelect
-          label="Subject"
-          type={LOOKUP_TYPES.SUBJECT}
-          value={subjectId}
-          allowEmpty
-          emptyLabel="All subjects"
-          disabled={pendingOnly}
-          onChange={setSubjectId}
-        />
-
-        <LookupSelect
-          label="Class"
-          type={LOOKUP_TYPES.CLASS}
-          value={classId}
-          allowEmpty
-          emptyLabel="All classes"
-          disabled={pendingOnly}
-          onChange={setClassId}
-        />
-      </section>
-
-      {error || actionError ? (
-        <div className="mb-4 whitespace-pre-wrap rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error?.message ?? actionError}
-        </div>
-      ) : null}
-
-      {importMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {importMessage}
-        </div>
-      ) : null}
-
-      {importErrors.length > 0 ? (
-        <div className="mb-4 max-h-48 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="mb-2 font-semibold">
-            Import row errors ({importErrors.length})
-          </p>
-          <ul className="list-disc space-y-1 pl-5">
-            {importErrors.map((item) => (
-              <li key={`${item.rowNumber}-${item.message}`}>
-                Row {item.rowNumber}: {item.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {isLoading ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            Loading questions...
+      {/* Status tiles: Pending / Approved / Rejected / Archived / Active */}
+      <AppCard padded className="space-y-3">
+        {hasFilters ? (
+          <div className="flex items-center justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-muted-foreground"
+              onClick={clearAllFilters}
+            >
+              Clear filters
+            </Button>
           </div>
-        ) : questions.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No questions found for the selected filters.
+        ) : null}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 sm:gap-2.5">
+          <QuestionBankStatTile
+            label="Total"
+            value={bankStats.total}
+            status="active"
+            active={listFilter === "all"}
+            onClick={() => selectListFilter("all")}
+          />
+          <QuestionBankStatTile
+            label="Pending"
+            value={bankStats.pending}
+            status="pending"
+            active={listFilter === "pending"}
+            onClick={() => selectListFilter("pending")}
+          />
+          <QuestionBankStatTile
+            label="Approved"
+            value={bankStats.approved}
+            status="approved"
+            active={listFilter === "approved"}
+            onClick={() => selectListFilter("approved")}
+          />
+          <QuestionBankStatTile
+            label="Rejected"
+            value={bankStats.rejected}
+            status="rejected"
+            active={listFilter === "rejected"}
+            onClick={() => selectListFilter("rejected")}
+          />
+          <QuestionBankStatTile
+            label="Archived"
+            value={bankStats.archived}
+            status="deactivated"
+            active={listFilter === "archived"}
+            onClick={() => selectListFilter("archived")}
+          />
+          <QuestionBankStatTile
+            label="Active"
+            value={bankStats.active}
+            status="active"
+            active={listFilter === "active"}
+            onClick={() => selectListFilter("active")}
+          />
+        </div>
+      </AppCard>
+
+      {/* Category overview — full picture with counts */}
+      <AppCard padded className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Subjects · Classes · Difficulties
+              {activeCategoryFilters > 0
+                ? ` · ${activeCategoryFilters} selected`
+                : null}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Showing counts for {lensSummary}. Tap a row to filter the list.
+            </p>
+          </div>
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <AppSearchInput
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search questions…"
+              containerClassName="min-w-0 flex-1 sm:max-w-xs"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={() => setCategoryExpanded((expanded) => !expanded)}
+              aria-expanded={categoryExpanded}
+              aria-controls="question-category-overview"
+              aria-label={
+                categoryExpanded
+                  ? "Hide category overview"
+                  : "Show category overview"
+              }
+              title={
+                categoryExpanded
+                  ? "Hide category overview"
+                  : "Show category overview"
+              }
+            >
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 transition-transform duration-200",
+                  categoryExpanded && "rotate-180",
+                )}
+              />
+            </Button>
+          </div>
+        </div>
+
+        {categoryExpanded ? (
+          <div
+            id="question-category-overview"
+            className="grid gap-3 lg:grid-cols-3 lg:gap-4"
+          >
+            <QuestionCategoryColumn
+              title="Subjects"
+              accent="primary"
+              items={categoryColumns.subjects}
+              selectedId={subjectId}
+              loading={subjectsQuery.isLoading}
+              emptyLabel="No subjects configured yet."
+              onSelect={(id) => startTransition(() => setSubjectId(id))}
+            />
+            <QuestionCategoryColumn
+              title="Classes"
+              accent="approved"
+              items={categoryColumns.classes}
+              selectedId={classId}
+              loading={classesQuery.isLoading}
+              emptyLabel="No classes configured yet."
+              onSelect={(id) => startTransition(() => setClassId(id))}
+            />
+            <QuestionCategoryColumn
+              title="Difficulties"
+              accent="pending"
+              items={categoryColumns.difficulties}
+              selectedId={difficultyId}
+              loading={difficultiesQuery.isLoading}
+              emptyLabel="No difficulty levels configured yet."
+              onSelect={(id) => startTransition(() => setDifficultyId(id))}
+            />
+          </div>
+        ) : null}
+      </AppCard>
+
+      {error ? (
+        <AppErrorState
+          message={error.message}
+          onRetry={() => void refetch()}
+        />
+      ) : null}
+
+      {/* Question list — navigate only; actions live on detail */}
+      <AppCard padded={false} className="overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+          <p className="text-sm font-medium text-foreground">
+            {tableRows.length} question{tableRows.length === 1 ? "" : "s"}
+            {listFilter !== "all" ? (
+              <span className="ml-2 font-normal text-muted-foreground">
+                · {lensSummary}
+              </span>
+            ) : null}
+          </p>
+        </div>
+
+        {isLoading ? (
+          <div className="p-4 sm:p-5">
+            <AppLoadingSkeleton variant="table" count={5} />
+          </div>
+        ) : tableRows.length === 0 ? (
+          <div className="p-4 sm:p-5">
+            <AppEmptyState
+              title="No questions match these filters"
+              description="Clear filters or create a new question to get started."
+              actionLabel="New question"
+              onAction={() => navigate("/questions/new")}
+            />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Question
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Type
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Marks
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {questions.map((question) => (
-                  <tr key={question.questionId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/questions/${question.questionId}`}
-                        className="font-medium text-brand-700 hover:text-brand-800"
+          <div>
+            <div className="hidden border-b border-border bg-muted/40 px-4 py-2.5 sm:grid sm:grid-cols-8 sm:gap-3 sm:px-5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Subject
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Class
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Difficulty
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Type
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Status
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Marks
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Time sec
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Visibility
+              </p>
+            </div>
+
+            <ul className="divide-y divide-border">
+              {tableRows.map((question) => {
+                const cat = categoryLabel(question);
+                const visibility =
+                  question.visibility && question.visibility !== "None"
+                    ? question.visibility
+                    : "—";
+                const timeSeconds = resolveEstimatedTimeSeconds(question);
+                const timeLabel =
+                  timeSeconds != null ? `${timeSeconds} sec` : "—";
+
+                return (
+                  <li key={question.questionId}>
+                    <Link
+                      to={`/questions/${question.questionId}`}
+                      className="block px-4 py-3.5 transition hover:bg-muted/30 sm:px-5"
+                    >
+                      <p
+                        className="truncate text-sm font-semibold text-foreground"
+                        title={question.questionText}
                       >
-                        {truncateText(question.questionText)}
-                      </Link>
-                      <p className="mt-1 text-xs text-slate-500">
-                        #{question.questionId} · {question.createdBy}
+                        {question.questionText}
                       </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {question.questionType}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        label={
-                          question.isActive
-                            ? question.status
-                            : `${question.status} (inactive)`
-                        }
-                        tone={getQuestionStatusTone(
-                          question.status,
-                          question.isActive,
-                        )}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {question.marks}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <Link
-                          to={`/questions/${question.questionId}`}
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                          View
-                        </Link>
-                        {canMutateRow(question) ? (
-                          <>
-                            <Link
-                              to={`/questions/${question.questionId}/edit`}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
-                              Edit
-                            </Link>
-                            <button
-                              type="button"
-                              disabled={deleteQuestion.isPending}
-                              onClick={() => void handleDelete(question)}
-                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        ) : null}
+
+                      <div className="mt-2 grid grid-cols-2 items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-8">
+                        <p className="min-w-0 truncate font-medium text-foreground">
+                          {cat.subject}
+                        </p>
+                        <p className="min-w-0 truncate">{cat.className}</p>
+                        <p className="min-w-0 truncate">{cat.difficulty}</p>
+                        <p className="min-w-0 truncate">
+                          {question.questionType}
+                        </p>
+                        <div className="min-w-0">
+                          <StatusBadge
+                            label={displayQuestionListStatusLabel(
+                              question.status,
+                              question.isActive,
+                            )}
+                            status={getQuestionListStatusKey(
+                              question.status,
+                              question.isActive,
+                            )}
+                          />
+                        </div>
+                        {/* Mobile: marks / time / visibility (no labels) */}
+                        <p className="min-w-0 truncate tabular-nums sm:hidden">
+                          {question.marks} / {timeLabel} / {visibility}
+                        </p>
+                        {/* Desktop: separate columns */}
+                        <p className="hidden min-w-0 truncate tabular-nums sm:block">
+                          {question.marks}
+                        </p>
+                        <p className="hidden min-w-0 truncate tabular-nums sm:block">
+                          {timeLabel}
+                        </p>
+                        <p className="hidden min-w-0 truncate sm:block">
+                          {visibility}
+                        </p>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
-      </div>
+      </AppCard>
     </div>
   );
 }

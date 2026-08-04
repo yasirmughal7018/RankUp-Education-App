@@ -34,6 +34,8 @@ export interface QuizMonitoringStudent {
   isReviewDone: boolean;
   status: string;
   lastSubmittedAt: string | null;
+  focusLossCount?: number;
+  clipboardPasteCount?: number;
 }
 
 export interface QuizMonitoring {
@@ -57,6 +59,7 @@ export interface AttemptReviewQuestion {
   submittedText: string | null;
   parentFeedback: string | null;
   requiresReview: boolean;
+  aiFeedback?: string | null;
 }
 
 export interface AttemptReview {
@@ -73,8 +76,11 @@ export interface AttemptReview {
   isReviewDone: boolean;
   submittedAt: string;
   questions: AttemptReviewQuestion[];
+  focusLossCount?: number;
+  clipboardPasteCount?: number;
 }
 
+/** Fallback to student id when name missing. */
 export function displayStudentName(
   studentName: string | null | undefined,
   studentId: number,
@@ -89,10 +95,31 @@ export interface MarkAttemptAnswerInput {
   feedback?: string | null;
 }
 
+/** Humanize snake_case monitor status. */
 export function formatMonitorStatus(status: string): string {
   return status.replace(/_/g, " ");
 }
 
+/** Compact integrity counters for monitor/review chips. */
+export function formatIntegrityCounters(
+  focusLossCount = 0,
+  clipboardPasteCount = 0,
+): string | null {
+  if (focusLossCount <= 0 && clipboardPasteCount <= 0) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (focusLossCount > 0) {
+    parts.push(`Focus ${focusLossCount}`);
+  }
+  if (clipboardPasteCount > 0) {
+    parts.push(`Paste ${clipboardPasteCount}`);
+  }
+  return parts.join(" · ");
+}
+
+/** Badge color tone from monitor status string. */
 export function getMonitorStatusTone(
   status: string,
 ): "default" | "success" | "warning" | "danger" {

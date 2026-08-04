@@ -3,6 +3,7 @@ import 'package:rankup_education/core/api/api_client.dart';
 import 'package:rankup_education/features/product_stubs/data/product_stub_models.dart';
 import 'package:rankup_education/features/product_stubs/data/product_stub_remote_datasource.dart';
 
+/// Riverpod providers for stub-backed product feature pages.
 final productStubRemoteDataSourceProvider =
     Provider<ProductStubRemoteDataSource>((ref) {
   return ProductStubRemoteDataSource(ref.watch(dioProvider));

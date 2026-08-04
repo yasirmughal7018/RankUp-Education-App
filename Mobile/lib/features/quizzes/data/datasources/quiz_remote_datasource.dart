@@ -6,6 +6,7 @@ import 'package:rankup_education/features/quizzes/data/models/quiz_attempt_model
 import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
+/// REST client for quiz list, attempt, and grading endpoints.
 class QuizRemoteDataSource {
   const QuizRemoteDataSource(this._dio);
 
@@ -45,11 +46,15 @@ class QuizRemoteDataSource {
   Future<QuizAttemptSessionModel> startAttempt({
     required String quizId,
     required String deviceId,
+    bool instructionsAcknowledged = false,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/quizzes/$quizId/attempts',
-        data: {'deviceId': deviceId},
+        data: {
+          'deviceId': deviceId,
+          'instructionsAcknowledged': instructionsAcknowledged,
+        },
       );
       return _readObject(response.data, QuizAttemptSessionModel.fromJson);
     } on DioException catch (error) {
@@ -62,6 +67,9 @@ class QuizRemoteDataSource {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     int? timeSpentSeconds,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+    String? deviceId,
   }) async {
     try {
       final response = await _dio.put<Map<String, dynamic>>(
@@ -71,6 +79,11 @@ class QuizRemoteDataSource {
             for (final answer in answers) _answerPayload(answer),
           ],
           if (timeSpentSeconds != null) 'timeSpentSeconds': timeSpentSeconds,
+          if (focusLossDelta != null && focusLossDelta > 0)
+            'focusLossDelta': focusLossDelta,
+          if (clipboardPasteDelta != null && clipboardPasteDelta > 0)
+            'clipboardPasteDelta': clipboardPasteDelta,
+          if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
         },
       );
       _ensureSuccess(response.data);
@@ -84,6 +97,8 @@ class QuizRemoteDataSource {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     required int timeSpentSeconds,
+    bool isAutoSubmit = false,
+    String? deviceId,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -93,6 +108,8 @@ class QuizRemoteDataSource {
             for (final answer in answers) _answerPayload(answer),
           ],
           'timeSpentSeconds': timeSpentSeconds,
+          'isAutoSubmit': isAutoSubmit,
+          if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
         },
       );
       return _readObject(response.data, QuizAttemptResultModel.fromJson);
@@ -110,6 +127,54 @@ class QuizRemoteDataSource {
         '/quizzes/$quizId/attempts/$attemptId/result',
       );
       return _readObject(response.data, QuizAttemptResultModel.fromJson);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
+  Future<OfflineQuizSyncResult> syncOfflineAttempt({
+    required String quizId,
+    required String attemptId,
+    required String clientSyncId,
+    required List<QuizAnswerSubmission> answers,
+    required int timeSpentSeconds,
+    required String deviceId,
+    bool submit = false,
+    bool isAutoSubmit = false,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/quizzes/$quizId/attempts/$attemptId/sync',
+        data: {
+          'clientSyncId': clientSyncId,
+          'answers': [
+            for (final answer in answers) _answerPayload(answer),
+          ],
+          'timeSpentSeconds': timeSpentSeconds,
+          'deviceId': deviceId,
+          'submit': submit,
+          'isAutoSubmit': isAutoSubmit,
+          if (focusLossDelta != null && focusLossDelta > 0)
+            'focusLossDelta': focusLossDelta,
+          if (clipboardPasteDelta != null && clipboardPasteDelta > 0)
+            'clipboardPasteDelta': clipboardPasteDelta,
+        },
+      );
+
+      return _readObject(response.data, (json) {
+        final resultJson = json['result'];
+        return OfflineQuizSyncResult(
+          attemptId: json['attemptId']?.toString() ?? attemptId,
+          alreadySynced: json['alreadySynced'] == true,
+          submitted: json['submitted'] == true,
+          clientSyncId: json['clientSyncId']?.toString() ?? clientSyncId,
+          result: resultJson is Map<String, dynamic>
+              ? QuizAttemptResultModel.fromJson(resultJson)
+              : null,
+        );
+      });
     } on DioException catch (error) {
       throw mapDioException(error);
     }
@@ -143,6 +208,10 @@ class QuizRemoteDataSource {
       if (answer.submittedText != null &&
           answer.submittedText!.trim().isNotEmpty)
         'submittedText': answer.submittedText,
+      if (answer.isMarkedForReview != null)
+        'isMarkedForReview': answer.isMarkedForReview,
+      if (answer.timeSpentSeconds != null && answer.timeSpentSeconds! > 0)
+        'timeSpentSeconds': answer.timeSpentSeconds,
     };
   }
 

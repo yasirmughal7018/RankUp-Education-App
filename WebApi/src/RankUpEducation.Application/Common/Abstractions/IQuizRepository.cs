@@ -1,4 +1,5 @@
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Common.Abstractions;
@@ -36,6 +37,10 @@ public interface IQuizRepository
 
     Task<IReadOnlyList<QuizListItem>> ListForSchoolAsync(
         int? schoolId,
+        int? campusId,
+        long? viewerUserId,
+        bool includeAllDrafts,
+        bool includeAllSchools,
         string? search,
         string? subject,
         string? grade,
@@ -43,6 +48,8 @@ public interface IQuizRepository
 
     Task<IReadOnlyList<PendingQuizApprovalItem>> ListPendingApprovalAsync(
         int? schoolId,
+        int? campusId,
+        bool includeSchoolApproved,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<QuizListItem>> ListForCreatorAsync(
@@ -55,6 +62,12 @@ public interface IQuizRepository
     Task<QuizDetailItem?> GetDetailForStudentAsync(long quizId, long studentId, CancellationToken cancellationToken);
 
     Task<QuizDetailItem?> GetDetailForCreatorAsync(long quizId, long creatorUserId, CancellationToken cancellationToken);
+
+    /// <summary>Manage detail by quiz id (ownership already checked by the service).</summary>
+    Task<QuizDetailItem?> GetDetailForManageAsync(long quizId, CancellationToken cancellationToken);
+
+    /// <summary>Appends one workflow event to the quiz's app_approval trail.</summary>
+    Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken);
 
     Task<bool> HasStartedAssignmentsAsync(long quizId, DateTimeOffset now, CancellationToken cancellationToken);
 

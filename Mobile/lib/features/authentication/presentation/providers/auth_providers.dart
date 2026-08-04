@@ -12,6 +12,7 @@ import 'package:rankup_education/features/authentication/data/repositories/role_
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 import 'package:rankup_education/features/authentication/presentation/controllers/auth_controller.dart';
 
+/// Selects API or mock auth repository based on environment flags.
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final environment = ref.watch(appEnvironmentProvider);
   final tokenStore = ref.watch(tokenStoreProvider);
@@ -35,6 +36,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   );
 });
 
+/// Global auth session state shared by router and screens.
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
   (ref) {
     return AuthController(

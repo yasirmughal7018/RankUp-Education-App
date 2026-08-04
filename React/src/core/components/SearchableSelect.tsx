@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import { cn } from "@/lib/utils";
 
 export interface SearchableSelectOption {
   value: string;
@@ -18,8 +20,10 @@ interface SearchableSelectProps {
   className?: string;
 }
 
-const triggerClassName =
-  "flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-70";
+const triggerClassName = cn(
+  FORM_FIELD_CLASS,
+  "flex items-center justify-between gap-2 text-left disabled:bg-muted",
+);
 
 /**
  * Searchable single-select combobox (filter-as-you-type).
@@ -159,23 +163,23 @@ export function SearchableSelect({
         }}
         onKeyDown={handleKeyDown}
       >
-        <span className={selected ? "text-slate-900" : "text-slate-500"}>
+        <span className={selected ? "text-foreground" : "text-muted-foreground"}>
           {selected?.label ?? placeholder}
         </span>
-        <span className="text-slate-400" aria-hidden="true">
+        <span className="text-muted-foreground" aria-hidden="true">
           ▾
         </span>
       </button>
 
       {open ? (
-        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-          <div className="border-b border-slate-100 p-2">
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
+          <div className="border-b border-border p-2">
             <input
               ref={searchRef}
               type="search"
               value={query}
               placeholder="Type to search..."
-              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2"
+              className={cn(FORM_FIELD_CLASS, "rounded-md py-1.5")}
               onChange={(event) => {
                 setQuery(event.target.value);
                 setHighlightIndex(0);

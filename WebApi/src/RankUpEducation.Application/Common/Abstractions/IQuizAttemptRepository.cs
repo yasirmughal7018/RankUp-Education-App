@@ -9,6 +9,14 @@ public interface IQuizAttemptRepository
 
     Task AddAttemptQuestionsAsync(IReadOnlyList<QuizAttemptQuestion> attemptQuestions, CancellationToken cancellationToken);
 
+    Task AddAttemptQuestionOptionsAsync(
+        IReadOnlyList<QuizAttemptQuestionOption> options,
+        CancellationToken cancellationToken);
+
+    Task AddAttemptAcceptedAnswersAsync(
+        IReadOnlyList<QuizAttemptAcceptedAnswer> answers,
+        CancellationToken cancellationToken);
+
     Task AddAttemptAnswersAsync(IReadOnlyList<QuizAttemptAnswer> answers, CancellationToken cancellationToken);
 
     Task<QuizAttempt?> GetInProgressAttemptAsync(
@@ -39,4 +47,6 @@ public interface IQuizAttemptRepository
     Task RemoveAttemptAnswersAsync(long attemptQuestionId, CancellationToken cancellationToken);
 
     Task<bool> IsSubmittedAttemptAsync(long attemptId, CancellationToken cancellationToken);
+
+    Task<QuizAttempt?> GetAttemptByClientSyncIdAsync(string clientSyncId, CancellationToken cancellationToken);
 }

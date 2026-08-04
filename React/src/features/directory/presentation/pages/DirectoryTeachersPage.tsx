@@ -1,15 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
+import { Pencil, UserCheck, UserPlus, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
-import { PageHeader } from "@/core/components/PageHeader";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
+import { AppSearchInput } from "@/components/ui/app-search-input";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
-  ActiveStatusFilter,
   CreateDirectoryTeacherInput,
   DirectoryTeacher,
   UpdateDirectoryTeacherInput,
 } from "@/features/directory/domain/directoryTypes";
+import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import {
+  DirectoryBulkBar,
+  DirectoryEntityCard,
+  DirectoryFilterPanel,
+  DirectoryFlash,
+  DirectoryIconAction,
+  DirectoryListPanel,
+  DirectoryMobileList,
+  DirectoryPageShell,
+  DirectoryTable,
+  DirectoryTableHead,
+  DirectoryTd,
+  DirectoryTh,
+  directorySelectClassName,
+} from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { TeacherFormDialog } from "@/features/directory/presentation/components/TeacherFormDialog";
 import {
@@ -20,12 +38,19 @@ import {
   useDirectoryCampusesQuery,
   useDirectorySchoolsQuery,
   useDirectoryTeachersQuery,
+  useGrantParentRoleToTeacherMutation,
   useUpdateTeacherMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
-import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import {
+  DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS,
+  matchesDirectoryAccountStatusFilter,
+  type DirectoryAccountStatusFilter,
+} from "@/features/directory/presentation/utils/accountStatus";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
+/** Paginated teacher directory with school/campus filters and CRUD actions. */
 export function DirectoryTeachersPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
@@ -36,12 +61,15 @@ export function DirectoryTeachersPage() {
   const [search, setSearch] = useState(initialSearch);
   const [schoolId, setSchoolId] = useState("");
   const [campusId, setCampusId] = useState("");
-  const [activeFilter, setActiveFilter] = useState<ActiveStatusFilter>("all");
+  const [activeFilter, setActiveFilter] =
+    useState<DirectoryAccountStatusFilter>("all");
   const [pageNumber, setPageNumber] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [teacherDialog, setTeacherDialog] = useState<
     "create" | DirectoryTeacher | null
   >(null);
+  const [grantParentTarget, setGrantParentTarget] =
+    useState<DirectoryTeacher | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -73,17 +101,20 @@ export function DirectoryTeachersPage() {
   const activateMutation = useActivateTeacherMutation();
   const deactivateMutation = useDeactivateTeacherMutation();
   const bulkDeactivateMutation = useBulkDeactivateTeachersMutation();
+  const grantParentMutation = useGrantParentRoleToTeacherMutation();
 
-  const teachers = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
   const visibleTeachers = useMemo(() => {
-    if (activeFilter === "all") {
-      return teachers;
-    }
-    const wantActive = activeFilter === "active";
-    return teachers.filter((teacher) => teacher.isActive === wantActive);
-  }, [teachers, activeFilter]);
+    const items = data?.items ?? [];
+    return items.filter((teacher) =>
+      matchesDirectoryAccountStatusFilter(
+        teacher.accountStatus,
+        teacher.isActive,
+        activeFilter,
+      ),
+    );
+  }, [data?.items, activeFilter]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -99,7 +130,8 @@ export function DirectoryTeachersPage() {
     updateMutation.isPending ||
     activateMutation.isPending ||
     deactivateMutation.isPending ||
-    bulkDeactivateMutation.isPending;
+    bulkDeactivateMutation.isPending ||
+    grantParentMutation.isPending;
 
   const allVisibleSelected =
     visibleTeachers.length > 0 &&
@@ -200,47 +232,69 @@ export function DirectoryTeachersPage() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title="Teachers"
-        description="Search and manage teachers with school and campus filters."
-        action={
-          <div className="flex flex-wrap gap-2">
-            {canManage ? (
-              <button
-                type="button"
-                onClick={() => {
-                  clearMessages();
-                  setTeacherDialog("create");
-                }}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-              >
-                Create teacher
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Refresh
-            </button>
-            <Link
-              to="/admin/directory"
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Directory home
-            </Link>
-          </div>
-        }
-      />
+  function rowActions(teacher: DirectoryTeacher) {
+    if (!canManage) {
+      return null;
+    }
+    const hasParentRole = (teacher.roles ?? []).includes("Parent");
+    return (
+      <>
+        <DirectoryIconAction
+          icon={Pencil}
+          label={`Edit ${teacher.fullName}`}
+          disabled={busy}
+          onClick={() => {
+            clearMessages();
+            setTeacherDialog(teacher);
+          }}
+        />
+        {!hasParentRole ? (
+          <DirectoryIconAction
+            icon={UserPlus}
+            label={`Add Parent role to ${teacher.fullName}`}
+            disabled={busy}
+            onClick={() => {
+              clearMessages();
+              setGrantParentTarget(teacher);
+            }}
+          />
+        ) : null}
+        <DirectoryIconAction
+          icon={teacher.isActive ? UserX : UserCheck}
+          label={
+            teacher.isActive
+              ? `Deactivate ${teacher.fullName}`
+              : `Activate ${teacher.fullName}`
+          }
+          disabled={busy}
+          onClick={() => void toggleActive(teacher)}
+        />
+      </>
+    );
+  }
 
-      <section className="mb-6 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="search"
+  return (
+    <DirectoryPageShell
+      title="Teachers"
+      primaryAction={
+        canManage ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 whitespace-nowrap"
+            onClick={() => {
+              clearMessages();
+              setTeacherDialog("create");
+            }}
+          >
+            Create teacher
+          </Button>
+        ) : null
+      }
+    >
+      <DirectoryFilterPanel>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <AppSearchInput
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
             onKeyDown={(event) => {
@@ -249,21 +303,13 @@ export function DirectoryTeachersPage() {
               }
             }}
             placeholder="Search teachers..."
-            className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            containerClassName="min-w-0 flex-1 lg:min-w-[200px]"
           />
-          <button
-            type="button"
-            onClick={applyFilters}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-          >
-            Search
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
           <select
             value={schoolId}
             onChange={(event) => setSchoolId(event.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className={cn(directorySelectClassName, "lg:w-44")}
+            aria-label="Filter by school"
           >
             <option value="">All schools</option>
             {schools.map((school) => (
@@ -279,7 +325,8 @@ export function DirectoryTeachersPage() {
               setPageNumber(1);
             }}
             disabled={!selectedSchoolId}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-60"
+            className={cn(directorySelectClassName, "lg:w-44")}
+            aria-label="Filter by campus"
           >
             <option value="">All campuses</option>
             {campuses.map((campus) => (
@@ -291,172 +338,173 @@ export function DirectoryTeachersPage() {
           <select
             value={activeFilter}
             onChange={(event) =>
-              setActiveFilter(event.target.value as ActiveStatusFilter)
+              setActiveFilter(
+                event.target.value as DirectoryAccountStatusFilter,
+              )
             }
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className={cn(directorySelectClassName, "lg:w-40")}
+            aria-label="Filter by status"
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            {DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
-        </div>
-      </section>
-
-      {error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error.message}
-        </div>
-      ) : null}
-
-      {actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {actionError}
-        </div>
-      ) : null}
-
-      {successMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {successMessage}
-        </div>
-      ) : null}
-
-      {canManage && selectedIds.size > 0 ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <span className="text-slate-700">{selectedIds.size} selected</span>
-          <button
+          <Button
             type="button"
-            onClick={() => void handleBulkDeactivate()}
-            disabled={busy}
-            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
+            className="h-11 shrink-0 sm:h-10"
+            onClick={applyFilters}
           >
-            Bulk deactivate
-          </button>
+            Search
+          </Button>
         </div>
-      ) : null}
+      </DirectoryFilterPanel>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {isLoading ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            Loading teachers...
-          </div>
-        ) : visibleTeachers.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No teachers found.
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    {canManage ? (
-                      <th className="px-4 py-3 text-left">
-                        <input
-                          type="checkbox"
-                          checked={allVisibleSelected}
-                          onChange={toggleSelectAll}
-                          aria-label="Select all teachers on this page"
-                          className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                        />
-                      </th>
-                    ) : null}
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Username
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Code
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      School / Campus
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-600">
-                      Status
-                    </th>
-                    {canManage ? (
-                      <th className="px-4 py-3 text-right font-medium text-slate-600">
-                        Actions
-                      </th>
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {visibleTeachers.map((teacher) => (
-                    <tr key={teacher.teacherId} className="hover:bg-slate-50">
-                      {canManage ? (
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(teacher.teacherId)}
-                            onChange={() => toggleSelect(teacher.teacherId)}
-                            aria-label={`Select ${teacher.fullName}`}
-                            className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                          />
-                        </td>
-                      ) : null}
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {teacher.fullName}
-                        <p className="text-xs font-normal text-slate-500">
-                          ID {teacher.teacherId}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {teacher.username}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {teacher.teacherCode}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {teacher.schoolId} / {teacher.campusId}
-                      </td>
-                      <td className="px-4 py-3">
-                        <AccountStatusBadge
-                          accountStatus={teacher.accountStatus}
-                          isActive={teacher.isActive}
-                        />
-                      </td>
-                      {canManage ? (
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                clearMessages();
-                                setTeacherDialog(teacher);
-                              }}
-                              disabled={busy}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void toggleActive(teacher)}
-                              disabled={busy}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                            >
-                              {teacher.isActive ? "Deactivate" : "Activate"}
-                            </button>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <DirectoryPagination
-              pageNumber={pageNumber}
-              pageSize={PAGE_SIZE}
-              totalCount={totalCount}
-              onPageChange={setPageNumber}
-              disabled={isFetching}
+      <DirectoryFlash
+        error={error?.message ?? actionError}
+        success={successMessage}
+        onRetry={error ? () => void refetch() : undefined}
+      />
+
+      <DirectoryBulkBar count={canManage ? selectedIds.size : 0}>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          disabled={busy}
+          onClick={() => void handleBulkDeactivate()}
+        >
+          Bulk deactivate
+        </Button>
+      </DirectoryBulkBar>
+
+      <DirectoryListPanel
+        loading={isLoading}
+        empty={visibleTeachers.length === 0}
+        emptyTitle="No teachers found"
+        emptyDescription="Try a different search or clear filters."
+        emptyActionLabel={canManage ? "Create teacher" : undefined}
+        onEmptyAction={
+          canManage
+            ? () => {
+                clearMessages();
+                setTeacherDialog("create");
+              }
+            : undefined
+        }
+        footer={
+          <DirectoryPagination
+            pageNumber={pageNumber}
+            pageSize={PAGE_SIZE}
+            totalCount={totalCount}
+            onPageChange={setPageNumber}
+            disabled={isFetching}
+          />
+        }
+      >
+        <DirectoryMobileList>
+          {visibleTeachers.map((teacher) => (
+            <DirectoryEntityCard
+              key={teacher.teacherId}
+              selected={selectedIds.has(teacher.teacherId)}
+              onSelect={
+                canManage ? () => toggleSelect(teacher.teacherId) : undefined
+              }
+              title={teacher.fullName}
+              subtitle={
+                (teacher.roles?.length ?? 0) > 1
+                  ? `${teacher.username} · ${teacher.roles?.join(", ")}`
+                  : teacher.username
+              }
+              badge={
+                <AccountStatusBadge
+                  accountStatus={teacher.accountStatus}
+                  isActive={teacher.isActive}
+                />
+              }
+              meta={
+                <>
+                  <p>Code {teacher.teacherCode}</p>
+                  <p>
+                    {teacher.schoolName} · {teacher.campusName}
+                  </p>
+                </>
+              }
+              actions={rowActions(teacher)}
             />
-          </>
-        )}
-      </div>
+          ))}
+        </DirectoryMobileList>
+
+        <DirectoryTable>
+          <DirectoryTableHead>
+            {canManage ? (
+              <DirectoryTh>
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all teachers on this page"
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+              </DirectoryTh>
+            ) : null}
+            <DirectoryTh>Name</DirectoryTh>
+            <DirectoryTh>Code</DirectoryTh>
+            <DirectoryTh>School / Campus</DirectoryTh>
+            <DirectoryTh>Status</DirectoryTh>
+            {canManage ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
+          </DirectoryTableHead>
+          <tbody className="divide-y divide-border">
+            {visibleTeachers.map((teacher) => (
+              <tr
+                key={teacher.teacherId}
+                className="transition hover:bg-muted/40"
+              >
+                {canManage ? (
+                  <DirectoryTd>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(teacher.teacherId)}
+                      onChange={() => toggleSelect(teacher.teacherId)}
+                      aria-label={`Select ${teacher.fullName}`}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    />
+                  </DirectoryTd>
+                ) : null}
+                <DirectoryTd>
+                  <p className="font-medium">{teacher.fullName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {teacher.username}
+                  </p>
+                  {(teacher.roles?.length ?? 0) > 1 ? (
+                    <p className="mt-0.5 text-xs font-medium text-primary">
+                      Roles: {teacher.roles?.join(", ")}
+                    </p>
+                  ) : null}
+                </DirectoryTd>
+                <DirectoryTd>{teacher.teacherCode}</DirectoryTd>
+                <DirectoryTd className="text-muted-foreground">
+                  {teacher.schoolName} / {teacher.campusName}
+                </DirectoryTd>
+                <DirectoryTd>
+                  <AccountStatusBadge
+                    accountStatus={teacher.accountStatus}
+                    isActive={teacher.isActive}
+                  />
+                </DirectoryTd>
+                {canManage ? (
+                  <DirectoryTd align="right">
+                    <div className="flex justify-end gap-2">
+                      {rowActions(teacher)}
+                    </div>
+                  </DirectoryTd>
+                ) : null}
+              </tr>
+            ))}
+          </tbody>
+        </DirectoryTable>
+      </DirectoryListPanel>
 
       {teacherDialog ? (
         <TeacherFormDialog
@@ -467,6 +515,42 @@ export function DirectoryTeachersPage() {
           onSubmit={handleFormSubmit}
         />
       ) : null}
-    </div>
+
+      <AppConfirmDialog
+        open={grantParentTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !grantParentMutation.isPending) {
+            setGrantParentTarget(null);
+          }
+        }}
+        title="Add Parent role"
+        description={
+          grantParentTarget
+            ? `Add the Parent role to ${grantParentTarget.fullName}? They will keep Teacher access and can switch roles after login. Students cannot combine roles.`
+            : ""
+        }
+        confirmLabel="Add Parent role"
+        loading={grantParentMutation.isPending}
+        onConfirm={() => {
+          if (!grantParentTarget) {
+            return;
+          }
+          void (async () => {
+            try {
+              await grantParentMutation.mutateAsync(grantParentTarget.teacherId);
+              setSuccessMessage(
+                `Parent role added to ${grantParentTarget.fullName}.`,
+              );
+              setGrantParentTarget(null);
+            } catch (err) {
+              const apiError = err as ApiError;
+              setActionError(
+                apiError.message ?? "Unable to add Parent role.",
+              );
+            }
+          })();
+        }}
+      />
+    </DirectoryPageShell>
   );
 }

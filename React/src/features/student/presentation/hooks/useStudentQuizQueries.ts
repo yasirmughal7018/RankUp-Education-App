@@ -1,3 +1,4 @@
+/** React Query hooks for student quiz taking flow. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as quizApi from "@/features/quizzes/data/quizApi";
@@ -7,6 +8,7 @@ import type {
   SubmitQuizAnswer,
 } from "@/features/student/domain/studentQuizTypes";
 
+/** Assigned quizzes for the signed-in student. */
 export function useStudentQuizzesQuery() {
   return useQuery({
     queryKey: queryKeys.quizzes("student"),
@@ -14,6 +16,7 @@ export function useStudentQuizzesQuery() {
   });
 }
 
+/** Quiz instructions and attempt status. */
 export function useStudentQuizDetailQuery(quizId: number) {
   return useQuery({
     queryKey: queryKeys.studentQuizDetail(quizId),
@@ -22,11 +25,13 @@ export function useStudentQuizDetailQuery(quizId: number) {
   });
 }
 
+/** Start or resume an attempt. */
 export function useStartQuizAttemptMutation(quizId: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => studentQuizApi.startQuizAttempt(quizId),
+    mutationFn: (input?: { instructionsAcknowledged?: boolean }) =>
+      studentQuizApi.startQuizAttempt(quizId, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.studentQuizDetail(quizId),
@@ -35,6 +40,7 @@ export function useStartQuizAttemptMutation(quizId: number) {
   });
 }
 
+/** Autosave in-progress answers. */
 export function useSaveQuizDraftMutation(quizId: number, attemptId: number) {
   return useMutation({
     mutationFn: (input: SaveQuizDraftInput) =>
@@ -42,6 +48,7 @@ export function useSaveQuizDraftMutation(quizId: number, attemptId: number) {
   });
 }
 
+/** Submit attempt for grading. */
 export function useSubmitQuizAttemptMutation(quizId: number, attemptId: number) {
   const queryClient = useQueryClient();
 
@@ -49,15 +56,18 @@ export function useSubmitQuizAttemptMutation(quizId: number, attemptId: number) 
     mutationFn: ({
       answers,
       timeSpentSeconds,
+      isAutoSubmit = false,
     }: {
       answers: SubmitQuizAnswer[];
       timeSpentSeconds: number;
+      isAutoSubmit?: boolean;
     }) =>
       studentQuizApi.submitQuizAttempt(
         quizId,
         attemptId,
         answers,
         timeSpentSeconds,
+        isAutoSubmit,
       ),
     onSuccess: (result) => {
       queryClient.setQueryData(
@@ -74,6 +84,7 @@ export function useSubmitQuizAttemptMutation(quizId: number, attemptId: number) 
   });
 }
 
+/** Graded attempt result. */
 export function useStudentQuizResultQuery(quizId: number, attemptId: number) {
   return useQuery({
     queryKey: queryKeys.studentQuizResult(quizId, attemptId),

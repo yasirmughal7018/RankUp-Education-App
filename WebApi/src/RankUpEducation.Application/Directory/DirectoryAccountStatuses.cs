@@ -16,6 +16,7 @@ public static class DirectoryAccountStatuses
     public const string Deactivated = "Deactivated";
     public const string Rejected = "Rejected";
 
+    /// <summary>Derives the directory account status from user flags.</summary>
     public static string Resolve(
         bool isActive,
         bool hasPassword,
@@ -50,6 +51,7 @@ public static class DirectoryAccountStatuses
         return Deactivated;
     }
 
+    /// <summary>Maps a <see cref="User"/> to the directory account status string.</summary>
     public static string FromUser(User user, bool isLockedPendingSchoolChange = false)
         => Resolve(
             user.IsActive,

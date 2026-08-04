@@ -9,3 +9,11 @@ linter:
   rules:
     public_member_api_docs: false
     lines_longer_than_80_chars: false
+    # Single-method repository/store interfaces are intentional DI seams.
+    one_member_abstracts: false
+    # Offline quiz persistence intentionally uses async dart:io file APIs.
+    avoid_slow_async_io: false
+    # Keep dependency order readable for feature groups; CI sorts elsewhere.
+    sort_pub_dependencies: false
+    # Doc comment [Type] refs often name API DTOs not imported in the library.
+    comment_references: false

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
+/// Admin home with shortcuts to approvals and alerts.
 class AdminDashboardPage extends ConsumerWidget {
   const AdminDashboardPage({super.key});
 

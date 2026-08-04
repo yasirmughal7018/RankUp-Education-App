@@ -127,20 +127,30 @@ CREATE TABLE public.questions (
 	marks int2 NOT NULL,
 	is_active bool DEFAULT true NOT NULL,
 	status_id int2 NOT NULL,
-	created_by varchar(100) NOT NULL,
-	approved_by varchar(100) NULL,
+	created_by int8 NOT NULL,
+	created_by_role int2 DEFAULT 2014 NOT NULL,
+	approved_by int8 NULL,
 	created_date date DEFAULT CURRENT_DATE NOT NULL,
 	modified_date date DEFAULT CURRENT_DATE NOT NULL,
 	is_ai_approved bool DEFAULT false NOT NULL,
+	rejection_reason varchar(1000) NULL,
+	school_id int4 NULL,
+	campus_id int4 NULL,
+	visibility_level int2 DEFAULT 0 NOT NULL,
 	CONSTRAINT questions_pkey PRIMARY KEY (id),
 	CONSTRAINT questions_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.lookups(id),
 	CONSTRAINT questions_difficulty_level_fkey FOREIGN KEY (difficulty_level) REFERENCES public.lookups(id),
 	CONSTRAINT questions_question_type_id_fkey FOREIGN KEY (question_type_id) REFERENCES public.lookups(id),
 	CONSTRAINT questions_status_id_fkey FOREIGN KEY (status_id) REFERENCES public.lookups(id),
 	CONSTRAINT questions_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.lookups(id),
-	CONSTRAINT questions_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.lookups(id)
+	CONSTRAINT questions_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.lookups(id),
+	CONSTRAINT fk_questions_created_by_app_users FOREIGN KEY (created_by) REFERENCES public.app_users(id),
+	CONSTRAINT fk_questions_approved_by_app_users FOREIGN KEY (approved_by) REFERENCES public.app_users(id)
 );
 CREATE INDEX idx_questions_lookup_ids ON public.questions USING btree (class_id, subject_id, topic_id);
+CREATE INDEX idx_questions_created_by_role ON public.questions USING btree (created_by_role);
+-- Question workflow trail (create/submit/endorse/publish/reject/modify/activate/deactivate/archive/unarchive)
+-- lives in the generic app_approval table (entity_type 2, question_id FK) — see docs/scripts/app_user.sql.
 
 
 -- public.refresh_tokens definition
@@ -324,10 +334,12 @@ CREATE TABLE public.quizzes (
 	allowed_attempts int2 NULL,
 	shuffle_questions bool DEFAULT true NOT NULL,
 	shuffle_options bool DEFAULT true NOT NULL,
+	navigation_mode varchar(20) DEFAULT 'Free'::character varying NOT NULL,
 	instructions varchar(1000) NOT NULL,
 	is_active bool DEFAULT true NOT NULL,
 	created_by varchar(100) NOT NULL,
 	approved_by varchar(100) NULL,
+	rejection_reason varchar(1000) NULL,
 	approval_status_id int2 NOT NULL,
 	lifecycle_status_id int2 NOT NULL,
 	created_date date DEFAULT CURRENT_DATE NOT NULL,
@@ -406,7 +418,7 @@ CREATE TABLE public.quiz_questions (
 	question_id int8 NOT NULL,
 	display_order int2 NOT NULL,
 	marks int2 NOT NULL,
-	shuffle_options bool DEFAULT true NOT NULL,
+	time_in_sec int2 DEFAULT 0 NOT NULL,
 	CONSTRAINT quiz_questions_pkey PRIMARY KEY (id),
 	CONSTRAINT quiz_questions_quiz_question_key UNIQUE (quiz_id, question_id),
 	CONSTRAINT quiz_questions_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.questions(id),
@@ -483,6 +495,8 @@ CREATE TABLE public.quiz_attempt_questions (
 	quiz_attempt_id int8 NOT NULL,
 	question_id int8 NOT NULL,
 	display_order int2 NOT NULL,
+	marks int2 DEFAULT 0 NOT NULL,
+	is_marked_for_review bool DEFAULT false NOT NULL,
 	quiz_review_id int8 NULL,
 	CONSTRAINT quiz_attempt_questions_pkey PRIMARY KEY (id),
 	CONSTRAINT quiz_attempt_questions_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.questions(id),

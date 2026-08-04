@@ -1,3 +1,6 @@
+/**
+ * Quiz management HTTP client — CRUD, questions, assignments, approvals.
+ */
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 import type {
   AssignQuizInput,
@@ -34,6 +37,7 @@ function buildListQuery(search?: string, subject?: string, grade?: string): stri
   return query ? `?${query}` : "";
 }
 
+/** List quizzes with optional search and subject/grade filters. */
 export async function listQuizzes(
   search?: string,
   subject?: string,
@@ -46,10 +50,12 @@ export async function listQuizzes(
   return response.items;
 }
 
+/** Full quiz detail for the manage/edit UI. */
 export async function getManageQuiz(quizId: number): Promise<ManageQuiz> {
   return apiRequest<ManageQuiz>(`/quizzes/${quizId}/manage`);
 }
 
+/** Create a draft quiz from form values. */
 export async function createQuiz(values: QuizFormValues): Promise<ManageQuiz> {
   return apiRequest<ManageQuiz>("/quizzes", {
     method: "POST",
@@ -57,6 +63,7 @@ export async function createQuiz(values: QuizFormValues): Promise<ManageQuiz> {
   });
 }
 
+/** Update quiz metadata; contextStudentId is create-only and stripped. */
 export async function updateQuiz(
   quizId: number,
   values: QuizFormValues,
@@ -64,6 +71,9 @@ export async function updateQuiz(
   const payload = buildQuizPayload(values);
   const updatePayload = { ...payload };
   delete (updatePayload as { contextStudentId?: number | null }).contextStudentId;
+  delete (updatePayload as { quizTypeId?: number | null }).quizTypeId;
+  delete (updatePayload as { schoolId?: number | null }).schoolId;
+  delete (updatePayload as { campusId?: number | null }).campusId;
 
   return apiRequest<ManageQuiz>(`/quizzes/${quizId}`, {
     method: "PUT",
@@ -71,29 +81,65 @@ export async function updateQuiz(
   });
 }
 
+/** Permanently delete a quiz. */
 export async function deleteQuiz(quizId: number): Promise<void> {
   await apiRequestVoid(`/quizzes/${quizId}`, { method: "DELETE" });
 }
 
+/** Publish draft quiz (may require admin approval). */
 export async function publishQuiz(quizId: number): Promise<ManageQuiz> {
   return apiRequest<ManageQuiz>(`/quizzes/${quizId}/publish`, {
     method: "POST",
   });
 }
 
+/** Clone quiz as a new draft; returns the new quiz manage payload. */
 export async function duplicateQuiz(quizId: number): Promise<ManageQuiz> {
-  const response = await apiRequest<{ quiz: ManageQuiz }>(
-    `/quizzes/${quizId}/duplicate`,
+  const response = await apiRequest<
+    ManageQuiz & { quiz?: ManageQuiz; sourceQuizId?: number; Id?: number }
+  >(`/quizzes/${quizId}/duplicate`, { method: "POST" });
+
+  // Prefer nested quiz when older API shape is still returned; otherwise use top-level manage payload.
+  const quiz = response.quiz ?? response;
+  const id = quiz.id ?? (quiz as unknown as { Id?: number }).Id ?? 0;
+  if (id <= 0) {
+    throw {
+      message: "Quiz was duplicated but the new quiz id was missing.",
+      status: 500,
+    };
+  }
+
+  return { ...quiz, id };
+}
+
+/** Archive started quizzes, or permanently delete when unassigned / not started. */
+export async function archiveQuiz(
+  quizId: number,
+): Promise<{ quizId: number; lifecycleStatus: string; permanentlyDeleted: boolean }> {
+  const response = await apiRequest<{
+    quizId: number;
+    lifecycleStatus: string;
+    permanentlyDeleted?: boolean;
+  }>(`/quizzes/${quizId}/archive`, { method: "POST" });
+
+  return {
+    quizId: response.quizId,
+    lifecycleStatus: response.lifecycleStatus,
+    permanentlyDeleted: Boolean(response.permanentlyDeleted),
+  };
+}
+
+/** Restore an archived quiz to Published or Assigned. */
+export async function unarchiveQuiz(
+  quizId: number,
+): Promise<{ quizId: number; lifecycleStatus: string }> {
+  return apiRequest<{ quizId: number; lifecycleStatus: string }>(
+    `/quizzes/${quizId}/unarchive`,
     { method: "POST" },
   );
-
-  return response.quiz;
 }
 
-export async function archiveQuiz(quizId: number): Promise<void> {
-  await apiRequest(`/quizzes/${quizId}/archive`, { method: "POST" });
-}
-
+/** Admin queue: quizzes awaiting approval. */
 export async function listPendingQuizApprovals(): Promise<PendingQuizApproval[]> {
   const response = await apiRequest<{ items: PendingQuizApproval[] }>(
     "/quizzes/pending-approval",
@@ -102,20 +148,28 @@ export async function listPendingQuizApprovals(): Promise<PendingQuizApproval[]>
   return response.items;
 }
 
+/** Admin: approve a pending quiz. */
 export async function approveQuiz(quizId: number): Promise<void> {
   await apiRequest(`/quizzes/${quizId}/approve`, { method: "POST" });
 }
 
+/** Admin: reject a quiz; reason is required. */
 export async function rejectQuiz(
   quizId: number,
-  reason?: string,
+  reason: string,
 ): Promise<void> {
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    throw { message: "Rejection reason is required.", status: 400 };
+  }
+
   await apiRequest(`/quizzes/${quizId}/reject`, {
     method: "POST",
-    body: { reason: reason?.trim() || null },
+    body: { reason: trimmed },
   });
 }
 
+/** Add an inline question to the quiz. */
 export async function addQuizQuestion(
   quizId: number,
   input: AddQuizQuestionInput,
@@ -126,6 +180,7 @@ export async function addQuizQuestion(
   });
 }
 
+/** Update an existing inline quiz question. */
 export async function updateQuizQuestion(
   quizId: number,
   questionId: number,
@@ -137,6 +192,7 @@ export async function updateQuizQuestion(
   });
 }
 
+/** Attach a question-bank item to the quiz. */
 export async function attachBankQuestion(
   quizId: number,
   input: AttachBankQuestionInput,
@@ -150,6 +206,7 @@ export async function attachBankQuestion(
   });
 }
 
+/** Remove a question from the quiz. */
 export async function removeQuizQuestion(
   quizId: number,
   questionId: number,
@@ -159,6 +216,7 @@ export async function removeQuizQuestion(
   });
 }
 
+/** Assign quiz to students, a group, or a grade. */
 export async function assignQuiz(
   quizId: number,
   input: AssignQuizInput,
@@ -173,10 +231,14 @@ export async function assignQuiz(
       endAt: input.endAt,
       allowedAttempts: input.allowedAttempts,
       gradeId: input.gradeId,
+      section: input.section ?? null,
+      schoolIds: input.schoolIds?.length ? input.schoolIds : null,
+      campusId: input.campusId ?? null,
     },
   });
 }
 
+/** List active assignments for a quiz. */
 export async function listQuizAssignments(
   quizId: number,
 ): Promise<QuizAssignment[]> {
@@ -187,6 +249,7 @@ export async function listQuizAssignments(
   return response.items;
 }
 
+/** Cancel all assignments for a quiz. */
 export async function cancelQuizAssignments(quizId: number): Promise<void> {
   await apiRequest(`/quizzes/${quizId}/cancel`, { method: "POST" });
 }
@@ -200,6 +263,7 @@ export interface AllowRetryResponse {
   isReviewDone: boolean;
 }
 
+/** Grant extra attempts on a specific assignment. */
 export async function allowRetry(
   quizId: number,
   assignmentId: number,

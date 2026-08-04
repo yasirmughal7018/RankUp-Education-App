@@ -1,9 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rankup_education/core/errors/app_exception.dart';
+import 'package:rankup_education/core/network/connectivity_service.dart';
+import 'package:rankup_education/core/storage/student_device_id_store.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_status.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.dart';
+import 'package:rankup_education/features/quizzes/domain/offline_attempt_session.dart';
+import 'package:rankup_education/features/quizzes/domain/offline_quiz_sync.dart';
 import 'package:rankup_education/features/quizzes/domain/repositories/quiz_repository.dart';
 
+/// Outcome of a draft save that may fall back to the offline queue.
+enum QuizDraftSaveOutcome { saved, queuedOffline, failed }
+
+/// Quiz list, filter, attempt, and review UI state.
 class QuizzesState {
   const QuizzesState({
     this.allQuizzes = const [],
@@ -20,6 +29,10 @@ class QuizzesState {
     this.selectedDetail,
     this.activeAttempt,
     this.attemptResult,
+    this.pendingOfflineCount = 0,
+    this.offlineSubmitQueued = false,
+    this.pendingOfflineQuizId,
+    this.pendingOfflineAttemptId,
   });
 
   final List<QuizSummary> allQuizzes;
@@ -36,6 +49,10 @@ class QuizzesState {
   final QuizDetail? selectedDetail;
   final QuizAttemptSession? activeAttempt;
   final QuizAttemptResult? attemptResult;
+  final int pendingOfflineCount;
+  final bool offlineSubmitQueued;
+  final String? pendingOfflineQuizId;
+  final String? pendingOfflineAttemptId;
 
   QuizzesState copyWith({
     List<QuizSummary>? allQuizzes,
@@ -52,10 +69,15 @@ class QuizzesState {
     QuizDetail? selectedDetail,
     QuizAttemptSession? activeAttempt,
     QuizAttemptResult? attemptResult,
+    int? pendingOfflineCount,
+    bool? offlineSubmitQueued,
+    String? pendingOfflineQuizId,
+    String? pendingOfflineAttemptId,
     bool clearError = false,
     bool clearActionError = false,
     bool clearAttempt = false,
     bool clearResult = false,
+    bool clearPendingOfflineTarget = false,
   }) {
     return QuizzesState(
       allQuizzes: allQuizzes ?? this.allQuizzes,
@@ -72,15 +94,42 @@ class QuizzesState {
       selectedDetail: selectedDetail ?? this.selectedDetail,
       activeAttempt: clearAttempt ? null : activeAttempt ?? this.activeAttempt,
       attemptResult: clearResult ? null : attemptResult ?? this.attemptResult,
+      pendingOfflineCount: pendingOfflineCount ?? this.pendingOfflineCount,
+      offlineSubmitQueued: offlineSubmitQueued ?? this.offlineSubmitQueued,
+      pendingOfflineQuizId: clearPendingOfflineTarget
+          ? null
+          : pendingOfflineQuizId ?? this.pendingOfflineQuizId,
+      pendingOfflineAttemptId: clearPendingOfflineTarget
+          ? null
+          : pendingOfflineAttemptId ?? this.pendingOfflineAttemptId,
     );
   }
 }
 
+/// Orchestrates quiz loading, filtering, attempts, and submissions.
 class QuizzesController extends StateNotifier<QuizzesState> {
-  QuizzesController(this._repository) : super(const QuizzesState());
+  QuizzesController(
+    this._repository,
+    this._offlineStore,
+    this._sessionStore,
+    this._connectivity,
+    this._deviceIdStore,
+  ) : super(const QuizzesState());
 
   final QuizRepository _repository;
+  final OfflineQuizSyncStore _offlineStore;
+  final OfflineAttemptSessionStore _sessionStore;
+  final ConnectivityService _connectivity;
+  final StudentDeviceIdStore _deviceIdStore;
 
+  Future<String> _resolveDeviceId(String? deviceId) async {
+    if (deviceId != null && deviceId.trim().isNotEmpty) {
+      return deviceId.trim();
+    }
+    return _deviceIdStore.getOrCreate();
+  }
+
+  /// Loads quiz summaries and applies client-side filters.
   Future<void> load({
     String? search,
     String? quizType,
@@ -138,20 +187,69 @@ class QuizzesController extends StateNotifier<QuizzesState> {
   Future<QuizAttemptSession?> startAttempt({
     required String quizId,
     required String deviceId,
+    bool instructionsAcknowledged = false,
   }) async {
     state = state.copyWith(isAttemptLoading: true, clearActionError: true);
 
+    final online = await _connectivity.hasConnection;
+    if (!online) {
+      final cached = await _sessionStore.load(quizId);
+      if (cached != null) {
+        state = state.copyWith(
+          activeAttempt: cached,
+          isAttemptLoading: false,
+          clearResult: true,
+        );
+        await _refreshOfflineCount(
+          quizId: quizId,
+          attemptId: cached.attemptId,
+        );
+        return cached;
+      }
+
+      state = state.copyWith(
+        isAttemptLoading: false,
+        actionError:
+            'Connect to the internet to start a new quiz. You can resume an in-progress attempt offline if it was started earlier on this device.',
+      );
+      return null;
+    }
+
     try {
+      final resolvedDeviceId = await _resolveDeviceId(deviceId);
       final attempt = await _repository.startAttempt(
         quizId: quizId,
-        deviceId: deviceId,
+        deviceId: resolvedDeviceId,
+        instructionsAcknowledged: instructionsAcknowledged,
       );
+      await _sessionStore.save(attempt);
       state = state.copyWith(
         activeAttempt: attempt,
         isAttemptLoading: false,
         clearResult: true,
       );
+      await _refreshOfflineCount(quizId: quizId, attemptId: attempt.attemptId);
       return attempt;
+    } on NetworkException {
+      final cached = await _sessionStore.load(quizId);
+      if (cached != null) {
+        state = state.copyWith(
+          activeAttempt: cached,
+          isAttemptLoading: false,
+          clearResult: true,
+        );
+        await _refreshOfflineCount(
+          quizId: quizId,
+          attemptId: cached.attemptId,
+        );
+        return cached;
+      }
+      state = state.copyWith(
+        isAttemptLoading: false,
+        actionError:
+            'Unable to reach the server. Connect to start a new quiz, or resume a cached in-progress attempt.',
+      );
+      return null;
     } on Exception catch (error) {
       state = state.copyWith(
         isAttemptLoading: false,
@@ -161,22 +259,66 @@ class QuizzesController extends StateNotifier<QuizzesState> {
     }
   }
 
-  Future<bool> saveDraft({
+  Future<QuizDraftSaveOutcome> saveDraft({
     required String quizId,
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     int? timeSpentSeconds,
+    int? focusLossDelta,
+    int? clipboardPasteDelta,
+    String? deviceId,
   }) async {
+    final resolvedDeviceId = await _resolveDeviceId(deviceId);
+    final spent = timeSpentSeconds ?? 0;
+
+    Future<QuizDraftSaveOutcome> enqueueOffline() async {
+      await _offlineStore.enqueue(
+        quizId: quizId,
+        attemptId: attemptId,
+        answers: answers,
+        timeSpentSeconds: spent,
+        deviceId: resolvedDeviceId,
+        submit: false,
+        focusLossDelta: focusLossDelta,
+        clipboardPasteDelta: clipboardPasteDelta,
+      );
+      await _refreshOfflineCount(quizId: quizId, attemptId: attemptId);
+      return QuizDraftSaveOutcome.queuedOffline;
+    }
+
+    final online = await _connectivity.hasConnection;
+    if (!online) {
+      final outcome = await enqueueOffline();
+      await _persistLocalDraftAnswers(quizId, answers);
+      return outcome;
+    }
+
     try {
       await _repository.saveDraft(
         quizId: quizId,
         attemptId: attemptId,
         answers: answers,
         timeSpentSeconds: timeSpentSeconds,
+        focusLossDelta: focusLossDelta,
+        clipboardPasteDelta: clipboardPasteDelta,
+        deviceId: resolvedDeviceId,
       );
-      return true;
-    } on Exception {
-      return false;
+      await _persistLocalDraftAnswers(quizId, answers);
+      await _refreshOfflineCount(quizId: quizId, attemptId: attemptId);
+      return QuizDraftSaveOutcome.saved;
+    } on NetworkException {
+      final outcome = await enqueueOffline();
+      await _persistLocalDraftAnswers(quizId, answers);
+      return outcome;
+    } on ValidationException catch (error) {
+      state = state.copyWith(actionError: error.message);
+      return QuizDraftSaveOutcome.failed;
+    } on AppException catch (error) {
+      state = state.copyWith(actionError: error.message);
+      return QuizDraftSaveOutcome.failed;
+    } on Exception catch (error) {
+      state = state.copyWith(actionError: error.toString());
+      return QuizDraftSaveOutcome.failed;
     }
   }
 
@@ -185,20 +327,71 @@ class QuizzesController extends StateNotifier<QuizzesState> {
     required String attemptId,
     required List<QuizAnswerSubmission> answers,
     required int timeSpentSeconds,
+    bool isAutoSubmit = false,
+    String? deviceId,
   }) async {
+    if (state.offlineSubmitQueued &&
+        state.pendingOfflineAttemptId == attemptId) {
+      return null;
+    }
+
     state = state.copyWith(isAttemptLoading: true, clearActionError: true);
+    final resolvedDeviceId = await _resolveDeviceId(deviceId);
+
+    Future<QuizAttemptResult?> enqueueOfflineSubmit() async {
+      await _offlineStore.enqueue(
+        quizId: quizId,
+        attemptId: attemptId,
+        answers: answers,
+        timeSpentSeconds: timeSpentSeconds,
+        deviceId: resolvedDeviceId,
+        submit: true,
+        isAutoSubmit: isAutoSubmit,
+      );
+      await _refreshOfflineCount(quizId: quizId, attemptId: attemptId);
+      state = state.copyWith(
+        isAttemptLoading: false,
+        offlineSubmitQueued: true,
+      );
+      return null;
+    }
+
+    final online = await _connectivity.hasConnection;
+    if (!online) {
+      return enqueueOfflineSubmit();
+    }
 
     try {
+      final flushed =
+          await flushOfflineQueue(quizId: quizId, attemptId: attemptId);
+      if (flushed != null) {
+        await load(
+          search: state.search,
+          quizType: state.quizType,
+          status: state.status,
+          dateFilter: state.dateFilter,
+        );
+        state = state.copyWith(isAttemptLoading: false);
+        return flushed;
+      }
+
       final result = await _repository.submitAttempt(
         quizId: quizId,
         attemptId: attemptId,
         answers: answers,
         timeSpentSeconds: timeSpentSeconds,
+        isAutoSubmit: isAutoSubmit,
+        deviceId: resolvedDeviceId,
       );
+      await _offlineStore.clear(attemptId);
+      await _sessionStore.clearByAttempt(quizId: quizId, attemptId: attemptId);
       state = state.copyWith(
         attemptResult: result,
         isAttemptLoading: false,
         clearAttempt: true,
+        pendingOfflineCount: 0,
+        offlineSubmitQueued: false,
+        clearPendingOfflineTarget: true,
       );
       await load(
         search: state.search,
@@ -207,6 +400,8 @@ class QuizzesController extends StateNotifier<QuizzesState> {
         dateFilter: state.dateFilter,
       );
       return result;
+    } on NetworkException {
+      return enqueueOfflineSubmit();
     } on Exception catch (error) {
       state = state.copyWith(
         isAttemptLoading: false,
@@ -214,6 +409,178 @@ class QuizzesController extends StateNotifier<QuizzesState> {
       );
       return null;
     }
+  }
+
+  /// Replays queued draft then submit for [attemptId] via POST .../sync.
+  Future<QuizAttemptResult?> flushOfflineQueue({
+    required String quizId,
+    required String attemptId,
+  }) async {
+    final pending = await _offlineStore.list(attemptId);
+    if (pending.isEmpty) {
+      await _refreshOfflineCount(quizId: quizId, attemptId: attemptId);
+      return null;
+    }
+
+    final online = await _connectivity.hasConnection;
+    if (!online) {
+      return null;
+    }
+
+    final ordered = [
+      ...pending.where((item) => !item.submit),
+      ...pending.where((item) => item.submit),
+    ];
+
+    QuizAttemptResult? submitResult;
+    for (final item in ordered) {
+      try {
+        final syncResult = await _repository.syncOfflineAttempt(
+          quizId: item.quizId,
+          attemptId: item.attemptId,
+          clientSyncId: item.clientSyncId,
+          answers: item.answers,
+          timeSpentSeconds: item.timeSpentSeconds,
+          deviceId: item.deviceId,
+          submit: item.submit,
+          isAutoSubmit: item.isAutoSubmit,
+          focusLossDelta: item.focusLossDelta,
+          clipboardPasteDelta: item.clipboardPasteDelta,
+        );
+        await _offlineStore.remove(attemptId, item.id);
+        if (syncResult.submitted && syncResult.result != null) {
+          submitResult = syncResult.result;
+        }
+      } on Exception catch (error) {
+        await _refreshOfflineCount(quizId: quizId, attemptId: attemptId);
+        state = state.copyWith(actionError: error.toString());
+        return null;
+      }
+    }
+
+    final remaining = await _offlineStore.count(attemptId);
+    state = state.copyWith(
+      pendingOfflineCount: remaining,
+      offlineSubmitQueued: remaining > 0 &&
+          (await _offlineStore.list(attemptId)).any((item) => item.submit),
+      attemptResult: submitResult ?? state.attemptResult,
+      clearAttempt: submitResult != null,
+      pendingOfflineQuizId: remaining > 0 ? quizId : null,
+      pendingOfflineAttemptId: remaining > 0 ? attemptId : null,
+      clearPendingOfflineTarget: remaining == 0,
+    );
+
+    if (submitResult != null) {
+      await _sessionStore.clearByAttempt(quizId: quizId, attemptId: attemptId);
+      await load(
+        search: state.search,
+        quizType: state.quizType,
+        status: state.status,
+        dateFilter: state.dateFilter,
+      );
+    }
+
+    return submitResult;
+  }
+
+  /// Flushes any known pending offline target (active attempt or last queued).
+  ///
+  /// When online again, first resumes the server attempt (POST .../attempts)
+  /// so draft/submit sync has a live InProgress row, then replays the queue.
+  Future<QuizAttemptResult?> flushPendingOfflineQueue() async {
+    final attempt = state.activeAttempt;
+    final quizId = attempt?.quizId ?? state.pendingOfflineQuizId;
+    final attemptId = attempt?.attemptId ?? state.pendingOfflineAttemptId;
+    if (quizId == null ||
+        quizId.isEmpty ||
+        attemptId == null ||
+        attemptId.isEmpty) {
+      return null;
+    }
+
+    final online = await _connectivity.hasConnection;
+    if (online) {
+      try {
+        final deviceId = await _resolveDeviceId(null);
+        final resumed = await _repository.startAttempt(
+          quizId: quizId,
+          deviceId: deviceId,
+          instructionsAcknowledged: true,
+        );
+        await _sessionStore.save(resumed);
+        state = state.copyWith(activeAttempt: resumed);
+      } on Exception {
+        // Continue to sync drafts against the known attempt id.
+      }
+    }
+
+    return flushOfflineQueue(quizId: quizId, attemptId: attemptId);
+  }
+
+  Future<void> refreshOfflineStatus({
+    required String quizId,
+    required String attemptId,
+  }) =>
+      _refreshOfflineCount(quizId: quizId, attemptId: attemptId);
+
+  Future<void> _persistLocalDraftAnswers(
+    String quizId,
+    List<QuizAnswerSubmission> answers,
+  ) async {
+    final current = state.activeAttempt ?? await _sessionStore.load(quizId);
+    if (current == null) {
+      return;
+    }
+
+    final saved = [
+      for (final answer in answers)
+        SavedQuizAnswer(
+          questionId: answer.questionId,
+          selectedOptionId: answer.selectedOptionId,
+          selectedOptionIds: answer.selectedOptionIds ??
+              (answer.selectedOptionId == null
+                  ? const <String>[]
+                  : <String>[answer.selectedOptionId!]),
+          submittedText: answer.submittedText,
+          isMarkedForReview: answer.isMarkedForReview ?? false,
+        ),
+    ];
+
+    final updated = QuizAttemptSession(
+      attemptId: current.attemptId,
+      quizId: current.quizId,
+      attemptNumber: current.attemptNumber,
+      startedAt: current.startedAt,
+      questions: current.questions,
+      timeLimitMinutes: current.timeLimitMinutes,
+      resumed: true,
+      savedAnswers: saved,
+      navigationMode: current.navigationMode,
+      enforceDeviceLock: current.enforceDeviceLock,
+      focusLossCount: current.focusLossCount,
+      clipboardPasteCount: current.clipboardPasteCount,
+      enablePerQuestionTimer: current.enablePerQuestionTimer,
+    );
+    await _sessionStore.save(updated);
+    if (state.activeAttempt?.attemptId == current.attemptId) {
+      state = state.copyWith(activeAttempt: updated);
+    }
+  }
+
+  Future<void> _refreshOfflineCount({
+    required String quizId,
+    required String attemptId,
+  }) async {
+    final items = await _offlineStore.list(attemptId);
+    final count = items.length;
+    final hasSubmit = items.any((item) => item.submit);
+    state = state.copyWith(
+      pendingOfflineCount: count,
+      offlineSubmitQueued: hasSubmit,
+      pendingOfflineQuizId: count > 0 ? quizId : null,
+      pendingOfflineAttemptId: count > 0 ? attemptId : null,
+      clearPendingOfflineTarget: count == 0,
+    );
   }
 
   Future<QuizAttemptResult?> loadAttemptResult({
@@ -263,6 +630,11 @@ List<QuizSummary> _applyLocalFilters(
     final matchesStatus = status.isEmpty || _studentStatus(quiz, now) == status;
     final matchesDate = switch (selectedDateFilter) {
       'Today' => _isSameDay(date, now),
+      'Upcoming' => quiz.startAt != null && quiz.startAt!.isAfter(now),
+      'Overdue' =>
+        quiz.dueAt != null &&
+            quiz.dueAt!.isBefore(now) &&
+            _studentStatus(quiz, now) != 'Completed',
       'Yesterday' => _isSameDay(date, now.subtract(const Duration(days: 1))),
       'Last 7 Days' => _isWithinPastDays(date, now, 7),
       'Last 15 Days' => _isWithinPastDays(date, now, 15),

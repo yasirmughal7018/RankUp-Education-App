@@ -1,3 +1,4 @@
+/// Access and refresh token pair parsed from auth API responses.
 class AuthTokensModel {
   const AuthTokensModel({
     required this.accessToken,

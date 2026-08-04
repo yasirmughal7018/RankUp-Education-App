@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rankup_education/core/widgets/feature_placeholder_page.dart';
 
+/// Student portfolio placeholder screen.
 class PortfolioPage extends StatelessWidget {
   const PortfolioPage({super.key});
 

@@ -3,6 +3,10 @@ using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Auth;
 
+/// <summary>
+/// Application account (table: app_users). Supports self-registration, admin provisioning,
+/// multi-role assignment, login, password lifecycle, and school/campus context.
+/// </summary>
 public sealed class User : SoftDeleteEntity
 {
     private readonly List<RefreshToken> _refreshTokens = [];
@@ -15,6 +19,7 @@ public sealed class User : SoftDeleteEntity
         FullName = string.Empty;
     }
 
+    /// <summary>Creates an active account with a password and initial role.</summary>
     public User(
         string username,
         string passwordHash,
@@ -45,6 +50,7 @@ public sealed class User : SoftDeleteEntity
     public string Username { get; private set; }
     public string? PasswordHash { get; private set; }
     public string FullName { get; private set; }
+    /// <summary>Role-specific profile id (student/teacher/parent) when loaded for session.</summary>
     public long? ProfileId { get; private set; }
     public int? SchoolId { get; private set; }
     public int? CampusId { get; private set; }
@@ -52,21 +58,28 @@ public sealed class User : SoftDeleteEntity
     public string? Cnic { get; private set; }
     public string? EmailAddress { get; private set; }
     public string? AvatarUrl { get; private set; }
+    /// <summary>When true, user must change password after next successful login.</summary>
     public bool? MustChangePassword { get; private set; }
+    /// <summary>Optional message supplied with a self-registration request.</summary>
     public string? ReasonMessage { get; private set; }
     /// <summary>Student roll number or teacher code (shared identity field).</summary>
     public string? RollNumberTeacherCode { get; private set; }
     public DateOnly? CreatedDate { get; private set; }
     public DateOnly? ModifiedDate { get; private set; }
+    /// <summary>False while registration is pending or account is locked (e.g. school-change).</summary>
     public bool IsActive { get; private set; }
+    /// <summary>When the self-registration request was submitted.</summary>
     public DateTimeOffset? RequestedAt { get; private set; }
     /// <summary>Set when a registration request is rejected (soft close; row kept for audit).</summary>
     public DateTimeOffset? RejectedAt { get; private set; }
+    /// <summary>Admin-supplied reason when a registration request is rejected.</summary>
+    public string? RejectionReason { get; private set; }
     public DateTimeOffset? LastLoginAt { get; private set; }
     public IReadOnlyCollection<RefreshToken> RefreshTokens => _refreshTokens;
     public IReadOnlyCollection<DeviceSession> DeviceSessions => _deviceSessions;
     public IReadOnlyCollection<UserRoleAssignment> RoleAssignments => _roleAssignments;
 
+    /// <summary>Distinct roles assigned to this account.</summary>
     public IReadOnlyList<UserRole> Roles
         => _roleAssignments
             .Select(assignment => assignment.Role)
@@ -97,8 +110,10 @@ public sealed class User : SoftDeleteEntity
 
     public bool HasRole(UserRole role) => Roles.Contains(role);
 
+    /// <summary>Registration was soft-rejected; user may submit a new request.</summary>
     public bool IsRejectedRegistration => RejectedAt is not null;
 
+    /// <summary>Inactive self-registration awaiting admin approval (no password yet).</summary>
     public bool IsPendingRegistration
         => !IsActive && !PasswordHash.HasTrimmedText() && !IsRejectedRegistration;
 
@@ -140,7 +155,7 @@ public sealed class User : SoftDeleteEntity
         string fullName,
         UserRole role,
         DateTimeOffset requestedAt,
-        string mobileNumber,
+        string? mobileNumber,
         string? emailAddress = null,
         string? cnic = null,
         int? schoolId = null,
@@ -155,7 +170,7 @@ public sealed class User : SoftDeleteEntity
             PasswordHash = null,
             IsActive = false,
             RequestedAt = requestedAt,
-            MobileNumber = mobileNumber.AsTrimmedString(),
+            MobileNumber = mobileNumber.AsTrimmedOrNull(),
             EmailAddress = emailAddress.AsNormalizedEmailOrNull(),
             Cnic = cnic.AsTrimmedOrNull(),
             SchoolId = schoolId,
@@ -167,6 +182,10 @@ public sealed class User : SoftDeleteEntity
         }.WithInitialRole(role);
     }
 
+    /// <summary>
+    /// Validates the account may authenticate. Does not require a password hash
+    /// (see <see cref="NeedsPasswordSetup"/> for first-login password setup).
+    /// </summary>
     public void EnsureCanLogin()
     {
         if (IsDeleted)
@@ -196,6 +215,7 @@ public sealed class User : SoftDeleteEntity
         // Callers that require a full password must check NeedsPasswordSetup separately.
     }
 
+    /// <summary>Requires a stored password (blocks actions that need an existing credential).</summary>
     public void EnsureHasPassword()
     {
         if (!PasswordHash.HasTrimmedText())
@@ -217,24 +237,33 @@ public sealed class User : SoftDeleteEntity
         PasswordHash = null;
         MustChangePassword = true;
         RejectedAt = null;
+        RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
     /// <summary>Soft-reject registration. Keeps the user row and approval trail for audit.</summary>
-    public void RejectPendingRegistration(DateTimeOffset rejectedAt)
+    public void RejectPendingRegistration(DateTimeOffset rejectedAt, string reason)
     {
         if (!IsPendingRegistration)
         {
             throw new BusinessRuleException("This user is not a pending registration request.");
         }
 
+        var trimmed = reason.AsTrimmedString();
+        if (!trimmed.HasTrimmedText())
+        {
+            throw new BusinessRuleException("Rejection reason is required.");
+        }
+
         IsActive = false;
         PasswordHash = null;
         RejectedAt = rejectedAt;
+        RejectionReason = trimmed.Length > 1000 ? trimmed[..1000] : trimmed;
         MustChangePassword = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Activates the account and sets the initial password hash.</summary>
     public void Activate(string passwordHash)
     {
         if (!passwordHash.HasTrimmedText())
@@ -246,6 +275,7 @@ public sealed class User : SoftDeleteEntity
         IsActive = true;
     }
 
+    /// <summary>Flags the account to change password on next login.</summary>
     public void RequirePasswordChange()
     {
         // true = user must change password on next login.
@@ -253,6 +283,7 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Clears the forced password-change flag after a successful change.</summary>
     public void ClearPasswordChangeRequirement()
     {
         // null/false = no forced change required (after user changes once → false).
@@ -260,6 +291,7 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Updates login username (e.g. CNIC promotion after Portal Admin approval).</summary>
     public void SetUsername(string username)
     {
         if (!username.HasTrimmedText())
@@ -271,6 +303,7 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Sets school/campus only when a non-null value is provided.</summary>
     public void AssignSchoolCampus(int? schoolId, int? campusId)
     {
         if (schoolId.HasValue)
@@ -286,6 +319,7 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Admin-side contact update; only non-empty fields are applied.</summary>
     public void UpdateContactInfo(string? mobileNumber, string? cnic, string? emailAddress = null)
     {
         if (mobileNumber.HasTrimmedText())
@@ -309,7 +343,7 @@ public sealed class User : SoftDeleteEntity
     /// <summary>Self-service contact update (school/campus changes go through approval).</summary>
     public void UpdateSelfServiceContact(
         string fullName,
-        string mobileNumber,
+        string? mobileNumber,
         string? emailAddress,
         string? cnic)
     {
@@ -318,24 +352,21 @@ public sealed class User : SoftDeleteEntity
             throw new BusinessRuleException("Display name is required.");
         }
 
-        if (!mobileNumber.HasTrimmedText())
-        {
-            throw new BusinessRuleException("Mobile number is required.");
-        }
-
         FullName = fullName.AsTrimmedString();
-        MobileNumber = mobileNumber.AsTrimmedString();
+        MobileNumber = mobileNumber.AsTrimmedOrNull();
         EmailAddress = emailAddress.AsNormalizedEmailOrNull();
         Cnic = cnic.AsTrimmedOrNull();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Stores the URL of the user's profile avatar image.</summary>
     public void SetAvatarUrl(string? avatarUrl)
     {
         AvatarUrl = avatarUrl.AsTrimmedOrNull();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Replaces school/campus after an approved school-change request.</summary>
     public void ApplySchoolCampus(int? schoolId, int? campusId)
     {
         SchoolId = schoolId;
@@ -343,24 +374,28 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Updates student roll number or teacher code from registration metadata.</summary>
     public void SetRollNumberTeacherCode(string? rollNumberTeacherCode)
     {
         RollNumberTeacherCode = rollNumberTeacherCode.AsTrimmedOrNull();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Updates display name only.</summary>
     public void UpdateProfile(string fullName)
     {
         FullName = fullName.AsTrimmedString();
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Activates or deactivates the account (e.g. lock during school-change review).</summary>
     public void SetActive(bool isActive)
     {
         IsActive = isActive;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Replaces the stored password hash.</summary>
     public void SetPasswordHash(string passwordHash)
     {
         if (!passwordHash.HasTrimmedText())
@@ -372,6 +407,39 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>
+    /// Admin-mediated forgot-password: clear hash so the user can set a new one via set-initial-password.
+    /// </summary>
+    public void ClearPasswordForAdminReset()
+    {
+        if (IsDeleted)
+        {
+            throw new BusinessRuleException("This account is not active.");
+        }
+
+        if (IsPendingRegistration || IsRejectedRegistration)
+        {
+            throw new BusinessRuleException("Pending or rejected registrations cannot use password reset.");
+        }
+
+        if (!IsActive)
+        {
+            throw new BusinessRuleException(
+                "This account is not active. Unlock or reactivate it before clearing the password.");
+        }
+
+        if (!PasswordHash.HasTrimmedText())
+        {
+            throw new BusinessRuleException(
+                "Password is already cleared. The user can set a new password on the login screen.");
+        }
+
+        PasswordHash = null;
+        MustChangePassword = true;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>Attaches role-specific profile and school context for token/session mapping.</summary>
     public void AttachProfileContext(long? profileId, int? schoolId, int? campusId)
     {
         ProfileId = profileId;
@@ -379,16 +447,19 @@ public sealed class User : SoftDeleteEntity
         CampusId = campusId;
     }
 
+    /// <summary>Records the timestamp of a successful password login.</summary>
     public void RecordLogin(DateTimeOffset loginAt)
     {
         LastLoginAt = loginAt;
     }
 
+    /// <summary>Issues a new refresh token for the current session.</summary>
     public void AddRefreshToken(RefreshToken refreshToken)
     {
         _refreshTokens.Add(refreshToken);
     }
 
+    /// <summary>Adds a role if combination rules allow it.</summary>
     public void AddRole(UserRole role, DateTimeOffset createdAt)
     {
         UserRoleRules.EnsureCanAddRole(Roles.ToList(), role);
@@ -396,6 +467,17 @@ public sealed class User : SoftDeleteEntity
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
     }
 
+    /// <summary>Removes a Parent or Teacher role when another role remains.</summary>
+    public void RemoveRole(UserRole role)
+    {
+        UserRoleRules.EnsureCanRemoveRole(Roles.ToList(), role);
+        var assignment = _roleAssignments.FirstOrDefault(item => item.Role == role)
+            ?? throw new BusinessRuleException($"This account does not have the {role} role.");
+        _roleAssignments.Remove(assignment);
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>Throws when the account does not hold the requested role.</summary>
     public void EnsureHasRole(UserRole role)
     {
         if (!HasRole(role))
@@ -420,6 +502,7 @@ public sealed class User : SoftDeleteEntity
         _roleAssignments.Add(new UserRoleAssignment(Id, role, createdAt));
     }
 
+    /// <summary>Registers or updates a device session for push notifications.</summary>
     public void RegisterDevice(DeviceSession deviceSession)
     {
         var existing = _deviceSessions.FirstOrDefault(session => session.DeviceId == deviceSession.DeviceId);

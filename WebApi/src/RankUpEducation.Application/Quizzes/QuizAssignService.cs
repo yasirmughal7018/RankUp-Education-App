@@ -1,5 +1,7 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Lookups;
+using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
@@ -8,14 +10,22 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
+/// <summary>
+/// Assigns published quizzes to students (one, selected, group, grade, or all linked children),
+/// cancels future assignments, and grants retries after review.
+/// </summary>
 public interface IQuizAssignService
 {
+    /// <summary>Creates per-student assignments and moves quiz lifecycle to Assigned.</summary>
     Task<AssignQuizResponse> AssignAsync(long quizId, AssignQuizRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Lists all assignments for a quiz owned by the caller.</summary>
     Task<QuizAssignmentListResponse> ListAssignmentsAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Removes upcoming assignments and sets lifecycle to Cancelled.</summary>
     Task<CancelQuizResponse> CancelAsync(long quizId, CancellationToken cancellationToken);
 
+    /// <summary>Grants extra attempts after review is done and all allowed attempts were used.</summary>
     Task<AllowRetryResponse> AllowRetryAsync(
         long quizId,
         long assignmentId,
@@ -23,6 +33,7 @@ public interface IQuizAssignService
         CancellationToken cancellationToken);
 }
 
+/// <inheritdoc cref="IQuizAssignService"/>
 public sealed class QuizAssignService : IQuizAssignService
 {
     private readonly IQuizRepository _quizzes;
@@ -34,6 +45,7 @@ public sealed class QuizAssignService : IQuizAssignService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationService _notifications;
 
     public QuizAssignService(
         IQuizRepository quizzes,
@@ -44,7 +56,8 @@ public sealed class QuizAssignService : IQuizAssignService
         IUserRepository users,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        INotificationService notifications)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -55,6 +68,7 @@ public sealed class QuizAssignService : IQuizAssignService
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _notifications = notifications;
     }
 
     public async Task<AssignQuizResponse> AssignAsync(
@@ -62,9 +76,53 @@ public sealed class QuizAssignService : IQuizAssignService
         AssignQuizRequest request,
         CancellationToken cancellationToken)
     {
-        var scope = QuizScopeResolver.RequireManageScope(_currentUser);
+        var scope = QuizScopeResolver.RequireAssignScope(_currentUser);
         var quiz = await RequireAssignableQuizAsync(quizId, scope, cancellationToken);
         ValidateAssignRequest(request);
+
+        if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
+        {
+            if (scope.Role != UserRole.Parent)
+            {
+                throw new ForbiddenAppException("Only parents can assign ParentPrivate quizzes.");
+            }
+
+            var privateMode = request.Mode.AsLowercase();
+            if (privateMode is "allingrade" or "allinsection" or "allinschool" or "multischool" or "public")
+            {
+                throw new ValidationAppException(["ParentPrivate quizzes can only target linked children."]);
+            }
+        }
+
+        var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
+        QuizTypeBehavior.EnsureAssignable(
+            quizTypeName,
+            quiz.TimeLimitMinutes,
+            request.AllowedAttempts,
+            request.StartAt,
+            request.EndAt,
+            _dateTimeProvider.UtcNow);
+
+        var mode = request.Mode.AsLowercase();
+        if (mode == "public")
+        {
+            if (scope.Role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin))
+            {
+                throw new ForbiddenAppException(
+                    "Only school or portal administrators can publish public catalog quizzes.");
+            }
+
+            quiz.SetAudienceAccess("Public", request.StartAt, request.EndAt, request.AllowedAttempts);
+            var publicLifecycleId = await RequireLookupAsync(
+                LookupNames.QuizLifecycleStatus,
+                LookupNames.AssignedLifecycleNames,
+                cancellationToken);
+            quiz.SetLifecycleStatus(publicLifecycleId);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+            return new AssignQuizResponse(quizId, lifecycleName, 0, Array.Empty<QuizAssignmentResponse>());
+        }
 
         var studentIds = await ResolveTargetStudentIdsAsync(scope, request, cancellationToken);
         if (studentIds.Count == 0)
@@ -72,13 +130,21 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["No valid students were found for this assignment."]);
         }
 
-        var resultStatusId = await RequireLookupAsync(
-            QuizLookupNames.QuizResultStatus,
-            QuizLookupNames.AssignedResultNames,
-            cancellationToken);
+        var now = _dateTimeProvider.UtcNow;
+        var resultStatusId = request.StartAt > now
+            ? await _lookups.ResolveLookupIdByNamesAsync(
+                LookupNames.QuizResultStatus,
+                LookupNames.UpcomingResultNames,
+                LookupNames.QuizResultStatusIds.Upcoming,
+                cancellationToken)
+            : await _lookups.ResolveLookupIdByNamesAsync(
+                LookupNames.QuizResultStatus,
+                LookupNames.AssignedResultNames,
+                LookupNames.QuizResultStatusIds.NotAttempted,
+                cancellationToken);
         var assignedLifecycleId = await RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.AssignedLifecycleNames,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.AssignedLifecycleNames,
             cancellationToken);
 
         var assignments = new List<QuizAssignment>();
@@ -112,15 +178,27 @@ public sealed class QuizAssignService : IQuizAssignService
         }
 
         await _assignments.AddAssignmentsAsync(assignments, cancellationToken);
+
         quiz.SetLifecycleStatus(assignedLifecycleId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        // Surprise quizzes stay hidden until StartAt — notify only when the window is already open.
+        if (!QuizTypeBehavior.IsSurprise(quizTypeName) || request.StartAt <= now)
+        {
+            await _notifications.CreateAsync(
+                studentIds,
+                "New quiz assigned",
+                $"\"{quiz.QuizTitle}\" has been assigned to you. Open My Quizzes to start.",
+                QuizNotificationCategories.QuizAssigned,
+                cancellationToken);
+        }
+
         var createdAssignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
-        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var assignedLifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
 
         return new AssignQuizResponse(
             quizId,
-            lifecycleName,
+            assignedLifecycleName,
             assignments.Count,
             createdAssignments.Select(QuizManageMapping.ToAssignmentResponse).ToArray());
     }
@@ -129,8 +207,18 @@ public sealed class QuizAssignService : IQuizAssignService
         long quizId,
         CancellationToken cancellationToken)
     {
-        var scope = QuizScopeResolver.RequireManageScope(_currentUser);
+        var scope = QuizScopeResolver.RequireAssignScope(_currentUser);
         await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+
+        var expired = await _assignments.ExpireOverdueUnattemptedAsync(_dateTimeProvider.UtcNow, cancellationToken);
+        if (expired.ChangedCount > 0)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await QuizSurpriseNotifications.NotifyNewlyOpenedAsync(
+                _notifications,
+                expired.NewlyOpenedSurpriseAssignments,
+                cancellationToken);
+        }
 
         var assignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
         return new QuizAssignmentListResponse(assignments.Select(QuizManageMapping.ToAssignmentResponse).ToArray());
@@ -148,11 +236,15 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("No upcoming assignments were found to cancel.");
         }
 
-        var cancelledLifecycleId = await RequireLookupAsync(
-            QuizLookupNames.QuizLifecycleStatus,
-            QuizLookupNames.CancelledLifecycleNames,
+        // Cancelled is not a quiz lifecycle — restore Assigned or Published from remaining rows.
+        var hasAssignments = await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken);
+        var restoredLifecycleId = await RequireLookupAsync(
+            LookupNames.QuizLifecycleStatus,
+            hasAssignments
+                ? LookupNames.AssignedLifecycleNames
+                : LookupNames.PublishedLifecycleNames,
             cancellationToken);
-        quiz.SetLifecycleStatus(cancelledLifecycleId);
+        quiz.SetLifecycleStatus(restoredLifecycleId);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -190,6 +282,15 @@ public sealed class QuizAssignService : IQuizAssignService
 
         var extraAttempts = request.ExtraAttempts <= 0 ? (short)1 : request.ExtraAttempts;
         assignment.GrantRetry(extraAttempts);
+
+        // Retry quota is open, but the student has not started the new attempt yet.
+        var notAttemptedResultId = await _lookups.ResolveLookupIdByNamesAsync(
+            LookupNames.QuizResultStatus,
+            LookupNames.AssignedResultNames,
+            LookupNames.QuizResultStatusIds.NotAttempted,
+            cancellationToken);
+        assignment.SetResultStatus(notAttemptedResultId);
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var student = await _users.GetByIdAsync(assignment.StudentId, cancellationToken);
@@ -236,12 +337,19 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("Quiz must contain at least one question before assignment.");
         }
 
-        if (scope.Role == UserRole.Teacher)
+        if (scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-            if (!approvalName.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+            var canAssign =
+                LookupNames.IsFinalApprovedName(approvalName)
+                || (scope.Role == UserRole.SchoolAdmin
+                    && LookupNames.IsSchoolApprovedName(approvalName));
+            if (!canAssign)
             {
-                throw new BusinessRuleException("Teacher quizzes must be approved before assignment.");
+                throw new BusinessRuleException(
+                    scope.Role == UserRole.SchoolAdmin
+                        ? "Quizzes must be school-approved or approved before assignment."
+                        : "Quizzes must be approved before assignment.");
             }
         }
 
@@ -253,8 +361,23 @@ public sealed class QuizAssignService : IQuizAssignService
         QuizManageScope scope,
         CancellationToken cancellationToken)
     {
-        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
-            ?? throw new NotFoundAppException("Quiz was not found.");
+        if (quizId <= 0)
+        {
+            throw new NotFoundAppException("Quiz was not found.");
+        }
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        if (quiz is null)
+        {
+            throw new NotFoundAppException($"Quiz #{quizId} was not found.");
+        }
+
+        // Public catalog quizzes may be viewed/assigned by any assign-capable role.
+        if (quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
+            && scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
+        {
+            return quiz;
+        }
 
         QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
         return quiz;
@@ -279,14 +402,101 @@ public sealed class QuizAssignService : IQuizAssignService
             };
         }
 
+        if (scope.Role == UserRole.SchoolAdmin)
+        {
+            return mode switch
+            {
+                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
+                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
+                "allinschool" => await ResolveAllInSchoolStudentsAsync(scope, request, cancellationToken),
+                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for school admins."])
+            };
+        }
+
+        if (scope.Role == UserRole.PortalAdmin)
+        {
+            return mode switch
+            {
+                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
+                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
+                "allinschool" => await ResolveAllInSchoolStudentsAsync(scope, request, cancellationToken),
+                "multischool" => await ResolveMultiSchoolStudentsAsync(request, cancellationToken),
+                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for portal admins."])
+            };
+        }
+
         return mode switch
         {
             "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
             "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
             "group" => await ResolveGroupStudentsAsync(scope, request, UserRole.Teacher, cancellationToken),
             "allingrade" => await ResolveAllInGradeStudentsAsync(scope, request, cancellationToken),
+            "allinsection" => await ResolveAllInSectionStudentsAsync(scope, request, cancellationToken),
             _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for teachers."])
         };
+    }
+
+    private async Task<IReadOnlyList<long>> ResolveAllInSectionStudentsAsync(
+        QuizManageScope scope,
+        AssignQuizRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.GradeId is null or <= 0)
+        {
+            throw new ValidationAppException(["Grade id is required for allInSection assignment."]);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Section))
+        {
+            throw new ValidationAppException(["Section is required for allInSection assignment."]);
+        }
+
+        return await _studentScope.GetStudentIdsInCampusByGradeAndSectionAsync(
+            scope.SchoolId!.Value,
+            scope.CampusId!.Value,
+            request.GradeId.Value,
+            request.Section,
+            cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<long>> ResolveAllInSchoolStudentsAsync(
+        QuizManageScope scope,
+        AssignQuizRequest request,
+        CancellationToken cancellationToken)
+    {
+        var schoolId = scope.SchoolId
+            ?? request.SchoolIds?.FirstOrDefault()
+            ?? throw new ValidationAppException(["School id is required for allInSchool assignment."]);
+
+        if (scope.Role == UserRole.SchoolAdmin && scope.SchoolId != schoolId)
+        {
+            throw new ForbiddenAppException("You can only assign school-wide within your school.");
+        }
+
+        var campusId = request.CampusId is > 0
+            ? request.CampusId
+            : scope.CampusId;
+        var gradeId = request.GradeId is > 0 ? request.GradeId : null;
+
+        return await _studentScope.GetStudentIdsInSchoolAsync(
+            schoolId,
+            cancellationToken,
+            campusId,
+            gradeId);
+    }
+
+    private async Task<IReadOnlyList<long>> ResolveMultiSchoolStudentsAsync(
+        AssignQuizRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.SchoolIds is null || request.SchoolIds.Count == 0)
+        {
+            throw new ValidationAppException(["At least one school id is required for multiSchool assignment."]);
+        }
+
+        return await _studentScope.GetStudentIdsInSchoolsAsync(
+            request.SchoolIds.Distinct().ToArray(),
+            cancellationToken);
     }
 
     private async Task<IReadOnlyList<long>> ResolveOneStudentAsync(

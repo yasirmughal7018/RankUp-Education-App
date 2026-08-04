@@ -40,9 +40,13 @@ With mocks enabled, these local demo accounts work without the API:
 | Teacher Demo | `teacher-demo` | `password` |
 
 The mobile app has one common login screen for Student, Parent, and Teacher
-accounts. It must not send a role during login. The backend must validate the
-username and password, resolve the role from the database, and return the role
-with the authenticated user.
+accounts. It must not send a role during login. The backend validates the
+username and password, resolves roles from `app_user_roles`, and returns the
+active session role plus the full `roles` list.
+
+Multi-role accounts (e.g. Parent + Teacher) use `POST /auth/switch-role` from
+Profile. Student and PortalAdmin cannot combine with other roles. Full rules:
+[`docs/02_RankUp_Authentication_Logic.html`](../../docs/02_RankUp_Authentication_Logic.html).
 
 Login request:
 
@@ -122,6 +126,10 @@ Public options (anonymous):
 
 Standalone question management under `/api/questions`.
 
+Mobile now supports creating all current question types, question detail and
+workflow actions, role-scoped pending approvals, lifecycle controls, file
+import, and Public+Active-only bank attachment to quizzes.
+
 | Action | Method | Route |
 |--------|--------|-------|
 | List questions | `GET` | `/api/questions?isActive=&subjectId=&classId=&pendingApprovalOnly=` |
@@ -145,6 +153,13 @@ Workflow:
 5. Teacher edits an approved question → returns to **Pending**, clears approval and `isAiApproved`.
 6. **Deactivate** hides a question from quizzes without deleting the row.
 7. **Delete** permanently removes a question only when it is not linked to any quiz.
+
+## Mobile Quiz Management
+
+Teacher and admin mobile flows support role-scoped assignment modes (individual,
+group, grade, section, school, multi-school, public, and linked children where
+permitted), duplicate/archive/cancel/retry actions, live assignment monitoring,
+and SchoolAdmin/PortalAdmin quiz approval queues.
 
 ## Quiz Question Endpoints (Parent / Teacher)
 
@@ -276,13 +291,47 @@ Submit uses the same answer shape as draft.
 
 | Action | Method | Route |
 |--------|--------|-------|
+| Create quiz | `POST` | `/api/quizzes` |
+| Manage detail | `GET` | `/api/quizzes/{quizId}/manage` |
+| Publish | `POST` | `/api/quizzes/{quizId}/publish` |
+| Add inline question | `POST` | `/api/quizzes/{quizId}/questions` |
+| Attach from bank | `POST` | `/api/quizzes/{quizId}/questions/from-bank` |
+| Remove question | `DELETE` | `/api/quizzes/{quizId}/questions/{questionId}` |
+| Assign | `POST` | `/api/quizzes/{quizId}/assign` |
+| List assignments | `GET` | `/api/quizzes/{quizId}/assignments` |
+| Pending reviews | `GET` | `/api/quizzes/reviews/pending` |
+| Attempt review | `GET` | `/api/quizzes/{quizId}/attempts/{attemptId}/review` |
+| Mark answers | `PUT` | `/api/quizzes/{quizId}/attempts/{attemptId}/answers` |
+| Finalize review | `POST` | `/api/quizzes/{quizId}/attempts/{attemptId}/finalize-review` |
 | Pending quiz approval | `GET` | `/api/quizzes/pending-approval` |
 | Reject quiz | `POST` | `/api/quizzes/{quizId}/reject` |
 
 Reject body: `{ "reason": "optional" }`.
 
-Mobile teacher MVP lists quizzes via `GET /api/quizzes` and shows a read-only summary.
-Create/edit/assign/from-bank attach remain on web for this MVP.
+Mobile teacher manage (in `/quizzes` hub): create → add/attach questions → publish → assign
+(role modes: selected / grade / section / group / school / multi / public / linked) →
+duplicate / archive / cancel / monitor / allow-retry → pending reviews → mark/finalize.
+SchoolAdmin/PortalAdmin quiz approvals: `/quizzes/approvals`.
+Lookups use `GET /api/lookups?type=…`; student picker uses `GET /api/directory/students`.
+
+Mobile bank attach uses `GET /api/questions?eligibleForQuizOnly=true` (Public + Active).
+
+Mobile question bank (`/questions`): create, detail actions (submit / approve / reject /
+activate / deactivate / archive / unarchive by role), pending queue, Excel import.
+
+## Student quiz history (History self)
+
+Students may view their own submitted-attempt history without full analytics
+access (summary / rankings / performance stay Teacher / SchoolAdmin / PortalAdmin).
+
+| Action | Method | Route |
+| --- | --- | --- |
+| Own quiz history | `GET` | `/api/reports/students/{studentId}/quiz-history` |
+
+`studentId` must be the signed-in student’s `profileId` (API scopes other IDs away).
+
+Mobile: `/reports` for Student role and the Quizzes hub history icon both call this
+endpoint. Web: `/student/history`.
 
 ## Product stub endpoints (empty lists today)
 
@@ -299,11 +348,16 @@ without failing. Full domain logic is not implemented yet.
 | Worksheets | `GET` | `/api/worksheets` |
 | Device / push | `POST` | `/api/devices/register` |
 
-### Offline sync & push (placeholders)
+### Offline sync & push
 
-- **Offline sync:** `lib/core/synchronization/sync_queue.dart` holds an
-  in-memory queue (`enqueue` / `processPending`). Persistence and API replay
-  are not implemented.
+- **Quiz draft/submit:** `lib/features/quizzes/domain/offline_quiz_sync.dart`
+  queues draft/submit payloads and replays via `POST /quizzes/{id}/attempts/{attemptId}/sync`.
+- **Quiz start/resume:** `lib/features/quizzes/domain/offline_attempt_session.dart`
+  persists the InProgress attempt shell after an online start so students can
+  reopen offline. New starts still require the network. On reconnect, the app
+  resumes via `POST /quizzes/{id}/attempts` then flushes the draft/submit queue.
+- **Generic sync queue:** `lib/core/synchronization/sync_queue.dart` remains an
+  in-memory placeholder for non-quiz features.
 - **Push:** `lib/core/notifications/notification_service.dart` registers a
   debug placeholder token via `/devices/register` after login. Firebase
   Messaging / local notification channels are still TODO.

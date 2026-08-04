@@ -1,8 +1,11 @@
+using Microsoft.Extensions.Configuration;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Directory;
 using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Auth;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Parents;
@@ -11,47 +14,75 @@ using RankUpEducation.Domain.Teachers;
 
 namespace RankUpEducation.Application.Auth;
 
+/// <summary>
+/// Authentication and account lifecycle: login, registration approval, role switching,
+/// school-change requests, password management, profile/avatar updates.
+/// </summary>
 public sealed class AuthService : IAuthService
 {
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
     private static readonly string[] AllowedRegistrationRoles = ["Student", "Parent", "Teacher"];
     private const string RegistrationRequestCategory = "RegistrationRequest";
     private const string SchoolChangeRequestCategory = "SchoolChangeRequest";
+    private const string RoleRequestCategory = "RoleRequest";
+    private const string PasswordResetRequestCategory = "PasswordResetRequest";
     private const string LockedPendingSchoolChangeMessage =
-        "Your account is locked because you requested a school or campus change. School Admin or Portal Admin must approve (or reject) the change before you can sign in again.";
+        "Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.";
+    private const string LockedRolePendingSchoolChangeMessageFormat =
+        "Your {0} role is locked because you requested a school or campus change. You can keep using your other role(s) until an admin approves or rejects the change.";
 
+    private static readonly TimeSpan PasswordResetTokenLifetime = TimeSpan.FromHours(2);
     private readonly IUserRepository _users;
     private readonly ISchoolChangeRequestRepository _schoolChanges;
+    private readonly IUserRoleRequestRepository _roleRequests;
+    private readonly IPasswordResetRequestRepository _passwordResets;
+    private readonly IDirectoryRepository _directory;
+    private readonly IStudentScopeRepository _studentScope;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICurrentUserService _currentUser;
     private readonly INotificationService _notifications;
     private readonly IFileStorageService _fileStorage;
+    private readonly IEmailService _email;
+    private readonly IConfiguration _configuration;
     private readonly IUnitOfWork _unitOfWork;
 
     public AuthService(
         IUserRepository users,
         ISchoolChangeRequestRepository schoolChanges,
+        IUserRoleRequestRepository roleRequests,
+        IPasswordResetRequestRepository passwordResets,
+        IDirectoryRepository directory,
+        IStudentScopeRepository studentScope,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         IDateTimeProvider dateTimeProvider,
         ICurrentUserService currentUser,
         INotificationService notifications,
         IFileStorageService fileStorage,
+        IEmailService email,
+        IConfiguration configuration,
         IUnitOfWork unitOfWork)
     {
         _users = users;
         _schoolChanges = schoolChanges;
+        _roleRequests = roleRequests;
+        _passwordResets = passwordResets;
+        _directory = directory;
+        _studentScope = studentScope;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _dateTimeProvider = dateTimeProvider;
         _currentUser = currentUser;
         _notifications = notifications;
         _fileStorage = fileStorage;
+        _email = email;
+        _configuration = configuration;
         _unitOfWork = unitOfWork;
     }
 
+    /// <inheritdoc />
     public async Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken)
     {
         ValidateLogin(request);
@@ -61,6 +92,7 @@ public sealed class AuthService : IAuthService
 
         try
         {
+            await TryConvertFullSchoolChangeLockToRoleScopedAsync(user, cancellationToken);
             user.EnsureCanLogin();
         }
         catch (BusinessRuleException exception)
@@ -87,19 +119,25 @@ public sealed class AuthService : IAuthService
             throw new AuthenticationAppException("Invalid username or password.");
         }
 
-        var activeRole = user.Role;
+        var lockedRole = await GetPendingSchoolChangeLockedRoleAsync(user.Id, cancellationToken);
+        var activeRole = ResolveUsableSessionRole(user, preferredRole: null, lockedRole);
         var refreshToken = IssueRefreshToken(user, activeRole);
-        user.RecordLogin(_dateTimeProvider.UtcNow);
+        var loginAt = _dateTimeProvider.UtcNow;
+        user.RecordLogin(loginAt);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        // Persist last_login_at explicitly so login time is saved even if the
+        // tracked entity change for that column is missed.
+        await _users.UpdateLastLoginAtAsync(user.Id, loginAt, cancellationToken);
 
         var sessionUser = await _users.GetByIdForRoleAsync(user.Id, activeRole, cancellationToken) ?? user;
 
         return new LoginResponse(
             _tokenService.CreateAccessToken(sessionUser, activeRole),
             refreshToken,
-            sessionUser.ToCurrentUserResponse(activeRole));
+            await ToCurrentUserResponseAsync(sessionUser, activeRole, cancellationToken));
     }
 
+    /// <inheritdoc />
     public async Task<LoginResponse> SwitchRoleAsync(
         SwitchRoleRequest request,
         CancellationToken cancellationToken)
@@ -116,12 +154,21 @@ public sealed class AuthService : IAuthService
 
         try
         {
+            await TryConvertFullSchoolChangeLockToRoleScopedAsync(user, cancellationToken);
             user.EnsureCanLogin();
             user.EnsureHasRole(targetRole);
         }
         catch (BusinessRuleException exception)
         {
             throw new AuthenticationAppException(exception.Message);
+        }
+
+        var lockedRole = await GetPendingSchoolChangeLockedRoleAsync(user.Id, cancellationToken);
+        if (lockedRole == targetRole)
+        {
+            throw new ValidationAppException([
+                string.Format(LockedRolePendingSchoolChangeMessageFormat, targetRole),
+            ]);
         }
 
         var sessionUser = await _users.GetByIdForRoleAsync(user.Id, targetRole, cancellationToken) ?? user;
@@ -131,9 +178,65 @@ public sealed class AuthService : IAuthService
         return new LoginResponse(
             _tokenService.CreateAccessToken(sessionUser, targetRole),
             refreshToken,
-            sessionUser.ToCurrentUserResponse(targetRole));
+            await ToCurrentUserResponseAsync(sessionUser, targetRole, cancellationToken));
     }
 
+    /// <inheritdoc />
+    public async Task<LoginResponse> RemoveMyRoleAsync(
+        string role,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
+        if (string.IsNullOrWhiteSpace(role)
+            || !Enum.TryParse<UserRole>(role.AsTrimmedString(), true, out var roleToRemove))
+        {
+            throw new ValidationAppException(["Role is required."]);
+        }
+
+        var currentRole = ResolveActiveRoleFromClaims();
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        try
+        {
+            user.EnsureCanLogin();
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new AuthenticationAppException(exception.Message);
+        }
+
+        if (await _users.HasStudentGroupsForRoleAsync(user.Id, roleToRemove, cancellationToken))
+        {
+            throw new ValidationAppException([
+                $"Cannot remove {roleToRemove}: student groups still reference this role. Delete or reassign those groups first.",
+            ]);
+        }
+
+        try
+        {
+            user.RemoveRole(roleToRemove);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        var nextRole = user.HasRole(currentRole)
+            ? currentRole
+            : user.Roles[0];
+
+        var sessionUser = await _users.GetByIdForRoleAsync(user.Id, nextRole, cancellationToken) ?? user;
+        var refreshToken = IssueRefreshToken(sessionUser, nextRole);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new LoginResponse(
+            _tokenService.CreateAccessToken(sessionUser, nextRole),
+            refreshToken,
+            sessionUser.ToCurrentUserResponse(nextRole));
+    }
+
+    /// <inheritdoc />
     public async Task<LoginStatusResponse> GetLoginStatusAsync(
         LoginStatusRequest request,
         CancellationToken cancellationToken)
@@ -154,9 +257,13 @@ public sealed class AuthService : IAuthService
 
         if (user.IsRejectedRegistration)
         {
+            var storedReason = user.RejectionReason?.Trim();
+            var rejectMessage = !string.IsNullOrWhiteSpace(storedReason)
+                ? $"Your registration request was rejected: {storedReason}"
+                : "Your registration request was rejected. You may submit a new request.";
             return new LoginStatusResponse(
                 "Rejected",
-                "Your registration request was rejected. You may submit a new request.");
+                rejectMessage);
         }
 
         if (user.IsPendingRegistration)
@@ -168,17 +275,23 @@ public sealed class AuthService : IAuthService
 
         if (!user.IsActive)
         {
-            var pendingLockMessage = await TryGetPendingSchoolChangeLockMessageAsync(
+            var converted = await TryConvertFullSchoolChangeLockToRoleScopedAsync(
                 user,
                 cancellationToken);
-            if (pendingLockMessage is not null)
+            if (!converted)
             {
-                return new LoginStatusResponse(
-                    "LockedPendingSchoolChange",
-                    pendingLockMessage);
-            }
+                var pendingLockMessage = await TryGetPendingSchoolChangeLockMessageAsync(
+                    user,
+                    cancellationToken);
+                if (pendingLockMessage is not null)
+                {
+                    return new LoginStatusResponse(
+                        "LockedPendingSchoolChange",
+                        pendingLockMessage);
+                }
 
-            throw new AuthenticationAppException("This account is not active.");
+                throw new AuthenticationAppException("This account is not active.");
+            }
         }
 
         if (user.NeedsPasswordSetup)
@@ -193,6 +306,7 @@ public sealed class AuthService : IAuthService
             "Enter your password to sign in.");
     }
 
+    /// <inheritdoc />
     public async Task SetInitialPasswordAsync(
         SetInitialPasswordRequest request,
         CancellationToken cancellationToken)
@@ -235,24 +349,27 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<RegisterAccountResponse> RegisterAccountAsync(
         RegisterAccountRequest request,
         CancellationToken cancellationToken)
     {
         ValidateRegistration(request);
 
-        var mobileNumber = request.MobileNumber.AsTrimmedString();
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
         var cnic = request.Cnic.AsTrimmedOrNull();
+        var role = ParseRegistrationRole(request.UserType);
+        var emailAddress = request.EmailAddress.AsNormalizedEmailOrNull()
+            ?? throw new ValidationAppException([
+                "Email address is required (it is the username)."]);
 
-        // Username priority: CNIC if present, otherwise mobile number.
-        var username = cnic ?? mobileNumber;
+        // Username is always the email for Student / Parent / Teacher.
+        var username = emailAddress;
 
         if (await _users.UsernameExistsAsync(username, cancellationToken))
         {
             throw new ValidationAppException([
-                cnic is null
-                    ? "An account or request already exists for this mobile number."
-                    : "An account or request already exists for this CNIC."]);
+                "An account or request already exists for this email address."]);
         }
 
         if (cnic is not null && await _users.CnicExistsAsync(cnic, cancellationToken))
@@ -260,12 +377,11 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException(["An account already exists for this CNIC."]);
         }
 
-        if (await _users.MobileNumberExistsAsync(mobileNumber, cancellationToken))
+        if (mobileNumber is not null
+            && await _users.MobileNumberExistsAsync(mobileNumber, cancellationToken))
         {
             throw new ValidationAppException(["An account or request already exists for this mobile number."]);
         }
-
-        var role = ParseRegistrationRole(request.UserType);
 
         // Parent: never school/campus.
         // Student/Teacher: school and campus are optional; they drive the approval queue.
@@ -273,7 +389,11 @@ public sealed class AuthService : IAuthService
         var campusId = role == UserRole.Parent || !schoolId.HasValue
             ? null
             : request.CampusId;
+        // Reject unknown / inactive destinations before queuing reviewers.
+        await EnsureActiveSchoolCampusDestinationAsync(schoolId, campusId, cancellationToken);
+        // Student roll number only when a school is selected; Parent never uses it.
         var rollNumberTeacherCode = role == UserRole.Parent
+            || (role == UserRole.Student && !schoolId.HasValue)
             ? null
             : request.RollNumberTeacherCode;
 
@@ -283,7 +403,7 @@ public sealed class AuthService : IAuthService
             role,
             _dateTimeProvider.UtcNow,
             mobileNumber,
-            request.EmailAddress.AsNormalizedEmailOrNull(),
+            emailAddress,
             cnic,
             schoolId,
             campusId,
@@ -293,11 +413,12 @@ public sealed class AuthService : IAuthService
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Approval queue lives only in app_user_approval:
+        // Approval queue lives only in app_approval:
         // no school → PortalAdmin;
         // school only → SchoolAdmin + PortalAdmin;
         // campus → CampusAdmin + SchoolAdmin + PortalAdmin.
-        // Only PortalAdmin approval activates the account.
+        // Activation: destination Campus/School Admin can activate in scope;
+        // PortalAdmin can activate any (required when there is no school).
         var approverCandidates = await _users.ListPendingApproverCandidatesAsync(
             user.SchoolId,
             user.CampusId,
@@ -305,7 +426,7 @@ public sealed class AuthService : IAuthService
         if (approverCandidates.Count > 0)
         {
             var approvalRows = approverCandidates
-                .Select(candidate => UserApproval.CreatePending(
+                .Select(candidate => Approval.CreatePending(
                     user.Id,
                     candidate.UserId,
                     candidate.Role))
@@ -328,6 +449,7 @@ public sealed class AuthService : IAuthService
         return new RegisterAccountResponse(user.Id, user.Username, user.FullName, user.Role.ToString());
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<PendingRegistrationResponse>> ListPendingRegistrationsAsync(
         int take,
         CancellationToken cancellationToken)
@@ -398,6 +520,7 @@ public sealed class AuthService : IAuthService
         return responses;
     }
 
+    /// <inheritdoc />
     public async Task<ApproveRegistrationResponse> ApproveRegistrationAsync(
         long userId,
         CancellationToken cancellationToken)
@@ -421,7 +544,7 @@ public sealed class AuthService : IAuthService
             throw new ForbiddenAppException("Approver role was not found.");
         }
 
-        // Record this admin's approval in app_user_approval.
+        // Record this admin's approval in app_approval.
         var pendingApproval = await _users.GetPendingApprovalAsync(
             user.Id,
             approverId,
@@ -434,21 +557,22 @@ public sealed class AuthService : IAuthService
         else if (await _users.HasApprovedAsync(user.Id, approverId, approverRole, cancellationToken))
         {
             throw new BusinessRuleException(
-                "Approved — awaiting Portal Admin.");
+                "You already approved this request. It stays pending until an authorized admin activates it.");
         }
         else
         {
             // Legacy request without a queue row for this approver.
-            var approval = UserApproval.CreatePending(user.Id, approverId, approverRole);
+            var approval = Approval.CreatePending(user.Id, approverId, approverRole);
             approval.MarkApproved(_dateTimeProvider.UtcNow);
             await _users.AddApprovalAsync(approval, cancellationToken);
         }
 
         // Activation rules:
-        // - PortalAdmin approve → activate immediately (School/Campus not required).
-        // - SchoolAdmin / CampusAdmin approve → record only; wait for PortalAdmin.
-        // - CampusAdmin approve does not require SchoolAdmin (PortalAdmin still required).
-        if (approverRole != UserRole.PortalAdmin)
+        // - PortalAdmin → activate any request (including no-school / Parent).
+        // - SchoolAdmin → activate Student/Teacher for their school.
+        // - CampusAdmin → activate Student/Teacher for their campus.
+        // - No school on the request → PortalAdmin only (enforced by EnsureCanApproveRegistration).
+        if (!CanActivateRegistration(user, approverRole))
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             return new ApproveRegistrationResponse(
@@ -457,27 +581,11 @@ public sealed class AuthService : IAuthService
                 user.FullName,
                 IsActivated: false,
                 Message:
-                    "Your approval was recorded. The account stays pending until Portal Admin approves.");
+                    "Your approval was recorded. The account stays pending until an authorized admin activates it.");
         }
 
-        // Username priority: when CNIC is already on the request, username becomes CNIC.
-        var resolvedCnic = user.Cnic.AsTrimmedOrNull();
-        if (resolvedCnic is not null
-            && !string.Equals(user.Username, resolvedCnic, StringComparison.OrdinalIgnoreCase))
-        {
-            if (await _users.UsernameExistsAsync(resolvedCnic, cancellationToken))
-            {
-                throw new ValidationAppException(["An account already exists for this CNIC username."]);
-            }
-
-            user.SetUsername(resolvedCnic);
-        }
-
-        var mobileNumber = user.MobileNumber.HasTrimmedText()
-            ? user.MobileNumber!
-            : user.Username;
-
-        await CreateProfileForRoleAsync(user, mobileNumber, cancellationToken);
+        // Username stays as registered (email).
+        await CreateProfileForRoleAsync(user, user.MobileNumber, cancellationToken);
         user.ApprovePendingRegistration();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -487,12 +595,24 @@ public sealed class AuthService : IAuthService
             user.FullName,
             IsActivated: true,
             Message:
-                "Registration approved by Portal Admin. The user can set their initial password and sign in.");
+                "Registration approved. The user can set their initial password and sign in.");
     }
 
-    public async Task RejectRegistrationAsync(long userId, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async Task RejectRegistrationAsync(
+        long userId,
+        string reason,
+        CancellationToken cancellationToken)
     {
         EnsureRegistrationReviewer();
+
+        var trimmedReason = reason.AsTrimmedString();
+        if (trimmedReason.Length < 10)
+        {
+            throw new ValidationAppException([
+                "Rejection reason is required (at least 10 characters)."
+            ]);
+        }
 
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundAppException("Registration request was not found.");
@@ -521,19 +641,20 @@ public sealed class AuthService : IAuthService
             cancellationToken);
         if (approval is not null)
         {
-            approval.RecordRejected(rejectedAt);
+            approval.RecordRejected(rejectedAt, trimmedReason);
         }
         else
         {
-            var rejection = UserApproval.CreatePending(user.Id, rejectorId, rejectorRole);
-            rejection.MarkRejected(rejectedAt);
+            var rejection = Approval.CreatePending(user.Id, rejectorId, rejectorRole);
+            rejection.MarkRejected(rejectedAt, trimmedReason);
             await _users.AddApprovalAsync(rejection, cancellationToken);
         }
 
-        user.RejectPendingRegistration(rejectedAt);
+        user.RejectPendingRegistration(rejectedAt, trimmedReason);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<AuthTokensResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken)
     {
         ValidateRefreshToken(request);
@@ -550,12 +671,16 @@ public sealed class AuthService : IAuthService
         var user = await _users.GetByIdAsync(storedToken.UserId, cancellationToken)
             ?? throw new AuthenticationAppException("User account was not found.");
 
+        await TryConvertFullSchoolChangeLockToRoleScopedAsync(user, cancellationToken);
         user.EnsureCanLogin();
-        var activeRole = storedToken.ActiveRole ?? user.Role;
-        if (!user.HasRole(activeRole))
+        var lockedRole = await GetPendingSchoolChangeLockedRoleAsync(user.Id, cancellationToken);
+        var preferredRole = storedToken.ActiveRole;
+        if (preferredRole.HasValue && preferredRole == lockedRole)
         {
-            activeRole = user.Role;
+            preferredRole = null;
         }
+
+        var activeRole = ResolveUsableSessionRole(user, preferredRole, lockedRole);
 
         storedToken.Revoke(_dateTimeProvider.UtcNow);
         var sessionUser = await _users.GetByIdForRoleAsync(user.Id, activeRole, cancellationToken) ?? user;
@@ -565,6 +690,7 @@ public sealed class AuthService : IAuthService
         return new AuthTokensResponse(_tokenService.CreateAccessToken(sessionUser, activeRole), refreshToken);
     }
 
+    /// <inheritdoc />
     public async Task RequestPasswordResetAsync(PasswordResetRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Username))
@@ -572,9 +698,278 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException(["Username is required."]);
         }
 
-        _ = await _users.GetByLoginIdentifierAsync(request.Username.AsTrimmedString(), cancellationToken);
+        // Never reveal whether the identifier exists — always return success to the client.
+        var user = await _users.GetByLoginIdentifierAsync(
+            request.Username.AsTrimmedString(),
+            cancellationToken);
+        if (user is null
+            || user.IsDeleted
+            || !user.IsActive
+            || user.IsPendingRegistration
+            || user.IsRejectedRegistration
+            || !user.PasswordHash.HasTrimmedText())
+        {
+            return;
+        }
+
+        var now = _dateTimeProvider.UtcNow;
+        await _passwordResets.CancelPendingForUserAsync(user.Id, now, cancellationToken);
+
+        string? plainToken = null;
+        string? tokenHash = null;
+        DateTimeOffset? tokenExpires = null;
+        var email = user.EmailAddress.AsNormalizedEmailOrNull()
+            ?? (user.Username.Contains('@', StringComparison.Ordinal)
+                ? user.Username.AsNormalizedEmailOrNull()
+                : null);
+
+        if (email is not null)
+        {
+            plainToken = TokenHasher.GenerateUrlSafeToken();
+            tokenHash = TokenHasher.HashTokenSha256Hex(plainToken);
+            tokenExpires = now.Add(PasswordResetTokenLifetime);
+        }
+
+        var resetRequest = UserPasswordResetRequest.Create(
+            user.Id,
+            user.Role,
+            tokenHash,
+            tokenExpires,
+            now);
+        await _passwordResets.AddAsync(resetRequest, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (email is not null && plainToken is not null)
+        {
+            var resetUrl = BuildPasswordResetUrl(plainToken);
+            await _email.SendAsync(
+                email,
+                "Reset your RankUp Education password",
+                $"Hello {user.FullName},\n\n"
+                + "We received a request to reset your password.\n"
+                + $"Open this link to choose a new password (expires in {(int)PasswordResetTokenLifetime.TotalHours} hours):\n"
+                + $"{resetUrl}\n\n"
+                + "If you did not request this, you can ignore this email.\n"
+                + "School Admin / Campus Admin / Parent / Portal Admin may also complete this request; "
+                + "only the first completion is applied.\n",
+                cancellationToken);
+        }
+
+        var recipientIds = await ResolvePasswordResetRecipientIdsAsync(user, cancellationToken);
+        if (recipientIds.Count > 0)
+        {
+            await _notifications.CreateAsync(
+                recipientIds,
+                $"Password reset: {user.Username}",
+                $"{user.FullName} ({user.Role}) requested a password reset (#{resetRequest.Id}). "
+                + "Clear their password so they can set a new one on the login screen. "
+                + "Once one person completes the reset, others cannot.",
+                PasswordResetRequestCategory,
+                cancellationToken);
+        }
     }
 
+    /// <inheritdoc />
+    public async Task CompletePasswordResetAsync(
+        CompletePasswordResetRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Token))
+        {
+            throw new ValidationAppException(["Reset token is required."]);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            throw new ValidationAppException(["New password is required."]);
+        }
+
+        if (request.NewPassword.Length < 6)
+        {
+            throw new ValidationAppException(["New password must be at least 6 characters."]);
+        }
+
+        var tokenHash = TokenHasher.HashTokenSha256Hex(request.Token.AsTrimmedString());
+        var resetRequest = await _passwordResets.GetPendingByEmailTokenHashAsync(
+            tokenHash,
+            cancellationToken)
+            ?? throw new ValidationAppException([
+                "This password reset link is invalid or was already used."]);
+
+        var now = _dateTimeProvider.UtcNow;
+        if (!resetRequest.MatchesEmailToken(tokenHash, now))
+        {
+            throw new ValidationAppException([
+                "This password reset link is invalid or has expired."]);
+        }
+
+        var user = await _users.GetByIdAsync(resetRequest.UserId, cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        if (user.IsDeleted || !user.IsActive || user.IsPendingRegistration || user.IsRejectedRegistration)
+        {
+            throw new BusinessRuleException("This account cannot reset its password right now.");
+        }
+
+        try
+        {
+            resetRequest.Complete(now, completedByUserId: null, completedByRole: null);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        user.SetPasswordHash(_passwordHasher.Hash(request.NewPassword));
+        user.ClearPasswordChangeRequirement();
+        await _users.RevokeRefreshTokensForUserAsync(user.Id, now, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task ClearPasswordForResetAsync(
+        PasswordResetRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            throw new ValidationAppException(["Username is required."]);
+        }
+
+        var user = await _users.GetByLoginIdentifierAsync(
+            request.Username.AsTrimmedString(),
+            cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        await EnsureCanClearPasswordForResetAsync(user, cancellationToken);
+
+        var resetRequest = await _passwordResets.GetPendingForUserAsync(user.Id, cancellationToken)
+            ?? throw new BusinessRuleException(
+                "No pending password reset request was found. It may already have been completed.");
+
+        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var clearerRole))
+        {
+            throw new ForbiddenAppException("You are not allowed to clear passwords for reset.");
+        }
+
+        var clearerId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+
+        var now = _dateTimeProvider.UtcNow;
+        try
+        {
+            resetRequest.Complete(now, clearerId, clearerRole);
+            user.ClearPasswordForAdminReset();
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _users.RevokeRefreshTokensForUserAsync(user.Id, now, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Recipients who may complete a pending reset for the requester's role:
+    /// Student → SchoolAdmin, CampusAdmin, Parent, PortalAdmin;
+    /// Teacher → SchoolAdmin, CampusAdmin, PortalAdmin;
+    /// CampusAdmin → SchoolAdmin, PortalAdmin;
+    /// SchoolAdmin → PortalAdmin.
+    /// </summary>
+    private async Task<IReadOnlyList<long>> ResolvePasswordResetRecipientIdsAsync(
+        User user,
+        CancellationToken cancellationToken)
+    {
+        var ids = new HashSet<long>();
+        var role = user.Role;
+
+        if (role == UserRole.Student)
+        {
+            var candidates = await _users.ListPendingApproverCandidatesAsync(
+                user.SchoolId,
+                user.CampusId,
+                cancellationToken);
+            foreach (var candidate in candidates)
+            {
+                ids.Add(candidate.UserId);
+            }
+
+            foreach (var parentId in await _studentScope.GetLinkedParentIdsAsync(user.Id, cancellationToken))
+            {
+                ids.Add(parentId);
+            }
+        }
+        else if (role == UserRole.Teacher)
+        {
+            var candidates = await _users.ListPendingApproverCandidatesAsync(
+                user.SchoolId,
+                user.CampusId,
+                cancellationToken);
+            foreach (var candidate in candidates)
+            {
+                if (candidate.Role is UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin)
+                {
+                    ids.Add(candidate.UserId);
+                }
+            }
+        }
+        else if (role == UserRole.CampusAdmin)
+        {
+            var candidates = await _users.ListPendingApproverCandidatesAsync(
+                user.SchoolId,
+                campusId: null,
+                cancellationToken);
+            foreach (var candidate in candidates)
+            {
+                if (candidate.Role is UserRole.PortalAdmin or UserRole.SchoolAdmin)
+                {
+                    ids.Add(candidate.UserId);
+                }
+            }
+        }
+        else if (role == UserRole.SchoolAdmin)
+        {
+            var candidates = await _users.ListPendingApproverCandidatesAsync(
+                schoolId: null,
+                campusId: null,
+                cancellationToken);
+            foreach (var candidate in candidates)
+            {
+                if (candidate.Role == UserRole.PortalAdmin)
+                {
+                    ids.Add(candidate.UserId);
+                }
+            }
+        }
+        else if (role == UserRole.Parent)
+        {
+            var candidates = await _users.ListPendingApproverCandidatesAsync(
+                schoolId: null,
+                campusId: null,
+                cancellationToken);
+            foreach (var candidate in candidates)
+            {
+                if (candidate.Role == UserRole.PortalAdmin)
+                {
+                    ids.Add(candidate.UserId);
+                }
+            }
+        }
+
+        ids.Remove(user.Id);
+        return ids.ToArray();
+    }
+
+    private string BuildPasswordResetUrl(string plainToken)
+    {
+        var baseUrl = _configuration["App:PublicWebBaseUrl"].AsTrimmedOrNull()
+            ?? _configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()?.FirstOrDefault()
+            ?? "http://localhost:5173";
+        return $"{baseUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(plainToken)}";
+    }
+
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> GetCurrentUserAsync(CancellationToken cancellationToken)
     {
         var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
@@ -585,6 +980,7 @@ public sealed class AuthService : IAuthService
         return await ToCurrentUserResponseAsync(user, activeRole, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> UpdateProfileAsync(
         UpdateProfileRequest request,
         CancellationToken cancellationToken)
@@ -608,19 +1004,21 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException(["Display name is required."]);
         }
 
-        if (string.IsNullOrWhiteSpace(request.MobileNumber))
-        {
-            throw new ValidationAppException(["Mobile number is required."]);
-        }
-
-        var mobileNumber = request.MobileNumber.AsTrimmedString();
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
         var cnic = request.Cnic.AsTrimmedOrNull();
         var emailAddress = request.EmailAddress.AsNormalizedEmailOrNull();
-
-        var existingMobile = await _users.GetByMobileNumberAsync(mobileNumber, cancellationToken);
-        if (existingMobile is not null && existingMobile.Id != user.Id)
+        if (emailAddress is null)
         {
-            throw new ValidationAppException(["An account already exists for this mobile number."]);
+            throw new ValidationAppException(["Email address is required (it is the username)."]);
+        }
+
+        if (mobileNumber is not null)
+        {
+            var existingMobile = await _users.GetByMobileNumberAsync(mobileNumber, cancellationToken);
+            if (existingMobile is not null && existingMobile.Id != user.Id)
+            {
+                throw new ValidationAppException(["An account already exists for this mobile number."]);
+            }
         }
 
         if (cnic is not null)
@@ -630,6 +1028,17 @@ public sealed class AuthService : IAuthService
             {
                 throw new ValidationAppException(["An account already exists for this CNIC."]);
             }
+        }
+
+        // Username follows email for Student / Teacher / Parent / SchoolAdmin / CampusAdmin.
+        if (!string.Equals(user.Username, emailAddress, StringComparison.OrdinalIgnoreCase))
+        {
+            if (await _users.UsernameExistsAsync(emailAddress, cancellationToken))
+            {
+                throw new ValidationAppException(["An account already exists for this email address."]);
+            }
+
+            user.SetUsername(emailAddress);
         }
 
         try
@@ -649,6 +1058,7 @@ public sealed class AuthService : IAuthService
         return await ToCurrentUserResponseAsync(user, activeRole, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<RequestSchoolChangeResponse> RequestSchoolChangeAsync(
         RequestSchoolChangeRequest request,
         CancellationToken cancellationToken)
@@ -681,19 +1091,307 @@ public sealed class AuthService : IAuthService
             ]);
         }
 
-        user.SetActive(false);
-        await _users.RevokeRefreshTokensForUserAsync(
+        var otherRoles = user.Roles.Where(role => role != activeRole).ToList();
+        var fullyLockAccount = otherRoles.Count == 0;
+        var lockedRoleName = activeRole.ToString();
+
+        if (fullyLockAccount)
+        {
+            user.SetActive(false);
+            await _users.RevokeRefreshTokensForUserAsync(
+                user.Id,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new RequestSchoolChangeResponse(
+                changeRequest.Id,
+                IsLocked: true,
+                LockedPendingSchoolChangeMessage,
+                IsAccountFullyLocked: true,
+                LockedRole: lockedRoleName);
+        }
+
+        // Multi-role: lock only the requesting role; keep account active for other roles.
+        await _users.RevokeRefreshTokensForRoleAsync(
             user.Id,
+            activeRole,
             _dateTimeProvider.UtcNow,
             cancellationToken);
+
+        var continueAs = ResolveUsableSessionRole(user, preferredRole: null, lockedRole: activeRole);
+        var sessionUser = await _users.GetByIdForRoleAsync(user.Id, continueAs, cancellationToken) ?? user;
+        var refreshToken = IssueRefreshToken(sessionUser, continueAs);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var message = string.Format(LockedRolePendingSchoolChangeMessageFormat, lockedRoleName);
         return new RequestSchoolChangeResponse(
             changeRequest.Id,
             IsLocked: true,
-            LockedPendingSchoolChangeMessage);
+            message,
+            IsAccountFullyLocked: false,
+            LockedRole: lockedRoleName,
+            AccessToken: _tokenService.CreateAccessToken(sessionUser, continueAs),
+            RefreshToken: refreshToken,
+            User: await ToCurrentUserResponseAsync(sessionUser, continueAs, cancellationToken));
     }
 
+    /// <inheritdoc />
+    public async Task<RequestAdditionalRoleResponse> RequestAdditionalRoleAsync(
+        RequestAdditionalRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId ?? throw new AuthenticationAppException("Authentication is required.");
+        var activeRole = ResolveActiveRoleFromClaims();
+        var user = await _users.GetByIdForRoleAsync(userId, activeRole, cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        try
+        {
+            user.EnsureCanLogin();
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new AuthenticationAppException(exception.Message);
+        }
+
+        if (!Enum.TryParse<UserRole>(request.Role.AsTrimmedString(), true, out var requestedRole)
+            || requestedRole is not (UserRole.Teacher or UserRole.Parent))
+        {
+            throw new ValidationAppException(["Requested role must be Parent or Teacher."]);
+        }
+
+        try
+        {
+            UserRoleRules.EnsureCanAddRole(user.Roles, requestedRole);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        if (requestedRole == UserRole.Teacher)
+        {
+            if (request.SchoolId is null or <= 0 || request.CampusId is null or <= 0)
+            {
+                throw new ValidationAppException(["School and campus are required for Teacher."]);
+            }
+
+            await EnsureCampusBelongsToSchoolForRoleRequestAsync(
+                request.SchoolId.Value,
+                request.CampusId.Value,
+                cancellationToken);
+        }
+
+        await _roleRequests.CancelPendingForUserAsync(
+            user.Id,
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
+
+        UserRoleRequest roleRequest;
+        try
+        {
+            roleRequest = UserRoleRequest.Create(
+                user.Id,
+                requestedRole,
+                request.SchoolId,
+                request.CampusId,
+                request.TeacherCode,
+                request.ReasonMessage,
+                _dateTimeProvider.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _roleRequests.AddAsync(roleRequest, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var recipientIds = await ResolveRoleRequestRecipientIdsAsync(
+            roleRequest,
+            cancellationToken);
+        if (recipientIds.Length > 0)
+        {
+            await _notifications.CreateAsync(
+                recipientIds,
+                "Additional role request",
+                $"{user.FullName} requested the {requestedRole} role ({user.Username}).",
+                RoleRequestCategory,
+                cancellationToken);
+        }
+
+        return new RequestAdditionalRoleResponse(
+            roleRequest.Id,
+            requestedRole.ToString(),
+            "Your role request was submitted. An admin will review it. Your account stays active.");
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PendingRoleRequestResponse>> ListPendingRoleRequestsAsync(
+        int take,
+        CancellationToken cancellationToken)
+    {
+        EnsureRoleRequestReviewer();
+
+        int? schoolFilter = null;
+        int? campusFilter = null;
+        if (IsCampusAdmin())
+        {
+            schoolFilter = _currentUser.SchoolId;
+            campusFilter = _currentUser.CampusId;
+        }
+        else if (IsSchoolAdmin())
+        {
+            schoolFilter = _currentUser.SchoolId;
+        }
+
+        var requests = await _roleRequests.ListPendingAsync(
+            take,
+            schoolFilter,
+            campusFilter,
+            cancellationToken);
+
+        var responses = new List<PendingRoleRequestResponse>(requests.Count);
+        foreach (var item in requests)
+        {
+            var user = await _users.GetByIdAsync(item.UserId, cancellationToken);
+            if (user is null)
+            {
+                continue;
+            }
+
+            responses.Add(new PendingRoleRequestResponse(
+                item.Id,
+                item.UserId,
+                user.FullName,
+                user.Username,
+                user.Role.ToString(),
+                user.Roles.Select(static role => role.ToString()).ToArray(),
+                item.RequestedRole.ToString(),
+                item.SchoolId,
+                item.CampusId,
+                item.TeacherCode,
+                item.ReasonMessage,
+                item.RequestedAt.ToString("O")));
+        }
+
+        return responses;
+    }
+
+    /// <inheritdoc />
+    public async Task ApproveRoleRequestAsync(long requestId, CancellationToken cancellationToken)
+    {
+        EnsureRoleRequestReviewer();
+
+        var request = await _roleRequests.GetByIdAsync(requestId, cancellationToken)
+            ?? throw new NotFoundAppException("Role request was not found.");
+
+        if (!request.IsPending)
+        {
+            throw new BusinessRuleException("This role request is no longer pending.");
+        }
+
+        EnsureCanReviewRoleRequest(request);
+
+        var user = await _users.GetByIdAsync(request.UserId, cancellationToken)
+            ?? throw new NotFoundAppException("User account was not found.");
+
+        try
+        {
+            UserRoleRules.EnsureCanAddRole(user.Roles, request.RequestedRole);
+            user.AddRole(request.RequestedRole, _dateTimeProvider.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        if (request.RequestedRole == UserRole.Teacher)
+        {
+            var schoolId = request.SchoolId
+                ?? throw new ValidationAppException(["School is required for Teacher."]);
+            var campusId = request.CampusId
+                ?? throw new ValidationAppException(["Campus is required for Teacher."]);
+            user.AssignSchoolCampus(schoolId, campusId);
+            if (request.TeacherCode.HasTrimmedText())
+            {
+                user.SetRollNumberTeacherCode(request.TeacherCode);
+            }
+
+            if (!await _users.HasTeacherProfileAsync(user.Id, cancellationToken))
+            {
+                await _users.AddTeacherProfileAsync(
+                    new Teacher(user.Id, user.MobileNumber),
+                    cancellationToken);
+            }
+
+            user.AttachProfileContext(user.Id, schoolId, campusId);
+        }
+        else if (request.RequestedRole == UserRole.Parent)
+        {
+            if (!await _users.HasParentProfileAsync(user.Id, cancellationToken))
+            {
+                await _users.AddParentProfileAsync(
+                    new Parent(user.Id, user.MobileNumber),
+                    cancellationToken);
+            }
+        }
+
+        var approverId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+        request.Approve(approverId, _dateTimeProvider.UtcNow);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _notifications.CreateAsync(
+            [user.Id],
+            "Role request approved",
+            $"Your request for the {request.RequestedRole} role was approved. Switch roles from your profile menu.",
+            RoleRequestCategory,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task RejectRoleRequestAsync(
+        long requestId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        EnsureRoleRequestReviewer();
+
+        var request = await _roleRequests.GetByIdAsync(requestId, cancellationToken)
+            ?? throw new NotFoundAppException("Role request was not found.");
+
+        if (!request.IsPending)
+        {
+            throw new BusinessRuleException("This role request is no longer pending.");
+        }
+
+        EnsureCanReviewRoleRequest(request);
+
+        var approverId = _currentUser.UserId
+            ?? throw new AuthenticationAppException("Authentication is required.");
+
+        try
+        {
+            request.Reject(approverId, reason, _dateTimeProvider.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _notifications.CreateAsync(
+            [request.UserId],
+            "Role request rejected",
+            $"Your request for the {request.RequestedRole} role was rejected: {request.RejectionReason}",
+            RoleRequestCategory,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> UploadAvatarAsync(
         Stream content,
         string fileName,
@@ -731,6 +1429,7 @@ public sealed class AuthService : IAuthService
         return await ToCurrentUserResponseAsync(user, activeRole, cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task DeactivateAccountAsync(
         DeactivateAccountRequest request,
         CancellationToken cancellationToken)
@@ -769,6 +1468,7 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<PendingSchoolChangeResponse>> ListPendingSchoolChangesAsync(
         int take,
         CancellationToken cancellationToken)
@@ -853,6 +1553,7 @@ public sealed class AuthService : IAuthService
         return responses;
     }
 
+    /// <inheritdoc />
     public async Task<ApproveSchoolChangeResponse> ApproveSchoolChangeAsync(
         long requestId,
         CancellationToken cancellationToken)
@@ -887,22 +1588,23 @@ public sealed class AuthService : IAuthService
         }
         else if (await _schoolChanges.HasApprovedAsync(request.Id, approverId, approverRole, cancellationToken))
         {
-            // Already soft-approved (e.g. legacy flow). Appliers may still finalize.
+            // Already approved earlier. Appliers may still finalize if allowed.
             if (!CanApplySchoolChange(request, approverRole))
             {
                 throw new BusinessRuleException(
-                    "You already approved this request. It stays pending until School Admin or Portal Admin applies it.");
+                    "You already approved this request. It stays pending until an admin who can apply the destination change finalizes it.");
             }
         }
         else
         {
-            var approval = UserSchoolChangeApproval.CreatePending(request.Id, approverId, approverRole);
+            var approval = Approval.CreatePendingSchoolChange(request.Id, approverId, approverRole);
             approval.MarkApproved(_dateTimeProvider.UtcNow);
             await _schoolChanges.AddApprovalsAsync([approval], cancellationToken);
         }
 
-        // Teacher/Student (and Parent/CampusAdmin) school or campus changes:
-        // SchoolAdmin OR PortalAdmin can apply. CampusAdmin records soft-approval only.
+        // PortalAdmin applies any request.
+        // SchoolAdmin applies inbound Teacher/Student/CampusAdmin for their school.
+        // CampusAdmin applies inbound Teacher/Student for their campus.
         if (!CanApplySchoolChange(request, approverRole))
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -911,7 +1613,7 @@ public sealed class AuthService : IAuthService
                 request.UserId,
                 IsApplied: false,
                 Message:
-                    "Your approval was recorded. The change stays pending until School Admin or Portal Admin approves.");
+                    "Your approval was recorded. The change stays pending until School Admin or Portal Admin applies it.");
         }
 
         var user = await _users.GetByIdAsync(request.UserId, cancellationToken)
@@ -933,8 +1635,10 @@ public sealed class AuthService : IAuthService
             Message: "School/campus change approved and applied. The account is unlocked.");
     }
 
+    /// <inheritdoc />
     public async Task RejectSchoolChangeAsync(
         long requestId,
+        bool leaveWithoutSchool,
         CancellationToken cancellationToken)
     {
         EnsureRegistrationReviewer();
@@ -967,7 +1671,7 @@ public sealed class AuthService : IAuthService
         }
         else
         {
-            var approval = UserSchoolChangeApproval.CreatePending(request.Id, approverId, approverRole);
+            var approval = Approval.CreatePendingSchoolChange(request.Id, approverId, approverRole);
             approval.RecordRejected(_dateTimeProvider.UtcNow);
             await _schoolChanges.AddApprovalsAsync([approval], cancellationToken);
         }
@@ -975,14 +1679,25 @@ public sealed class AuthService : IAuthService
         request.Reject(_dateTimeProvider.UtcNow);
 
         var user = await _users.GetByIdAsync(request.UserId, cancellationToken);
-        if (user is not null && !user.IsActive)
+        if (user is not null)
         {
-            user.SetActive(true);
+            // Rejected destination change: unlock the account.
+            // Optionally clear school/campus (student may continue without a school).
+            if (leaveWithoutSchool && request.RequesterRole == UserRole.Student)
+            {
+                user.ApplySchoolCampus(schoolId: null, campusId: null);
+            }
+
+            if (!user.IsActive)
+            {
+                user.SetActive(true);
+            }
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<CurrentUserResponse> ChangePasswordAsync(
         ChangePasswordRequest request,
         CancellationToken cancellationToken)
@@ -1042,6 +1757,7 @@ public sealed class AuthService : IAuthService
         return user.ToCurrentUserResponse(ResolveActiveRoleFromClaims());
     }
 
+    /// <inheritdoc />
     public async Task LogoutAsync(RefreshTokenRequest? request, CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.RefreshToken))
@@ -1057,7 +1773,7 @@ public sealed class AuthService : IAuthService
 
     private async Task CreateProfileForRoleAsync(
         User user,
-        string mobileNumber,
+        string? mobileNumber,
         CancellationToken cancellationToken)
     {
         switch (user.Role)
@@ -1195,6 +1911,44 @@ public sealed class AuthService : IAuthService
     private static bool IsPortalOnlyRegistration(User user)
         => !user.SchoolId.HasValue;
 
+    /// <summary>
+    /// Who can activate a pending registration after recording approval:
+    /// PortalAdmin — any request;
+    /// SchoolAdmin — Student/Teacher with a school in their scope;
+    /// CampusAdmin — Student/Teacher with a campus in their scope;
+    /// Parent / no-school requests — PortalAdmin only.
+    /// </summary>
+    private static bool CanActivateRegistration(User user, UserRole approverRole)
+    {
+        if (approverRole == UserRole.PortalAdmin)
+        {
+            return true;
+        }
+
+        if (user.Role == UserRole.Parent || IsPortalOnlyRegistration(user))
+        {
+            return false;
+        }
+
+        // Student and Teacher may be activated by destination school/campus admins.
+        if (user.Role is not (UserRole.Student or UserRole.Teacher))
+        {
+            return false;
+        }
+
+        if (approverRole == UserRole.CampusAdmin)
+        {
+            return user.CampusId.HasValue;
+        }
+
+        if (approverRole == UserRole.SchoolAdmin)
+        {
+            return user.SchoolId.HasValue;
+        }
+
+        return false;
+    }
+
     private async Task<CurrentUserResponse> ToCurrentUserResponseAsync(
         User user,
         UserRole activeRole,
@@ -1209,23 +1963,119 @@ public sealed class AuthService : IAuthService
                 pending.ToSchoolId,
                 pending.ToCampusId,
                 pending.RequestedAt.ToString("O"),
-                pending.Status.ToString());
+                pending.Status.ToString(),
+                pending.RequesterRole.ToString(),
+                IsAccountFullyLocked: !user.IsActive);
         }
 
-        return user.ToCurrentUserResponse(activeRole, pendingDto);
+        var pendingRole = await _roleRequests.GetPendingForUserAsync(user.Id, cancellationToken);
+        CurrentUserPendingRoleRequest? pendingRoleDto = null;
+        if (pendingRole is not null)
+        {
+            pendingRoleDto = new CurrentUserPendingRoleRequest(
+                pendingRole.Id,
+                pendingRole.RequestedRole.ToString(),
+                pendingRole.SchoolId,
+                pendingRole.CampusId,
+                pendingRole.TeacherCode,
+                pendingRole.ReasonMessage,
+                pendingRole.RequestedAt.ToString("O"));
+        }
+
+        return user.ToCurrentUserResponse(activeRole, pendingDto, pendingRoleDto);
+    }
+
+    private async Task<UserRole?> GetPendingSchoolChangeLockedRoleAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var pending = await _schoolChanges.GetPendingForUserAsync(userId, cancellationToken);
+        return pending?.RequesterRole;
+    }
+
+    /// <summary>
+    /// Older school-change flow deactivated the whole account. For multi-role users with a
+    /// pending transfer, reopen the account and keep only the requesting role locked.
+    /// </summary>
+    private async Task<bool> TryConvertFullSchoolChangeLockToRoleScopedAsync(
+        User user,
+        CancellationToken cancellationToken)
+    {
+        if (user.IsActive)
+        {
+            return false;
+        }
+
+        var pending = await _schoolChanges.GetPendingForUserAsync(user.Id, cancellationToken);
+        if (pending is null)
+        {
+            return false;
+        }
+
+        if (!user.Roles.Any(role => role != pending.RequesterRole))
+        {
+            return false;
+        }
+
+        user.SetActive(true);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Picks a session role that is assigned and not locked by a pending school-change.
+    /// </summary>
+    private static UserRole ResolveUsableSessionRole(
+        User user,
+        UserRole? preferredRole,
+        UserRole? lockedRole)
+    {
+        if (preferredRole.HasValue
+            && user.HasRole(preferredRole.Value)
+            && preferredRole != lockedRole)
+        {
+            return preferredRole.Value;
+        }
+
+        var unlocked = user.Roles
+            .Where(role => lockedRole is null || role != lockedRole)
+            .ToList();
+        if (unlocked.Count > 0)
+        {
+            return unlocked[0];
+        }
+
+        // Fallback (should only happen if locked role is the sole role — login already blocked).
+        return user.Role;
     }
 
     private async Task<string?> TryGetPendingSchoolChangeLockMessageAsync(
         User user,
         CancellationToken cancellationToken)
     {
-        if (user.IsActive || user.IsPendingRegistration || user.IsRejectedRegistration)
+        if (user.IsPendingRegistration || user.IsRejectedRegistration)
         {
             return null;
         }
 
         var pending = await _schoolChanges.GetPendingForUserAsync(user.Id, cancellationToken);
-        return pending is null ? null : LockedPendingSchoolChangeMessage;
+        if (pending is null)
+        {
+            return null;
+        }
+
+        // Multi-role: other roles remain usable — do not treat as full-account lock.
+        if (user.Roles.Any(role => role != pending.RequesterRole))
+        {
+            return null;
+        }
+
+        if (user.IsActive)
+        {
+            return null;
+        }
+
+        return LockedPendingSchoolChangeMessage;
     }
 
     private async Task<UserSchoolChangeRequest?> MaybeQueueSchoolChangeAsync(
@@ -1235,15 +2085,17 @@ public sealed class AuthService : IAuthService
         int? requestedCampusId,
         CancellationToken cancellationToken)
     {
-        // PortalAdmin / SchoolAdmin cannot change school/campus via this flow.
-        if (activeRole is UserRole.PortalAdmin or UserRole.SchoolAdmin)
+        // PortalAdmin / SchoolAdmin / Parent cannot change school/campus via this flow.
+        // Parent accounts are not school-scoped (registration never assigns school/campus).
+        if (activeRole is UserRole.PortalAdmin
+            or UserRole.SchoolAdmin
+            or UserRole.Parent)
         {
             throw new ForbiddenAppException("Your role cannot request a school or campus change.");
         }
 
         var canRequest = activeRole is UserRole.Student
             or UserRole.Teacher
-            or UserRole.Parent
             or UserRole.CampusAdmin;
 
         if (!canRequest)
@@ -1279,6 +2131,10 @@ public sealed class AuthService : IAuthService
         {
             return null;
         }
+
+        // Validate destination before locking the account — fake/inactive school or campus
+        // IDs would otherwise queue a change with no matching School/Campus reviewers.
+        await EnsureActiveSchoolCampusDestinationAsync(toSchoolId, toCampusId, cancellationToken);
 
         try
         {
@@ -1318,7 +2174,7 @@ public sealed class AuthService : IAuthService
             }
 
             var approvals = candidates
-                .Select(candidate => UserSchoolChangeApproval.CreatePending(
+                .Select(candidate => Approval.CreatePendingSchoolChange(
                     changeRequest.Id,
                     candidate.UserId,
                     candidate.Role))
@@ -1390,8 +2246,11 @@ public sealed class AuthService : IAuthService
     }
 
     /// <summary>
-    /// Teacher/Student school or campus changes (also Parent/CampusAdmin requests):
-    /// SchoolAdmin or PortalAdmin may apply. CampusAdmin soft-approves only.
+    /// Who can apply (unlock + move school/campus), after review scope checks:
+    /// PortalAdmin — any request;
+    /// SchoolAdmin — Teacher/Student/CampusAdmin into their school;
+    /// CampusAdmin — Teacher/Student into their campus.
+    /// Parent cannot request school/campus change.
     /// </summary>
     private static bool CanApplySchoolChange(UserSchoolChangeRequest request, UserRole approverRole)
     {
@@ -1400,15 +2259,93 @@ public sealed class AuthService : IAuthService
             return true;
         }
 
-        if (approverRole != UserRole.SchoolAdmin)
+        if (approverRole == UserRole.SchoolAdmin)
         {
-            return false;
+            return request.RequesterRole is UserRole.Teacher
+                or UserRole.Student
+                or UserRole.CampusAdmin;
         }
 
-        return request.RequesterRole is UserRole.Teacher
-            or UserRole.Student
-            or UserRole.Parent
-            or UserRole.CampusAdmin;
+        if (approverRole == UserRole.CampusAdmin)
+        {
+            return request.RequesterRole is UserRole.Teacher or UserRole.Student;
+        }
+
+        return false;
+    }
+
+    private void EnsureRoleRequestReviewer()
+    {
+        EnsureRegistrationReviewer();
+    }
+
+    private void EnsureCanReviewRoleRequest(UserRoleRequest request)
+    {
+        if (string.Equals(_currentUser.Role, UserRole.PortalAdmin.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (IsCampusAdmin())
+        {
+            if (request.CampusId is not null
+                && _currentUser.CampusId is not null
+                && request.CampusId != _currentUser.CampusId)
+            {
+                throw new ForbiddenAppException("You can only review role requests for your campus.");
+            }
+
+            return;
+        }
+
+        if (IsSchoolAdmin())
+        {
+            if (request.SchoolId is not null
+                && _currentUser.SchoolId is not null
+                && request.SchoolId != _currentUser.SchoolId)
+            {
+                throw new ForbiddenAppException("You can only review role requests for your school.");
+            }
+
+            return;
+        }
+
+        throw new ForbiddenAppException("Only admins can review role requests.");
+    }
+
+    private async Task EnsureCampusBelongsToSchoolForRoleRequestAsync(
+        int schoolId,
+        int campusId,
+        CancellationToken cancellationToken)
+    {
+        var campus = await _directory.GetCampusAsync(campusId, cancellationToken)
+            ?? throw new NotFoundAppException("Campus was not found.");
+        if (campus.SchoolId != schoolId)
+        {
+            throw new ValidationAppException(["Campus must belong to the selected school."]);
+        }
+
+        if (!await _directory.SchoolExistsAsync(schoolId, cancellationToken))
+        {
+            throw new NotFoundAppException("School was not found.");
+        }
+    }
+
+    private async Task<long[]> ResolveRoleRequestRecipientIdsAsync(
+        UserRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await _users.ListPendingApproverCandidatesAsync(
+            request.SchoolId,
+            request.CampusId,
+            cancellationToken);
+
+        return candidates
+            .Where(candidate =>
+                candidate.Role is UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin)
+            .Select(candidate => candidate.UserId)
+            .Distinct()
+            .ToArray();
     }
 
     private void EnsureRegistrationReviewer()
@@ -1419,6 +2356,115 @@ public sealed class AuthService : IAuthService
             && !string.Equals(role, UserRole.CampusAdmin.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             throw new ForbiddenAppException("Only admins can review registration requests.");
+        }
+    }
+
+    /// <summary>
+    /// Who may complete a password reset for the target account:
+    /// PortalAdmin — any;
+    /// SchoolAdmin — Student / Teacher / CampusAdmin in school (not SchoolAdmin / PortalAdmin);
+    /// CampusAdmin — Student / Teacher in campus;
+    /// Parent — linked Student only.
+    /// </summary>
+    private static bool RoleCanClearPasswordForUser(UserRole clearerRole, User target)
+    {
+        if (clearerRole == UserRole.PortalAdmin)
+        {
+            return true;
+        }
+
+        if (target.HasRole(UserRole.PortalAdmin) || target.HasRole(UserRole.SchoolAdmin))
+        {
+            // SchoolAdmin passwords: PortalAdmin only.
+            return false;
+        }
+
+        if (clearerRole == UserRole.SchoolAdmin)
+        {
+            // SchoolAdmin may clear Student, Teacher, CampusAdmin, Parent in school.
+            return true;
+        }
+
+        if (clearerRole == UserRole.CampusAdmin)
+        {
+            return target.HasRole(UserRole.Student) || target.HasRole(UserRole.Teacher);
+        }
+
+        if (clearerRole == UserRole.Parent)
+        {
+            return target.HasRole(UserRole.Student);
+        }
+
+        return false;
+    }
+
+    private async Task EnsureCanClearPasswordForResetAsync(User user, CancellationToken cancellationToken)
+    {
+        if (!Enum.TryParse<UserRole>(_currentUser.Role, true, out var clearerRole))
+        {
+            throw new ForbiddenAppException("You are not allowed to clear passwords for reset.");
+        }
+
+        if (!RoleCanClearPasswordForUser(clearerRole, user))
+        {
+            if (user.HasRole(UserRole.PortalAdmin))
+            {
+                throw new ForbiddenAppException("Only Portal Admin can reset a Portal Admin password.");
+            }
+
+            if (clearerRole == UserRole.CampusAdmin
+                && (user.HasRole(UserRole.SchoolAdmin) || user.HasRole(UserRole.CampusAdmin)))
+            {
+                throw new ForbiddenAppException(
+                    "Campus admins cannot reset School Admin or Campus Admin passwords.");
+            }
+
+            if (clearerRole == UserRole.Parent)
+            {
+                throw new ForbiddenAppException("Parents can only reset passwords for linked students.");
+            }
+
+            throw new ForbiddenAppException("You are not allowed to clear passwords for reset.");
+        }
+
+        if (clearerRole == UserRole.PortalAdmin)
+        {
+            return;
+        }
+
+        if (clearerRole == UserRole.Parent)
+        {
+            var parentId = _currentUser.ProfileId
+                ?? _currentUser.UserId
+                ?? throw new ForbiddenAppException("Parent profile was not found.");
+            if (!await _studentScope.IsLinkedStudentAsync(parentId, user.Id, cancellationToken))
+            {
+                throw new ForbiddenAppException("Parents can only reset passwords for linked students.");
+            }
+
+            return;
+        }
+
+        if (clearerRole == UserRole.SchoolAdmin)
+        {
+            var adminSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            if (user.SchoolId != adminSchoolId)
+            {
+                throw new ForbiddenAppException("You can only reset passwords for users in your school.");
+            }
+
+            return;
+        }
+
+        // CampusAdmin — role rules already passed; enforce campus scope.
+        var campusSchoolId = _currentUser.SchoolId
+            ?? throw new ForbiddenAppException("School context was not found.");
+        var campusId = _currentUser.CampusId
+            ?? throw new ForbiddenAppException("Campus context was not found.");
+        if (user.SchoolId != campusSchoolId || user.CampusId != campusId)
+        {
+            throw new ForbiddenAppException("You can only reset passwords for users in your campus.");
         }
     }
 
@@ -1462,11 +2508,77 @@ public sealed class AuthService : IAuthService
         return UserRole.Student;
     }
 
+    /// <summary>
+    /// Ensures destination school/campus IDs refer to existing, active records and that
+    /// the campus belongs to the school. Prevents registration / school-change queues from
+    /// locking accounts against destinations that have no matching reviewers.
+    /// </summary>
+    private async Task EnsureActiveSchoolCampusDestinationAsync(
+        int? schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        if (!schoolId.HasValue && !campusId.HasValue)
+        {
+            return;
+        }
+
+        if (campusId.HasValue && !schoolId.HasValue)
+        {
+            throw new ValidationAppException(["School is required when a campus is selected."]);
+        }
+
+        if (schoolId.HasValue)
+        {
+            if (schoolId.Value <= 0)
+            {
+                throw new ValidationAppException(["School is invalid."]);
+            }
+
+            var school = await _directory.GetSchoolAsync(schoolId.Value, cancellationToken);
+            if (school is null)
+            {
+                throw new ValidationAppException(["School was not found."]);
+            }
+
+            if (!school.IsActive)
+            {
+                throw new ValidationAppException(["School is inactive. Choose an active school."]);
+            }
+        }
+
+        if (!campusId.HasValue)
+        {
+            return;
+        }
+
+        if (campusId.Value <= 0)
+        {
+            throw new ValidationAppException(["Campus is invalid."]);
+        }
+
+        var campus = await _directory.GetCampusAsync(campusId.Value, cancellationToken);
+        if (campus is null)
+        {
+            throw new ValidationAppException(["Campus was not found."]);
+        }
+
+        if (campus.SchoolId != schoolId!.Value)
+        {
+            throw new ValidationAppException(["Campus must belong to the selected school."]);
+        }
+
+        if (!campus.IsActive)
+        {
+            throw new ValidationAppException(["Campus is inactive. Choose an active campus."]);
+        }
+    }
+
     private static void ValidateLogin(LoginRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Username))
         {
-            throw new ValidationAppException(["CNIC or mobile number is required."]);
+            throw new ValidationAppException(["Username is required."]);
         }
     }
 
@@ -1477,11 +2589,6 @@ public sealed class AuthService : IAuthService
         if (string.IsNullOrWhiteSpace(request.FullName))
         {
             errors.Add("Full name is required.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.MobileNumber))
-        {
-            errors.Add("Mobile number is required.");
         }
 
         UserRole? role = null;
@@ -1497,6 +2604,12 @@ public sealed class AuthService : IAuthService
         else
         {
             role = parsedRole;
+        }
+
+        // Username is always the email for Student / Parent / Teacher.
+        if (!request.EmailAddress.AsNormalizedEmailOrNull().HasTrimmedText())
+        {
+            errors.Add("Email address is required (it is the username).");
         }
 
         if (role == UserRole.Parent)
@@ -1528,9 +2641,12 @@ public sealed class AuthService : IAuthService
                 errors.Add("Campus is invalid.");
             }
 
-            if (role == UserRole.Student && !request.RollNumberTeacherCode.HasTrimmedText())
+            // Roll number only when the student belongs to a school.
+            if (role == UserRole.Student
+                && request.SchoolId.HasValue
+                && !request.RollNumberTeacherCode.HasTrimmedText())
             {
-                errors.Add("Roll number is required for Student account requests.");
+                errors.Add("Roll number is required when a school is selected.");
             }
         }
 

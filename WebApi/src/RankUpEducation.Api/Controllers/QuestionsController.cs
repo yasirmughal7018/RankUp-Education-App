@@ -87,7 +87,7 @@ public sealed class QuestionsController : ControllerBase
         }
 
         await using var stream = file.OpenReadStream();
-        IReadOnlyList<CreateQuestionRequest> rows;
+        IReadOnlyList<QuestionExcelImportRow> rows;
         try
         {
             rows = QuestionExcelImportParser.Parse(stream);
@@ -120,7 +120,7 @@ public sealed class QuestionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _questionService.SubmitForReviewAsync(questionId, cancellationToken);
-        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question submitted for Portal Admin review."));
+        return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question submitted for review (PendingReview)."));
     }
 
     [HttpPost("{questionId:long}/approve")]
@@ -167,6 +167,15 @@ public sealed class QuestionsController : ControllerBase
     {
         var response = await _questionService.ArchiveAsync(questionId, cancellationToken);
         return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question archived."));
+    }
+
+    [HttpPost("{questionId:long}/unarchive")]
+    public async Task<ActionResult<ApiResponse<QuestionActiveStateResponse>>> UnarchiveAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.UnarchiveAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionActiveStateResponse>.Ok(response, "Question unarchived."));
     }
 
     [HttpDelete("{questionId:long}")]

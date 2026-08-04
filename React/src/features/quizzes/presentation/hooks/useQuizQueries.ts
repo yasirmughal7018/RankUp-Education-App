@@ -1,3 +1,4 @@
+/** React Query hooks for quiz management, assignments, and attempt review. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as quizApi from "@/features/quizzes/data/quizApi";
@@ -10,6 +11,7 @@ import type {
 } from "@/features/quizzes/domain/quizTypes";
 import type { MarkAttemptAnswerInput } from "@/features/quizzes/domain/quizMonitorTypes";
 
+/** List quizzes with optional search. */
 export function useQuizzesQuery(search?: string) {
   return useQuery({
     queryKey: queryKeys.quizzes(search),
@@ -17,6 +19,7 @@ export function useQuizzesQuery(search?: string) {
   });
 }
 
+/** Admin queue of quizzes awaiting approval. */
 export function usePendingQuizApprovalsQuery() {
   return useQuery({
     queryKey: queryKeys.pendingQuizApprovals(),
@@ -24,14 +27,18 @@ export function usePendingQuizApprovalsQuery() {
   });
 }
 
+/** Single quiz detail for manage/edit pages. */
 export function useManageQuizQuery(quizId: number, enabled = true) {
   return useQuery({
     queryKey: queryKeys.manageQuiz(quizId),
     queryFn: () => quizApi.getManageQuiz(quizId),
     enabled: enabled && quizId > 0,
+    // Hard-deleted quizzes must not auto-retry / refetch after cache removal.
+    retry: false,
   });
 }
 
+/** Assignments for one quiz. */
 export function useQuizAssignmentsQuery(quizId: number, enabled = true) {
   return useQuery({
     queryKey: queryKeys.quizAssignments(quizId),
@@ -40,6 +47,7 @@ export function useQuizAssignmentsQuery(quizId: number, enabled = true) {
   });
 }
 
+/** Cross-quiz assignment board. */
 export function useAssignmentBoardQuery(studentId?: number | null) {
   return useQuery({
     queryKey: queryKeys.assignmentBoard(studentId),
@@ -47,6 +55,7 @@ export function useAssignmentBoardQuery(studentId?: number | null) {
   });
 }
 
+/** Attempts awaiting manual grading. */
 export function usePendingReviewsQuery() {
   return useQuery({
     queryKey: queryKeys.pendingReviews(),
@@ -54,6 +63,7 @@ export function usePendingReviewsQuery() {
   });
 }
 
+/** Live monitoring snapshot for a quiz. */
 export function useQuizMonitoringQuery(quizId: number) {
   return useQuery({
     queryKey: queryKeys.quizMonitoring(quizId),
@@ -62,6 +72,7 @@ export function useQuizMonitoringQuery(quizId: number) {
   });
 }
 
+/** Attempt detail for the review page. */
 export function useAttemptReviewQuery(quizId: number, attemptId: number) {
   return useQuery({
     queryKey: queryKeys.attemptReview(quizId, attemptId),
@@ -78,10 +89,23 @@ function useInvalidateQuizDetail(quizId: number) {
     void queryClient.invalidateQueries({
       queryKey: queryKeys.quizAssignments(quizId),
     });
-    void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+    invalidateQuizListQueries(queryClient);
   };
 }
 
+/**
+ * Invalidate quiz *list* caches only.
+ * Do not use queryKey: ["quizzes"] — that prefix also matches manage/assignments/monitoring
+ * and refetches them after delete/archive (causing NotFound on a removed quiz).
+ */
+function invalidateQuizListQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    predicate: (query) =>
+      query.queryKey[0] === "quizzes" && query.queryKey.length === 2,
+  });
+}
+
+/** Publish a draft quiz. */
 export function usePublishQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -91,37 +115,75 @@ export function usePublishQuizMutation(quizId: number) {
   });
 }
 
+/** Permanently delete a draft quiz. */
 export function useDeleteQuizMutation(quizId: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: () => quizApi.deleteQuiz(quizId),
+    onMutate: async () => {
+      // Cancel in-flight detail fetches; the page must also disable these queries
+      // before mutateAsync so removeQueries does not trigger a GetManageDetail refetch.
+      await queryClient.cancelQueries({ queryKey: queryKeys.manageQuiz(quizId) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.quizAssignments(quizId) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.quizMonitoring(quizId) });
+    },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      // Do not removeQueries here — an active observer would immediately refetch
+      // GetManageDetail. The page disables queries then navigates away.
+      invalidateQuizListQueries(queryClient);
     },
   });
 }
 
+/** Clone quiz as new draft. */
 export function useDuplicateQuizMutation(quizId: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: () => quizApi.duplicateQuiz(quizId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+    onSuccess: (quiz) => {
+      invalidateQuizListQueries(queryClient);
+      if (quiz?.id > 0) {
+        queryClient.setQueryData(queryKeys.manageQuiz(quiz.id), quiz);
+      }
     },
   });
 }
 
+/** Archive a published quiz (hard-deletes when not started / unassigned). */
 export function useArchiveQuizMutation(quizId: number) {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateQuizDetail(quizId);
 
   return useMutation({
     mutationFn: () => quizApi.archiveQuiz(quizId),
+    onSuccess: (result) => {
+      invalidateQuizListQueries(queryClient);
+      if (result.permanentlyDeleted) {
+        // Hard-delete: page suppresses detail queries and navigates — do not refetch manage.
+        void queryClient.cancelQueries({ queryKey: queryKeys.manageQuiz(quizId) });
+        void queryClient.cancelQueries({ queryKey: queryKeys.quizAssignments(quizId) });
+        return;
+      }
+
+      // Soft archive: refresh manage detail + assignments for latest lifecycle.
+      invalidate();
+    },
+  });
+}
+
+/** Restore an archived quiz. */
+export function useUnarchiveQuizMutation(quizId: number) {
+  const invalidate = useInvalidateQuizDetail(quizId);
+
+  return useMutation({
+    mutationFn: () => quizApi.unarchiveQuiz(quizId),
     onSuccess: invalidate,
   });
 }
 
+/** Remove a question from the quiz. */
 export function useRemoveQuizQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -132,6 +194,7 @@ export function useRemoveQuizQuestionMutation(quizId: number) {
   });
 }
 
+/** Add inline question to quiz. */
 export function useAddQuizQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -142,6 +205,7 @@ export function useAddQuizQuestionMutation(quizId: number) {
   });
 }
 
+/** Update inline quiz question. */
 export function useUpdateQuizQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -157,6 +221,7 @@ export function useUpdateQuizQuestionMutation(quizId: number) {
   });
 }
 
+/** Attach bank question to quiz. */
 export function useAttachBankQuestionMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -167,6 +232,7 @@ export function useAttachBankQuestionMutation(quizId: number) {
   });
 }
 
+/** Assign quiz to students/group/grade. */
 export function useAssignQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
   const queryClient = useQueryClient();
@@ -182,6 +248,7 @@ export function useAssignQuizMutation(quizId: number) {
   });
 }
 
+/** Cancel all assignments. */
 export function useCancelQuizAssignmentsMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
   const queryClient = useQueryClient();
@@ -197,6 +264,7 @@ export function useCancelQuizAssignmentsMutation(quizId: number) {
   });
 }
 
+/** Grant extra attempts on assignment. */
 export function useAllowRetryMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
   const queryClient = useQueryClient();
@@ -221,6 +289,7 @@ export function useAllowRetryMutation(quizId: number) {
   });
 }
 
+/** Update quiz metadata. */
 export function useUpdateQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);
 
@@ -230,13 +299,14 @@ export function useUpdateQuizMutation(quizId: number) {
   });
 }
 
+/** Admin approve pending quiz. */
 export function useApproveQuizMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (quizId: number) => quizApi.approveQuiz(quizId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      invalidateQuizListQueries(queryClient);
       void queryClient.invalidateQueries({
         queryKey: queryKeys.pendingQuizApprovals(),
       });
@@ -244,14 +314,15 @@ export function useApproveQuizMutation() {
   });
 }
 
+/** Admin reject pending quiz. */
 export function useRejectQuizMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ quizId, reason }: { quizId: number; reason?: string }) =>
+    mutationFn: ({ quizId, reason }: { quizId: number; reason: string }) =>
       quizApi.rejectQuiz(quizId, reason),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      invalidateQuizListQueries(queryClient);
       void queryClient.invalidateQueries({
         queryKey: queryKeys.pendingQuizApprovals(),
       });
@@ -259,6 +330,7 @@ export function useRejectQuizMutation() {
   });
 }
 
+/** Save manual grading marks. */
 export function useMarkAttemptAnswersMutation(quizId: number, attemptId: number) {
   const queryClient = useQueryClient();
 
@@ -280,6 +352,7 @@ export function useMarkAttemptAnswersMutation(quizId: number, attemptId: number)
   });
 }
 
+/** Finalize review and release results. */
 export function useFinalizeAttemptReviewMutation(quizId: number, attemptId: number) {
   const queryClient = useQueryClient();
 
@@ -302,12 +375,12 @@ export function useFinalizeAttemptReviewMutation(quizId: number, attemptId: numb
   });
 }
 
+/** Manual cache invalidation helpers. */
 export function useInvalidateQuizQueries() {
   const queryClient = useQueryClient();
 
   return {
-    invalidateQuizzes: () =>
-      queryClient.invalidateQueries({ queryKey: ["quizzes"] }),
+    invalidateQuizzes: () => invalidateQuizListQueries(queryClient),
     invalidateManageQuiz: (quizId: number) =>
       queryClient.invalidateQueries({ queryKey: queryKeys.manageQuiz(quizId) }),
   };

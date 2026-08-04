@@ -1,3 +1,6 @@
+/**
+ * Quiz monitoring HTTP client — assignment board, live monitoring, attempt review.
+ */
 import { apiRequest } from "@/core/api/apiClient";
 import type {
   AssignmentBoardItem,
@@ -7,6 +10,7 @@ import type {
   QuizMonitoring,
 } from "@/features/quizzes/domain/quizMonitorTypes";
 
+/** Cross-quiz assignment list; optional student filter for parents. */
 export async function listAssignmentBoard(
   studentId?: number | null,
 ): Promise<AssignmentBoardItem[]> {
@@ -23,6 +27,7 @@ export async function listAssignmentBoard(
   return response.items;
 }
 
+/** Attempts awaiting manual grading. */
 export async function listPendingReviews(): Promise<PendingReviewItem[]> {
   const response = await apiRequest<{ items: PendingReviewItem[] }>(
     "/quizzes/reviews/pending",
@@ -31,10 +36,12 @@ export async function listPendingReviews(): Promise<PendingReviewItem[]> {
   return response.items;
 }
 
+/** Live progress snapshot for a published quiz. */
 export async function getQuizMonitoring(quizId: number): Promise<QuizMonitoring> {
   return apiRequest<QuizMonitoring>(`/quizzes/${quizId}/monitoring`);
 }
 
+/** Full attempt detail for the review UI. */
 export async function getAttemptReview(
   quizId: number,
   attemptId: number,
@@ -44,6 +51,7 @@ export async function getAttemptReview(
   );
 }
 
+/** Save awarded marks and feedback for manually graded answers. */
 export async function markAttemptAnswers(
   quizId: number,
   attemptId: number,
@@ -58,6 +66,7 @@ export async function markAttemptAnswers(
   );
 }
 
+/** Lock in review marks and release results to the student. */
 export async function finalizeAttemptReview(
   quizId: number,
   attemptId: number,

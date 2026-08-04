@@ -5,6 +5,7 @@ import 'package:rankup_education/core/errors/app_exception.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 
+/// Mandatory password change gate when the account requires a new password.
 class ChangePasswordPage extends ConsumerStatefulWidget {
   const ChangePasswordPage({super.key});
 

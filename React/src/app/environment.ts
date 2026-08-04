@@ -19,6 +19,7 @@ if (
   );
 }
 
+/** Normalized runtime config from Vite env vars. */
 export const environment = {
   apiBaseUrl,
   appName: (import.meta.env.VITE_APP_NAME ?? "RankUp Education").trim(),

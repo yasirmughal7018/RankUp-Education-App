@@ -1,6 +1,7 @@
 import { apiRequest } from "@/core/api/apiClient";
 import type { LookupItem } from "@/core/lookups/lookupTypes";
 
+/** List lookup items, optionally filtered by type and parent. */
 export async function listLookups(
   type?: string,
   parentId?: number | null,
@@ -23,6 +24,7 @@ export async function listLookups(
   return response.items;
 }
 
+/** Distinct lookup type names available from the API. */
 export async function listLookupTypes(): Promise<string[]> {
   const response = await apiRequest<{ types: string[] }>("/lookups/types");
   return response.types;

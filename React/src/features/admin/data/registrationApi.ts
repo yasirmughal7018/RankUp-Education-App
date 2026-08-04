@@ -1,9 +1,11 @@
+/** Admin registration approval HTTP client. */
 import {
   apiRequest,
   apiRequestVoid,
 } from "@/core/api/apiClient";
 import type { PendingRegistration } from "@/features/admin/domain/registrationTypes";
 
+/** Accounts awaiting admin approval. */
 export async function listPendingRegistrations(
   take = 50,
 ): Promise<PendingRegistration[]> {
@@ -12,6 +14,7 @@ export async function listPendingRegistrations(
   );
 }
 
+/** Approve and optionally activate account. */
 export async function approveRegistration(
   userId: number,
 ): Promise<ApproveRegistrationResult> {
@@ -31,8 +34,13 @@ export interface ApproveRegistrationResult {
   message: string;
 }
 
-export async function rejectRegistration(userId: number): Promise<void> {
+/** Reject a pending registration with a required reason. */
+export async function rejectRegistration(
+  userId: number,
+  reason: string,
+): Promise<void> {
   await apiRequestVoid(`/auth/registrations/${userId}/reject`, {
     method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }

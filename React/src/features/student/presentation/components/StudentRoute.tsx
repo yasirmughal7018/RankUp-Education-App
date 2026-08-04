@@ -15,6 +15,7 @@ function ForbiddenScreen() {
   );
 }
 
+/** Restricts routes to Student quiz takers. */
 export function StudentRoute() {
   const { user } = useAuth();
 

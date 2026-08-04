@@ -5,6 +5,7 @@ import 'package:rankup_education/features/authentication/domain/entities/auth_se
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
+/// Offline demo auth repository for development builds with mocks enabled.
 class MockAuthRepository implements AuthRepository {
   MockAuthRepository(this._tokenStore);
 
@@ -125,6 +126,20 @@ class MockAuthRepository implements AuthRepository {
       refreshToken: session.refreshToken,
     );
     return updatedUser;
+  }
+
+  @override
+  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+    int? schoolId,
+    int? campusId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    return (
+      requestId: 1,
+      isLocked: true,
+      message:
+          'Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.',
+    );
   }
 
   @override

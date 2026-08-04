@@ -16,6 +16,8 @@ import 'package:rankup_education/features/notifications/presentation/pages/notif
 import 'package:rankup_education/features/parent_dashboard/presentation/pages/parent_dashboard_page.dart';
 import 'package:rankup_education/features/profile/presentation/pages/profile_page.dart';
 import 'package:rankup_education/features/questions/presentation/pages/questions_page.dart';
+import 'package:rankup_education/features/quizzes/presentation/pages/quiz_approvals_page.dart';
+import 'package:rankup_education/features/quizzes/presentation/pages/quiz_monitoring_page.dart';
 import 'package:rankup_education/features/quizzes/presentation/pages/quizzes_page.dart';
 import 'package:rankup_education/features/rankings/presentation/pages/rankings_page.dart';
 import 'package:rankup_education/features/reports/presentation/pages/reports_page.dart';
@@ -24,6 +26,7 @@ import 'package:rankup_education/features/student_dashboard/presentation/pages/s
 import 'package:rankup_education/features/teacher_dashboard/presentation/pages/teacher_dashboard_page.dart';
 import 'package:rankup_education/features/worksheets/presentation/pages/worksheets_page.dart';
 
+/// Role-aware [GoRouter] with auth redirects and bottom navigation shell.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: '/',
@@ -52,7 +55,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (isAuthenticated &&
-          (location.startsWith('/admin') || location == '/notifications') &&
+          location.startsWith('/admin') &&
           !isAdminRole(user.role)) {
         return _dashboardPath(user.role);
       }
@@ -63,11 +66,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _dashboardPath(user.role);
       }
 
+      if (isAuthenticated &&
+          location == '/quizzes/approvals' &&
+          !canApproveQuizzes(user.role)) {
+        return _dashboardPath(user.role);
+      }
+
       return null;
     },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const SplashPage()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) {
+          final extra = state.extra;
+          String? lockedMessage;
+          if (extra is Map) {
+            final value = extra['lockedMessage'];
+            if (value is String && value.trim().isNotEmpty) {
+              lockedMessage = value.trim();
+            }
+          }
+          return LoginPage(initialLockedMessage: lockedMessage);
+        },
+      ),
       GoRoute(
         path: '/change-password',
         builder: (context, state) => const ChangePasswordPage(),
@@ -102,6 +124,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/quizzes',
             builder: (context, state) => const QuizzesPage(),
+          ),
+          GoRoute(
+            path: '/quizzes/approvals',
+            builder: (context, state) => const QuizApprovalsPage(),
+          ),
+          GoRoute(
+            path: '/quizzes/monitoring/:quizId',
+            builder: (context, state) => QuizMonitoringPage(
+              quizId: state.pathParameters['quizId']!,
+            ),
           ),
           GoRoute(
             path: '/questions',
@@ -158,7 +190,8 @@ String _dashboardPath(UserRole role) {
     UserRole.teacher => '/teacher',
     UserRole.schoolAdmin ||
     UserRole.campusAdmin ||
-    UserRole.portalAdmin => '/admin',
+    UserRole.portalAdmin =>
+      '/admin',
   };
 }
 
@@ -172,7 +205,8 @@ class _RoleShell extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).user;
     final destinations = _destinationsFor(user?.role ?? UserRole.student);
     final location = GoRouterState.of(context).uri.path;
-    var selectedIndex = destinations.indexWhere((item) => location == item.path);
+    var selectedIndex =
+        destinations.indexWhere((item) => location == item.path);
     if (selectedIndex < 0) {
       selectedIndex = destinations.indexWhere(
         (item) => item.path != '/' && location.startsWith('${item.path}/'),
@@ -285,7 +319,8 @@ List<_NavDestination> _destinationsFor(UserRole role) {
       ],
     UserRole.schoolAdmin ||
     UserRole.campusAdmin ||
-    UserRole.portalAdmin => const [
+    UserRole.portalAdmin =>
+      const [
         _NavDestination('Home', '/admin', Icons.home_outlined, Icons.home),
         _NavDestination(
           'Approvals',

@@ -1,3 +1,6 @@
+/**
+ * Authentication HTTP client — login, tokens, profile, registration options.
+ */
 import {
   apiRequest,
   apiRequestForm,
@@ -32,6 +35,7 @@ export interface LoginStatusResponse {
   message: string;
 }
 
+/** Pre-login gate: approval state, password setup, lock, etc. */
 export async function getLoginStatus(
   username: string,
 ): Promise<LoginStatusResponse> {
@@ -42,6 +46,7 @@ export async function getLoginStatus(
   });
 }
 
+/** Authenticate and return a full session (tokens + user). */
 export async function login(request: LoginRequest): Promise<AuthSession> {
   const response = await apiRequest<LoginResponse>("/auth/login", {
     method: "POST",
@@ -56,11 +61,26 @@ export async function login(request: LoginRequest): Promise<AuthSession> {
   };
 }
 
+/** Switch active role; returns new tokens and user snapshot. */
 export async function switchRole(role: string): Promise<AuthSession> {
   const response = await apiRequest<LoginResponse>("/auth/switch-role", {
     method: "POST",
     body: { role },
   });
+
+  return {
+    accessToken: response.accessToken,
+    refreshToken: response.refreshToken,
+    user: response.user,
+  };
+}
+
+/** Remove Parent or Teacher from a multi-role account; returns refreshed session. */
+export async function removeMyRole(role: string): Promise<AuthSession> {
+  const response = await apiRequest<LoginResponse>(
+    `/auth/me/roles/${encodeURIComponent(role)}`,
+    { method: "DELETE" },
+  );
 
   return {
     accessToken: response.accessToken,
@@ -80,6 +100,7 @@ export async function setInitialPassword(
   });
 }
 
+/** Exchange refresh token for a new access/refresh pair. */
 export async function refreshTokens(
   refreshToken: string,
 ): Promise<AuthTokensResponse> {
@@ -91,6 +112,7 @@ export async function refreshTokens(
   });
 }
 
+/** Revoke refresh token server-side (no-op when token missing). */
 export async function logout(refreshToken: string | null): Promise<void> {
   if (!refreshToken) {
     return;
@@ -103,17 +125,19 @@ export async function logout(refreshToken: string | null): Promise<void> {
   });
 }
 
+/** Fetch current user profile (validates stored access token). */
 export async function getCurrentUser(): Promise<CurrentUser> {
   return apiRequest<CurrentUser>("/auth/me");
 }
 
 export interface UpdateProfileRequest {
   fullName: string;
-  mobileNumber: string;
+  mobileNumber?: string | null;
   emailAddress?: string | null;
   cnic?: string | null;
 }
 
+/** Update profile fields on the authenticated account. */
 export async function updateProfile(
   request: UpdateProfileRequest,
 ): Promise<CurrentUser> {
@@ -132,8 +156,17 @@ export interface RequestSchoolChangeResponse {
   requestId: number;
   isLocked: boolean;
   message: string;
+  /** True when the account was fully deactivated (only one role). */
+  isAccountFullyLocked?: boolean;
+  /** Role locked by this request (e.g. Teacher). */
+  lockedRole?: string | null;
+  /** When role-scoped lock: continue session as another role. */
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  user?: CurrentUser | null;
 }
 
+/** Submit a school/campus change request (may lock the account). */
 export async function requestSchoolChange(
   request: RequestSchoolChangeRequest,
 ): Promise<RequestSchoolChangeResponse> {
@@ -143,6 +176,31 @@ export async function requestSchoolChange(
   });
 }
 
+export interface RequestAdditionalRoleRequest {
+  role: "Parent" | "Teacher";
+  schoolId?: number | null;
+  campusId?: number | null;
+  teacherCode?: string | null;
+  reasonMessage?: string | null;
+}
+
+export interface RequestAdditionalRoleResponse {
+  id: number;
+  requestedRole: string;
+  message: string;
+}
+
+/** Request Parent or Teacher as an additional role (account stays active). */
+export async function requestAdditionalRole(
+  request: RequestAdditionalRoleRequest,
+): Promise<RequestAdditionalRoleResponse> {
+  return apiRequest<RequestAdditionalRoleResponse>("/auth/me/role-requests", {
+    method: "POST",
+    body: request,
+  });
+}
+
+/** Upload profile avatar (multipart). */
 export async function uploadAvatar(file: File): Promise<CurrentUser> {
   const formData = new FormData();
   formData.append("file", file);
@@ -153,6 +211,7 @@ export interface DeactivateAccountRequest {
   currentPassword: string;
 }
 
+/** Self-service account deactivation (requires current password). */
 export async function deactivateAccount(
   request: DeactivateAccountRequest,
 ): Promise<void> {
@@ -164,7 +223,7 @@ export async function deactivateAccount(
 
 export interface RegisterAccountRequest {
   fullName: string;
-  mobileNumber: string;
+  mobileNumber?: string | null;
   emailAddress?: string | null;
   userType: "Student" | "Parent" | "Teacher";
   rollNumberTeacherCode?: string | null;
@@ -201,6 +260,7 @@ export interface RegistrationCampusOption {
   isActive: boolean;
 }
 
+/** Schools available during public self-registration. */
 export async function listRegistrationSchools(): Promise<
   RegistrationSchoolOption[]
 > {
@@ -211,6 +271,7 @@ export async function listRegistrationSchools(): Promise<
   return response.items;
 }
 
+/** Campuses for a school on the registration form. */
 export async function listRegistrationCampuses(
   schoolId: number,
 ): Promise<RegistrationCampusOption[]> {
@@ -221,6 +282,7 @@ export async function listRegistrationCampuses(
   return response.items;
 }
 
+/** Request password reset by username (emails link + notifies scoped admins). */
 export async function requestPasswordReset(username: string): Promise<void> {
   await apiRequestVoid("/auth/password-reset/request", {
     method: "POST",
@@ -229,6 +291,27 @@ export async function requestPasswordReset(username: string): Promise<void> {
   });
 }
 
+/** Complete password reset via emailed token. */
+export async function completePasswordReset(
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  await apiRequestVoid("/auth/password-reset/complete", {
+    method: "POST",
+    body: { token, newPassword },
+    skipAuth: true,
+  });
+}
+
+/** Admin or linked Parent: clear password for a pending reset (first wins). */
+export async function clearPasswordForReset(username: string): Promise<void> {
+  await apiRequestVoid("/auth/password-reset/clear", {
+    method: "POST",
+    body: { username },
+  });
+}
+
+/** Public self-registration (Student, Parent, or Teacher). */
 export async function registerAccount(
   request: RegisterAccountRequest,
 ): Promise<RegisterAccountResponse> {
@@ -239,6 +322,7 @@ export async function registerAccount(
   });
 }
 
+/** Change password for the authenticated user. */
 export async function changePassword(
   request: ChangePasswordRequest,
 ): Promise<CurrentUser> {

@@ -1,4 +1,5 @@
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Contracts.Questions;
 using RankUpEducation.Contracts.QuizQuestions;
 
 namespace RankUpEducation.Application.QuizQuestions;
@@ -16,8 +17,19 @@ internal static class QuizQuestionMapping
             question.Marks,
             question.DisplayOrder,
             question.Hint,
+            question.EstimatedTimeSeconds,
             question.Options.Select(option => new QuizQuestionOptionResponse(
                 option.OptionId,
                 option.OptionText,
-                option.IsCorrect)).ToArray());
+                option.IsCorrect,
+                option.OptionImageUrl)).ToArray(),
+            question.AcceptedAnswers.Select(answer => new QuestionAcceptedAnswerResponse(
+                answer.AcceptedAnswerId,
+                answer.AnswerText,
+                answer.IsCaseSensitive,
+                answer.AllowPartialMatch,
+                answer.MinimumLength,
+                answer.MaximumLength,
+                answer.AllowAiReview,
+                answer.AllowTeacherReview)).ToArray());
 }

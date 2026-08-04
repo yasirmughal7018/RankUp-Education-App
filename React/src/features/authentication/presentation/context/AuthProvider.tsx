@@ -35,6 +35,9 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   setInitialPassword: (username: string, newPassword: string) => Promise<void>;
   switchRole: (role: UserRole) => Promise<CurrentUser>;
+  removeMyRole: (role: UserRole) => Promise<CurrentUser>;
+  /** Replace the stored session (e.g. after role-scoped school-change lock). */
+  applySession: (session: AuthSession) => void;
   logout: () => Promise<void>;
   clearError: () => void;
   updateUser: (user: CurrentUser) => void;
@@ -42,6 +45,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Provides auth state, login/logout, token refresh, and forced password change. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -61,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(nextSession);
   }, []);
 
+  // Deduplicate concurrent refresh calls (e.g. multiple 401s).
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current;
@@ -228,6 +233,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setActiveSession],
   );
 
+  const removeMyRole = useCallback(
+    async (role: UserRole) => {
+      setIsSubmitting(true);
+      setError(null);
+
+      try {
+        const nextSession = await authApi.removeMyRole(role);
+        saveStoredSession(nextSession);
+        setActiveSession(nextSession);
+        return normalizeCurrentUser(nextSession.user);
+      } catch (caught) {
+        const apiError = caught as ApiError;
+        setError(apiError.message || "Unable to remove role.");
+        throw caught;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [setActiveSession],
+  );
+
   const updateUser = useCallback(
     (user: CurrentUser) => {
       if (!sessionRef.current) {
@@ -244,6 +270,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setActiveSession],
   );
 
+  const applySession = useCallback(
+    (nextSession: AuthSession) => {
+      saveStoredSession(nextSession);
+      setActiveSession(nextSession);
+    },
+    [setActiveSession],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
@@ -254,6 +288,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       setInitialPassword,
       switchRole,
+      removeMyRole,
+      applySession,
       logout,
       clearError: () => setError(null),
       updateUser,
@@ -266,6 +302,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       setInitialPassword,
       switchRole,
+      removeMyRole,
+      applySession,
       logout,
       updateUser,
     ],
@@ -287,6 +325,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Read auth context; throws when used outside AuthProvider. */
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
 

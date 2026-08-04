@@ -1,6 +1,8 @@
 import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model.dart';
 import 'package:rankup_education/features/quizzes/domain/entities/quiz_attempt.dart';
+import 'package:rankup_education/features/quizzes/domain/quiz_navigation.dart';
 
+/// JSON models for quiz attempt request/response payloads.
 class QuizDetailModel extends QuizDetail {
   const QuizDetailModel({
     required super.id,
@@ -55,10 +57,8 @@ class QuizDetailModel extends QuizDetail {
       dueAt: summary.dueAt,
       completedAt: summary.completedAt,
       instructions: summary.instructions,
-      navigationMode: _readBool(json, ['shuffleQuestions'])
-          ? 'Locked Navigation'
-          : summary.navigationMode,
-      answersCanBeChanged: !_readBool(json, ['shuffleQuestions']),
+      navigationMode: summary.navigationMode,
+      answersCanBeChanged: summary.answersCanBeChanged,
       hintsAllowed: summary.hintsAllowed,
       reviewAvailable: summary.reviewAvailable,
       resultStatus: summary.resultStatus,
@@ -72,6 +72,7 @@ class QuizDetailModel extends QuizDetail {
   }
 }
 
+/// JSON model for [QuizQuestion].
 class QuizQuestionModel extends QuizQuestion {
   const QuizQuestionModel({
     required super.id,
@@ -81,6 +82,8 @@ class QuizQuestionModel extends QuizQuestion {
     required super.displayOrder,
     super.hint,
     super.options,
+    super.estimatedTimeSeconds,
+    super.timeSpentSeconds,
   });
 
   factory QuizQuestionModel.fromJson(Map<String, dynamic> json) {
@@ -98,10 +101,36 @@ class QuizQuestionModel extends QuizQuestion {
               .map(QuizOptionModel.fromJson)
               .toList()
           : const [],
+      estimatedTimeSeconds: _readInt(json, ['estimatedTimeSeconds']),
+      timeSpentSeconds: _readInt(json, ['timeSpentSeconds']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'questionId': id,
+        'text': text,
+        'questionText': text,
+        'questionType': questionType,
+        'marks': marks,
+        'displayOrder': displayOrder,
+        if (hint != null) 'hint': hint,
+        'options': [
+          for (final option in options)
+            option is QuizOptionModel
+                ? option.toJson()
+                : QuizOptionModel(
+                    id: option.id,
+                    text: option.text,
+                    imageUrl: option.imageUrl,
+                  ).toJson(),
+        ],
+        'estimatedTimeSeconds': estimatedTimeSeconds,
+        'timeSpentSeconds': timeSpentSeconds,
+      };
 }
 
+/// JSON model for [QuizOption].
 class QuizOptionModel extends QuizOption {
   const QuizOptionModel({
     required super.id,
@@ -116,14 +145,24 @@ class QuizOptionModel extends QuizOption {
       imageUrl: _readNullableString(json, ['imageUrl']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'optionId': id,
+        'text': text,
+        'optionText': text,
+        if (imageUrl != null) 'imageUrl': imageUrl,
+      };
 }
 
+/// JSON model for [SavedQuizAnswer].
 class SavedQuizAnswerModel extends SavedQuizAnswer {
   const SavedQuizAnswerModel({
     required super.questionId,
     super.selectedOptionId,
     super.selectedOptionIds,
     super.submittedText,
+    super.isMarkedForReview,
   });
 
   factory SavedQuizAnswerModel.fromJson(Map<String, dynamic> json) {
@@ -143,10 +182,20 @@ class SavedQuizAnswerModel extends SavedQuizAnswer {
           ? parsedIds
           : (singleId == null ? const <String>[] : <String>[singleId]),
       submittedText: _readNullableString(json, ['submittedText']),
+      isMarkedForReview: _readBool(json, ['isMarkedForReview']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'questionId': questionId,
+        if (selectedOptionId != null) 'selectedOptionId': selectedOptionId,
+        'selectedOptionIds': selectedOptionIds,
+        if (submittedText != null) 'submittedText': submittedText,
+        'isMarkedForReview': isMarkedForReview,
+      };
 }
 
+/// JSON model for [QuizAttemptSession].
 class QuizAttemptSessionModel extends QuizAttemptSession {
   const QuizAttemptSessionModel({
     required super.attemptId,
@@ -157,6 +206,11 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
     super.timeLimitMinutes,
     super.resumed,
     super.savedAnswers,
+    super.navigationMode,
+    super.enforceDeviceLock,
+    super.focusLossCount,
+    super.clipboardPasteCount,
+    super.enablePerQuestionTimer,
   });
 
   factory QuizAttemptSessionModel.fromJson(Map<String, dynamic> json) {
@@ -181,10 +235,103 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
               .map(SavedQuizAnswerModel.fromJson)
               .toList()
           : const [],
+      navigationMode: normalizeQuizNavigationMode(
+        _readNullableString(json, ['navigationMode']),
+      ),
+      enforceDeviceLock: _readBool(json, ['enforceDeviceLock']),
+      focusLossCount: _readInt(json, ['focusLossCount']),
+      clipboardPasteCount: _readInt(json, ['clipboardPasteCount']),
+      enablePerQuestionTimer: _readBool(json, ['enablePerQuestionTimer']),
+    );
+  }
+
+  factory QuizAttemptSessionModel.fromSession(QuizAttemptSession session) {
+    if (session is QuizAttemptSessionModel) {
+      return session;
+    }
+    return QuizAttemptSessionModel(
+      attemptId: session.attemptId,
+      quizId: session.quizId,
+      attemptNumber: session.attemptNumber,
+      startedAt: session.startedAt,
+      questions: session.questions,
+      timeLimitMinutes: session.timeLimitMinutes,
+      resumed: session.resumed,
+      savedAnswers: session.savedAnswers,
+      navigationMode: session.navigationMode,
+      enforceDeviceLock: session.enforceDeviceLock,
+      focusLossCount: session.focusLossCount,
+      clipboardPasteCount: session.clipboardPasteCount,
+      enablePerQuestionTimer: session.enablePerQuestionTimer,
+    );
+  }
+
+  /// Persist for offline resume after an online start.
+  Map<String, dynamic> toJson() => {
+        'attemptId': attemptId,
+        'quizId': quizId,
+        'attemptNumber': attemptNumber,
+        'startedAt': startedAt.toUtc().toIso8601String(),
+        'timeLimitMinutes': timeLimitMinutes,
+        'resumed': resumed,
+        'questions': [
+          for (final question in questions)
+            question is QuizQuestionModel
+                ? question.toJson()
+                : QuizQuestionModel(
+                    id: question.id,
+                    text: question.text,
+                    questionType: question.questionType,
+                    marks: question.marks,
+                    displayOrder: question.displayOrder,
+                    hint: question.hint,
+                    options: question.options,
+                    estimatedTimeSeconds: question.estimatedTimeSeconds,
+                    timeSpentSeconds: question.timeSpentSeconds,
+                  ).toJson(),
+        ],
+        'savedAnswers': [
+          for (final answer in savedAnswers)
+            answer is SavedQuizAnswerModel
+                ? answer.toJson()
+                : SavedQuizAnswerModel(
+                    questionId: answer.questionId,
+                    selectedOptionId: answer.selectedOptionId,
+                    selectedOptionIds: answer.selectedOptionIds,
+                    submittedText: answer.submittedText,
+                    isMarkedForReview: answer.isMarkedForReview,
+                  ).toJson(),
+        ],
+        'navigationMode': navigationMode,
+        'enforceDeviceLock': enforceDeviceLock,
+        'focusLossCount': focusLossCount,
+        'clipboardPasteCount': clipboardPasteCount,
+        'enablePerQuestionTimer': enablePerQuestionTimer,
+      };
+
+  QuizAttemptSessionModel copyWithResumed({
+    bool resumed = true,
+    List<SavedQuizAnswer>? savedAnswers,
+  }) {
+    return QuizAttemptSessionModel(
+      attemptId: attemptId,
+      quizId: quizId,
+      attemptNumber: attemptNumber,
+      startedAt: startedAt,
+      questions: questions,
+      timeLimitMinutes: timeLimitMinutes,
+      resumed: resumed,
+      savedAnswers: savedAnswers ?? this.savedAnswers,
+      navigationMode: navigationMode,
+      enforceDeviceLock: enforceDeviceLock,
+      focusLossCount: focusLossCount,
+      clipboardPasteCount: clipboardPasteCount,
+      enablePerQuestionTimer: enablePerQuestionTimer,
     );
   }
 }
 
+/// JSON model for [QuizAttemptResult].
 class QuizAttemptResultModel extends QuizAttemptResult {
   const QuizAttemptResultModel({
     required super.attemptId,
@@ -223,6 +370,7 @@ class QuizAttemptResultModel extends QuizAttemptResult {
   }
 }
 
+/// JSON model for [QuizResultQuestion].
 class QuizResultQuestionModel extends QuizResultQuestion {
   const QuizResultQuestionModel({
     required super.id,

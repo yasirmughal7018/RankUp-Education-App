@@ -5,9 +5,9 @@ import { SearchableSelect } from "@/core/components/SearchableSelect";
 import * as authApi from "@/features/authentication/data/authApi";
 import type { RegisterAccountRequest } from "@/features/authentication/data/authApi";
 import { AuthSplitLayout } from "@/features/authentication/presentation/components/AuthSplitLayout";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
-const inputClassName =
-  "w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none ring-brand-500 focus:border-brand-500 focus:ring-2";
+const inputClassName = FORM_FIELD_CLASS;
 
 const USER_TYPES = ["Student", "Parent", "Teacher"] as const;
 
@@ -121,8 +121,8 @@ export function RequestAccessPage() {
     setError(null);
     setSuccessMessage(null);
 
-    if (isStudent && !form.rollNumberTeacherCode.trim()) {
-      setError("Roll number is required for Student account requests.");
+    if (!form.emailAddress.trim()) {
+      setError("Email address is required (it becomes the username).");
       return;
     }
 
@@ -131,20 +131,25 @@ export function RequestAccessPage() {
       return;
     }
 
-    setIsSubmitting(true);
-
     const schoolId =
       isParent || !form.schoolId ? null : Number(form.schoolId);
     const campusId =
       isParent || !schoolId || !form.campusId ? null : Number(form.campusId);
 
+    if (isStudent && schoolId && !form.rollNumberTeacherCode.trim()) {
+      setError("Roll number is required when a school is selected.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
       const response = await authApi.registerAccount({
         fullName: form.fullName.trim(),
-        mobileNumber: form.mobileNumber.trim(),
+        mobileNumber: form.mobileNumber.trim() || null,
         emailAddress: form.emailAddress.trim() || null,
         userType: form.userType,
-        rollNumberTeacherCode: isParent
+        rollNumberTeacherCode: isParent || (isStudent && !schoolId)
           ? null
           : form.rollNumberTeacherCode.trim() || null,
         reasonMessage: form.reasonMessage.trim() || null,
@@ -155,13 +160,13 @@ export function RequestAccessPage() {
 
       const routing =
         schoolId && campusId
-          ? "Campus Admin / School Admin (recorded) and Portal Admin (required to activate)"
+          ? "Campus Admin or School Admin (can activate), or Portal Admin"
           : schoolId
-            ? "School Admin (recorded) and Portal Admin (required to activate)"
+            ? "School Admin (can activate) or Portal Admin"
             : "Portal Admin";
 
       setSuccessMessage(
-        `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. After Portal Admin approval, set your initial password on the login screen, then sign in. Username will be ${response.username}.`,
+        `Request submitted for ${response.fullName}. It will be reviewed by ${routing}. After approval, set your initial password on the login screen, then sign in. Username will be ${response.username}.`,
       );
       setForm({
         fullName: "",
@@ -184,8 +189,12 @@ export function RequestAccessPage() {
   }
 
   const description = isParent
-    ? "Parent requests go to Portal Admin. School and campus are not required."
-    : "Optional school/campus routes approval. Only Portal Admin activates the account.";
+    ? "Parent requests go to Portal Admin. Email is your username. School and campus are not required."
+    : isStudent
+      ? "Email is your username. Mobile is optional. Roll number is required only when you select a school."
+      : "Email is your username. Optional school/campus routes approval. Campus/School Admin can activate in scope; without a school, Portal Admin approves.";
+
+  const rollRequired = isStudent && Boolean(form.schoolId);
 
   return (
     <AuthSplitLayout variant="request-access">
@@ -249,12 +258,15 @@ export function RequestAccessPage() {
             </div>
 
             <div>
-              <FieldLabel htmlFor="mobileNumber" required>
+              <FieldLabel
+                htmlFor="mobileNumber"
+                required={false}
+                optional
+              >
                 Mobile number
               </FieldLabel>
               <input
                 id="mobileNumber"
-                required
                 disabled={isSubmitting}
                 value={form.mobileNumber}
                 onChange={(event) =>
@@ -266,18 +278,20 @@ export function RequestAccessPage() {
             </div>
 
             <div>
-              <FieldLabel htmlFor="emailAddress" optional>
-                Email
+              <FieldLabel htmlFor="emailAddress" required>
+                Email (username)
               </FieldLabel>
               <input
                 id="emailAddress"
                 type="email"
+                required
                 disabled={isSubmitting}
                 value={form.emailAddress}
                 onChange={(event) =>
                   updateField("emailAddress", event.target.value)
                 }
                 className={inputClassName}
+                placeholder="you@example.com"
               />
             </div>
 
@@ -323,14 +337,14 @@ export function RequestAccessPage() {
               <div>
                 <FieldLabel
                   htmlFor="rollNumberTeacherCode"
-                  required={isStudent}
-                  optional={isTeacher}
+                  required={rollRequired}
+                  optional={!rollRequired}
                 >
                   {isTeacher ? "Teacher code" : "Roll number"}
                 </FieldLabel>
                 <input
                   id="rollNumberTeacherCode"
-                  required={isStudent}
+                  required={rollRequired}
                   disabled={isSubmitting}
                   value={form.rollNumberTeacherCode}
                   onChange={(event) =>
@@ -338,7 +352,11 @@ export function RequestAccessPage() {
                   }
                   className={inputClassName}
                   placeholder={
-                    isTeacher ? "Teacher code" : "Student roll number"
+                    isTeacher
+                      ? "Teacher code"
+                      : rollRequired
+                        ? "Student roll number"
+                        : "Required when a school is selected"
                   }
                 />
               </div>

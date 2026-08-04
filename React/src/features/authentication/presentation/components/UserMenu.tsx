@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { getRoleLabel } from "@/core/api/types";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { RoleSwitcher } from "@/features/authentication/presentation/components/RoleSwitcher";
 
 function userInitials(name?: string | null, username?: string | null) {
   const source = (name || username || "?").trim();
@@ -17,11 +18,13 @@ interface UserMenuProps {
   compact?: boolean;
 }
 
+/** Header dropdown: profile link, role switch, and sign out. */
 export function UserMenu({ compact = false }: UserMenuProps) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const canSwitchRole = Boolean(user?.roles && user.roles.length > 1);
 
   useEffect(() => {
     if (!open) {
@@ -183,6 +186,17 @@ export function UserMenu({ compact = false }: UserMenuProps) {
               </span>
               <span className="font-semibold">Profile</span>
             </Link>
+
+            {canSwitchRole ? (
+              <div
+                role="none"
+                className="mt-0.5 rounded-xl border border-slate-100 bg-slate-50/80 px-2.5 py-2"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <RoleSwitcher />
+              </div>
+            ) : null}
 
             <button
               type="button"

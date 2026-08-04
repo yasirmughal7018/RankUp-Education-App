@@ -38,13 +38,9 @@ export function ParentChildHistoryPage() {
         <PageHeader
           title="Quiz history unavailable"
           description={error?.message ?? "Unable to load quiz history."}
+          backTo="/parent/children"
+          backAriaLabel="Back to children"
         />
-        <Link
-          to="/parent/children"
-          className="inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Back to children
-        </Link>
       </div>
     );
   }
@@ -54,23 +50,17 @@ export function ParentChildHistoryPage() {
       <PageHeader
         title={`${data.studentName || `Student ${data.studentId}`} — quiz history`}
         description="Submitted quiz attempts and results for this linked student."
+        backTo="/parent/children"
+        backAriaLabel="Back to children"
         action={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-            >
-              Refresh
-            </button>
-            <Link
-              to="/parent/children"
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Back to children
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+          >
+            Refresh
+          </button>
         }
       />
 
