@@ -62,6 +62,12 @@ const roleModules: Record<UserRole, string[]> = {
     "Create and assign quizzes",
     "Monitor child assignments",
   ],
+  Coordinator: [
+    "Create and assign quizzes",
+    "Monitor live quiz attempts",
+    "Review student submissions",
+    "View quiz reports and rankings",
+  ],
 };
 
 function quickLinksForRole(

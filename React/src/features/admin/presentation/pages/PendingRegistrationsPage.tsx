@@ -307,12 +307,11 @@ export function PendingRegistrationsPage() {
   }
 
   function toggleSelectAll() {
-    setSelectedIds((current) => {
-      if (allSelectableSelected) {
-        return new Set();
-      }
-      return new Set(selectableIds);
-    });
+setSelectedIds(
+    allSelectableSelected
+        ? new Set()
+        : new Set(selectableIds)
+);
   }
 
   function requestBulkApprove() {

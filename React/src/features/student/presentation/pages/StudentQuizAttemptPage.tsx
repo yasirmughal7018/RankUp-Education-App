@@ -503,14 +503,13 @@ export function StudentQuizAttemptPage() {
     }
   }, [attempt, numericAttemptId]);
 
-  const questions = attempt?.questions ?? [];
   const navigationMode = normalizeNavigationMode(attempt?.navigationMode);
   const enablePerQuestionTimer = Boolean(attempt?.enablePerQuestionTimer);
 
-  const orderedQuestions = useMemo(
-    () => [...questions].sort((a, b) => a.displayOrder - b.displayOrder),
-    [questions],
-  );
+  const orderedQuestions = useMemo(() => {
+    const items = attempt?.questions ?? [];
+    return [...items].sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [attempt?.questions]);
 
   useEffect(() => {
     if (orderedQuestions.length === 0) {

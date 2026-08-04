@@ -33,7 +33,6 @@ export function SchoolAdminFormDialog({
 }: SchoolAdminFormDialogProps) {
   const isEdit = schoolAdmin != null;
   const [fullName, setFullName] = useState(schoolAdmin?.fullName ?? "");
-  const [username, setUsername] = useState(schoolAdmin?.username ?? "");
   const [schoolId, setSchoolId] = useState(
     schoolAdmin?.schoolId ? String(schoolAdmin.schoolId) : "",
   );

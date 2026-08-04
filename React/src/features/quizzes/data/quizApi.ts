@@ -101,7 +101,7 @@ export async function duplicateQuiz(quizId: number): Promise<ManageQuiz> {
 
   // Prefer nested quiz when older API shape is still returned; otherwise use top-level manage payload.
   const quiz = response.quiz ?? response;
-  const id = quiz.id ?? quiz.Id ?? 0;
+  const id = quiz.id ?? (quiz as unknown as { Id?: number }).Id ?? 0;
   if (id <= 0) {
     throw {
       message: "Quiz was duplicated but the new quiz id was missing.",

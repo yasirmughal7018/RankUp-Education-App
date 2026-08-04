@@ -103,20 +103,18 @@ export function DirectoryTeachersPage() {
   const bulkDeactivateMutation = useBulkDeactivateTeachersMutation();
   const grantParentMutation = useGrantParentRoleToTeacherMutation();
 
-  const teachers = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
-  const visibleTeachers = useMemo(
-    () =>
-      teachers.filter((teacher) =>
-        matchesDirectoryAccountStatusFilter(
-          teacher.accountStatus,
-          teacher.isActive,
-          activeFilter,
-        ),
+  const visibleTeachers = useMemo(() => {
+    const items = data?.items ?? [];
+    return items.filter((teacher) =>
+      matchesDirectoryAccountStatusFilter(
+        teacher.accountStatus,
+        teacher.isActive,
+        activeFilter,
       ),
-    [teachers, activeFilter],
-  );
+    );
+  }, [data?.items, activeFilter]);
 
   useEffect(() => {
     setSelectedIds(new Set());

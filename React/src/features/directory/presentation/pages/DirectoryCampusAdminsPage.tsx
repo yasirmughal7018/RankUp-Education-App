@@ -116,18 +116,18 @@ export function DirectoryCampusAdminsPage() {
   const activateMutation = useActivateCampusAdminMutation();
   const deactivateMutation = useDeactivateCampusAdminMutation();
 
-  const campusAdmins = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
   const visibleAdmins = useMemo(() => {
-    return campusAdmins.filter((admin) =>
+    const items = data?.items ?? [];
+    return items.filter((admin) =>
       matchesDirectoryAccountStatusFilter(
         admin.accountStatus,
         admin.isActive,
         activeFilter,
       ),
     );
-  }, [campusAdmins, activeFilter]);
+  }, [data?.items, activeFilter]);
 
   useEffect(() => {
     if (lockedSchoolId != null) {

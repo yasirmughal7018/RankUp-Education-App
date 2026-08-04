@@ -40,7 +40,6 @@ export function CampusAdminFormDialog({
   const schoolLocked = lockSchoolId != null && lockSchoolId > 0;
 
   const [fullName, setFullName] = useState(campusAdmin?.fullName ?? "");
-  const [username, setUsername] = useState(campusAdmin?.username ?? "");
   const [schoolId, setSchoolId] = useState(
     schoolLocked
       ? String(lockSchoolId)

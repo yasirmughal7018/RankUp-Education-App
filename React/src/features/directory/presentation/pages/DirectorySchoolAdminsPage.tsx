@@ -101,18 +101,18 @@ export function DirectorySchoolAdminsPage() {
   const activateMutation = useActivateSchoolAdminMutation();
   const deactivateMutation = useDeactivateSchoolAdminMutation();
 
-  const schoolAdmins = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
   const visibleAdmins = useMemo(() => {
-    return schoolAdmins.filter((admin) =>
+    const items = data?.items ?? [];
+    return items.filter((admin) =>
       matchesDirectoryAccountStatusFilter(
         admin.accountStatus,
         admin.isActive,
         activeFilter,
       ),
     );
-  }, [schoolAdmins, activeFilter]);
+  }, [data?.items, activeFilter]);
 
   const busy =
     createMutation.isPending ||

@@ -42,12 +42,12 @@ export function ParentQuizDashboardPage() {
   const quizzesQuery = useQuizzesQuery("");
   const childrenQuery = useLinkedStudentsQuery(true);
 
-  const quizzes = quizzesQuery.data ?? [];
   const stats = useMemo(() => {
+    const items = quizzesQuery.data ?? [];
     let published = 0;
     let notAssigned = 0;
     let pendingReviews = 0;
-    for (const quiz of quizzes) {
+    for (const quiz of items) {
       const status = quiz.status?.toLowerCase() ?? "";
       if (status.includes("publish") || status.includes("assign")) {
         published += 1;
@@ -63,13 +63,13 @@ export function ParentQuizDashboardPage() {
       }
     }
     return {
-      total: quizzes.length,
+      total: items.length,
       published,
       notAssigned,
       pendingReviews,
       children: childrenQuery.data?.length ?? 0,
     };
-  }, [quizzes, childrenQuery.data]);
+  }, [quizzesQuery.data, childrenQuery.data]);
 
   return (
     <div className="space-y-6">

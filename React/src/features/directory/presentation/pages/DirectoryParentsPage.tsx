@@ -112,20 +112,18 @@ export function DirectoryParentsPage() {
   const unlinkMutation = useUnlinkParentStudentMutation();
   const grantTeacherMutation = useGrantTeacherRoleToParentMutation();
 
-  const parents = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
-  const visibleParents = useMemo(
-    () =>
-      parents.filter((parent) =>
-        matchesDirectoryAccountStatusFilter(
-          parent.accountStatus,
-          parent.isActive,
-          activeFilter,
-        ),
+  const visibleParents = useMemo(() => {
+    const items = data?.items ?? [];
+    return items.filter((parent) =>
+      matchesDirectoryAccountStatusFilter(
+        parent.accountStatus,
+        parent.isActive,
+        activeFilter,
       ),
-    [parents, activeFilter],
-  );
+    );
+  }, [data?.items, activeFilter]);
 
   useEffect(() => {
     setSelectedIds(new Set());

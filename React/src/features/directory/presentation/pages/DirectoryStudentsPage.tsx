@@ -102,20 +102,18 @@ export function DirectoryStudentsPage() {
   const deactivateMutation = useDeactivateStudentMutation();
   const bulkDeactivateMutation = useBulkDeactivateStudentsMutation();
 
-  const students = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
 
-  const visibleStudents = useMemo(
-    () =>
-      students.filter((student) =>
-        matchesDirectoryAccountStatusFilter(
-          student.accountStatus,
-          student.isActive,
-          activeFilter,
-        ),
+  const visibleStudents = useMemo(() => {
+    const items = data?.items ?? [];
+    return items.filter((student) =>
+      matchesDirectoryAccountStatusFilter(
+        student.accountStatus,
+        student.isActive,
+        activeFilter,
       ),
-    [students, activeFilter],
-  );
+    );
+  }, [data?.items, activeFilter]);
 
   useEffect(() => {
     setSelectedIds(new Set());

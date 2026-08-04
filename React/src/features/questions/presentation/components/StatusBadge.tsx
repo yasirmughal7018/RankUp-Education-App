@@ -125,5 +125,6 @@ export function getQuestionStatusKey(
   status: string,
   _isActive?: boolean,
 ): ApprovalStatusKey {
+  void _isActive;
   return getQuestionWorkflowStatusKey(status);
 }

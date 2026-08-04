@@ -401,6 +401,7 @@ export function normalizeQuizNavigationMode(
 export function normalizeQuizReviewDisplayMode(
   _value?: string | null,
 ): QuizReviewDisplayMode {
+  void _value;
   return "Full";
 }
 
