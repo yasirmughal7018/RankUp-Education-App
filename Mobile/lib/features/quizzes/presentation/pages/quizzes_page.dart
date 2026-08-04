@@ -1164,8 +1164,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     _focusLossDelta = 0;
     _clipboardPasteDelta = 0;
 
-    setState(() =>
-        _saveStatus = _isOffline ? 'Syncing offline answers…' : 'Saving…');
+    setState(() {
+      _saveStatus = _isOffline ? 'Syncing offline answers…' : 'Saving…';
+    });
 
     final outcome =
         await ref.read(quizzesControllerProvider.notifier).saveDraft(
@@ -2453,13 +2454,11 @@ class _QuizAttemptView extends StatelessWidget {
                         remainingTime: remainingTime,
                       ),
                       urgent: quizTimerUrgent,
-                      warning: false,
                     ),
                     if (questionRemainingSeconds != null)
                       _InfoChip(
                         icon: Icons.hourglass_bottom,
                         label: 'Q ${_formatSeconds(questionRemainingSeconds!)}',
-                        urgent: false,
                         warning: questionTimerUrgent,
                       ),
                   ],
@@ -2652,7 +2651,10 @@ class _QuizAttemptView extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 DropdownButtonFormField<String>(
-                                  value: i < selected.length &&
+                                  key: ValueKey(
+                                    'match-$i-${i < selected.length ? selected[i] : ''}',
+                                  ),
+                                  initialValue: i < selected.length &&
                                           selected[i].isNotEmpty
                                       ? selected[i]
                                       : null,
@@ -3845,10 +3847,10 @@ class _RuleTile extends StatelessWidget {
 class _AnswerOption extends StatelessWidget {
   const _AnswerOption({
     required this.label,
-    this.imageUrl,
     required this.selected,
     required this.multipleSelection,
     required this.onTap,
+    this.imageUrl,
   });
 
   final String label;

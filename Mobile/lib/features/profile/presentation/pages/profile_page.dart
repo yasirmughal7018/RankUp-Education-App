@@ -82,7 +82,7 @@ class ProfilePage extends ConsumerWidget {
           ],
           if (canRequestSchoolChange) ...[
             const SizedBox(height: 28),
-            _SchoolChangeSection(user: user!),
+            _SchoolChangeSection(user: user),
           ],
           const SizedBox(height: 24),
           FilledButton.icon(
@@ -335,7 +335,6 @@ class _SchoolChangeSectionState extends ConsumerState<_SchoolChangeSection> {
                 ),
                 items: [
                   const DropdownMenuItem<int?>(
-                    value: null,
                     child: Text('Select school'),
                   ),
                   ..._schools.map(
@@ -365,7 +364,6 @@ class _SchoolChangeSectionState extends ConsumerState<_SchoolChangeSection> {
                 ),
                 items: [
                   const DropdownMenuItem<int?>(
-                    value: null,
                     child: Text('No campus / clear'),
                   ),
                   ..._campuses.map(

@@ -245,6 +245,27 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
     );
   }
 
+  factory QuizAttemptSessionModel.fromSession(QuizAttemptSession session) {
+    if (session is QuizAttemptSessionModel) {
+      return session;
+    }
+    return QuizAttemptSessionModel(
+      attemptId: session.attemptId,
+      quizId: session.quizId,
+      attemptNumber: session.attemptNumber,
+      startedAt: session.startedAt,
+      questions: session.questions,
+      timeLimitMinutes: session.timeLimitMinutes,
+      resumed: session.resumed,
+      savedAnswers: session.savedAnswers,
+      navigationMode: session.navigationMode,
+      enforceDeviceLock: session.enforceDeviceLock,
+      focusLossCount: session.focusLossCount,
+      clipboardPasteCount: session.clipboardPasteCount,
+      enablePerQuestionTimer: session.enablePerQuestionTimer,
+    );
+  }
+
   /// Persist for offline resume after an online start.
   Map<String, dynamic> toJson() => {
         'attemptId': attemptId,
@@ -287,27 +308,6 @@ class QuizAttemptSessionModel extends QuizAttemptSession {
         'clipboardPasteCount': clipboardPasteCount,
         'enablePerQuestionTimer': enablePerQuestionTimer,
       };
-
-  static QuizAttemptSessionModel fromSession(QuizAttemptSession session) {
-    if (session is QuizAttemptSessionModel) {
-      return session;
-    }
-    return QuizAttemptSessionModel(
-      attemptId: session.attemptId,
-      quizId: session.quizId,
-      attemptNumber: session.attemptNumber,
-      startedAt: session.startedAt,
-      questions: session.questions,
-      timeLimitMinutes: session.timeLimitMinutes,
-      resumed: session.resumed,
-      savedAnswers: session.savedAnswers,
-      navigationMode: session.navigationMode,
-      enforceDeviceLock: session.enforceDeviceLock,
-      focusLossCount: session.focusLossCount,
-      clipboardPasteCount: session.clipboardPasteCount,
-      enablePerQuestionTimer: session.enablePerQuestionTimer,
-    );
-  }
 
   QuizAttemptSessionModel copyWithResumed({
     bool resumed = true,

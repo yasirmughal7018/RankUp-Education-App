@@ -589,65 +589,80 @@ class _CreateQuestionDialogState extends State<_CreateQuestionDialog> {
                       const InputDecoration(labelText: 'Accepted answer'),
                 ),
               if (_type == 'True/False')
-                for (var i = 0; i < 2; i++)
-                  RadioListTile<int>(
-                    value: i,
-                    groupValue: _correct,
-                    onChanged: (value) => setState(() => _correct = value ?? 0),
-                    title:
-                        Text(i == 0 ? 'True is correct' : 'False is correct'),
-                  )
-              else if (usesOptions)
-                for (var i = 0; i < _options.length; i++)
-                  _type == 'Multiple Choice'
-                      ? CheckboxListTile(
-                          value: _correctMany.contains(i),
-                          onChanged: (value) => setState(() {
-                            (value ?? false)
-                                ? _correctMany.add(i)
-                                : _correctMany.remove(i);
-                          }),
-                          title: TextField(
-                            controller: _options[i],
-                            decoration: InputDecoration(
-                              labelText: 'Option ${i + 1}',
-                            ),
+                RadioGroup<int>(
+                  groupValue: _correct,
+                  onChanged: (value) => setState(() => _correct = value ?? 0),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < 2; i++)
+                        RadioListTile<int>(
+                          value: i,
+                          title: Text(
+                            i == 0 ? 'True is correct' : 'False is correct',
                           ),
-                        )
-                      : Column(
-                          children: [
-                            RadioListTile<int>(
-                              value: i,
-                              groupValue: _correct,
-                              onChanged:
-                                  _type == 'Matching' || _type == 'Ordering'
-                                      ? null
-                                      : (value) => setState(
-                                            () => _correct = value ?? 0,
-                                          ),
-                              title: TextField(
-                                controller: _options[i],
-                                decoration: InputDecoration(
-                                  labelText: _type == 'Matching'
-                                      ? const ['L1', 'L2', 'R1', 'R2'][i]
-                                      : 'Option ${i + 1}',
-                                ),
-                              ),
-                            ),
-                            if (_type == 'Media')
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
-                                child: TextField(
-                                  controller: _images[i],
-                                  keyboardType: TextInputType.url,
+                        ),
+                    ],
+                  ),
+                )
+              else if (usesOptions)
+                if (_type == 'Multiple Choice')
+                  for (var i = 0; i < _options.length; i++)
+                    CheckboxListTile(
+                      value: _correctMany.contains(i),
+                      onChanged: (value) => setState(() {
+                        (value ?? false)
+                            ? _correctMany.add(i)
+                            : _correctMany.remove(i);
+                      }),
+                      title: TextField(
+                        controller: _options[i],
+                        decoration: InputDecoration(
+                          labelText: 'Option ${i + 1}',
+                        ),
+                      ),
+                    )
+                else
+                  RadioGroup<int>(
+                    groupValue: _correct,
+                    onChanged: _type == 'Matching' || _type == 'Ordering'
+                        ? (_) {}
+                        : (value) => setState(() => _correct = value ?? 0),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < _options.length; i++)
+                          Column(
+                            children: [
+                              RadioListTile<int>(
+                                value: i,
+                                enabled: _type != 'Matching' &&
+                                    _type != 'Ordering',
+                                title: TextField(
+                                  controller: _options[i],
                                   decoration: InputDecoration(
-                                    labelText: 'Image URL ${i + 1}',
+                                    labelText: _type == 'Matching'
+                                        ? const ['L1', 'L2', 'R1', 'R2'][i]
+                                        : 'Option ${i + 1}',
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
+                              if (_type == 'Media')
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: TextField(
+                                    controller: _images[i],
+                                    keyboardType: TextInputType.url,
+                                    decoration: InputDecoration(
+                                      labelText: 'Image URL ${i + 1}',
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
               if (_error != null)
                 Text(
                   _error!,

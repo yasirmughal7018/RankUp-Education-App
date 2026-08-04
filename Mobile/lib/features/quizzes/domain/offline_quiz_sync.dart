@@ -29,6 +29,30 @@ class OfflineQuizSyncItem {
     this.clipboardPasteDelta,
   });
 
+  factory OfflineQuizSyncItem.fromJson(Map<String, dynamic> json) {
+    final rawAnswers = json['answers'];
+    return OfflineQuizSyncItem(
+      id: json['id']?.toString() ?? '',
+      quizId: json['quizId']?.toString() ?? '',
+      attemptId: json['attemptId']?.toString() ?? '',
+      clientSyncId: json['clientSyncId']?.toString() ?? '',
+      answers: rawAnswers is List
+          ? [
+              for (final entry in rawAnswers)
+                if (entry is Map<String, dynamic>) _answerFromJson(entry),
+            ]
+          : const [],
+      timeSpentSeconds: (json['timeSpentSeconds'] as num?)?.toInt() ?? 0,
+      deviceId: json['deviceId']?.toString() ?? '',
+      submit: json['submit'] == true,
+      isAutoSubmit: json['isAutoSubmit'] == true,
+      focusLossDelta: (json['focusLossDelta'] as num?)?.toInt(),
+      clipboardPasteDelta: (json['clipboardPasteDelta'] as num?)?.toInt(),
+      queuedAt: DateTime.tryParse(json['queuedAt']?.toString() ?? '')?.toUtc() ??
+          DateTime.now().toUtc(),
+    );
+  }
+
   final String id;
   final String quizId;
   final String attemptId;
@@ -59,30 +83,6 @@ class OfflineQuizSyncItem {
       if (clipboardPasteDelta != null) 'clipboardPasteDelta': clipboardPasteDelta,
       'queuedAt': queuedAt.toUtc().toIso8601String(),
     };
-  }
-
-  factory OfflineQuizSyncItem.fromJson(Map<String, dynamic> json) {
-    final rawAnswers = json['answers'];
-    return OfflineQuizSyncItem(
-      id: json['id']?.toString() ?? '',
-      quizId: json['quizId']?.toString() ?? '',
-      attemptId: json['attemptId']?.toString() ?? '',
-      clientSyncId: json['clientSyncId']?.toString() ?? '',
-      answers: rawAnswers is List
-          ? [
-              for (final entry in rawAnswers)
-                if (entry is Map<String, dynamic>) _answerFromJson(entry),
-            ]
-          : const [],
-      timeSpentSeconds: (json['timeSpentSeconds'] as num?)?.toInt() ?? 0,
-      deviceId: json['deviceId']?.toString() ?? '',
-      submit: json['submit'] == true,
-      isAutoSubmit: json['isAutoSubmit'] == true,
-      focusLossDelta: (json['focusLossDelta'] as num?)?.toInt(),
-      clipboardPasteDelta: (json['clipboardPasteDelta'] as num?)?.toInt(),
-      queuedAt: DateTime.tryParse(json['queuedAt']?.toString() ?? '')?.toUtc() ??
-          DateTime.now().toUtc(),
-    );
   }
 }
 

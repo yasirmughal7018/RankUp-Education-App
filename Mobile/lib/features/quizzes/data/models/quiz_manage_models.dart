@@ -306,9 +306,9 @@ class AddInlineQuestionInput {
         'questionType': questionType,
         'marks': marks,
         'estimatedTimeSeconds': estimatedTimeSeconds,
-        'hint': hint?.trim().isEmpty == true ? null : hint?.trim(),
+        'hint': hint?.trim().isEmpty ?? false ? null : hint?.trim(),
         'explanation':
-            explanation?.trim().isEmpty == true ? null : explanation?.trim(),
+            explanation?.trim().isEmpty ?? false ? null : explanation?.trim(),
         'options': [for (final option in options) option.toJson()],
         'acceptedAnswers': [
           for (final answer in acceptedAnswers) answer.toJson(),

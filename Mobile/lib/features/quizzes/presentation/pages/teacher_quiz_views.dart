@@ -192,7 +192,6 @@ class _TeacherQuizCreateViewState extends ConsumerState<TeacherQuizCreateView> {
         difficultyLevelId: _difficultyId!,
         quizTypeId: _quizTypeId!,
         instructions: _instructionsController.text,
-        timeLimitMinutes: null,
         allowedAttempts: _allowedAttempts,
         shuffleQuestions: _shuffleQuestions,
         shuffleOptions: _shuffleOptions,
@@ -472,7 +471,7 @@ class TeacherQuizManageView extends StatelessWidget {
             children: [
               if (canPublish)
                 FilledButton.icon(
-                  onPressed: state.isSaving ? null : () => onPublish(),
+                  onPressed: state.isSaving ? null : onPublish,
                   icon: const Icon(Icons.publish_outlined),
                   label: Text(state.isSaving ? 'Working…' : 'Publish'),
                 ),
@@ -780,12 +779,12 @@ class TeacherAttemptReviewView extends StatelessWidget {
         if (!review.isReviewDone) ...[
           const SizedBox(height: 8),
           FilledButton(
-            onPressed: state.isSaving ? null : () => onSaveMarks(),
+            onPressed: state.isSaving ? null : onSaveMarks,
             child: Text(state.isSaving ? 'Saving…' : 'Save marks'),
           ),
           const SizedBox(height: 8),
           FilledButton.tonal(
-            onPressed: state.isSaving ? null : () => onFinalize(),
+            onPressed: state.isSaving ? null : onFinalize,
             child: const Text('Finalize review'),
           ),
         ],
@@ -967,7 +966,8 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _mode,
+              key: ValueKey(_mode),
+              initialValue: _mode,
               decoration: const InputDecoration(labelText: 'Assignment mode'),
               items: [
                 for (final mode in assignModesForRole(widget.role))
@@ -1020,7 +1020,7 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                             ),
                             onChanged: (value) {
                               setState(() {
-                                if (value == true) {
+                                if (value ?? false) {
                                   if (_mode == 'one') {
                                     _selectedIds.clear();
                                   }
@@ -1297,7 +1297,8 @@ class _AddInlineQuestionDialogState extends State<_AddInlineQuestionDialog> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _type,
+                key: ValueKey(_type),
+                initialValue: _type,
                 decoration: const InputDecoration(labelText: 'Type'),
                 items: const [
                   DropdownMenuItem(
@@ -1356,89 +1357,102 @@ class _AddInlineQuestionDialogState extends State<_AddInlineQuestionDialog> {
                   _type == 'Ordering' ||
                   _type == 'Media') ...[
                 const SizedBox(height: 8),
-                for (var i = 0; i < _optionControllers.length; i++)
-                  Column(
-                    children: [
-                      if (_type == 'Multiple Choice')
-                        CheckboxListTile(
-                          value: _correctIndexes.contains(i),
-                          onChanged: (value) => setState(() {
-                            value == true
-                                ? _correctIndexes.add(i)
-                                : _correctIndexes.remove(i);
-                          }),
-                          title: TextField(
+                if (_type == 'Multiple Choice' ||
+                    _type == 'Matching' ||
+                    _type == 'Ordering')
+                  for (var i = 0; i < _optionControllers.length; i++)
+                    Column(
+                      children: [
+                        if (_type == 'Multiple Choice')
+                          CheckboxListTile(
+                            value: _correctIndexes.contains(i),
+                            onChanged: (value) => setState(() {
+                              (value ?? false)
+                                  ? _correctIndexes.add(i)
+                                  : _correctIndexes.remove(i);
+                            }),
+                            title: TextField(
+                              controller: _optionControllers[i],
+                              decoration: InputDecoration(
+                                labelText: 'Option ${i + 1}',
+                              ),
+                            ),
+                          )
+                        else
+                          TextField(
                             controller: _optionControllers[i],
                             decoration: InputDecoration(
-                              labelText: 'Option ${i + 1}',
+                              labelText: _type == 'Matching'
+                                  ? const ['L1', 'L2', 'R1', 'R2'][i]
+                                  : 'Ordered item ${i + 1}',
                             ),
                           ),
-                        )
-                      else if (_type == 'Matching' || _type == 'Ordering')
-                        TextField(
-                          controller: _optionControllers[i],
-                          decoration: InputDecoration(
-                            labelText: _type == 'Matching'
-                                ? const ['L1', 'L2', 'R1', 'R2'][i]
-                                : 'Ordered item ${i + 1}',
+                      ],
+                    )
+                else
+                  RadioGroup<int>(
+                    groupValue: _correctIndex,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _correctIndex = value);
+                      }
+                    },
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < _optionControllers.length; i++)
+                          Column(
+                            children: [
+                              RadioListTile<int>(
+                                value: i,
+                                title: TextField(
+                                  controller: _optionControllers[i],
+                                  decoration: InputDecoration(
+                                    labelText: 'Option ${i + 1}',
+                                  ),
+                                ),
+                              ),
+                              if (_type == 'Media')
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 16,
+                                    right: 16,
+                                    bottom: 8,
+                                  ),
+                                  child: TextField(
+                                    controller: _imageControllers[i],
+                                    decoration: InputDecoration(
+                                      labelText: 'Image URL ${i + 1}',
+                                    ),
+                                    keyboardType: TextInputType.url,
+                                  ),
+                                ),
+                            ],
                           ),
-                        )
-                      else
-                        RadioListTile<int>(
-                          value: i,
-                          groupValue: _correctIndex,
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _correctIndex = value);
-                            }
-                          },
-                          title: TextField(
-                            controller: _optionControllers[i],
-                            decoration: InputDecoration(
-                              labelText: 'Option ${i + 1}',
-                            ),
-                          ),
-                        ),
-                      if (_type == 'Media')
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            left: 16,
-                            right: 16,
-                            bottom: 8,
-                          ),
-                          child: TextField(
-                            controller: _imageControllers[i],
-                            decoration: InputDecoration(
-                              labelText: 'Image URL ${i + 1}',
-                            ),
-                            keyboardType: TextInputType.url,
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
               ],
-              if (_type == 'True/False') ...[
-                RadioListTile<int>(
-                  value: 0,
+              if (_type == 'True/False')
+                RadioGroup<int>(
                   groupValue: _correctIndex,
-                  title: const Text('True is correct'),
                   onChanged: (value) {
                     if (value != null) {
                       setState(() => _correctIndex = value);
                     }
                   },
+                  child: const Column(
+                    children: [
+                      RadioListTile<int>(
+                        value: 0,
+                        title: Text('True is correct'),
+                      ),
+                      RadioListTile<int>(
+                        value: 1,
+                        title: Text('False is correct'),
+                      ),
+                    ],
+                  ),
                 ),
-                RadioListTile<int>(
-                  value: 1,
-                  groupValue: _correctIndex,
-                  title: const Text('False is correct'),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _correctIndex = value);
-                    }
-                  },
-                ),
-              ],
               if (_type == 'Fill in the Blanks') ...[
                 const SizedBox(height: 8),
                 TextField(
@@ -1556,7 +1570,8 @@ class _LookupDropdown extends StatelessWidget {
     return async.when(
       data: (items) {
         return DropdownButtonFormField<int>(
-          value: items.any((item) => item.id == value) ? value : null,
+          key: ValueKey(value),
+          initialValue: items.any((item) => item.id == value) ? value : null,
           decoration: InputDecoration(labelText: label),
           items: [
             for (final item in items)
