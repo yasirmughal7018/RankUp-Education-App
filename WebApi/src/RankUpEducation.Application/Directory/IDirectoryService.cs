@@ -139,6 +139,20 @@ public interface IDirectoryService
         long teacherId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Adds Coordinator to a Teacher account (may already also be Parent).
+    /// </summary>
+    Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToTeacherAsync(
+        long teacherId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Adds Coordinator to a Parent account (may already also be Teacher).
+    /// </summary>
+    Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToParentAsync(
+        long parentId,
+        CancellationToken cancellationToken);
+
     /// <summary>Updates parent contact and profile fields.</summary>
     Task<DirectoryParentResponse> UpdateParentAsync(
         long parentId,

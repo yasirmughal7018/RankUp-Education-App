@@ -1,6 +1,6 @@
 /**
  * Route guard for /questions/* — allows PortalAdmin, SchoolAdmin, CampusAdmin,
- * Teacher, and Parent; Students are blocked (they use quizzes only).
+ * Teacher, Parent, and Coordinator; Students are blocked (they use quizzes only).
  */
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -12,8 +12,9 @@ function ForbiddenScreen() {
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
         <h1 className="text-2xl font-semibold text-slate-900">Access denied</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          Only PortalAdmin, SchoolAdmin, CampusAdmin, Teacher, and Parent
-          accounts can manage the question bank. Students use quizzes only.
+          Only PortalAdmin, SchoolAdmin, CampusAdmin, Teacher, Parent, and
+          Coordinator accounts can manage the question bank. Students use quizzes
+          only.
         </p>
       </div>
     </div>

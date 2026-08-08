@@ -50,7 +50,10 @@ export function RoleSwitcher() {
       <div
         role="group"
         aria-label="Switch active role"
-        className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1"
+        className={cn(
+          "grid gap-1 rounded-lg bg-slate-100 p-1",
+          user.roles.length >= 3 ? "grid-cols-3" : "grid-cols-2",
+        )}
       >
         {user.roles.map((role) => {
           const isSelected = role === user.role;

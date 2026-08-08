@@ -17,7 +17,7 @@ const fieldClass = FORM_FIELD_CLASS;
 
 const SCHOOL_CHANGE_ROLES: UserRole[] = ["Teacher", "Student", "CampusAdmin"];
 
-const REQUESTABLE_ROLES = ["Parent", "Teacher"] as const;
+const REQUESTABLE_ROLES = ["Parent", "Teacher", "Coordinator"] as const;
 
 /** Roles the user may remove themselves when another role remains. */
 const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher"];

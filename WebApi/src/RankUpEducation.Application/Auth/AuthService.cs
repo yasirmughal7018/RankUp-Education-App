@@ -1156,9 +1156,10 @@ public sealed class AuthService : IAuthService
         }
 
         if (!Enum.TryParse<UserRole>(request.Role.AsTrimmedString(), true, out var requestedRole)
-            || requestedRole is not (UserRole.Teacher or UserRole.Parent))
+            || requestedRole is not (UserRole.Teacher or UserRole.Parent or UserRole.Coordinator))
         {
-            throw new ValidationAppException(["Requested role must be Parent or Teacher."]);
+            throw new ValidationAppException(
+                ["Requested role must be Parent, Teacher, or Coordinator."]);
         }
 
         try

@@ -229,6 +229,7 @@ export const QUESTION_MANAGER_ROLES: UserRole[] = [
   "CampusAdmin",
   "Teacher",
   "Parent",
+  "Coordinator",
 ];
 
 /** Whether the role may browse / create in the question bank. */

@@ -205,6 +205,10 @@ export interface CreateDirectoryTeacherInput {
   teacherCode: string;
   mobileNumber?: string | null;
   emailAddress?: string | null;
+  /** Also assign Parent on the same login (with Teacher ± Coordinator). */
+  alsoParent?: boolean;
+  /** Also assign Coordinator on the same login. */
+  alsoCoordinator?: boolean;
 }
 
 export interface UpdateDirectoryTeacherInput {
@@ -212,6 +216,10 @@ export interface UpdateDirectoryTeacherInput {
   campusId: number;
   teacherCode: string;
   mobileNumber?: string | null;
+  /** Ensure Parent is on this account. */
+  alsoParent?: boolean;
+  /** Ensure Coordinator is on this account. */
+  alsoCoordinator?: boolean;
 }
 
 export interface CreateDirectoryParentInput {

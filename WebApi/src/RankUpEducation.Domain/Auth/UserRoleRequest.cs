@@ -60,9 +60,10 @@ public sealed class UserRoleRequest
         string? reasonMessage,
         DateTimeOffset requestedAt)
     {
-        if (requestedRole is not (UserRole.Teacher or UserRole.Parent))
+        if (requestedRole is not (UserRole.Teacher or UserRole.Parent or UserRole.Coordinator))
         {
-            throw new BusinessRuleException("Only Parent or Teacher can be requested as an additional role.");
+            throw new BusinessRuleException(
+                "Only Parent, Teacher, or Coordinator can be requested as an additional role.");
         }
 
         if (requestedRole == UserRole.Teacher)

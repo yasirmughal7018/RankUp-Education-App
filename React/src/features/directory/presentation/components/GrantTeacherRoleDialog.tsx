@@ -27,7 +27,7 @@ interface GrantTeacherRoleDialogProps {
   onSubmit: (input: GrantTeacherRoleInput) => Promise<void>;
 }
 
-/** Grant Teacher role to an existing Parent (Parent + Teacher multi-role). */
+/** Grant Teacher role to an existing Parent (can combine with Coordinator). */
 export function GrantTeacherRoleDialog({
   parent,
   schools,
@@ -96,7 +96,7 @@ export function GrantTeacherRoleDialog({
           <DialogTitle>Add Teacher role</DialogTitle>
           <DialogDescription>
             Grant the Teacher role to {parent.fullName} ({parent.username}).
-            Students cannot combine roles; Parent + Teacher is allowed.
+            Students cannot combine roles. Parent, Teacher, and Coordinator may share one account.
           </DialogDescription>
         </DialogHeader>
 

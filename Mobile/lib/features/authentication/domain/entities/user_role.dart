@@ -1,5 +1,13 @@
 /// Application roles mapped from API role names.
-enum UserRole { student, parent, teacher, schoolAdmin, campusAdmin, portalAdmin }
+enum UserRole {
+  student,
+  parent,
+  teacher,
+  coordinator,
+  schoolAdmin,
+  campusAdmin,
+  portalAdmin,
+}
 
 /// Parses API/legacy role strings into [UserRole], defaulting to student.
 UserRole parseUserRole(String value) {
@@ -7,6 +15,7 @@ UserRole parseUserRole(String value) {
     'student' => UserRole.student,
     'parent' => UserRole.parent,
     'teacher' => UserRole.teacher,
+    'coordinator' => UserRole.coordinator,
     'schooladmin' => UserRole.schoolAdmin,
     'campusadmin' => UserRole.campusAdmin,
     // PortalAdmin is the current API/DB name; superadmin is legacy.
@@ -28,6 +37,7 @@ bool canManageQuestions(UserRole role) {
       role == UserRole.schoolAdmin ||
       role == UserRole.campusAdmin ||
       role == UserRole.teacher ||
+      role == UserRole.coordinator ||
       role == UserRole.parent;
 }
 
@@ -86,6 +96,7 @@ extension UserRoleLabel on UserRole {
       UserRole.student => 'Student',
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
+      UserRole.coordinator => 'Coordinator',
       UserRole.schoolAdmin => 'School Admin',
       UserRole.campusAdmin => 'Campus Admin',
       UserRole.portalAdmin => 'Portal Admin',
@@ -97,6 +108,7 @@ extension UserRoleLabel on UserRole {
       UserRole.student => 'Student',
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
+      UserRole.coordinator => 'Coordinator',
       UserRole.schoolAdmin => 'SchoolAdmin',
       UserRole.campusAdmin => 'CampusAdmin',
       UserRole.portalAdmin => 'PortalAdmin',

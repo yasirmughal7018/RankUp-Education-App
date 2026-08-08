@@ -63,6 +63,18 @@ public static class AuthPermissions
                 "quiz.assign-private",
                 "worksheet.assign-private"
             ],
+            UserRole.Coordinator =>
+            [
+                "dashboard.view",
+                "quiz.create",
+                "quiz.assign",
+                "quiz.review",
+                "worksheet.create",
+                "worksheet.review",
+                "attendance.mark",
+                "message.send",
+                "discussion.moderate"
+            ],
             _ => Array.Empty<string>()
         };
     }

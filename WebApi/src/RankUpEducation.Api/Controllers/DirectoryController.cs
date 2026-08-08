@@ -362,6 +362,36 @@ public sealed class DirectoryController : ControllerBase
             "Parent role added to teacher account."));
     }
 
+    /// <summary>Adds the Coordinator role to an existing Teacher account.</summary>
+    [HttpPost("teachers/{teacherId:long}/roles/coordinator")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> GrantCoordinatorRoleToTeacherAsync(
+        long teacherId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantCoordinatorRoleToTeacherAsync(
+            teacherId,
+            cancellationToken);
+        return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
+            response,
+            "Coordinator role added to teacher account."));
+    }
+
+    /// <summary>Adds the Coordinator role to an existing Parent account.</summary>
+    [HttpPost("parents/{parentId:long}/roles/coordinator")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> GrantCoordinatorRoleToParentAsync(
+        long parentId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantCoordinatorRoleToParentAsync(
+            parentId,
+            cancellationToken);
+        return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
+            response,
+            "Coordinator role added to parent account."));
+    }
+
     /// <summary>Updates an existing parent.</summary>
     [HttpPut("parents/{parentId:long}")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]

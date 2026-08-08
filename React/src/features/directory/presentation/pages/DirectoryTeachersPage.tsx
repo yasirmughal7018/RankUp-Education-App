@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Pencil, UserCheck, UserPlus, UserX } from "lucide-react";
+import { Pencil, UserCheck, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
@@ -38,6 +38,7 @@ import {
   useDirectoryCampusesQuery,
   useDirectorySchoolsQuery,
   useDirectoryTeachersQuery,
+  useGrantCoordinatorRoleToTeacherMutation,
   useGrantParentRoleToTeacherMutation,
   useUpdateTeacherMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
@@ -69,6 +70,8 @@ export function DirectoryTeachersPage() {
     "create" | DirectoryTeacher | null
   >(null);
   const [grantParentTarget, setGrantParentTarget] =
+    useState<DirectoryTeacher | null>(null);
+  const [grantCoordinatorTarget, setGrantCoordinatorTarget] =
     useState<DirectoryTeacher | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -102,6 +105,7 @@ export function DirectoryTeachersPage() {
   const deactivateMutation = useDeactivateTeacherMutation();
   const bulkDeactivateMutation = useBulkDeactivateTeachersMutation();
   const grantParentMutation = useGrantParentRoleToTeacherMutation();
+  const grantCoordinatorMutation = useGrantCoordinatorRoleToTeacherMutation();
 
   const totalCount = data?.totalCount ?? 0;
 
@@ -131,7 +135,8 @@ export function DirectoryTeachersPage() {
     activateMutation.isPending ||
     deactivateMutation.isPending ||
     bulkDeactivateMutation.isPending ||
-    grantParentMutation.isPending;
+    grantParentMutation.isPending ||
+    grantCoordinatorMutation.isPending;
 
   const allVisibleSelected =
     visibleTeachers.length > 0 &&
@@ -177,7 +182,20 @@ export function DirectoryTeachersPage() {
         payload.input as CreateDirectoryTeacherInput,
       );
       setSuccessMessage(
-        `Created teacher ${created.fullName}. User must set password on first login.`,
+        `Created teacher ${created.fullName}${
+          (payload.input as CreateDirectoryTeacherInput).alsoParent ||
+          (payload.input as CreateDirectoryTeacherInput).alsoCoordinator
+            ? ` with roles: Teacher${
+                (payload.input as CreateDirectoryTeacherInput).alsoParent
+                  ? ", Parent"
+                  : ""
+              }${
+                (payload.input as CreateDirectoryTeacherInput).alsoCoordinator
+                  ? ", Coordinator"
+                  : ""
+              }`
+            : ""
+        }. User must set password on first login.`,
       );
     } else if (teacherDialog && teacherDialog !== "create") {
       await updateMutation.mutateAsync({
@@ -236,7 +254,9 @@ export function DirectoryTeachersPage() {
     if (!canManage) {
       return null;
     }
-    const hasParentRole = (teacher.roles ?? []).includes("Parent");
+    const roles = teacher.roles ?? [];
+    const hasParentRole = roles.includes("Parent");
+    const hasCoordinatorRole = roles.includes("Coordinator");
     return (
       <>
         <DirectoryIconAction
@@ -249,15 +269,34 @@ export function DirectoryTeachersPage() {
           }}
         />
         {!hasParentRole ? (
-          <DirectoryIconAction
-            icon={UserPlus}
-            label={`Add Parent role to ${teacher.fullName}`}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9"
             disabled={busy}
             onClick={() => {
               clearMessages();
               setGrantParentTarget(teacher);
             }}
-          />
+          >
+            + Parent
+          </Button>
+        ) : null}
+        {!hasCoordinatorRole ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9"
+            disabled={busy}
+            onClick={() => {
+              clearMessages();
+              setGrantCoordinatorTarget(teacher);
+            }}
+          >
+            + Coordinator
+          </Button>
         ) : null}
         <DirectoryIconAction
           icon={teacher.isActive ? UserX : UserCheck}
@@ -526,7 +565,7 @@ export function DirectoryTeachersPage() {
         title="Add Parent role"
         description={
           grantParentTarget
-            ? `Add the Parent role to ${grantParentTarget.fullName}? They will keep Teacher access and can switch roles after login. Students cannot combine roles.`
+            ? `Add the Parent role to ${grantParentTarget.fullName}? They keep Teacher access and can also hold Coordinator. Switch roles after login.`
             : ""
         }
         confirmLabel="Add Parent role"
@@ -546,6 +585,44 @@ export function DirectoryTeachersPage() {
               const apiError = err as ApiError;
               setActionError(
                 apiError.message ?? "Unable to add Parent role.",
+              );
+            }
+          })();
+        }}
+      />
+
+      <AppConfirmDialog
+        open={grantCoordinatorTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !grantCoordinatorMutation.isPending) {
+            setGrantCoordinatorTarget(null);
+          }
+        }}
+        title="Add Coordinator role"
+        description={
+          grantCoordinatorTarget
+            ? `Add the Coordinator role to ${grantCoordinatorTarget.fullName}? They can hold Teacher, Parent, and Coordinator together and switch roles after login.`
+            : ""
+        }
+        confirmLabel="Add Coordinator role"
+        loading={grantCoordinatorMutation.isPending}
+        onConfirm={() => {
+          if (!grantCoordinatorTarget) {
+            return;
+          }
+          void (async () => {
+            try {
+              await grantCoordinatorMutation.mutateAsync(
+                grantCoordinatorTarget.teacherId,
+              );
+              setSuccessMessage(
+                `Coordinator role added to ${grantCoordinatorTarget.fullName}.`,
+              );
+              setGrantCoordinatorTarget(null);
+            } catch (err) {
+              const apiError = err as ApiError;
+              setActionError(
+                apiError.message ?? "Unable to add Coordinator role.",
               );
             }
           })();

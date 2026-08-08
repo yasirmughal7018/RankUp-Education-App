@@ -166,13 +166,21 @@ public sealed record CreateDirectoryTeacherRequest(
     int CampusId,
     string TeacherCode,
     string? MobileNumber = null,
-    string? EmailAddress = null);
+    string? EmailAddress = null,
+    /// <summary>Also assign Parent on the same account (Teacher + Parent + optional Coordinator).</summary>
+    bool AlsoParent = false,
+    /// <summary>Also assign Coordinator on the same account.</summary>
+    bool AlsoCoordinator = false);
 
 public sealed record UpdateDirectoryTeacherRequest(
     string FullName,
     int CampusId,
     string TeacherCode,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    /// <summary>Ensure Parent is on this account (no-op if already present).</summary>
+    bool AlsoParent = false,
+    /// <summary>Ensure Coordinator is on this account (no-op if already present).</summary>
+    bool AlsoCoordinator = false);
 
 /// <summary>Grant Teacher role to an existing Parent account.</summary>
 public sealed record GrantTeacherRoleRequest(
@@ -221,6 +229,13 @@ public sealed record UpdateDirectoryParentRequest(
     string FullName,
     string? Cnic = null,
     string? MobileNumber = null);
+
+/// <summary>Result of granting Coordinator onto an existing Teacher/Parent account.</summary>
+public sealed record GrantCoordinatorRoleResponse(
+    long UserId,
+    string FullName,
+    string Username,
+    IReadOnlyList<string> Roles);
 
 public sealed record LinkParentStudentRequest(long StudentId, string Relationship = "Guardian");
 

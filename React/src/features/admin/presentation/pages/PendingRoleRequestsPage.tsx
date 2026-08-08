@@ -28,7 +28,7 @@ import { BulkRejectRoleRequestsDialog } from "@/features/admin/presentation/comp
 import { RejectRoleRequestDialog } from "@/features/admin/presentation/components/RejectRoleRequestDialog";
 import { RoleRequestDetailsDialog } from "@/features/admin/presentation/components/RoleRequestDetailsDialog";
 
-type RoleRequestRoleFilter = "" | "Parent" | "Teacher";
+type RoleRequestRoleFilter = "" | "Parent" | "Teacher" | "Coordinator";
 
 type ConfirmIntent = { kind: "bulk-approve"; count: number };
 
@@ -38,6 +38,7 @@ const ROLE_FILTER_OPTIONS: { value: RoleRequestRoleFilter; label: string }[] = [
   { value: "", label: "All roles" },
   { value: "Parent", label: "Parent" },
   { value: "Teacher", label: "Teacher" },
+  { value: "Coordinator", label: "Coordinator" },
 ];
 
 function roleBadgeClass(role: string): string {
@@ -46,6 +47,8 @@ function roleBadgeClass(role: string): string {
       return "border border-[hsl(var(--achievement))]/25 bg-[hsl(var(--achievement-light))] text-[hsl(var(--achievement))]";
     case "Teacher":
       return "border border-[hsl(var(--ai))]/25 bg-[hsl(var(--ai-light))] text-[hsl(var(--ai))]";
+    case "Coordinator":
+      return "border border-brand-200 bg-brand-50 text-brand-700";
     default:
       return "border border-border bg-muted text-muted-foreground";
   }
@@ -511,7 +514,7 @@ setSelectedIds(
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-10 sm:px-6">
       <PageHeader
         title="Role requests"
-        description="Approve or reject requests from users who want Parent or Teacher as an additional role. Students cannot combine roles."
+        description="Approve or reject requests from users who want Parent, Teacher, or Coordinator as an additional role. Students cannot combine roles. One account may hold Teacher, Parent, and Coordinator together."
         action={
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">

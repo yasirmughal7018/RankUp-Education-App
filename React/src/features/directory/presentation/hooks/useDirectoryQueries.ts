@@ -390,6 +390,34 @@ export function useGrantTeacherRoleToParentMutation() {
   });
 }
 
+/** Add Coordinator role to an existing Teacher. */
+export function useGrantCoordinatorRoleToTeacherMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (teacherId: number) =>
+      directoryApi.grantCoordinatorRoleToTeacher(teacherId),
+    onSuccess: () => {
+      invalidateTeachers(queryClient);
+      invalidateParents(queryClient);
+    },
+  });
+}
+
+/** Add Coordinator role to an existing Parent. */
+export function useGrantCoordinatorRoleToParentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (parentId: number) =>
+      directoryApi.grantCoordinatorRoleToParent(parentId),
+    onSuccess: () => {
+      invalidateParents(queryClient);
+      invalidateTeachers(queryClient);
+    },
+  });
+}
+
 /** Create parent. */
 export function useCreateParentMutation() {
   const queryClient = useQueryClient();

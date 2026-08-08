@@ -37,7 +37,7 @@ class AuthSessionModel extends AuthSession {
           'goal.create',
           'message.send',
         ],
-      UserRole.teacher => [
+      UserRole.teacher || UserRole.coordinator => [
           'dashboard.view',
           'quiz.create',
           'worksheet.review',

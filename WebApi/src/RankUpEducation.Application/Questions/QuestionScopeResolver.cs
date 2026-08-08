@@ -54,6 +54,7 @@ public static class QuestionScopeResolver
         if (role is not (
             UserRole.Parent
             or UserRole.Teacher
+            or UserRole.Coordinator
             or UserRole.CampusAdmin
             or UserRole.SchoolAdmin
             or UserRole.PortalAdmin))

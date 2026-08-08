@@ -177,7 +177,7 @@ export async function requestSchoolChange(
 }
 
 export interface RequestAdditionalRoleRequest {
-  role: "Parent" | "Teacher";
+  role: "Parent" | "Teacher" | "Coordinator";
   schoolId?: number | null;
   campusId?: number | null;
   teacherCode?: string | null;
@@ -190,7 +190,7 @@ export interface RequestAdditionalRoleResponse {
   message: string;
 }
 
-/** Request Parent or Teacher as an additional role (account stays active). */
+/** Request Parent, Teacher, or Coordinator as an additional role (account stays active). */
 export async function requestAdditionalRole(
   request: RequestAdditionalRoleRequest,
 ): Promise<RequestAdditionalRoleResponse> {

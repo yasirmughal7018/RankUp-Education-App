@@ -510,13 +510,19 @@ public sealed class DirectoryService : IDirectoryService
             cancellationToken);
         if (existing is not null)
         {
-            return await AddTeacherRoleToExistingUserAsync(
+            var merged = await AddTeacherRoleToExistingUserAsync(
                 existing,
                 request,
                 schoolId,
                 campusId,
                 mobileNumber,
                 cancellationToken);
+            await EnsureTeacherCompanionRolesAsync(
+                existing,
+                request.AlsoParent,
+                request.AlsoCoordinator,
+                cancellationToken);
+            return merged with { Roles = RoleNames(existing) };
         }
 
         // Auto-approved; user sets password on first login. Username = email.
@@ -537,6 +543,12 @@ public sealed class DirectoryService : IDirectoryService
             cancellationToken);
         user.AttachProfileContext(user.Id, schoolId, campusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await EnsureTeacherCompanionRolesAsync(
+            user,
+            request.AlsoParent,
+            request.AlsoCoordinator,
+            cancellationToken);
 
         return new DirectoryTeacherResponse(
             user.Id,
@@ -593,6 +605,12 @@ public sealed class DirectoryService : IDirectoryService
         teacher.Update(request.MobileNumber);
         user.AttachProfileContext(user.Id, user.SchoolId, request.CampusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await EnsureTeacherCompanionRolesAsync(
+            user,
+            request.AlsoParent,
+            request.AlsoCoordinator,
+            cancellationToken);
 
         return new DirectoryTeacherResponse(
             teacher.Id,
@@ -1952,6 +1970,119 @@ public sealed class DirectoryService : IDirectoryService
             user.MobileNumber,
             user.Cnic,
             cancellationToken);
+    }
+
+    public async Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToTeacherAsync(
+        long teacherId,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+
+        var user = await _users.GetByIdAsync(teacherId, cancellationToken)
+            ?? throw new NotFoundAppException("Teacher was not found.");
+
+        EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
+
+        if (!user.HasRole(UserRole.Teacher))
+        {
+            throw new ValidationAppException(["This account is not a Teacher."]);
+        }
+
+        return await AddCoordinatorRoleAsync(user, cancellationToken);
+    }
+
+    public async Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToParentAsync(
+        long parentId,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+
+        var user = await _users.GetByIdAsync(parentId, cancellationToken)
+            ?? throw new NotFoundAppException("Parent was not found.");
+
+        await EnsureParentAccessibleInScopeAsync(parentId, cancellationToken);
+
+        if (!user.HasRole(UserRole.Parent))
+        {
+            throw new ValidationAppException(["This account is not a Parent."]);
+        }
+
+        return await AddCoordinatorRoleAsync(user, cancellationToken);
+    }
+
+    private async Task<GrantCoordinatorRoleResponse> AddCoordinatorRoleAsync(
+        User user,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            user.AddRole(UserRole.Coordinator, DateTimeOffset.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new GrantCoordinatorRoleResponse(
+            user.Id,
+            user.FullName,
+            user.Username,
+            RoleNames(user));
+    }
+
+    /// <summary>
+    /// Adds Parent and/or Coordinator onto a Teacher account so one login can hold all three.
+    /// </summary>
+    private async Task EnsureTeacherCompanionRolesAsync(
+        User user,
+        bool alsoParent,
+        bool alsoCoordinator,
+        CancellationToken cancellationToken)
+    {
+        var changed = false;
+
+        if (alsoParent && !user.HasRole(UserRole.Parent))
+        {
+            try
+            {
+                user.AddRole(UserRole.Parent, DateTimeOffset.UtcNow);
+            }
+            catch (BusinessRuleException exception)
+            {
+                throw new ValidationAppException([exception.Message]);
+            }
+
+            if (!await _users.HasParentProfileAsync(user.Id, cancellationToken))
+            {
+                await _users.AddParentProfileAsync(
+                    new Parent(user.Id, user.MobileNumber),
+                    cancellationToken);
+            }
+
+            changed = true;
+        }
+
+        if (alsoCoordinator && !user.HasRole(UserRole.Coordinator))
+        {
+            try
+            {
+                user.AddRole(UserRole.Coordinator, DateTimeOffset.UtcNow);
+            }
+            catch (BusinessRuleException exception)
+            {
+                throw new ValidationAppException([exception.Message]);
+            }
+
+            changed = true;
+        }
+
+        if (changed)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private void EnsureSchoolAccess(long schoolId)

@@ -88,7 +88,7 @@ function quickLinksForRole(
       { label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Assessments" },
     ];
   }
-  if (role === "Teacher") {
+  if (role === "Teacher" || role === "Coordinator") {
     return [
       { label: "Quizzes", href: "/quizzes", icon: ClipboardList, hint: "Create & assign" },
       { label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Build items" },

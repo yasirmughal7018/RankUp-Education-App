@@ -375,6 +375,24 @@ export async function grantParentRoleToTeacher(
   );
 }
 
+/** Add Coordinator role to an existing Teacher account. */
+export async function grantCoordinatorRoleToTeacher(
+  teacherId: number,
+): Promise<{ userId: number; fullName: string; username: string; roles: string[] }> {
+  return apiRequest(`/directory/teachers/${teacherId}/roles/coordinator`, {
+    method: "POST",
+  });
+}
+
+/** Add Coordinator role to an existing Parent account. */
+export async function grantCoordinatorRoleToParent(
+  parentId: number,
+): Promise<{ userId: number; fullName: string; username: string; roles: string[] }> {
+  return apiRequest(`/directory/parents/${parentId}/roles/coordinator`, {
+    method: "POST",
+  });
+}
+
 /** Update parent profile. */
 export async function updateParent(
   parentId: number,
