@@ -120,7 +120,7 @@ public sealed class QuizService : IQuizService
         var role = ParseRole(_currentUser.Role);
         var now = _dateTimeProvider.UtcNow;
 
-        if (role is UserRole.Student or UserRole.Parent or UserRole.Teacher)
+        if (role is UserRole.Student or UserRole.Parent or UserRole.Teacher or UserRole.Coordinator)
         {
             var expired = await _assignments.ExpireOverdueUnattemptedAsync(now, cancellationToken);
             if (expired.ChangedCount > 0)
@@ -137,7 +137,7 @@ public sealed class QuizService : IQuizService
         {
             UserRole.Student => await ListForStudentAsync(search, subject, grade, cancellationToken),
             UserRole.Parent => await ListForParentAsync(search, subject, grade, cancellationToken),
-            UserRole.Teacher => await ListForTeacherAsync(search, subject, grade, cancellationToken),
+            UserRole.Teacher or UserRole.Coordinator => await ListForTeacherAsync(search, subject, grade, cancellationToken),
             UserRole.SchoolAdmin => await _quizzes.ListForSchoolAsync(
                 _currentUser.SchoolId,
                 campusId: null,
@@ -200,7 +200,7 @@ public sealed class QuizService : IQuizService
             }
         }
 
-        if (role == UserRole.Teacher)
+        if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             var teacherUserId = _currentUser.UserId ?? throw new ForbiddenAppException("Teacher account was not found.");
             var ownedDetail = await _quizzes.GetDetailForCreatorAsync(quizId, teacherUserId, cancellationToken);
@@ -210,7 +210,7 @@ public sealed class QuizService : IQuizService
             }
         }
 
-        if (role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
+        if (role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
         {
             // Non-student viewers without creator detail fall back to list summary fields.
             var list = await ListAsync(null, null, null, cancellationToken);

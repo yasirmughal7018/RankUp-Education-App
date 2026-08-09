@@ -34,6 +34,7 @@ public sealed record DirectorySummaryResponse(
     DirectoryStatusCounts Teachers,
     DirectoryStatusCounts SchoolAdmins,
     DirectoryStatusCounts CampusAdmins,
+    DirectoryStatusCounts Coordinators,
     IReadOnlyList<string> VisibleSections);
 
 /// <summary>Non-paged list of schools.</summary>
@@ -223,12 +224,16 @@ public sealed record CreateDirectoryParentRequest(
     string Username,
     string? Cnic = null,
     string? MobileNumber = null,
-    string? EmailAddress = null);
+    string? EmailAddress = null,
+    /// <summary>Also assign Coordinator on the same account.</summary>
+    bool AlsoCoordinator = false);
 
 public sealed record UpdateDirectoryParentRequest(
     string FullName,
     string? Cnic = null,
-    string? MobileNumber = null);
+    string? MobileNumber = null,
+    /// <summary>Ensure Coordinator is on this account.</summary>
+    bool AlsoCoordinator = false);
 
 /// <summary>Result of granting Coordinator onto an existing Teacher/Parent account.</summary>
 public sealed record GrantCoordinatorRoleResponse(
@@ -236,6 +241,63 @@ public sealed record GrantCoordinatorRoleResponse(
     string FullName,
     string Username,
     IReadOnlyList<string> Roles);
+
+/// <summary>Paged coordinator directory result.</summary>
+public sealed record DirectoryCoordinatorListResponse(
+    IReadOnlyList<DirectoryCoordinatorResponse> Items,
+    int PageNumber,
+    int PageSize,
+    int TotalCount);
+
+/// <summary>User holding the Coordinator role (often also Teacher and/or Parent).</summary>
+public sealed record DirectoryCoordinatorResponse(
+    long UserId,
+    string FullName,
+    string Username,
+    string TeacherCode,
+    int SchoolId,
+    string SchoolName,
+    int CampusId,
+    string CampusName,
+    bool IsActive,
+    string? AvatarUrl,
+    string? MobileNumber,
+    string? Cnic,
+    string? EmailAddress,
+    DateOnly? CreatedDate,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? RejectedAt,
+    DateTimeOffset? LastLoginAt,
+    string? ReasonMessage,
+    bool NeedsPasswordSetup,
+    string AccountStatus,
+    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
+    IReadOnlyList<string> Roles);
+
+/// <summary>Create a Coordinator account (optionally also Teacher and/or Parent).</summary>
+public sealed record CreateDirectoryCoordinatorRequest(
+    string FullName,
+    string Username,
+    int SchoolId,
+    int CampusId,
+    string TeacherCode,
+    string? MobileNumber = null,
+    string? EmailAddress = null,
+    /// <summary>Also assign Teacher on the same account (requires teacher code).</summary>
+    bool AlsoTeacher = true,
+    /// <summary>Also assign Parent on the same account.</summary>
+    bool AlsoParent = false);
+
+/// <summary>Update a Coordinator account and optional companion roles.</summary>
+public sealed record UpdateDirectoryCoordinatorRequest(
+    string FullName,
+    int CampusId,
+    string TeacherCode,
+    string? MobileNumber = null,
+    /// <summary>Ensure Teacher is on this account.</summary>
+    bool AlsoTeacher = true,
+    /// <summary>Ensure Parent is on this account.</summary>
+    bool AlsoParent = false);
 
 public sealed record LinkParentStudentRequest(long StudentId, string Relationship = "Guardian");
 

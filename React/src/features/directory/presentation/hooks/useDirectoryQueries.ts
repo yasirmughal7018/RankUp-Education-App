@@ -4,6 +4,7 @@ import { queryKeys } from "@/core/api/queryKeys";
 import * as directoryApi from "@/features/directory/data/directoryApi";
 import type {
   CreateDirectoryCampusAdminInput,
+  CreateDirectoryCoordinatorInput,
   CreateDirectoryParentInput,
   CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
@@ -14,8 +15,10 @@ import type {
   DirectorySchoolAdminFilters,
   DirectoryStudentFilters,
   DirectoryTeacherFilters,
+  DirectoryCoordinatorFilters,
   LinkParentStudentInput,
   UpdateDirectoryCampusAdminInput,
+  UpdateDirectoryCoordinatorInput,
   UpdateDirectoryParentInput,
   UpdateDirectorySchoolAdminInput,
   UpdateDirectoryStudentInput,
@@ -32,8 +35,19 @@ function invalidateTeachers(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["directory", "teachers"] });
 }
 
+function invalidateCoordinators(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ["directory", "coordinators"] });
+}
+
 function invalidateParents(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["directory", "parents"] });
+}
+
+function invalidateComboRoles(queryClient: ReturnType<typeof useQueryClient>) {
+  invalidateTeachers(queryClient);
+  invalidateCoordinators(queryClient);
+  invalidateParents(queryClient);
+  void queryClient.invalidateQueries({ queryKey: queryKeys.directorySummary() });
 }
 
 function invalidateSchoolAdmins(queryClient: ReturnType<typeof useQueryClient>) {
@@ -95,6 +109,18 @@ export function useDirectoryTeachersQuery(
   return useQuery({
     queryKey: queryKeys.directoryTeachers(filters),
     queryFn: () => directoryApi.listTeachers(filters),
+    enabled,
+  });
+}
+
+/** Paginated coordinators with filters. */
+export function useDirectoryCoordinatorsQuery(
+  filters: DirectoryCoordinatorFilters,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.directoryCoordinators(filters),
+    queryFn: () => directoryApi.listCoordinators(filters),
     enabled,
   });
 }
@@ -397,10 +423,7 @@ export function useGrantCoordinatorRoleToTeacherMutation() {
   return useMutation({
     mutationFn: (teacherId: number) =>
       directoryApi.grantCoordinatorRoleToTeacher(teacherId),
-    onSuccess: () => {
-      invalidateTeachers(queryClient);
-      invalidateParents(queryClient);
-    },
+    onSuccess: () => invalidateComboRoles(queryClient),
   });
 }
 
@@ -411,10 +434,91 @@ export function useGrantCoordinatorRoleToParentMutation() {
   return useMutation({
     mutationFn: (parentId: number) =>
       directoryApi.grantCoordinatorRoleToParent(parentId),
-    onSuccess: () => {
-      invalidateParents(queryClient);
-      invalidateTeachers(queryClient);
-    },
+    onSuccess: () => invalidateComboRoles(queryClient),
+  });
+}
+
+/** Create coordinator. */
+export function useCreateCoordinatorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateDirectoryCoordinatorInput) =>
+      directoryApi.createCoordinator(input),
+    onSuccess: () => invalidateComboRoles(queryClient),
+  });
+}
+
+/** Update coordinator. */
+export function useUpdateCoordinatorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      input,
+    }: {
+      userId: number;
+      input: UpdateDirectoryCoordinatorInput;
+    }) => directoryApi.updateCoordinator(userId, input),
+    onSuccess: () => invalidateComboRoles(queryClient),
+  });
+}
+
+/** Activate coordinator. */
+export function useActivateCoordinatorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: number) => directoryApi.activateCoordinator(userId),
+    onSuccess: () => invalidateCoordinators(queryClient),
+  });
+}
+
+/** Deactivate coordinator. */
+export function useDeactivateCoordinatorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: number) => directoryApi.deactivateCoordinator(userId),
+    onSuccess: () => invalidateCoordinators(queryClient),
+  });
+}
+
+/** Bulk deactivate coordinators. */
+export function useBulkDeactivateCoordinatorsMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: number[]) => directoryApi.bulkDeactivateCoordinators(ids),
+    onSuccess: () => invalidateCoordinators(queryClient),
+  });
+}
+
+/** Add Parent role to an existing Coordinator. */
+export function useGrantParentRoleToCoordinatorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: number) =>
+      directoryApi.grantParentRoleToCoordinator(userId),
+    onSuccess: () => invalidateComboRoles(queryClient),
+  });
+}
+
+/** Add Teacher role to an existing Coordinator. */
+export function useGrantTeacherRoleToCoordinatorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      input,
+    }: {
+      userId: number;
+      input: GrantTeacherRoleInput;
+    }) => directoryApi.grantTeacherRoleToCoordinator(userId, input),
+    onSuccess: () => invalidateComboRoles(queryClient),
   });
 }
 

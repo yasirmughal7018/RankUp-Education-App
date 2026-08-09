@@ -15,12 +15,17 @@ import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 const fieldClass = FORM_FIELD_CLASS;
 
-const SCHOOL_CHANGE_ROLES: UserRole[] = ["Teacher", "Student", "CampusAdmin"];
+const SCHOOL_CHANGE_ROLES: UserRole[] = [
+  "Teacher",
+  "Student",
+  "CampusAdmin",
+  "Coordinator",
+];
 
 const REQUESTABLE_ROLES = ["Parent", "Teacher", "Coordinator"] as const;
 
 /** Roles the user may remove themselves when another role remains. */
-const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher"];
+const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher", "Coordinator"];
 
 type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
@@ -212,12 +217,15 @@ export function AccountPage() {
   const isPortalAdmin = profile?.role === "PortalAdmin";
   const isStudentRole = profile?.role === "Student";
   const isSchoolAdminRole = accountRoles.includes("SchoolAdmin");
+  const isCampusAdminRole = accountRoles.includes("CampusAdmin");
+  /** Exclusive single-role accounts — no Roles section on Account. */
+  const hideRolesSection =
+    isPortalAdmin || isSchoolAdminRole || isCampusAdminRole;
   const pendingRoleRequest = profile?.pendingRoleRequest ?? null;
   const availableRoleRequests: RequestableRole[] =
     !profile ||
-    isPortalAdmin ||
+    hideRolesSection ||
     isStudentRole ||
-    isSchoolAdminRole ||
     pendingRoleRequest
       ? []
       : REQUESTABLE_ROLES.filter((role) => !accountRoles.includes(role));
@@ -655,7 +663,11 @@ export function AccountPage() {
     <div className="space-y-5">
       <PageHeader
         title="Account"
-        description="Manage your profile, roles, and security."
+        description={
+          hideRolesSection
+            ? "Manage your profile and security."
+            : "Manage your profile, roles, and security."
+        }
       />
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -803,6 +815,7 @@ export function AccountPage() {
             </form>
           </SectionCard>
 
+          {!hideRolesSection ? (
           <SectionCard
             id="roles"
             title="Roles"
@@ -884,12 +897,6 @@ export function AccountPage() {
             {isStudentRole ? (
               <Notice tone="info">
                 Student accounts cannot add other roles.
-              </Notice>
-            ) : isPortalAdmin ? null : isSchoolAdminRole ? (
-              <Notice tone="info">
-                School Admin is a single-role account and cannot be combined with
-                Parent, Teacher, or Coordinator. Use a separate login for those
-                roles.
               </Notice>
             ) : pendingRoleRequest ? (
               <Notice tone="warn">
@@ -1072,6 +1079,7 @@ export function AccountPage() {
               </div>
             )}
           </SectionCard>
+          ) : null}
 
           {canRequestSchoolChange && schoolForm ? (
             <SectionCard

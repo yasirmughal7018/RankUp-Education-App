@@ -146,6 +146,15 @@ public interface IDirectoryRepository
         int pageSize,
         CancellationToken cancellationToken);
 
+    /// <summary>Page of users with the Coordinator role.</summary>
+    Task<(IReadOnlyList<DirectoryCoordinatorResponse> Items, int TotalCount)> ListCoordinatorsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
     /// <summary>Counts schools by active/inactive for the directory summary dashboard.</summary>
     Task<DirectorySchoolStatusCounts> CountSchoolsByStatusAsync(
         int? schoolId,

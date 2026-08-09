@@ -87,8 +87,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   bool _flushingOffline = false;
   String? _deviceId;
 
-  bool get _isTeacher =>
-      ref.watch(authControllerProvider).user?.role == UserRole.teacher;
+  bool get _isTeacher {
+    final role = ref.watch(authControllerProvider).user?.role;
+    return role == UserRole.teacher || role == UserRole.coordinator;
+  }
 
   UserRole get _role =>
       ref.watch(authControllerProvider).user?.role ?? UserRole.student;

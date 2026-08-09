@@ -287,7 +287,7 @@ public sealed class QuizReviewService : IQuizReviewService
             var existingReview = await _reviews.GetQuestionReviewEntityAsync(attemptQuestion.QuizReviewId.Value, cancellationToken);
             if (existingReview is not null)
             {
-                if (scope.Role == UserRole.Teacher)
+                if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
                 {
                     existingReview.SetTeacherReview(null, feedback);
                 }
@@ -301,7 +301,7 @@ public sealed class QuizReviewService : IQuizReviewService
         }
 
         var review = new QuizReview(scope.UserId.ToString(), quizId: null, questionId: attemptQuestion.QuestionId);
-        if (scope.Role == UserRole.Teacher)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
         {
             review.SetTeacherReview(null, feedback);
         }

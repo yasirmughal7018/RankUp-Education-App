@@ -827,6 +827,96 @@ public sealed class DirectoryRepository : IDirectoryRepository
         return (items, totalCount);
     }
 
+    public async Task<(IReadOnlyList<DirectoryCoordinatorResponse> Items, int TotalCount)> ListCoordinatorsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _dbContext.Users.AsNoTracking()
+            .Where(user => user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Coordinator));
+
+        if (schoolId is not null)
+        {
+            query = query.Where(user => user.SchoolId == schoolId.Value);
+        }
+
+        if (campusId is not null)
+        {
+            query = query.Where(user => user.CampusId == campusId.Value);
+        }
+
+        if (search.HasTrimmedText())
+        {
+            var term = search.AsTrimmedString();
+            query = query.Where(user =>
+                user.FullName.Contains(term)
+                || user.Username.Contains(term)
+                || (user.MobileNumber != null && user.MobileNumber.Contains(term))
+                || (user.EmailAddress != null && user.EmailAddress.Contains(term)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var users = await query
+            .OrderBy(user => user.FullName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var userIds = users.Select(user => user.Id).ToArray();
+        var schoolIds = users
+            .Where(user => user.SchoolId.HasValue)
+            .Select(user => user.SchoolId!.Value)
+            .Distinct()
+            .ToArray();
+        var campusIds = users
+            .Where(user => user.CampusId.HasValue)
+            .Select(user => user.CampusId!.Value)
+            .Distinct()
+            .ToArray();
+
+        var schoolNames = await GetSchoolNamesAsync(schoolIds, cancellationToken);
+        var campusNames = await GetCampusNamesAsync(campusIds, cancellationToken);
+        var lockedSet = await GetLockedUserIdsAsync(userIds, cancellationToken);
+        var approvalHistory = await GetApprovalHistoryByUserIdsAsync(userIds, cancellationToken);
+        var rolesByUser = await GetRoleNamesByUserIdsAsync(userIds, cancellationToken);
+
+        var items = users
+            .Select(user =>
+            {
+                var sid = user.SchoolId ?? 0;
+                var cid = user.CampusId ?? 0;
+                return new DirectoryCoordinatorResponse(
+                    user.Id,
+                    user.FullName,
+                    user.Username,
+                    user.RollNumberTeacherCode ?? string.Empty,
+                    sid,
+                    schoolNames.GetValueOrDefault(sid, "—"),
+                    cid,
+                    campusNames.GetValueOrDefault(cid, "—"),
+                    user.IsActive,
+                    user.AvatarUrl,
+                    user.MobileNumber,
+                    user.Cnic,
+                    user.EmailAddress,
+                    user.CreatedDate,
+                    user.RequestedAt,
+                    user.RejectedAt,
+                    user.LastLoginAt,
+                    user.ReasonMessage,
+                    user.NeedsPasswordSetup,
+                    DirectoryAccountStatuses.FromUser(user, lockedSet.Contains(user.Id)),
+                    approvalHistory.GetValueOrDefault(user.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
+                    rolesByUser.GetValueOrDefault(user.Id, Array.Empty<string>()));
+            })
+            .ToArray();
+
+        return (items, totalCount);
+    }
+
     private async Task<Dictionary<int, string>> GetSchoolNamesAsync(
         IReadOnlyList<int> schoolIds,
         CancellationToken cancellationToken)

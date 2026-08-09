@@ -33,6 +33,8 @@ export function ParentFormDialog({
   const [username, setUsername] = useState(parent?.username ?? "");
   const [cnic, setCnic] = useState(parent?.cnic ?? "");
   const [mobileNumber, setMobileNumber] = useState(parent?.mobileNumber ?? "");
+  const alreadyCoordinator = (parent?.roles ?? []).includes("Coordinator");
+  const [alsoCoordinator, setAlsoCoordinator] = useState(alreadyCoordinator);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,6 +69,7 @@ export function ParentFormDialog({
             fullName: trimmedName,
             cnic: trimmedCnic,
             mobileNumber: mobile,
+            alsoCoordinator,
           },
         });
       } else {
@@ -83,6 +86,7 @@ export function ParentFormDialog({
             emailAddress: trimmedEmail,
             cnic: trimmedCnic,
             mobileNumber: mobile,
+            alsoCoordinator,
           },
         });
       }
@@ -109,8 +113,8 @@ export function ParentFormDialog({
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
-              ? `Update details for ${parent.fullName}.`
-              : "Add a parent to the directory. If email, mobile, or CNIC matches an existing Teacher (or other non-Student) account, the Parent role is added to that same login. User must set password on first login."}
+              ? `Update details for ${parent.fullName}. You can also add Coordinator on this same login (with Teacher if already granted).`
+              : "Add a parent to the directory. Optionally also assign Coordinator. Use + Teacher on the list to stack Teacher as well — one login can hold Teacher, Parent, and Coordinator."}
           </p>
         </div>
 
@@ -185,6 +189,31 @@ export function ParentFormDialog({
               disabled={isSubmitting}
             />
           </div>
+
+          <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <legend className="px-1 text-sm font-semibold text-slate-800">
+              Additional roles on this account
+            </legend>
+            <p className="text-xs text-slate-600">
+              Parent is always included. Check Coordinator here; add Teacher from
+              the Parents list (+ Teacher) so one login can hold all three.
+            </p>
+            <label className="flex items-start gap-2.5 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={alsoCoordinator}
+                disabled={isSubmitting || alreadyCoordinator}
+                onChange={(event) => setAlsoCoordinator(event.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Coordinator</span>
+                {alreadyCoordinator ? (
+                  <span className="text-slate-500"> — already assigned</span>
+                ) : null}
+              </span>
+            </label>
+          </fieldset>
 
           <div className="flex justify-end gap-3 pt-2">
             <button

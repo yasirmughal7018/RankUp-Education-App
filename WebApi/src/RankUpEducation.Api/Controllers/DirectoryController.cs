@@ -144,7 +144,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Lists students with optional school, campus, grade, and search filters.</summary>
     [HttpGet("students")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin,Teacher,Coordinator")]
     public async Task<ActionResult<ApiResponse<DirectoryStudentListResponse>>> ListStudentsAsync(
         [FromQuery] int? schoolId,
         [FromQuery] int? campusId,
@@ -593,5 +593,111 @@ public sealed class DirectoryController : ControllerBase
     {
         await _directoryService.DeactivateCampusAdminAsync(userId, cancellationToken);
         return Ok(ApiResponse<object?>.Ok(null, "Campus admin deactivated."));
+    }
+
+    /// <summary>Lists coordinators with optional school, campus, and search filters.</summary>
+    [HttpGet("coordinators")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryCoordinatorListResponse>>> ListCoordinatorsAsync(
+        [FromQuery] int? schoolId,
+        [FromQuery] int? campusId,
+        [FromQuery] string? search,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _directoryService.ListCoordinatorsAsync(
+            schoolId,
+            campusId,
+            search,
+            pageNumber,
+            pageSize,
+            cancellationToken);
+        return Ok(ApiResponse<DirectoryCoordinatorListResponse>.Ok(response));
+    }
+
+    /// <summary>Provisions a new coordinator in the directory.</summary>
+    [HttpPost("coordinators")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryCoordinatorResponse>>> CreateCoordinatorAsync(
+        [FromBody] CreateDirectoryCoordinatorRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.CreateCoordinatorAsync(request, cancellationToken);
+        var message = response.Roles.Count > 1
+            ? "Coordinator role added to existing account."
+            : "Coordinator created.";
+        return Ok(ApiResponse<DirectoryCoordinatorResponse>.Ok(response, message));
+    }
+
+    /// <summary>Updates an existing coordinator.</summary>
+    [HttpPut("coordinators/{userId:long}")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryCoordinatorResponse>>> UpdateCoordinatorAsync(
+        long userId,
+        [FromBody] UpdateDirectoryCoordinatorRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.UpdateCoordinatorAsync(userId, request, cancellationToken);
+        return Ok(ApiResponse<DirectoryCoordinatorResponse>.Ok(response, "Coordinator updated."));
+    }
+
+    /// <summary>Activates a coordinator account.</summary>
+    [HttpPost("coordinators/{userId:long}/activate")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> ActivateCoordinatorAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.ActivateCoordinatorAsync(userId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Coordinator activated."));
+    }
+
+    /// <summary>Deactivates a coordinator account.</summary>
+    [HttpPost("coordinators/{userId:long}/deactivate")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> DeactivateCoordinatorAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.DeactivateCoordinatorAsync(userId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Coordinator deactivated."));
+    }
+
+    /// <summary>Deactivates multiple coordinators in one request.</summary>
+    [HttpPost("coordinators/bulk-deactivate")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateCoordinatorsAsync(
+        [FromBody] BulkDeactivateRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.BulkDeactivateCoordinatorsAsync(request, cancellationToken);
+        return Ok(ApiResponse<BulkActionResponse>.Ok(response, "Coordinators deactivated."));
+    }
+
+    /// <summary>Adds the Parent role to an existing Coordinator account.</summary>
+    [HttpPost("coordinators/{userId:long}/roles/parent")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> GrantParentRoleToCoordinatorAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantParentRoleToCoordinatorAsync(userId, cancellationToken);
+        return Ok(ApiResponse<DirectoryParentResponse>.Ok(response, "Parent role added."));
+    }
+
+    /// <summary>Adds the Teacher role to an existing Coordinator account.</summary>
+    [HttpPost("coordinators/{userId:long}/roles/teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> GrantTeacherRoleToCoordinatorAsync(
+        long userId,
+        [FromBody] GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantTeacherRoleToCoordinatorAsync(
+            userId,
+            request,
+            cancellationToken);
+        return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(response, "Teacher role added."));
     }
 }

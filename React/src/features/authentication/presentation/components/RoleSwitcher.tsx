@@ -19,6 +19,14 @@ export function RoleSwitcher() {
   }
 
   const lockedRole = user.pendingSchoolChange?.lockedRole ?? null;
+  const orderedRoles = [...user.roles].sort((a, b) => {
+    const order: UserRole[] = ["Teacher", "Coordinator", "Parent"];
+    const rank = (role: UserRole) => {
+      const index = order.indexOf(role);
+      return index === -1 ? 99 : index;
+    };
+    return rank(a) - rank(b);
+  });
 
   async function handleChange(nextRole: UserRole) {
     if (!user || nextRole === user.role) {
@@ -52,10 +60,10 @@ export function RoleSwitcher() {
         aria-label="Switch active role"
         className={cn(
           "grid gap-1 rounded-lg bg-slate-100 p-1",
-          user.roles.length >= 3 ? "grid-cols-3" : "grid-cols-2",
+          orderedRoles.length >= 3 ? "grid-cols-3" : "grid-cols-2",
         )}
       >
-        {user.roles.map((role) => {
+        {orderedRoles.map((role) => {
           const isSelected = role === user.role;
           const isLocked = lockedRole === role;
           return (

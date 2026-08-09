@@ -46,6 +46,13 @@ export const queryKeys = {
     pageNumber?: number;
     pageSize?: number;
   }) => ["directory", "teachers", filters] as const,
+  directoryCoordinators: (filters: {
+    schoolId?: number | null;
+    campusId?: number | null;
+    search?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }) => ["directory", "coordinators", filters] as const,
   directoryParents: (filters: {
     search?: string;
     pageNumber?: number;

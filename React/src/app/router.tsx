@@ -20,6 +20,7 @@ import { RequestAccessPage } from "@/features/authentication/presentation/pages/
 import { DashboardPage } from "@/features/dashboard/presentation/pages/DashboardPage";
 import { DirectoryOverviewPage } from "@/features/directory/presentation/pages/DirectoryOverviewPage";
 import { DirectoryCampusAdminsPage } from "@/features/directory/presentation/pages/DirectoryCampusAdminsPage";
+import { DirectoryCoordinatorsPage } from "@/features/directory/presentation/pages/DirectoryCoordinatorsPage";
 import { DirectoryParentsPage } from "@/features/directory/presentation/pages/DirectoryParentsPage";
 import { DirectorySchoolAdminsPage } from "@/features/directory/presentation/pages/DirectorySchoolAdminsPage";
 import { DirectorySchoolsPage } from "@/features/directory/presentation/pages/DirectorySchoolsPage";
@@ -113,6 +114,10 @@ export function AppRouter() {
               <Route
                 path="admin/directory/teachers"
                 element={<DirectoryTeachersPage />}
+              />
+              <Route
+                path="admin/directory/coordinators"
+                element={<DirectoryCoordinatorsPage />}
               />
               <Route
                 path="admin/directory/parents"

@@ -484,8 +484,9 @@ public sealed class UserRepository : IUserRepository
                 user.AttachProfileContext(student?.Id, user.SchoolId, user.CampusId);
                 break;
             case UserRole.Teacher:
+            case UserRole.Coordinator:
                 var teacher = await _dbContext.Teachers.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(teacher?.Id, user.SchoolId, user.CampusId);
+                user.AttachProfileContext(teacher?.Id ?? user.Id, user.SchoolId, user.CampusId);
                 break;
             case UserRole.Parent:
                 var parent = await _dbContext.Parents.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);

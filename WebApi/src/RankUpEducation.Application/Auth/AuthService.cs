@@ -2097,6 +2097,7 @@ public sealed class AuthService : IAuthService
 
         var canRequest = activeRole is UserRole.Student
             or UserRole.Teacher
+            or UserRole.Coordinator
             or UserRole.CampusAdmin;
 
         if (!canRequest)

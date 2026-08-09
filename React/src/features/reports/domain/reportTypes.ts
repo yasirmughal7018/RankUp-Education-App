@@ -59,15 +59,20 @@ export interface StudentQuizHistory {
   items: StudentQuizHistoryItem[];
 }
 
-export type ReportViewerRole = "PortalAdmin" | "SchoolAdmin" | "Teacher";
+export type ReportViewerRole =
+  | "PortalAdmin"
+  | "SchoolAdmin"
+  | "Teacher"
+  | "Coordinator";
 
 export const REPORT_VIEWER_ROLES: ReportViewerRole[] = [
   "PortalAdmin",
   "SchoolAdmin",
   "Teacher",
+  "Coordinator",
 ];
 
-/** True for PortalAdmin, SchoolAdmin, and Teacher. */
+/** True for PortalAdmin, SchoolAdmin, Teacher, and Coordinator. */
 export function canViewReports(role: string): boolean {
   return REPORT_VIEWER_ROLES.includes(role as ReportViewerRole);
 }

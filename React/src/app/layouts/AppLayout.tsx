@@ -39,7 +39,7 @@ export function AppLayout() {
         { to: "/admin/directory", label: "Directory" },
       );
     }
-    if (user?.role === "Teacher") {
+    if (user?.role === "Teacher" || user?.role === "Coordinator") {
       items.push({ to: "/admin/directory/students", label: "Students" });
     }
     if (user && canManageQuestions(user.role)) {
@@ -82,7 +82,7 @@ export function AppLayout() {
     if (isAdminRole(user.role)) {
       items.push({ to: "/admin/directory", label: "Directory" });
     }
-    if (user.role === "Teacher") {
+    if (user.role === "Teacher" || user.role === "Coordinator") {
       items.push({ to: "/admin/directory/students", label: "Students" });
     }
     if (canManageQuestions(user.role)) {

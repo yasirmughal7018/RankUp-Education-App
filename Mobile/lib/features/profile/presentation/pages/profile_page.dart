@@ -11,6 +11,7 @@ const _schoolChangeRoles = {
   UserRole.teacher,
   UserRole.student,
   UserRole.campusAdmin,
+  UserRole.coordinator,
 };
 
 /// Signed-in user profile, role switch, logout, and school change.

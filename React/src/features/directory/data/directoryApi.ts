@@ -6,6 +6,7 @@ import {
   type BulkActionResult,
   type BulkDeactivateInput,
   type CreateDirectoryCampusAdminInput,
+  type CreateDirectoryCoordinatorInput,
   type CreateDirectoryParentInput,
   type CreateDirectorySchoolAdminInput,
   type CreateDirectoryStudentInput,
@@ -14,6 +15,8 @@ import {
   type DirectoryCampus,
   type DirectoryCampusAdmin,
   type DirectoryCampusAdminFilters,
+  type DirectoryCoordinator,
+  type DirectoryCoordinatorFilters,
   type DirectoryParent,
   type DirectoryParentFilters,
   type DirectorySchool,
@@ -30,6 +33,7 @@ import {
   type LinkParentStudentResult,
   type PagedDirectoryResult,
   type UpdateDirectoryCampusAdminInput,
+  type UpdateDirectoryCoordinatorInput,
   type UpdateDirectoryParentInput,
   type UpdateDirectorySchoolAdminInput,
   type UpdateDirectoryStudentInput,
@@ -107,6 +111,7 @@ export async function getDirectorySummary(): Promise<DirectorySummary> {
     students: normalizePeopleCounts(raw.students),
     parents: normalizePeopleCounts(raw.parents),
     teachers: normalizePeopleCounts(raw.teachers),
+    coordinators: normalizePeopleCounts(raw.coordinators),
     schoolAdmins: normalizePeopleCounts(raw.schoolAdmins),
     campusAdmins: normalizePeopleCounts(raw.campusAdmins),
     visibleSections: Array.isArray(raw.visibleSections)
@@ -516,6 +521,87 @@ export async function listCampusAdmins(
       pageNumber: filters.pageNumber,
       pageSize: filters.pageSize,
     })}`,
+  );
+}
+
+/** Paginated coordinator directory. */
+export async function listCoordinators(
+  filters: DirectoryCoordinatorFilters = {},
+): Promise<PagedDirectoryResult<DirectoryCoordinator>> {
+  return apiRequest<PagedDirectoryResult<DirectoryCoordinator>>(
+    `/directory/coordinators${toQuery({
+      schoolId: filters.schoolId,
+      campusId: filters.campusId,
+      search: filters.search,
+      pageNumber: filters.pageNumber,
+      pageSize: filters.pageSize,
+    })}`,
+  );
+}
+
+/** Create coordinator account (optionally Teacher + Parent). */
+export async function createCoordinator(
+  input: CreateDirectoryCoordinatorInput,
+): Promise<DirectoryCoordinator> {
+  return apiRequest<DirectoryCoordinator>("/directory/coordinators", {
+    method: "POST",
+    body: input,
+  });
+}
+
+/** Update coordinator profile. */
+export async function updateCoordinator(
+  userId: number,
+  input: UpdateDirectoryCoordinatorInput,
+): Promise<DirectoryCoordinator> {
+  return apiRequest<DirectoryCoordinator>(`/directory/coordinators/${userId}`, {
+    method: "PUT",
+    body: input,
+  });
+}
+
+/** Reactivate coordinator. */
+export async function activateCoordinator(userId: number): Promise<void> {
+  await apiRequestVoid(`/directory/coordinators/${userId}/activate`, {
+    method: "POST",
+  });
+}
+
+/** Deactivate coordinator. */
+export async function deactivateCoordinator(userId: number): Promise<void> {
+  await apiRequestVoid(`/directory/coordinators/${userId}/deactivate`, {
+    method: "POST",
+  });
+}
+
+/** Deactivate many coordinators at once. */
+export async function bulkDeactivateCoordinators(
+  ids: number[],
+): Promise<BulkActionResult> {
+  return apiRequest<BulkActionResult>("/directory/coordinators/bulk-deactivate", {
+    method: "POST",
+    body: { ids },
+  });
+}
+
+/** Add Parent role to an existing Coordinator. */
+export async function grantParentRoleToCoordinator(
+  userId: number,
+): Promise<DirectoryParent> {
+  return apiRequest<DirectoryParent>(
+    `/directory/coordinators/${userId}/roles/parent`,
+    { method: "POST" },
+  );
+}
+
+/** Add Teacher role to an existing Coordinator. */
+export async function grantTeacherRoleToCoordinator(
+  userId: number,
+  input: GrantTeacherRoleInput,
+): Promise<DirectoryTeacher> {
+  return apiRequest<DirectoryTeacher>(
+    `/directory/coordinators/${userId}/roles/teacher`,
+    { method: "POST", body: input },
   );
 }
 

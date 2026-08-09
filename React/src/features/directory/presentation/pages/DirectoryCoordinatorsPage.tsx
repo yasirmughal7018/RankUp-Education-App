@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Link2, Pencil, Unlink, UserCheck, UserX } from "lucide-react";
+import { Pencil, UserCheck, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
@@ -8,12 +8,13 @@ import { AppSearchInput } from "@/components/ui/app-search-input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
-  CreateDirectoryParentInput,
-  DirectoryParent,
+  CreateDirectoryCoordinatorInput,
+  DirectoryCoordinator,
   GrantTeacherRoleInput,
-  UpdateDirectoryParentInput,
+  UpdateDirectoryCoordinatorInput,
 } from "@/features/directory/domain/directoryTypes";
 import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
+import { CoordinatorFormDialog } from "@/features/directory/presentation/components/CoordinatorFormDialog";
 import {
   DirectoryBulkBar,
   DirectoryEntityCard,
@@ -31,20 +32,17 @@ import {
 } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { GrantTeacherRoleDialog } from "@/features/directory/presentation/components/GrantTeacherRoleDialog";
-import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
-import { ParentFormDialog } from "@/features/directory/presentation/components/ParentFormDialog";
 import {
-  useActivateParentMutation,
-  useBulkDeactivateParentsMutation,
-  useCreateParentMutation,
-  useDeactivateParentMutation,
-  useDirectoryParentsQuery,
+  useActivateCoordinatorMutation,
+  useBulkDeactivateCoordinatorsMutation,
+  useCreateCoordinatorMutation,
+  useDeactivateCoordinatorMutation,
+  useDirectoryCampusesQuery,
+  useDirectoryCoordinatorsQuery,
   useDirectorySchoolsQuery,
-  useGrantCoordinatorRoleToParentMutation,
-  useGrantTeacherRoleToParentMutation,
-  useLinkParentStudentMutation,
-  useUnlinkParentStudentMutation,
-  useUpdateParentMutation,
+  useGrantParentRoleToCoordinatorMutation,
+  useGrantTeacherRoleToCoordinatorMutation,
+  useUpdateCoordinatorMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import {
   DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS,
@@ -55,23 +53,8 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
-function formatLinkedStudents(parent: DirectoryParent): string {
-  const count = parent.linkedStudentCount;
-  const names = parent.linkedStudentNames?.filter(Boolean) ?? [];
-
-  if (count === 0) {
-    return "No linked students";
-  }
-
-  if (names.length > 0) {
-    return `${count} linked · ${names.join(", ")}`;
-  }
-
-  return `${count} linked student${count === 1 ? "" : "s"}`;
-}
-
-/** Paginated parent directory with student linking and account management. */
-export function DirectoryParentsPage() {
+/** Paginated coordinator directory with school/campus filters and CRUD actions. */
+export function DirectoryCoordinatorsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
   const [searchParams] = useSearchParams();
@@ -79,52 +62,61 @@ export function DirectoryParentsPage() {
 
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
+  const [schoolId, setSchoolId] = useState("");
+  const [campusId, setCampusId] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<DirectoryAccountStatusFilter>("all");
   const [pageNumber, setPageNumber] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [parentDialog, setParentDialog] = useState<
-    "create" | DirectoryParent | null
+  const [coordinatorDialog, setCoordinatorDialog] = useState<
+    "create" | DirectoryCoordinator | null
   >(null);
-  const [linkParent, setLinkParent] = useState<DirectoryParent | null>(null);
+  const [grantParentTarget, setGrantParentTarget] =
+    useState<DirectoryCoordinator | null>(null);
   const [grantTeacherTarget, setGrantTeacherTarget] =
-    useState<DirectoryParent | null>(null);
-  const [grantCoordinatorTarget, setGrantCoordinatorTarget] =
-    useState<DirectoryParent | null>(null);
+    useState<DirectoryCoordinator | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const selectedSchoolId = Number(schoolId) || null;
+  const selectedCampusId = Number(campusId) || null;
+
+  const { data: schools = [] } = useDirectorySchoolsQuery(canManage);
+  const { data: campuses = [] } = useDirectoryCampusesQuery(
+    selectedSchoolId ?? 0,
+    selectedSchoolId != null,
+  );
 
   const filters = useMemo(
     () => ({
       search: search || undefined,
+      schoolId: selectedSchoolId,
+      campusId: selectedCampusId,
       pageNumber,
       pageSize: PAGE_SIZE,
     }),
-    [search, pageNumber],
+    [search, selectedSchoolId, selectedCampusId, pageNumber],
   );
 
   const { data, isLoading, error, refetch, isFetching } =
-    useDirectoryParentsQuery(filters);
-  const { data: schools = [] } = useDirectorySchoolsQuery(canManage);
+    useDirectoryCoordinatorsQuery(filters);
 
-  const createMutation = useCreateParentMutation();
-  const updateMutation = useUpdateParentMutation();
-  const activateMutation = useActivateParentMutation();
-  const deactivateMutation = useDeactivateParentMutation();
-  const bulkDeactivateMutation = useBulkDeactivateParentsMutation();
-  const linkMutation = useLinkParentStudentMutation();
-  const unlinkMutation = useUnlinkParentStudentMutation();
-  const grantTeacherMutation = useGrantTeacherRoleToParentMutation();
-  const grantCoordinatorMutation = useGrantCoordinatorRoleToParentMutation();
+  const createMutation = useCreateCoordinatorMutation();
+  const updateMutation = useUpdateCoordinatorMutation();
+  const activateMutation = useActivateCoordinatorMutation();
+  const deactivateMutation = useDeactivateCoordinatorMutation();
+  const bulkDeactivateMutation = useBulkDeactivateCoordinatorsMutation();
+  const grantParentMutation = useGrantParentRoleToCoordinatorMutation();
+  const grantTeacherMutation = useGrantTeacherRoleToCoordinatorMutation();
 
   const totalCount = data?.totalCount ?? 0;
 
-  const visibleParents = useMemo(() => {
+  const visibleCoordinators = useMemo(() => {
     const items = data?.items ?? [];
-    return items.filter((parent) =>
+    return items.filter((coordinator) =>
       matchesDirectoryAccountStatusFilter(
-        parent.accountStatus,
-        parent.isActive,
+        coordinator.accountStatus,
+        coordinator.isActive,
         activeFilter,
       ),
     );
@@ -132,7 +124,12 @@ export function DirectoryParentsPage() {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [pageNumber, search, activeFilter]);
+  }, [pageNumber, search, schoolId, campusId, activeFilter]);
+
+  useEffect(() => {
+    setCampusId("");
+    setPageNumber(1);
+  }, [schoolId]);
 
   const busy =
     createMutation.isPending ||
@@ -140,21 +137,21 @@ export function DirectoryParentsPage() {
     activateMutation.isPending ||
     deactivateMutation.isPending ||
     bulkDeactivateMutation.isPending ||
-    linkMutation.isPending ||
-    unlinkMutation.isPending ||
-    grantTeacherMutation.isPending ||
-    grantCoordinatorMutation.isPending;
+    grantParentMutation.isPending ||
+    grantTeacherMutation.isPending;
 
   const allVisibleSelected =
-    visibleParents.length > 0 &&
-    visibleParents.every((parent) => selectedIds.has(parent.parentId));
+    visibleCoordinators.length > 0 &&
+    visibleCoordinators.every((coordinator) =>
+      selectedIds.has(coordinator.userId),
+    );
 
   function clearMessages() {
     setActionError(null);
     setSuccessMessage(null);
   }
 
-  function applySearch() {
+  function applyFilters() {
     setSearch(searchInput.trim());
     setPageNumber(1);
   }
@@ -164,7 +161,7 @@ export function DirectoryParentsPage() {
       setSelectedIds(new Set());
       return;
     }
-    setSelectedIds(new Set(visibleParents.map((p) => p.parentId)));
+    setSelectedIds(new Set(visibleCoordinators.map((c) => c.userId)));
   }
 
   function toggleSelect(id: number) {
@@ -181,42 +178,51 @@ export function DirectoryParentsPage() {
 
   async function handleFormSubmit(payload: {
     mode: "create" | "edit";
-    input: CreateDirectoryParentInput | UpdateDirectoryParentInput;
+    input: CreateDirectoryCoordinatorInput | UpdateDirectoryCoordinatorInput;
   }) {
     clearMessages();
     if (payload.mode === "create") {
       const created = await createMutation.mutateAsync(
-        payload.input as CreateDirectoryParentInput,
+        payload.input as CreateDirectoryCoordinatorInput,
       );
+      const createInput = payload.input as CreateDirectoryCoordinatorInput;
       setSuccessMessage(
-        `Created parent ${created.fullName}. User must set password on first login.`,
+        `Created coordinator ${created.fullName}${
+          createInput.alsoTeacher || createInput.alsoParent
+            ? ` with roles: Coordinator${
+                createInput.alsoTeacher ? ", Teacher" : ""
+              }${createInput.alsoParent ? ", Parent" : ""}`
+            : ""
+        }. User must set password on first login.`,
       );
-    } else if (parentDialog && parentDialog !== "create") {
+    } else if (coordinatorDialog && coordinatorDialog !== "create") {
       await updateMutation.mutateAsync({
-        parentId: parentDialog.parentId,
-        input: payload.input as UpdateDirectoryParentInput,
+        userId: coordinatorDialog.userId,
+        input: payload.input as UpdateDirectoryCoordinatorInput,
       });
-      setSuccessMessage(`Updated parent ${payload.input.fullName}.`);
+      setSuccessMessage(`Updated coordinator ${payload.input.fullName}.`);
     }
-    setParentDialog(null);
+    setCoordinatorDialog(null);
   }
 
-  async function toggleActive(parent: DirectoryParent) {
+  async function toggleActive(coordinator: DirectoryCoordinator) {
     clearMessages();
     try {
-      if (parent.isActive) {
-        if (!window.confirm(`Deactivate ${parent.fullName}?`)) {
+      if (coordinator.isActive) {
+        if (!window.confirm(`Deactivate ${coordinator.fullName}?`)) {
           return;
         }
-        await deactivateMutation.mutateAsync(parent.parentId);
-        setSuccessMessage(`Deactivated ${parent.fullName}.`);
+        await deactivateMutation.mutateAsync(coordinator.userId);
+        setSuccessMessage(`Deactivated ${coordinator.fullName}.`);
       } else {
-        await activateMutation.mutateAsync(parent.parentId);
-        setSuccessMessage(`Activated ${parent.fullName}.`);
+        await activateMutation.mutateAsync(coordinator.userId);
+        setSuccessMessage(`Activated ${coordinator.fullName}.`);
       }
     } catch (err) {
       const apiError = err as ApiError;
-      setActionError(apiError.message ?? "Unable to update parent status.");
+      setActionError(
+        apiError.message ?? "Unable to update coordinator status.",
+      );
     }
   }
 
@@ -227,7 +233,7 @@ export function DirectoryParentsPage() {
     }
     if (
       !window.confirm(
-        `Deactivate ${ids.length} selected parent${ids.length === 1 ? "" : "s"}?`,
+        `Deactivate ${ids.length} selected coordinator${ids.length === 1 ? "" : "s"}?`,
       )
     ) {
       return;
@@ -236,84 +242,32 @@ export function DirectoryParentsPage() {
     clearMessages();
     try {
       const result = await bulkDeactivateMutation.mutateAsync(ids);
-      setSuccessMessage(`Deactivated ${result.affectedCount} parent(s).`);
+      setSuccessMessage(`Deactivated ${result.affectedCount} coordinator(s).`);
       setSelectedIds(new Set());
     } catch (err) {
       const apiError = err as ApiError;
-      setActionError(apiError.message ?? "Unable to bulk deactivate parents.");
-    }
-  }
-
-  async function handleLink(studentId: number, relationship: string) {
-    if (!linkParent) {
-      return;
-    }
-
-    clearMessages();
-    await linkMutation.mutateAsync({
-      parentId: linkParent.parentId,
-      input: { studentId, relationship },
-    });
-    setSuccessMessage(
-      `Linked student ${studentId} to ${linkParent.fullName}.`,
-    );
-    setLinkParent(null);
-  }
-
-  async function handleUnlink(parent: DirectoryParent) {
-    const raw = window.prompt(
-      `Enter the student ID to unlink from ${parent.fullName}:`,
-    );
-    if (!raw) {
-      return;
-    }
-
-    const studentId = Number(raw);
-    if (!studentId || studentId < 1) {
-      setActionError("Enter a valid student ID to unlink.");
-      return;
-    }
-
-    if (
-      !window.confirm(
-        `Unlink student ${studentId} from ${parent.fullName}?`,
-      )
-    ) {
-      return;
-    }
-
-    clearMessages();
-
-    try {
-      await unlinkMutation.mutateAsync({
-        parentId: parent.parentId,
-        studentId,
-      });
-      setSuccessMessage(
-        `Unlinked student ${studentId} from ${parent.fullName}.`,
+      setActionError(
+        apiError.message ?? "Unable to bulk deactivate coordinators.",
       );
-    } catch (err) {
-      const apiError = err as ApiError;
-      setActionError(apiError.message ?? "Unable to unlink student.");
     }
   }
 
-  function rowActions(parent: DirectoryParent) {
+  function rowActions(coordinator: DirectoryCoordinator) {
     if (!canManage) {
       return null;
     }
-    const roles = parent.roles ?? [];
+    const roles = coordinator.roles ?? [];
+    const hasParentRole = roles.includes("Parent");
     const hasTeacherRole = roles.includes("Teacher");
-    const hasCoordinatorRole = roles.includes("Coordinator");
     return (
       <>
         <DirectoryIconAction
           icon={Pencil}
-          label={`Edit ${parent.fullName}`}
+          label={`Edit ${coordinator.fullName}`}
           disabled={busy}
           onClick={() => {
             clearMessages();
-            setParentDialog(parent);
+            setCoordinatorDialog(coordinator);
           }}
         />
         {!hasTeacherRole ? (
@@ -325,13 +279,13 @@ export function DirectoryParentsPage() {
             disabled={busy}
             onClick={() => {
               clearMessages();
-              setGrantTeacherTarget(parent);
+              setGrantTeacherTarget(coordinator);
             }}
           >
             + Teacher
           </Button>
         ) : null}
-        {!hasCoordinatorRole ? (
+        {!hasParentRole ? (
           <Button
             type="button"
             size="sm"
@@ -340,34 +294,21 @@ export function DirectoryParentsPage() {
             disabled={busy}
             onClick={() => {
               clearMessages();
-              setGrantCoordinatorTarget(parent);
+              setGrantParentTarget(coordinator);
             }}
           >
-            + Coordinator
+            + Parent
           </Button>
         ) : null}
         <DirectoryIconAction
-          icon={parent.isActive ? UserX : UserCheck}
+          icon={coordinator.isActive ? UserX : UserCheck}
           label={
-            parent.isActive
-              ? `Deactivate ${parent.fullName}`
-              : `Activate ${parent.fullName}`
+            coordinator.isActive
+              ? `Deactivate ${coordinator.fullName}`
+              : `Activate ${coordinator.fullName}`
           }
           disabled={busy}
-          onClick={() => void toggleActive(parent)}
-        />
-        <DirectoryIconAction
-          icon={Link2}
-          label={`Link student to ${parent.fullName}`}
-          variant="default"
-          disabled={busy}
-          onClick={() => setLinkParent(parent)}
-        />
-        <DirectoryIconAction
-          icon={Unlink}
-          label={`Unlink student from ${parent.fullName}`}
-          disabled={busy}
-          onClick={() => void handleUnlink(parent)}
+          onClick={() => void toggleActive(coordinator)}
         />
       </>
     );
@@ -375,7 +316,7 @@ export function DirectoryParentsPage() {
 
   return (
     <DirectoryPageShell
-      title="Parents"
+      title="Coordinators"
       primaryAction={
         canManage ? (
           <Button
@@ -384,10 +325,10 @@ export function DirectoryParentsPage() {
             className="h-9 whitespace-nowrap"
             onClick={() => {
               clearMessages();
-              setParentDialog("create");
+              setCoordinatorDialog("create");
             }}
           >
-            Create parent
+            Create coordinator
           </Button>
         ) : null
       }
@@ -399,12 +340,42 @@ export function DirectoryParentsPage() {
             onChange={(event) => setSearchInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
-                applySearch();
+                applyFilters();
               }
             }}
-            placeholder="Search parents..."
+            placeholder="Search coordinators..."
             containerClassName="min-w-0 flex-1 lg:min-w-[200px]"
           />
+          <select
+            value={schoolId}
+            onChange={(event) => setSchoolId(event.target.value)}
+            className={cn(directorySelectClassName, "lg:w-44")}
+            aria-label="Filter by school"
+          >
+            <option value="">All schools</option>
+            {schools.map((school) => (
+              <option key={school.id} value={school.id}>
+                {school.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={campusId}
+            onChange={(event) => {
+              setCampusId(event.target.value);
+              setPageNumber(1);
+            }}
+            disabled={!selectedSchoolId}
+            className={cn(directorySelectClassName, "lg:w-44")}
+            aria-label="Filter by campus"
+          >
+            <option value="">All campuses</option>
+            {campuses.map((campus) => (
+              <option key={campus.id} value={campus.id}>
+                {campus.name}
+              </option>
+            ))}
+          </select>
           <select
             value={activeFilter}
             onChange={(event) =>
@@ -424,7 +395,7 @@ export function DirectoryParentsPage() {
           <Button
             type="button"
             className="h-11 shrink-0 sm:h-10"
-            onClick={applySearch}
+            onClick={applyFilters}
           >
             Search
           </Button>
@@ -451,15 +422,15 @@ export function DirectoryParentsPage() {
 
       <DirectoryListPanel
         loading={isLoading}
-        empty={visibleParents.length === 0}
-        emptyTitle="No parents found"
+        empty={visibleCoordinators.length === 0}
+        emptyTitle="No coordinators found"
         emptyDescription="Try a different search or clear filters."
-        emptyActionLabel={canManage ? "Create parent" : undefined}
+        emptyActionLabel={canManage ? "Create coordinator" : undefined}
         onEmptyAction={
           canManage
             ? () => {
                 clearMessages();
-                setParentDialog("create");
+                setCoordinatorDialog("create");
               }
             : undefined
         }
@@ -474,27 +445,36 @@ export function DirectoryParentsPage() {
         }
       >
         <DirectoryMobileList>
-          {visibleParents.map((parent) => (
+          {visibleCoordinators.map((coordinator) => (
             <DirectoryEntityCard
-              key={parent.parentId}
-              selected={selectedIds.has(parent.parentId)}
+              key={coordinator.userId}
+              selected={selectedIds.has(coordinator.userId)}
               onSelect={
-                canManage ? () => toggleSelect(parent.parentId) : undefined
+                canManage ? () => toggleSelect(coordinator.userId) : undefined
               }
-              title={parent.fullName}
+              title={coordinator.fullName}
               subtitle={
-                (parent.roles?.length ?? 0) > 1
-                  ? `${parent.username} · ${parent.roles?.join(", ")}`
-                  : parent.username
+                (coordinator.roles?.length ?? 0) > 1
+                  ? `${coordinator.username} · ${coordinator.roles?.join(", ")}`
+                  : coordinator.username
               }
               badge={
                 <AccountStatusBadge
-                  accountStatus={parent.accountStatus}
-                  isActive={parent.isActive}
+                  accountStatus={coordinator.accountStatus}
+                  isActive={coordinator.isActive}
                 />
               }
-              meta={<p>{formatLinkedStudents(parent)}</p>}
-              actions={rowActions(parent)}
+              meta={
+                <>
+                  {coordinator.teacherCode ? (
+                    <p>Code {coordinator.teacherCode}</p>
+                  ) : null}
+                  <p>
+                    {coordinator.schoolName} · {coordinator.campusName}
+                  </p>
+                </>
+              }
+              actions={rowActions(coordinator)}
             />
           ))}
         </DirectoryMobileList>
@@ -507,63 +487,59 @@ export function DirectoryParentsPage() {
                   type="checkbox"
                   checked={allVisibleSelected}
                   onChange={toggleSelectAll}
-                  aria-label="Select all parents on this page"
+                  aria-label="Select all coordinators on this page"
                   className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                 />
               </DirectoryTh>
             ) : null}
             <DirectoryTh>Name</DirectoryTh>
-            <DirectoryTh>Linked students</DirectoryTh>
+            <DirectoryTh>Code</DirectoryTh>
+            <DirectoryTh>School / Campus</DirectoryTh>
             <DirectoryTh>Status</DirectoryTh>
             {canManage ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
           </DirectoryTableHead>
           <tbody className="divide-y divide-border">
-            {visibleParents.map((parent) => (
+            {visibleCoordinators.map((coordinator) => (
               <tr
-                key={parent.parentId}
+                key={coordinator.userId}
                 className="transition hover:bg-muted/40"
               >
                 {canManage ? (
                   <DirectoryTd>
                     <input
                       type="checkbox"
-                      checked={selectedIds.has(parent.parentId)}
-                      onChange={() => toggleSelect(parent.parentId)}
-                      aria-label={`Select ${parent.fullName}`}
+                      checked={selectedIds.has(coordinator.userId)}
+                      onChange={() => toggleSelect(coordinator.userId)}
+                      aria-label={`Select ${coordinator.fullName}`}
                       className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
                     />
                   </DirectoryTd>
                 ) : null}
                 <DirectoryTd>
-                  <p className="font-medium">{parent.fullName}</p>
+                  <p className="font-medium">{coordinator.fullName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {parent.username}
+                    {coordinator.username}
                   </p>
-                  {(parent.roles?.length ?? 0) > 1 ? (
+                  {(coordinator.roles?.length ?? 0) > 1 ? (
                     <p className="mt-0.5 text-xs font-medium text-primary">
-                      Roles: {parent.roles?.join(", ")}
+                      Roles: {coordinator.roles?.join(", ")}
                     </p>
                   ) : null}
                 </DirectoryTd>
-                <DirectoryTd>
-                  <p>{parent.linkedStudentCount}</p>
-                  {parent.linkedStudentNames &&
-                  parent.linkedStudentNames.length > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      {parent.linkedStudentNames.join(", ")}
-                    </p>
-                  ) : null}
+                <DirectoryTd>{coordinator.teacherCode || "—"}</DirectoryTd>
+                <DirectoryTd className="text-muted-foreground">
+                  {coordinator.schoolName} / {coordinator.campusName}
                 </DirectoryTd>
                 <DirectoryTd>
                   <AccountStatusBadge
-                    accountStatus={parent.accountStatus}
-                    isActive={parent.isActive}
+                    accountStatus={coordinator.accountStatus}
+                    isActive={coordinator.isActive}
                   />
                 </DirectoryTd>
                 {canManage ? (
                   <DirectoryTd align="right">
-                    <div className="flex justify-end gap-1.5">
-                      {rowActions(parent)}
+                    <div className="flex justify-end gap-2">
+                      {rowActions(coordinator)}
                     </div>
                   </DirectoryTd>
                 ) : null}
@@ -573,21 +549,15 @@ export function DirectoryParentsPage() {
         </DirectoryTable>
       </DirectoryListPanel>
 
-      {parentDialog ? (
-        <ParentFormDialog
-          parent={parentDialog === "create" ? null : parentDialog}
+      {coordinatorDialog ? (
+        <CoordinatorFormDialog
+          coordinator={
+            coordinatorDialog === "create" ? null : coordinatorDialog
+          }
+          schools={schools}
           isSubmitting={createMutation.isPending || updateMutation.isPending}
-          onClose={() => setParentDialog(null)}
+          onClose={() => setCoordinatorDialog(null)}
           onSubmit={handleFormSubmit}
-        />
-      ) : null}
-
-      {linkParent ? (
-        <LinkStudentDialog
-          parentName={linkParent.fullName}
-          isSubmitting={linkMutation.isPending}
-          onClose={() => setLinkParent(null)}
-          onSubmit={handleLink}
         />
       ) : null}
 
@@ -598,50 +568,57 @@ export function DirectoryParentsPage() {
           isSubmitting={grantTeacherMutation.isPending}
           onClose={() => setGrantTeacherTarget(null)}
           onSubmit={async (input: GrantTeacherRoleInput) => {
-            await grantTeacherMutation.mutateAsync({
-              parentId: grantTeacherTarget.parentId,
-              input,
-            });
-            setSuccessMessage(
-              `Teacher role added to ${grantTeacherTarget.fullName}.`,
-            );
-            setGrantTeacherTarget(null);
+            clearMessages();
+            try {
+              await grantTeacherMutation.mutateAsync({
+                userId: grantTeacherTarget.userId,
+                input,
+              });
+              setSuccessMessage(
+                `Teacher role added to ${grantTeacherTarget.fullName}.`,
+              );
+              setGrantTeacherTarget(null);
+            } catch (err) {
+              const apiError = err as ApiError;
+              setActionError(
+                apiError.message ?? "Unable to add Teacher role.",
+              );
+              throw err;
+            }
           }}
         />
       ) : null}
 
       <AppConfirmDialog
-        open={grantCoordinatorTarget != null}
+        open={grantParentTarget != null}
         onOpenChange={(open) => {
-          if (!open && !grantCoordinatorMutation.isPending) {
-            setGrantCoordinatorTarget(null);
+          if (!open && !grantParentMutation.isPending) {
+            setGrantParentTarget(null);
           }
         }}
-        title="Add Coordinator role"
+        title="Add Parent role"
         description={
-          grantCoordinatorTarget
-            ? `Add the Coordinator role to ${grantCoordinatorTarget.fullName}? They can hold Teacher, Parent, and Coordinator together and switch roles after login.`
+          grantParentTarget
+            ? `Add the Parent role to ${grantParentTarget.fullName}? They keep Coordinator access and can also hold Teacher. Switch roles after login.`
             : ""
         }
-        confirmLabel="Add Coordinator role"
-        loading={grantCoordinatorMutation.isPending}
+        confirmLabel="Add Parent role"
+        loading={grantParentMutation.isPending}
         onConfirm={() => {
-          if (!grantCoordinatorTarget) {
+          if (!grantParentTarget) {
             return;
           }
           void (async () => {
             try {
-              await grantCoordinatorMutation.mutateAsync(
-                grantCoordinatorTarget.parentId,
-              );
+              await grantParentMutation.mutateAsync(grantParentTarget.userId);
               setSuccessMessage(
-                `Coordinator role added to ${grantCoordinatorTarget.fullName}.`,
+                `Parent role added to ${grantParentTarget.fullName}.`,
               );
-              setGrantCoordinatorTarget(null);
+              setGrantParentTarget(null);
             } catch (err) {
               const apiError = err as ApiError;
               setActionError(
-                apiError.message ?? "Unable to add Coordinator role.",
+                apiError.message ?? "Unable to add Parent role.",
               );
             }
           })();

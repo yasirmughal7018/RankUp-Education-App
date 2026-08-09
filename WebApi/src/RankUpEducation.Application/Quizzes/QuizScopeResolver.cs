@@ -209,7 +209,7 @@ public static class QuizScopeResolver
             return;
         }
 
-        if (scope.Role == UserRole.Teacher)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
         {
             if (!await studentScope.IsStudentInSchoolAsync(
                     studentId,

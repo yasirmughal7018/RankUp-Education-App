@@ -68,6 +68,12 @@ public sealed class DirectoryService : IDirectoryService
             campusId,
             cancellationToken);
 
+        var coordinators = await _directory.CountUsersByStatusAsync(
+            UserRole.Coordinator,
+            schoolId,
+            campusId,
+            cancellationToken);
+
         // Parents are scoped via linked students (they usually have no school on the user row).
         var parents = await _directory.CountParentsLinkedToStudentsByStatusAsync(
             schoolId,
@@ -80,6 +86,7 @@ public sealed class DirectoryService : IDirectoryService
             "students",
             "parents",
             "teachers",
+            "coordinators",
             "schoolChanges",
         };
 
@@ -113,6 +120,7 @@ public sealed class DirectoryService : IDirectoryService
             teachers,
             schoolAdmins,
             campusAdmins,
+            coordinators,
             visibleSections);
     }
 
@@ -713,7 +721,17 @@ public sealed class DirectoryService : IDirectoryService
             cancellationToken);
         if (existing is not null)
         {
-            return await AddParentRoleToExistingUserAsync(existing, request, mobileNumber, cnic, cancellationToken);
+            var merged = await AddParentRoleToExistingUserAsync(
+                existing,
+                request,
+                mobileNumber,
+                cnic,
+                cancellationToken);
+            await EnsureParentCompanionRolesAsync(
+                existing,
+                request.AlsoCoordinator,
+                cancellationToken);
+            return merged with { Roles = RoleNames(existing) };
         }
 
         // Auto-approved; user sets password on first login. Username = email.
@@ -730,6 +748,11 @@ public sealed class DirectoryService : IDirectoryService
         await _users.AddParentProfileAsync(new Parent(user.Id, mobileNumber), cancellationToken);
         user.AttachProfileContext(user.Id, null, null);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await EnsureParentCompanionRolesAsync(
+            user,
+            request.AlsoCoordinator,
+            cancellationToken);
 
         return new DirectoryParentResponse(
             user.Id,
@@ -773,6 +796,11 @@ public sealed class DirectoryService : IDirectoryService
         user.UpdateContactInfo(request.MobileNumber, request.Cnic);
         parent.Update(request.MobileNumber);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await EnsureParentCompanionRolesAsync(
+            user,
+            request.AlsoCoordinator,
+            cancellationToken);
 
         var linkedCount = await _directory.CountParentStudentLinksAsync(parentId, cancellationToken);
         return new DirectoryParentResponse(
@@ -1201,6 +1229,429 @@ public sealed class DirectoryService : IDirectoryService
             safePageSize,
             cancellationToken);
         return new DirectoryCampusAdminListResponse(items, safePageNumber, safePageSize, totalCount);
+    }
+
+    public async Task<DirectoryCoordinatorListResponse> ListCoordinatorsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
+        var (resolvedSchoolId, resolvedCampusId) = ResolveSchoolCampusFilter(schoolId, campusId);
+        var (items, totalCount) = await _directory.ListCoordinatorsAsync(
+            resolvedSchoolId,
+            resolvedCampusId,
+            search,
+            safePageNumber,
+            safePageSize,
+            cancellationToken);
+        return new DirectoryCoordinatorListResponse(items, safePageNumber, safePageSize, totalCount);
+    }
+
+    public async Task<DirectoryCoordinatorResponse> CreateCoordinatorAsync(
+        CreateDirectoryCoordinatorRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        ValidateCreateCoordinatorRequest(request);
+
+        var alsoTeacher = request.AlsoTeacher;
+        var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
+        await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var emailAddress = ResolveEmailUsername(request.EmailAddress, request.Username);
+        var existing = await FindExistingUserForAdditionalRoleAsync(
+            mobileNumber,
+            cnic: null,
+            emailOrUsername: emailAddress,
+            cancellationToken);
+
+        if (existing is not null)
+        {
+            await EnsureCoordinatorOnUserAsync(existing, cancellationToken);
+            if (alsoTeacher && !existing.HasRole(UserRole.Teacher))
+            {
+                var teacherRequest = new CreateDirectoryTeacherRequest(
+                    request.FullName,
+                    request.Username,
+                    schoolId,
+                    campusId,
+                    request.TeacherCode,
+                    mobileNumber,
+                    emailAddress);
+                await AddTeacherRoleToExistingUserAsync(
+                    existing,
+                    teacherRequest,
+                    schoolId,
+                    campusId,
+                    mobileNumber,
+                    cancellationToken);
+            }
+
+            if (request.AlsoParent)
+            {
+                await EnsureTeacherCompanionRolesAsync(
+                    existing,
+                    alsoParent: true,
+                    alsoCoordinator: true,
+                    cancellationToken);
+            }
+
+            return ToCoordinatorResponse(existing, schoolId, campusId);
+        }
+
+        var user = User.CreateProvisionedAccount(
+            emailAddress,
+            request.FullName.AsTrimmedString(),
+            UserRole.Coordinator,
+            schoolId,
+            campusId,
+            mobileNumber,
+            emailAddress: emailAddress);
+
+        if (alsoTeacher)
+        {
+            user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
+        }
+
+        await _users.AddAsync(user, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (alsoTeacher)
+        {
+            try
+            {
+                user.AddRole(UserRole.Teacher, DateTimeOffset.UtcNow);
+            }
+            catch (BusinessRuleException exception)
+            {
+                throw new ValidationAppException([exception.Message]);
+            }
+
+            await _users.AddTeacherProfileAsync(
+                new Teacher(user.Id, mobileNumber),
+                cancellationToken);
+        }
+
+        user.AttachProfileContext(user.Id, schoolId, campusId);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await EnsureTeacherCompanionRolesAsync(
+            user,
+            request.AlsoParent,
+            alsoCoordinator: false,
+            cancellationToken);
+
+        return ToCoordinatorResponse(user, schoolId, campusId);
+    }
+
+    public async Task<DirectoryCoordinatorResponse> UpdateCoordinatorAsync(
+        long userId,
+        UpdateDirectoryCoordinatorRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        ValidateUpdateCoordinatorRequest(request);
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("Coordinator was not found.");
+
+        if (!user.HasRole(UserRole.Coordinator))
+        {
+            throw new NotFoundAppException("Coordinator was not found.");
+        }
+
+        EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
+
+        var campus = await _directory.GetCampusAsync(request.CampusId, cancellationToken)
+            ?? throw new NotFoundAppException("Campus was not found.");
+        if (user.SchoolId is null || campus.SchoolId != user.SchoolId)
+        {
+            throw new ValidationAppException(["Campus must belong to the coordinator's school."]);
+        }
+
+        user.UpdateProfile(request.FullName);
+        user.AssignSchoolCampus(user.SchoolId, request.CampusId);
+        user.UpdateContactInfo(request.MobileNumber.AsTrimmedOrNull(), user.Cnic);
+        user.AttachProfileContext(user.Id, user.SchoolId, request.CampusId);
+
+        if (request.AlsoTeacher || user.HasRole(UserRole.Teacher))
+        {
+            user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
+        }
+
+        if (request.AlsoTeacher && !user.HasRole(UserRole.Teacher))
+        {
+            try
+            {
+                user.AddRole(UserRole.Teacher, DateTimeOffset.UtcNow);
+            }
+            catch (BusinessRuleException exception)
+            {
+                throw new ValidationAppException([exception.Message]);
+            }
+
+            if (!await _users.HasTeacherProfileAsync(user.Id, cancellationToken))
+            {
+                await _users.AddTeacherProfileAsync(
+                    new Teacher(user.Id, request.MobileNumber.AsTrimmedOrNull() ?? user.MobileNumber),
+                    cancellationToken);
+            }
+        }
+        else if (user.HasRole(UserRole.Teacher))
+        {
+            var teacher = await _directory.GetTeacherEntityAsync(userId, cancellationToken);
+            teacher?.Update(request.MobileNumber);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await EnsureTeacherCompanionRolesAsync(
+            user,
+            request.AlsoParent,
+            alsoCoordinator: false,
+            cancellationToken);
+
+        return ToCoordinatorResponse(user, user.SchoolId ?? 0, request.CampusId);
+    }
+
+    public async Task ActivateCoordinatorAsync(long userId, CancellationToken cancellationToken)
+    {
+        await SetCoordinatorActiveAsync(userId, true, cancellationToken);
+    }
+
+    public async Task DeactivateCoordinatorAsync(long userId, CancellationToken cancellationToken)
+    {
+        await SetCoordinatorActiveAsync(userId, false, cancellationToken);
+    }
+
+    public async Task<BulkActionResponse> BulkDeactivateCoordinatorsAsync(
+        BulkDeactivateRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        var ids = NormalizeIds(request);
+        var affected = 0;
+        foreach (var userId in ids)
+        {
+            var user = await _users.GetByIdAsync(userId, cancellationToken);
+            if (user is null
+                || !user.HasRole(UserRole.Coordinator)
+                || !CanManageUserInCurrentScope(user))
+            {
+                continue;
+            }
+
+            await DeactivateDirectoryUserAsync(userId, cancellationToken);
+            affected++;
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return new BulkActionResponse(affected);
+    }
+
+    public async Task<DirectoryParentResponse> GrantParentRoleToCoordinatorAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("Coordinator was not found.");
+
+        EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
+
+        if (!user.HasRole(UserRole.Coordinator))
+        {
+            throw new ValidationAppException(["This account is not a Coordinator."]);
+        }
+
+        if (user.HasRole(UserRole.Parent))
+        {
+            throw new ValidationAppException(["This account already has the Parent role."]);
+        }
+
+        var createRequest = new CreateDirectoryParentRequest(
+            user.FullName,
+            user.Username,
+            user.Cnic,
+            user.MobileNumber,
+            user.EmailAddress ?? user.Username);
+
+        return await AddParentRoleToExistingUserAsync(
+            user,
+            createRequest,
+            user.MobileNumber,
+            user.Cnic,
+            cancellationToken);
+    }
+
+    public async Task<DirectoryTeacherResponse> GrantTeacherRoleToCoordinatorAsync(
+        long userId,
+        GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+
+        if (!request.TeacherCode.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Teacher code is required."]);
+        }
+
+        var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
+        await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("Coordinator was not found.");
+
+        if (!user.HasRole(UserRole.Coordinator))
+        {
+            throw new ValidationAppException(["This account is not a Coordinator."]);
+        }
+
+        if (user.HasRole(UserRole.Teacher))
+        {
+            throw new ValidationAppException(["This account already has the Teacher role."]);
+        }
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull() ?? user.MobileNumber;
+        var createRequest = new CreateDirectoryTeacherRequest(
+            user.FullName,
+            user.Username,
+            schoolId,
+            campusId,
+            request.TeacherCode.AsTrimmedString(),
+            mobileNumber,
+            user.EmailAddress ?? user.Username);
+
+        return await AddTeacherRoleToExistingUserAsync(
+            user,
+            createRequest,
+            schoolId,
+            campusId,
+            mobileNumber,
+            cancellationToken);
+    }
+
+    private async Task SetCoordinatorActiveAsync(long userId, bool isActive, CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException("Coordinator was not found.");
+
+        if (!user.HasRole(UserRole.Coordinator))
+        {
+            throw new NotFoundAppException("Coordinator was not found.");
+        }
+
+        EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
+        await _directory.SetUserActiveAsync(userId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                userId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task EnsureCoordinatorOnUserAsync(User user, CancellationToken cancellationToken)
+    {
+        if (user.HasRole(UserRole.Coordinator))
+        {
+            return;
+        }
+
+        try
+        {
+            user.AddRole(UserRole.Coordinator, DateTimeOffset.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private static DirectoryCoordinatorResponse ToCoordinatorResponse(
+        User user,
+        int schoolId,
+        int campusId)
+        => new(
+            user.Id,
+            user.FullName,
+            user.Username,
+            user.RollNumberTeacherCode ?? string.Empty,
+            schoolId,
+            "—",
+            campusId,
+            "—",
+            user.IsActive,
+            user.AvatarUrl,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            DirectoryAccountStatuses.FromUser(user),
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            RoleNames(user));
+
+    private static void ValidateCreateCoordinatorRequest(CreateDirectoryCoordinatorRequest request)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            errors.Add("Full name is required.");
+        }
+
+        if (ResolveEmailUsernameOrNull(request.EmailAddress, request.Username) is null)
+        {
+            errors.Add("Email address is required (it is the username).");
+        }
+
+        if (request.AlsoTeacher && string.IsNullOrWhiteSpace(request.TeacherCode))
+        {
+            errors.Add("Teacher code is required when also assigning Teacher.");
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationAppException(errors);
+        }
+    }
+
+    private static void ValidateUpdateCoordinatorRequest(UpdateDirectoryCoordinatorRequest request)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            errors.Add("Full name is required.");
+        }
+
+        if (request.AlsoTeacher && string.IsNullOrWhiteSpace(request.TeacherCode))
+        {
+            errors.Add("Teacher code is required when also assigning Teacher.");
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationAppException(errors);
+        }
     }
 
     public async Task<DirectoryCampusAdminResponse> CreateCampusAdminAsync(
@@ -1702,7 +2153,7 @@ public sealed class DirectoryService : IDirectoryService
     private void EnsureDirectoryReader()
     {
         var role = ParseRole();
-        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.Teacher))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.Teacher or UserRole.Coordinator))
         {
             throw new ForbiddenAppException("You do not have access to the student directory.");
         }
@@ -2085,6 +2536,29 @@ public sealed class DirectoryService : IDirectoryService
         }
     }
 
+    /// <summary>Adds Coordinator onto a Parent account (may already also be Teacher).</summary>
+    private async Task EnsureParentCompanionRolesAsync(
+        User user,
+        bool alsoCoordinator,
+        CancellationToken cancellationToken)
+    {
+        if (!alsoCoordinator || user.HasRole(UserRole.Coordinator))
+        {
+            return;
+        }
+
+        try
+        {
+            user.AddRole(UserRole.Coordinator, DateTimeOffset.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     private void EnsureSchoolAccess(long schoolId)
         => EnsureSchoolAccess((int?)schoolId);
 
@@ -2143,7 +2617,7 @@ public sealed class DirectoryService : IDirectoryService
             return (scopedSchoolId, scopedCampusId);
         }
 
-        if (role is UserRole.SchoolAdmin or UserRole.Teacher)
+        if (role is UserRole.SchoolAdmin or UserRole.Teacher or UserRole.Coordinator)
         {
             var scopedSchoolId = _currentUser.SchoolId
                 ?? throw new ForbiddenAppException("School context was not found.");

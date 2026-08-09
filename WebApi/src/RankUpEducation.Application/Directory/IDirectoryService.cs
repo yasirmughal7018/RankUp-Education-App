@@ -213,6 +213,48 @@ public interface IDirectoryService
         int pageSize,
         CancellationToken cancellationToken);
 
+    /// <summary>Page of users with the Coordinator role.</summary>
+    Task<DirectoryCoordinatorListResponse> ListCoordinatorsAsync(
+        int? schoolId,
+        int? campusId,
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>Provisions a Coordinator (optionally also Teacher and/or Parent).</summary>
+    Task<DirectoryCoordinatorResponse> CreateCoordinatorAsync(
+        CreateDirectoryCoordinatorRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Updates a Coordinator profile and companion roles.</summary>
+    Task<DirectoryCoordinatorResponse> UpdateCoordinatorAsync(
+        long userId,
+        UpdateDirectoryCoordinatorRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Activates a Coordinator account.</summary>
+    Task ActivateCoordinatorAsync(long userId, CancellationToken cancellationToken);
+
+    /// <summary>Deactivates a Coordinator account.</summary>
+    Task DeactivateCoordinatorAsync(long userId, CancellationToken cancellationToken);
+
+    /// <summary>Deactivates many Coordinator accounts.</summary>
+    Task<BulkActionResponse> BulkDeactivateCoordinatorsAsync(
+        BulkDeactivateRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds Parent onto an existing Coordinator account.</summary>
+    Task<DirectoryParentResponse> GrantParentRoleToCoordinatorAsync(
+        long userId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds Teacher onto an existing Coordinator account.</summary>
+    Task<DirectoryTeacherResponse> GrantTeacherRoleToCoordinatorAsync(
+        long userId,
+        GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken);
+
     /// <summary>Provisions a campus admin for the given school and campus.</summary>
     Task<DirectoryCampusAdminResponse> CreateCampusAdminAsync(
         CreateDirectoryCampusAdminRequest request,

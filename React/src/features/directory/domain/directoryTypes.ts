@@ -3,6 +3,7 @@ export type DirectorySectionKey =
   | "students"
   | "parents"
   | "teachers"
+  | "coordinators"
   | "schoolAdmins"
   | "campusAdmins"
   | "schoolChanges";
@@ -52,6 +53,7 @@ export interface DirectorySummary {
   students: DirectoryStatusCounts;
   parents: DirectoryStatusCounts;
   teachers: DirectoryStatusCounts;
+  coordinators: DirectoryStatusCounts;
   schoolAdmins: DirectoryStatusCounts;
   campusAdmins: DirectoryStatusCounts;
   visibleSections: DirectorySectionKey[];
@@ -153,6 +155,51 @@ export interface DirectoryTeacher extends DirectoryAccountAuditFields {
   roles?: string[];
 }
 
+/** User with Coordinator role (often also Teacher and/or Parent). */
+export interface DirectoryCoordinator extends DirectoryAccountAuditFields {
+  userId: number;
+  fullName: string;
+  username: string;
+  teacherCode: string;
+  schoolId: number;
+  schoolName: string;
+  campusId: number;
+  campusName: string;
+  isActive: boolean;
+  avatarUrl?: string | null;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
+  needsPasswordSetup?: boolean;
+  accountStatus: DirectoryAccountStatus;
+  roles: string[];
+}
+
+export interface CreateDirectoryCoordinatorInput {
+  fullName: string;
+  username: string;
+  schoolId: number;
+  campusId: number;
+  teacherCode: string;
+  mobileNumber?: string | null;
+  emailAddress?: string | null;
+  /** Also assign Teacher on the same login (default true). */
+  alsoTeacher?: boolean;
+  /** Also assign Parent on the same login. */
+  alsoParent?: boolean;
+}
+
+export interface UpdateDirectoryCoordinatorInput {
+  fullName: string;
+  campusId: number;
+  teacherCode: string;
+  mobileNumber?: string | null;
+  /** Ensure Teacher is on this account. */
+  alsoTeacher?: boolean;
+  /** Ensure Parent is on this account. */
+  alsoParent?: boolean;
+}
+
 export interface DirectoryParent extends DirectoryAccountAuditFields {
   parentId: number;
   fullName: string;
@@ -228,6 +275,16 @@ export interface CreateDirectoryParentInput {
   cnic?: string | null;
   mobileNumber?: string | null;
   emailAddress?: string | null;
+  /** Also assign Coordinator on the same login. */
+  alsoCoordinator?: boolean;
+}
+
+export interface UpdateDirectoryParentInput {
+  fullName: string;
+  cnic?: string | null;
+  mobileNumber?: string | null;
+  /** Ensure Coordinator is on this account. */
+  alsoCoordinator?: boolean;
 }
 
 /** Grant Teacher role to an existing Parent account. */
@@ -326,12 +383,6 @@ export interface DirectoryCampusAdminFilters {
   pageSize?: number;
 }
 
-export interface UpdateDirectoryParentInput {
-  fullName: string;
-  cnic?: string | null;
-  mobileNumber?: string | null;
-}
-
 export interface BulkDeactivateInput {
   ids: number[];
 }
@@ -367,6 +418,12 @@ export interface DirectoryStudentFilters extends DirectoryPaging {
 }
 
 export interface DirectoryTeacherFilters extends DirectoryPaging {
+  schoolId?: number | null;
+  campusId?: number | null;
+  search?: string;
+}
+
+export interface DirectoryCoordinatorFilters extends DirectoryPaging {
   schoolId?: number | null;
   campusId?: number | null;
   search?: string;

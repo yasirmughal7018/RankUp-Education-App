@@ -165,7 +165,7 @@ export function CampusAdminFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${campusAdmin.fullName}.`
-              : "Add a new campus admin. User must set password on first login."}
+              : "Add a new campus admin for one campus. Campus Admin is a single-role account (like School Admin) and cannot be combined with Teacher, Parent, or Coordinator. User must set password on first login."}
           </p>
         </div>
 

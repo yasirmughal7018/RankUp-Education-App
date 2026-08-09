@@ -514,7 +514,7 @@ setSelectedIds(
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-10 sm:px-6">
       <PageHeader
         title="Role requests"
-        description="Approve or reject requests from users who want Parent, Teacher, or Coordinator as an additional role. Student and School Admin accounts stay single-role. One account may hold Teacher, Parent, and Coordinator together."
+        description="Approve or reject requests from users who want Parent, Teacher, or Coordinator as an additional role. Student, School Admin, and Campus Admin accounts stay single-role. One account may hold Teacher, Parent, and Coordinator together."
         action={
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">

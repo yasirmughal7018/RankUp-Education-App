@@ -337,7 +337,7 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("Quiz must contain at least one question before assignment.");
         }
 
-        if (scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.PortalAdmin)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             var canAssign =
@@ -374,7 +374,7 @@ public sealed class QuizAssignService : IQuizAssignService
 
         // Public catalog quizzes may be viewed/assigned by any assign-capable role.
         if (quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
-            && scope.Role is UserRole.Teacher or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
+            && scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
         {
             return quiz;
         }

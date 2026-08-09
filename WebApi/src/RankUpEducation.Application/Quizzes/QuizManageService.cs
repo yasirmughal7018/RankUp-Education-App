@@ -210,7 +210,7 @@ public sealed class QuizManageService : IQuizManageService
             LookupNames.PublishedLifecycleNames,
             cancellationToken);
 
-        if (scope.Role == UserRole.Teacher)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
         {
             // Teacher publish (re)queues Pending approval — also recovers Rejected quizzes.
             var pendingApprovalStatusId = await _guard.RequireLookupAsync(
@@ -664,7 +664,7 @@ public sealed class QuizManageService : IQuizManageService
             return context;
         }
 
-        if (scope.Role == UserRole.Teacher)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
         {
             var schoolId = scope.SchoolId ?? throw new ForbiddenAppException("Teacher school context was not found.");
             var campusId = scope.CampusId ?? throw new ForbiddenAppException("Teacher campus context was not found.");

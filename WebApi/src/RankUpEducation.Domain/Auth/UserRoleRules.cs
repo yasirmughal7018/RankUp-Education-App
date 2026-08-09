@@ -7,11 +7,10 @@ public static class UserRoleRules
 {
     /// <summary>
     /// Roles that may share one login (any subset).
-    /// Student, PortalAdmin, and SchoolAdmin stay exclusive.
+    /// Student, PortalAdmin, SchoolAdmin, and CampusAdmin stay exclusive.
     /// </summary>
     private static readonly HashSet<UserRole> CombinableRoles =
     [
-        UserRole.CampusAdmin,
         UserRole.Teacher,
         UserRole.Parent,
         UserRole.Coordinator,
@@ -37,13 +36,19 @@ public static class UserRoleRules
             return existingRoles.Count == 0 && roleToAdd == UserRole.PortalAdmin;
         }
 
-        // SchoolAdmin is exclusive — one role only, never with Teacher/Parent/Coordinator/etc.
+        // SchoolAdmin is exclusive (whole-school scope) — never with other roles.
         if (roleToAdd == UserRole.SchoolAdmin || existingRoles.Contains(UserRole.SchoolAdmin))
         {
             return existingRoles.Count == 0 && roleToAdd == UserRole.SchoolAdmin;
         }
 
-        // CampusAdmin, Teacher, Parent, Coordinator may share one account.
+        // CampusAdmin is exclusive (current-campus scope) — never with other roles.
+        if (roleToAdd == UserRole.CampusAdmin || existingRoles.Contains(UserRole.CampusAdmin))
+        {
+            return existingRoles.Count == 0 && roleToAdd == UserRole.CampusAdmin;
+        }
+
+        // Teacher, Parent, Coordinator may share one account.
         return CombinableRoles.Contains(roleToAdd)
             && existingRoles.All(CombinableRoles.Contains);
     }
@@ -77,6 +82,12 @@ public static class UserRoleRules
                 "School Admin accounts cannot be combined with other roles. Use a separate login for School Admin.");
         }
 
+        if (existingRoles.Contains(UserRole.CampusAdmin) || roleToAdd == UserRole.CampusAdmin)
+        {
+            throw new BusinessRuleException(
+                "Campus Admin accounts cannot be combined with other roles. Use a separate login for Campus Admin.");
+        }
+
         throw new BusinessRuleException($"Cannot add role {roleToAdd} to this account.");
     }
 
@@ -95,7 +106,7 @@ public static class UserRoleRules
             return false;
         }
 
-        return roleToRemove is UserRole.Parent or UserRole.Teacher;
+        return roleToRemove is UserRole.Parent or UserRole.Teacher or UserRole.Coordinator;
     }
 
     /// <summary>Throws when the role cannot be removed from this account.</summary>
@@ -117,6 +128,6 @@ public static class UserRoleRules
         }
 
         throw new BusinessRuleException(
-            "Only Parent or Teacher can be removed from your profile. Contact an admin for other role changes.");
+            "Only Parent, Teacher, or Coordinator can be removed from your profile. Contact an admin for other role changes.");
     }
 }

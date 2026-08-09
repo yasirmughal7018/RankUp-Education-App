@@ -8,19 +8,22 @@ function ForbiddenScreen() {
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
         <h1 className="text-2xl font-semibold text-slate-900">Access denied</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          Only Parent, Teacher, School Admin, Campus Admin, and Portal Admin
-          accounts can view student profiles.
+          Only Parent, Teacher, Coordinator, School Admin, Campus Admin, and
+          Portal Admin accounts can view student profiles.
         </p>
       </div>
     </div>
   );
 }
 
-/** Allows School/Campus/Portal admins and Teachers to view the student directory. */
+/** Allows School/Campus/Portal admins, Teachers, and Coordinators to view students. */
 export function DirectoryStudentsRoute() {
   const { user } = useAuth();
   const allowed =
-    user != null && (isAdminRole(user.role) || user.role === "Teacher");
+    user != null &&
+    (isAdminRole(user.role) ||
+      user.role === "Teacher" ||
+      user.role === "Coordinator");
 
   if (!allowed) {
     return <ForbiddenScreen />;

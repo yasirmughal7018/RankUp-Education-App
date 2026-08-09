@@ -11,6 +11,7 @@ import type {
   DirectoryApprovalHistoryItem,
   DirectoryCampus,
   DirectoryCampusAdmin,
+  DirectoryCoordinator,
   DirectoryParent,
   DirectorySchool,
   DirectorySchoolAdmin,
@@ -23,6 +24,7 @@ import type {
 import {
   useDirectoryCampusAdminsQuery,
   useDirectoryCampusesQuery,
+  useDirectoryCoordinatorsQuery,
   useDirectoryParentsQuery,
   useDirectorySchoolAdminsQuery,
   useDirectorySchoolsQuery,
@@ -228,6 +230,11 @@ const TAB_META: Record<
     href: "/admin/directory/teachers",
     searchPlaceholder: "Search teachers by name, code, or username…",
   },
+  coordinators: {
+    label: "Coordinators",
+    href: "/admin/directory/coordinators",
+    searchPlaceholder: "Search coordinators by name or username…",
+  },
   students: {
     label: "Students",
     href: "/admin/directory/students",
@@ -242,6 +249,7 @@ const DASHBOARD_TAB_ORDER: DashboardTab[] = [
   "campusAdmins",
   "parents",
   "teachers",
+  "coordinators",
   "students",
 ];
 
@@ -254,6 +262,7 @@ function isDashboardTab(value: string | null): value is DashboardTab {
     value === "students" ||
     value === "parents" ||
     value === "teachers" ||
+    value === "coordinators" ||
     value === "schoolAdmins" ||
     value === "campusAdmins"
   );
@@ -377,6 +386,38 @@ function mapTeacher(item: DirectoryTeacher): PreviewItem {
     statusCode,
     statusLabel: directoryAccountStatusLabel(statusCode),
     href: "/admin/directory/teachers",
+  };
+}
+
+function mapCoordinator(item: DirectoryCoordinator): PreviewItem {
+  const statusCode = normalizeDirectoryAccountStatus(
+    item.accountStatus,
+    item.isActive,
+  );
+  const roles = item.roles?.filter(Boolean) ?? [];
+  const rolesLabel = roles.length > 0 ? roles.join(", ") : "Coordinator";
+  return {
+    id: `coordinator-${item.userId}`,
+    title: item.fullName,
+    subtitle: `${item.schoolName || "—"} | ${item.campusName || "—"}`,
+    meta: rolesLabel,
+    username: item.username,
+    stats: [{ label: "Roles", value: rolesLabel }],
+    details: [
+      detailOrDash("Roles", rolesLabel),
+      detailOrDash("Teacher code", item.teacherCode),
+      detailOrDash("Mobile", item.mobileNumber),
+      detailOrDash("CNIC", item.cnic),
+      detailOrDash("Email", item.emailAddress),
+      ...auditDetailFields(item),
+      detailOrDash("Status", directoryAccountStatusLabel(statusCode)),
+    ],
+    approvalHistory: item.approvalHistory ?? [],
+    lastLoginAt: item.lastLoginAt,
+    avatarUrl: item.avatarUrl,
+    statusCode,
+    statusLabel: directoryAccountStatusLabel(statusCode),
+    href: "/admin/directory/coordinators",
   };
 }
 
@@ -522,6 +563,10 @@ export function DirectoryOverviewPage() {
     previewFilters,
     activeTab === "teachers",
   );
+  const coordinatorsQuery = useDirectoryCoordinatorsQuery(
+    previewFilters,
+    activeTab === "coordinators",
+  );
   const schoolAdminsQuery = useDirectorySchoolAdminsQuery(
     previewFilters,
     activeTab === "schoolAdmins",
@@ -541,6 +586,8 @@ export function DirectoryOverviewPage() {
         return parentsQuery;
       case "teachers":
         return teachersQuery;
+      case "coordinators":
+        return coordinatorsQuery;
       case "schoolAdmins":
         return schoolAdminsQuery;
       case "campusAdmins":
@@ -571,6 +618,9 @@ export function DirectoryOverviewPage() {
       case "teachers":
         items = (teachersQuery.data?.items ?? []).map(mapTeacher);
         break;
+      case "coordinators":
+        items = (coordinatorsQuery.data?.items ?? []).map(mapCoordinator);
+        break;
       case "schoolAdmins":
         items = (schoolAdminsQuery.data?.items ?? []).map(mapSchoolAdmin);
         break;
@@ -585,6 +635,7 @@ export function DirectoryOverviewPage() {
   }, [
     activeTab,
     campusAdminsQuery.data?.items,
+    coordinatorsQuery.data?.items,
     parentsQuery.data?.items,
     schoolAdminsQuery.data?.items,
     schoolsQuery.data,
@@ -636,6 +687,12 @@ export function DirectoryOverviewPage() {
         label: "Teachers",
         kind: "people",
         people: summary.teachers,
+      },
+      coordinators: {
+        key: "coordinators",
+        label: "Coordinators",
+        kind: "people",
+        people: summary.coordinators,
       },
       students: {
         key: "students",
@@ -759,7 +816,7 @@ export function DirectoryOverviewPage() {
 
       {!summaryLoading && !summaryError && summary ? (
         <>
-          <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
             {summaryCards.map((card) => {
               const people = card.people;
               const schools = card.schools;
@@ -1063,8 +1120,8 @@ function StatusRow({
 
 function DirectoryLoadingSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
-      {Array.from({ length: 6 }).map((_, index) => (
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+      {Array.from({ length: 7 }).map((_, index) => (
         <div
           key={index}
           className="h-[9.5rem] animate-pulse rounded-2xl border border-border bg-card"

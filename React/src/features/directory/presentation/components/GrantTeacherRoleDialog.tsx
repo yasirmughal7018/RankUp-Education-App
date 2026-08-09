@@ -3,7 +3,6 @@ import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
   DirectoryCampus,
-  DirectoryParent,
   DirectorySchool,
   GrantTeacherRoleInput,
 } from "@/features/directory/domain/directoryTypes";
@@ -19,17 +18,23 @@ import {
 } from "@/components/ui/dialog";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
+interface GrantTeacherRolePerson {
+  fullName: string;
+  username: string;
+  mobileNumber?: string | null;
+}
+
 interface GrantTeacherRoleDialogProps {
-  parent: DirectoryParent;
+  person: GrantTeacherRolePerson;
   schools: DirectorySchool[];
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (input: GrantTeacherRoleInput) => Promise<void>;
 }
 
-/** Grant Teacher role to an existing Parent (can combine with Coordinator). */
+/** Grant Teacher role to an existing Parent or Coordinator. */
 export function GrantTeacherRoleDialog({
-  parent,
+  person,
   schools,
   isSubmitting,
   onClose,
@@ -74,7 +79,7 @@ export function GrantTeacherRoleDialog({
         schoolId: parsedSchoolId,
         campusId: parsedCampusId,
         teacherCode: trimmedCode,
-        mobileNumber: parent.mobileNumber ?? null,
+        mobileNumber: person.mobileNumber ?? null,
       });
     } catch (err) {
       const apiError = err as ApiError;
@@ -95,9 +100,9 @@ export function GrantTeacherRoleDialog({
         <DialogHeader>
           <DialogTitle>Add Teacher role</DialogTitle>
           <DialogDescription>
-            Grant the Teacher role to {parent.fullName} ({parent.username}).
-            Students and School Admin cannot combine roles. Parent, Teacher, and
-            Coordinator may share one account.
+            Grant the Teacher role to {person.fullName} ({person.username}).
+            Students, School Admin, and Campus Admin cannot combine roles.
+            Parent, Teacher, and Coordinator may share one account.
           </DialogDescription>
         </DialogHeader>
 

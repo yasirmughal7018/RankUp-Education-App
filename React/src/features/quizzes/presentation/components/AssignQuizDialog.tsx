@@ -82,7 +82,8 @@ export function AssignQuizDialog({
   const { user } = useAuth();
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isPortalAdmin = user?.role === "PortalAdmin";
-  const isTeacher = user?.role === "Teacher";
+  const isTeacher =
+    user?.role === "Teacher" || user?.role === "Coordinator";
   const isAdminAssigner = isSchoolAdmin || isPortalAdmin;
   const surprise = isSurpriseQuizType(quizType);
   const modeOptions = useMemo(
@@ -117,7 +118,9 @@ export function AssignQuizDialog({
       ? null
       : (user?.schoolId ?? quizSchoolId ?? null);
   const lockedCampusId =
-    user?.role === "Teacher" || user?.role === "CampusAdmin"
+    user?.role === "Teacher" ||
+      user?.role === "Coordinator" ||
+      user?.role === "CampusAdmin"
       ? (user?.campusId ?? quizCampusId ?? null)
       : null;
 

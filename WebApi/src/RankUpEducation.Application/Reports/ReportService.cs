@@ -91,7 +91,7 @@ public sealed class ReportService : IReportService
             return;
         }
 
-        if (role is UserRole.Teacher or UserRole.SchoolAdmin)
+        if (role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin)
         {
             var schoolId = _currentUser.SchoolId
                 ?? throw new ForbiddenAppException("School context was not found.");
@@ -114,7 +114,7 @@ public sealed class ReportService : IReportService
     private void EnsureAdminOrTeacher()
     {
         var role = ParseRole();
-        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher or UserRole.Coordinator))
         {
             throw new ForbiddenAppException("You do not have access to reports.");
         }
@@ -124,7 +124,7 @@ public sealed class ReportService : IReportService
     private (int? SchoolId, int? CampusId, long? CreatorUserId) ResolveReportScope()
     {
         var role = ParseRole();
-        if (role == UserRole.Teacher)
+        if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             return (_currentUser.SchoolId, _currentUser.CampusId, _currentUser.UserId);
         }

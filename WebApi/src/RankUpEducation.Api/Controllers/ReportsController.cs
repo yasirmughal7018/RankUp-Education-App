@@ -22,7 +22,7 @@ public sealed class ReportsController : ControllerBase
 
     /// <summary>Returns aggregate quiz metrics for the caller's scope.</summary>
     [HttpGet("quiz-summary")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher,Coordinator")]
     public async Task<ActionResult<ApiResponse<QuizSummaryReportResponse>>> GetQuizSummaryAsync(
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
@@ -34,7 +34,7 @@ public sealed class ReportsController : ControllerBase
 
     /// <summary>Returns per-student performance for one quiz.</summary>
     [HttpGet("quizzes/{quizId:long}/performance")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher,Coordinator")]
     public async Task<ActionResult<ApiResponse<QuizPerformanceReportResponse>>> GetQuizPerformanceAsync(
         long quizId,
         CancellationToken cancellationToken)
@@ -55,7 +55,7 @@ public sealed class ReportsController : ControllerBase
 
     /// <summary>Returns a ranked leaderboard for an optional quiz.</summary>
     [HttpGet("rankings")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,Teacher,Coordinator")]
     public async Task<ActionResult<ApiResponse<RankingReportResponse>>> GetRankingsAsync(
         [FromQuery] long? quizId,
         CancellationToken cancellationToken)
