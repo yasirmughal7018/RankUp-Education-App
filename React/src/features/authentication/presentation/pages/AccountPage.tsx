@@ -211,9 +211,14 @@ export function AccountPage() {
         : [];
   const isPortalAdmin = profile?.role === "PortalAdmin";
   const isStudentRole = profile?.role === "Student";
+  const isSchoolAdminRole = accountRoles.includes("SchoolAdmin");
   const pendingRoleRequest = profile?.pendingRoleRequest ?? null;
   const availableRoleRequests: RequestableRole[] =
-    !profile || isPortalAdmin || isStudentRole || pendingRoleRequest
+    !profile ||
+    isPortalAdmin ||
+    isStudentRole ||
+    isSchoolAdminRole ||
+    pendingRoleRequest
       ? []
       : REQUESTABLE_ROLES.filter((role) => !accountRoles.includes(role));
   const activeRoleChoice: RequestableRole | null =
@@ -880,7 +885,13 @@ export function AccountPage() {
               <Notice tone="info">
                 Student accounts cannot add other roles.
               </Notice>
-            ) : isPortalAdmin ? null : pendingRoleRequest ? (
+            ) : isPortalAdmin ? null : isSchoolAdminRole ? (
+              <Notice tone="info">
+                School Admin is a single-role account and cannot be combined with
+                Parent, Teacher, or Coordinator. Use a separate login for those
+                roles.
+              </Notice>
+            ) : pendingRoleRequest ? (
               <Notice tone="warn">
                 A request for the{" "}
                 <span className="font-semibold">

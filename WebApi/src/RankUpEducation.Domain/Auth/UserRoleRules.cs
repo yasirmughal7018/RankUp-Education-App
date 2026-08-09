@@ -6,11 +6,11 @@ namespace RankUpEducation.Domain.Auth;
 public static class UserRoleRules
 {
     /// <summary>
-    /// Roles that may share one login (any subset). Student and PortalAdmin stay exclusive.
+    /// Roles that may share one login (any subset).
+    /// Student, PortalAdmin, and SchoolAdmin stay exclusive.
     /// </summary>
     private static readonly HashSet<UserRole> CombinableRoles =
     [
-        UserRole.SchoolAdmin,
         UserRole.CampusAdmin,
         UserRole.Teacher,
         UserRole.Parent,
@@ -37,7 +37,13 @@ public static class UserRoleRules
             return existingRoles.Count == 0 && roleToAdd == UserRole.PortalAdmin;
         }
 
-        // SchoolAdmin, CampusAdmin, Teacher, Parent, Coordinator may all share one account.
+        // SchoolAdmin is exclusive — one role only, never with Teacher/Parent/Coordinator/etc.
+        if (roleToAdd == UserRole.SchoolAdmin || existingRoles.Contains(UserRole.SchoolAdmin))
+        {
+            return existingRoles.Count == 0 && roleToAdd == UserRole.SchoolAdmin;
+        }
+
+        // CampusAdmin, Teacher, Parent, Coordinator may share one account.
         return CombinableRoles.Contains(roleToAdd)
             && existingRoles.All(CombinableRoles.Contains);
     }
@@ -63,6 +69,12 @@ public static class UserRoleRules
         if (existingRoles.Contains(UserRole.PortalAdmin) || roleToAdd == UserRole.PortalAdmin)
         {
             throw new BusinessRuleException("Portal Admin accounts cannot be combined with other roles.");
+        }
+
+        if (existingRoles.Contains(UserRole.SchoolAdmin) || roleToAdd == UserRole.SchoolAdmin)
+        {
+            throw new BusinessRuleException(
+                "School Admin accounts cannot be combined with other roles. Use a separate login for School Admin.");
         }
 
         throw new BusinessRuleException($"Cannot add role {roleToAdd} to this account.");

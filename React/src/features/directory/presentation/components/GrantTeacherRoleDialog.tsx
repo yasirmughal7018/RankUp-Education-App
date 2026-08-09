@@ -96,7 +96,8 @@ export function GrantTeacherRoleDialog({
           <DialogTitle>Add Teacher role</DialogTitle>
           <DialogDescription>
             Grant the Teacher role to {parent.fullName} ({parent.username}).
-            Students cannot combine roles. Parent, Teacher, and Coordinator may share one account.
+            Students and School Admin cannot combine roles. Parent, Teacher, and
+            Coordinator may share one account.
           </DialogDescription>
         </DialogHeader>
 

@@ -128,7 +128,7 @@ export function SchoolAdminFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${schoolAdmin.fullName}.`
-              : "Add a new school admin. User must set password on first login."}
+              : "Add a new school admin. School Admin is a single-role account and cannot be combined with Teacher, Parent, or Coordinator. User must set password on first login."}
           </p>
         </div>
 
