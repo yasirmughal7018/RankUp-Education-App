@@ -22,7 +22,7 @@ export function configureApiAuth(handlers: AuthHandlers): void {
   authHandlers = handlers;
 }
 
-function isGenericValidationMessage(message: string | undefined): boolean {
+function isGenericClientMessage(message: string | undefined): boolean {
   if (!message) {
     return true;
   }
@@ -31,7 +31,12 @@ function isGenericValidationMessage(message: string | undefined): boolean {
   return (
     normalized === "validation failed." ||
     normalized === "validation failed" ||
-    normalized === "one or more validation errors occurred."
+    normalized === "one or more validation errors occurred." ||
+    normalized === "something went wrong. please try again." ||
+    normalized === "something went wrong" ||
+    normalized === "unable to save changes." ||
+    normalized === "unable to save changes" ||
+    normalized === "request failed"
   );
 }
 
@@ -44,7 +49,7 @@ export function resolveApiErrorMessage(payload: {
     (item) => typeof item === "string" && item.trim().length > 0,
   );
 
-  if (errors.length > 0 && isGenericValidationMessage(payload.message)) {
+  if (errors.length > 0 && isGenericClientMessage(payload.message)) {
     return errors.join(" ");
   }
 

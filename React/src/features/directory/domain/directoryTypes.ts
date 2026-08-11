@@ -295,6 +295,20 @@ export interface GrantTeacherRoleInput {
   mobileNumber?: string | null;
 }
 
+/** Grant Coordinator role to an existing Parent account. */
+export interface GrantCoordinatorRoleInput {
+  schoolId: number;
+  campusId: number;
+  coordinatorCode: string;
+  mobileNumber?: string | null;
+}
+
+/** Grant Coordinator role to an existing Teacher (school/campus stay as-is). */
+export interface GrantTeacherCoordinatorRoleInput {
+  coordinatorCode: string;
+  mobileNumber?: string | null;
+}
+
 export interface DirectorySchoolAdmin extends DirectoryAccountAuditFields {
   userId: number;
   fullName: string;
@@ -421,6 +435,8 @@ export interface DirectoryTeacherFilters extends DirectoryPaging {
   schoolId?: number | null;
   campusId?: number | null;
   search?: string;
+  /** true = has students, false = none, undefined/null = all. */
+  hasStudents?: boolean | null;
 }
 
 export interface DirectoryCoordinatorFilters extends DirectoryPaging {
@@ -431,4 +447,10 @@ export interface DirectoryCoordinatorFilters extends DirectoryPaging {
 
 export interface DirectoryParentFilters extends DirectoryPaging {
   search?: string;
+  /** Filter by linked student's school (PortalAdmin). */
+  schoolId?: number | null;
+  /** Filter by linked student's campus (PortalAdmin / SchoolAdmin). */
+  campusId?: number | null;
+  /** true = has linked students, false = none, undefined = all. */
+  hasLinkedStudents?: boolean | null;
 }

@@ -221,13 +221,14 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<BulkActionResponse>.Ok(response, "Students deactivated."));
     }
 
-    /// <summary>Lists teachers with optional school, campus, and search filters.</summary>
+    /// <summary>Lists teachers with optional school, campus, search, and students filters.</summary>
     [HttpGet("teachers")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherListResponse>>> ListTeachersAsync(
         [FromQuery] int? schoolId,
         [FromQuery] int? campusId,
         [FromQuery] string? search,
+        [FromQuery] bool? hasStudents,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
@@ -236,6 +237,7 @@ public sealed class DirectoryController : ControllerBase
             schoolId,
             campusId,
             search,
+            hasStudents,
             pageNumber,
             pageSize,
             cancellationToken);
@@ -321,15 +323,26 @@ public sealed class DirectoryController : ControllerBase
     /// <summary>
     /// Lists parents. School/Campus Admin only see parents linked to students in their school/campus.
     /// </summary>
+    /// <summary>Lists parents with optional search and linked-student scope filters.</summary>
     [HttpGet("parents")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentListResponse>>> ListParentsAsync(
         [FromQuery] string? search,
+        [FromQuery] int? schoolId,
+        [FromQuery] int? campusId,
+        [FromQuery] bool? hasLinkedStudents,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        var response = await _directoryService.ListParentsAsync(search, pageNumber, pageSize, cancellationToken);
+        var response = await _directoryService.ListParentsAsync(
+            search,
+            schoolId,
+            campusId,
+            hasLinkedStudents,
+            pageNumber,
+            pageSize,
+            cancellationToken);
         return Ok(ApiResponse<DirectoryParentListResponse>.Ok(response));
     }
 
@@ -367,10 +380,12 @@ public sealed class DirectoryController : ControllerBase
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> GrantCoordinatorRoleToTeacherAsync(
         long teacherId,
+        [FromBody] GrantTeacherCoordinatorRoleRequest request,
         CancellationToken cancellationToken)
     {
         var response = await _directoryService.GrantCoordinatorRoleToTeacherAsync(
             teacherId,
+            request,
             cancellationToken);
         return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
             response,
@@ -382,10 +397,12 @@ public sealed class DirectoryController : ControllerBase
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> GrantCoordinatorRoleToParentAsync(
         long parentId,
+        [FromBody] GrantCoordinatorRoleRequest request,
         CancellationToken cancellationToken)
     {
         var response = await _directoryService.GrantCoordinatorRoleToParentAsync(
             parentId,
+            request,
             cancellationToken);
         return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
             response,

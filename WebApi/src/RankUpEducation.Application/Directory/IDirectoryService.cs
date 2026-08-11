@@ -90,6 +90,7 @@ public interface IDirectoryService
         int? schoolId,
         int? campusId,
         string? search,
+        bool? hasStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken);
@@ -122,9 +123,12 @@ public interface IDirectoryService
         BulkDeactivateRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Page of parents with optional search filter.</summary>
+    /// <summary>Page of parents with optional search and linked-student scope filters.</summary>
     Task<DirectoryParentListResponse> ListParentsAsync(
         string? search,
+        int? schoolId,
+        int? campusId,
+        bool? hasLinkedStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken);
@@ -140,17 +144,19 @@ public interface IDirectoryService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Adds Coordinator to a Teacher account (may already also be Parent).
+    /// Adds Coordinator to a Teacher account (keeps existing school/campus; sets coordinator code).
     /// </summary>
     Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToTeacherAsync(
         long teacherId,
+        GrantTeacherCoordinatorRoleRequest request,
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Adds Coordinator to a Parent account (may already also be Teacher).
+    /// Adds Coordinator to a Parent account with school, campus, and coordinator code.
     /// </summary>
     Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToParentAsync(
         long parentId,
+        GrantCoordinatorRoleRequest request,
         CancellationToken cancellationToken);
 
     /// <summary>Updates parent contact and profile fields.</summary>

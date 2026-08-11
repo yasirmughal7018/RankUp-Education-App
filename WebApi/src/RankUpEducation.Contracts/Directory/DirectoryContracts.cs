@@ -190,6 +190,18 @@ public sealed record GrantTeacherRoleRequest(
     string TeacherCode,
     string? MobileNumber = null);
 
+/// <summary>Grant Coordinator role to an existing Parent (requires school/campus/code).</summary>
+public sealed record GrantCoordinatorRoleRequest(
+    int SchoolId,
+    int CampusId,
+    string CoordinatorCode,
+    string? MobileNumber = null);
+
+/// <summary>Grant Coordinator role to an existing Teacher (keeps teacher school/campus; code only).</summary>
+public sealed record GrantTeacherCoordinatorRoleRequest(
+    string CoordinatorCode,
+    string? MobileNumber = null);
+
 public sealed record DirectoryParentListResponse(
     IReadOnlyList<DirectoryParentResponse> Items,
     int PageNumber,

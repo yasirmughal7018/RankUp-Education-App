@@ -43,6 +43,7 @@ export const queryKeys = {
     schoolId?: number | null;
     campusId?: number | null;
     search?: string;
+    hasStudents?: boolean | null;
     pageNumber?: number;
     pageSize?: number;
   }) => ["directory", "teachers", filters] as const,
@@ -55,6 +56,9 @@ export const queryKeys = {
   }) => ["directory", "coordinators", filters] as const,
   directoryParents: (filters: {
     search?: string;
+    schoolId?: number | null;
+    campusId?: number | null;
+    hasLinkedStudents?: boolean | null;
     pageNumber?: number;
     pageSize?: number;
   }) => ["directory", "parents", filters] as const,

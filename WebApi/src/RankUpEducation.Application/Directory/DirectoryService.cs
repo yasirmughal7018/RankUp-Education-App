@@ -482,6 +482,7 @@ public sealed class DirectoryService : IDirectoryService
         int? schoolId,
         int? campusId,
         string? search,
+        bool? hasStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken)
@@ -493,6 +494,7 @@ public sealed class DirectoryService : IDirectoryService
             resolvedSchoolId,
             resolvedCampusId,
             search,
+            hasStudents,
             safePageNumber,
             safePageSize,
             cancellationToken);
@@ -687,17 +689,21 @@ public sealed class DirectoryService : IDirectoryService
 
     public async Task<DirectoryParentListResponse> ListParentsAsync(
         string? search,
+        int? schoolId,
+        int? campusId,
+        bool? hasLinkedStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken)
     {
         EnsureAdmin();
         var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
-        var (resolvedSchoolId, resolvedCampusId) = ResolveParentVisibilityScope();
+        var (resolvedSchoolId, resolvedCampusId) = ResolveParentListFilter(schoolId, campusId);
         var (items, totalCount) = await _directory.ListParentsAsync(
             search,
             resolvedSchoolId,
             resolvedCampusId,
+            hasLinkedStudents,
             safePageNumber,
             safePageSize,
             cancellationToken);
@@ -1274,6 +1280,11 @@ public sealed class DirectoryService : IDirectoryService
         if (existing is not null)
         {
             await EnsureCoordinatorOnUserAsync(existing, cancellationToken);
+            existing.AssignSchoolCampus(schoolId, campusId);
+            existing.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
+            existing.UpdateContactInfo(mobileNumber, existing.Cnic);
+            existing.AttachProfileContext(existing.Id, schoolId, campusId);
+
             if (alsoTeacher && !existing.HasRole(UserRole.Teacher))
             {
                 var teacherRequest = new CreateDirectoryTeacherRequest(
@@ -1302,6 +1313,7 @@ public sealed class DirectoryService : IDirectoryService
                     cancellationToken);
             }
 
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
             return ToCoordinatorResponse(existing, schoolId, campusId);
         }
 
@@ -1314,10 +1326,7 @@ public sealed class DirectoryService : IDirectoryService
             mobileNumber,
             emailAddress: emailAddress);
 
-        if (alsoTeacher)
-        {
-            user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
-        }
+        user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
 
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -1379,12 +1388,8 @@ public sealed class DirectoryService : IDirectoryService
         user.UpdateProfile(request.FullName);
         user.AssignSchoolCampus(user.SchoolId, request.CampusId);
         user.UpdateContactInfo(request.MobileNumber.AsTrimmedOrNull(), user.Cnic);
+        user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
         user.AttachProfileContext(user.Id, user.SchoolId, request.CampusId);
-
-        if (request.AlsoTeacher || user.HasRole(UserRole.Teacher))
-        {
-            user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
-        }
 
         if (request.AlsoTeacher && !user.HasRole(UserRole.Teacher))
         {
@@ -1505,11 +1510,11 @@ public sealed class DirectoryService : IDirectoryService
             throw new ValidationAppException(["Teacher code is required."]);
         }
 
-        var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
-        await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
-
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundAppException("Coordinator was not found.");
+
+        EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
 
         if (!user.HasRole(UserRole.Coordinator))
         {
@@ -1521,6 +1526,13 @@ public sealed class DirectoryService : IDirectoryService
             throw new ValidationAppException(["This account already has the Teacher role."]);
         }
 
+        if (user.SchoolId is null or < 1 || user.CampusId is null or < 1)
+        {
+            throw new ValidationAppException(["Coordinator must already have a school and campus."]);
+        }
+
+        var schoolId = user.SchoolId.Value;
+        var campusId = user.CampusId.Value;
         var mobileNumber = request.MobileNumber.AsTrimmedOrNull() ?? user.MobileNumber;
         var createRequest = new CreateDirectoryTeacherRequest(
             user.FullName,
@@ -1624,9 +1636,9 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Email address is required (it is the username).");
         }
 
-        if (request.AlsoTeacher && string.IsNullOrWhiteSpace(request.TeacherCode))
+        if (string.IsNullOrWhiteSpace(request.TeacherCode))
         {
-            errors.Add("Teacher code is required when also assigning Teacher.");
+            errors.Add("Coordinator code is required.");
         }
 
         if (errors.Count > 0)
@@ -1643,9 +1655,9 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Full name is required.");
         }
 
-        if (request.AlsoTeacher && string.IsNullOrWhiteSpace(request.TeacherCode))
+        if (string.IsNullOrWhiteSpace(request.TeacherCode))
         {
-            errors.Add("Teacher code is required when also assigning Teacher.");
+            errors.Add("Coordinator code is required.");
         }
 
         if (errors.Count > 0)
@@ -2425,9 +2437,15 @@ public sealed class DirectoryService : IDirectoryService
 
     public async Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToTeacherAsync(
         long teacherId,
+        GrantTeacherCoordinatorRoleRequest request,
         CancellationToken cancellationToken)
     {
         EnsureAdmin();
+
+        if (request is null || !request.CoordinatorCode.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Coordinator code is required."]);
+        }
 
         var user = await _users.GetByIdAsync(teacherId, cancellationToken)
             ?? throw new NotFoundAppException("Teacher was not found.");
@@ -2440,14 +2458,40 @@ public sealed class DirectoryService : IDirectoryService
             throw new ValidationAppException(["This account is not a Teacher."]);
         }
 
+        if (user.HasRole(UserRole.Coordinator))
+        {
+            throw new ValidationAppException(["This account already has the Coordinator role."]);
+        }
+
+        if (user.SchoolId is null or < 1 || user.CampusId is null or < 1)
+        {
+            throw new ValidationAppException(["Teacher must already have a school and campus."]);
+        }
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull() ?? user.MobileNumber;
+        user.SetRollNumberTeacherCode(request.CoordinatorCode.AsTrimmedString());
+        if (mobileNumber.HasTrimmedText())
+        {
+            user.UpdateContactInfo(mobileNumber, user.Cnic);
+        }
+
         return await AddCoordinatorRoleAsync(user, cancellationToken);
     }
 
     public async Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToParentAsync(
         long parentId,
+        GrantCoordinatorRoleRequest request,
         CancellationToken cancellationToken)
     {
         EnsureAdmin();
+
+        if (!request.CoordinatorCode.HasTrimmedText())
+        {
+            throw new ValidationAppException(["Coordinator code is required."]);
+        }
+
+        var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
+        await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
 
         var user = await _users.GetByIdAsync(parentId, cancellationToken)
             ?? throw new NotFoundAppException("Parent was not found.");
@@ -2458,6 +2502,17 @@ public sealed class DirectoryService : IDirectoryService
         {
             throw new ValidationAppException(["This account is not a Parent."]);
         }
+
+        if (user.HasRole(UserRole.Coordinator))
+        {
+            throw new ValidationAppException(["This account already has the Coordinator role."]);
+        }
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull() ?? user.MobileNumber;
+        user.AssignSchoolCampus(schoolId, campusId);
+        user.SetRollNumberTeacherCode(request.CoordinatorCode.AsTrimmedString());
+        user.UpdateContactInfo(mobileNumber, user.Cnic);
+        user.AttachProfileContext(user.Id, schoolId, campusId);
 
         return await AddCoordinatorRoleAsync(user, cancellationToken);
     }
@@ -2652,6 +2707,28 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         return (null, null);
+    }
+
+    /// <summary>
+    /// Combines admin visibility scope with optional UI filters for linked-student school/campus.
+    /// CampusAdmin is locked to their campus. SchoolAdmin may further filter by campus.
+    /// PortalAdmin may filter by school and campus.
+    /// </summary>
+    private (int? SchoolId, int? CampusId) ResolveParentListFilter(int? schoolId, int? campusId)
+    {
+        var (scopedSchoolId, scopedCampusId) = ResolveParentVisibilityScope();
+
+        if (scopedCampusId is not null)
+        {
+            return (scopedSchoolId, scopedCampusId);
+        }
+
+        if (scopedSchoolId is not null)
+        {
+            return (scopedSchoolId, campusId);
+        }
+
+        return (schoolId, campusId);
     }
 
     private async Task EnsureParentAccessibleInScopeAsync(

@@ -11,6 +11,8 @@ import {
   type CreateDirectorySchoolAdminInput,
   type CreateDirectoryStudentInput,
   type CreateDirectoryTeacherInput,
+  type GrantCoordinatorRoleInput,
+  type GrantTeacherCoordinatorRoleInput,
   type GrantTeacherRoleInput,
   type DirectoryCampus,
   type DirectoryCampusAdmin,
@@ -280,6 +282,12 @@ export async function listTeachers(
       schoolId: filters.schoolId,
       campusId: filters.campusId,
       search: filters.search,
+      hasStudents:
+        filters.hasStudents === null || filters.hasStudents === undefined
+          ? undefined
+          : filters.hasStudents
+            ? "true"
+            : "false",
       pageNumber: filters.pageNumber,
       pageSize: filters.pageSize,
     })}`,
@@ -352,6 +360,15 @@ export async function listParents(
   return apiRequest<PagedDirectoryResult<DirectoryParent>>(
     `/directory/parents${toQuery({
       search: filters.search,
+      schoolId: filters.schoolId,
+      campusId: filters.campusId,
+      hasLinkedStudents:
+        filters.hasLinkedStudents === null ||
+        filters.hasLinkedStudents === undefined
+          ? undefined
+          : filters.hasLinkedStudents
+            ? "true"
+            : "false",
       pageNumber: filters.pageNumber,
       pageSize: filters.pageSize,
     })}`,
@@ -383,18 +400,22 @@ export async function grantParentRoleToTeacher(
 /** Add Coordinator role to an existing Teacher account. */
 export async function grantCoordinatorRoleToTeacher(
   teacherId: number,
+  input: GrantTeacherCoordinatorRoleInput,
 ): Promise<{ userId: number; fullName: string; username: string; roles: string[] }> {
   return apiRequest(`/directory/teachers/${teacherId}/roles/coordinator`, {
     method: "POST",
+    body: input,
   });
 }
 
 /** Add Coordinator role to an existing Parent account. */
 export async function grantCoordinatorRoleToParent(
   parentId: number,
+  input: GrantCoordinatorRoleInput,
 ): Promise<{ userId: number; fullName: string; username: string; roles: string[] }> {
   return apiRequest(`/directory/parents/${parentId}/roles/coordinator`, {
     method: "POST",
+    body: input,
   });
 }
 

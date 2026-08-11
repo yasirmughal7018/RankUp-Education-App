@@ -48,11 +48,6 @@ export function CoordinatorFormDialog({
   const [mobileNumber, setMobileNumber] = useState(
     coordinator?.mobileNumber ?? "",
   );
-  const existingRoles = coordinator?.roles ?? [];
-  const alreadyTeacher = existingRoles.includes("Teacher");
-  const alreadyParent = existingRoles.includes("Parent");
-  const [alsoTeacher, setAlsoTeacher] = useState(isEdit ? alreadyTeacher : true);
-  const [alsoParent, setAlsoParent] = useState(alreadyParent);
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;
@@ -84,16 +79,12 @@ export function CoordinatorFormDialog({
     const trimmedCode = teacherCode.trim();
     const parsedCampusId = Number(campusId);
 
-    if (!trimmedName) {
-      setError("Name is required.");
+    if (!trimmedName || !trimmedCode) {
+      setError("Name and coordinator code are required.");
       return;
     }
     if (!parsedCampusId || parsedCampusId < 1) {
       setError("Select a campus.");
-      return;
-    }
-    if (alsoTeacher && !trimmedCode) {
-      setError("Teacher code is required when assigning Teacher.");
       return;
     }
 
@@ -108,8 +99,6 @@ export function CoordinatorFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
-            alsoTeacher,
-            alsoParent,
           },
         });
       } else {
@@ -133,8 +122,6 @@ export function CoordinatorFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
-            alsoTeacher,
-            alsoParent,
           },
         });
       }
@@ -161,8 +148,8 @@ export function CoordinatorFormDialog({
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
-              ? `Update details for ${coordinator.fullName}. You can add Teacher and Parent on this same login.`
-              : "Add a coordinator to the directory. Optionally also assign Teacher and Parent so one login holds all three roles. User must set password on first login."}
+              ? `Update details for ${coordinator.fullName}.`
+              : "Add a coordinator to the directory. User must set password on first login. Extra roles can be added later from the Coordinators list."}
           </p>
         </div>
 
@@ -270,12 +257,8 @@ export function CoordinatorFormDialog({
           </div>
 
           <div>
-            <FieldLabel
-              htmlFor="coordinator-code"
-              required={alsoTeacher}
-              optional={!alsoTeacher}
-            >
-              Teacher code
+            <FieldLabel htmlFor="coordinator-code" required>
+              Coordinator code
             </FieldLabel>
             <input
               id="coordinator-code"
@@ -283,8 +266,8 @@ export function CoordinatorFormDialog({
               value={teacherCode}
               onChange={(event) => setTeacherCode(event.target.value)}
               className={inputClassName}
-              required={alsoTeacher}
-              disabled={isSubmitting || !alsoTeacher}
+              required
+              disabled={isSubmitting}
             />
           </div>
 
@@ -301,46 +284,6 @@ export function CoordinatorFormDialog({
               disabled={isSubmitting}
             />
           </div>
-
-          <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <legend className="px-1 text-sm font-semibold text-slate-800">
-              Additional roles on this account
-            </legend>
-            <p className="text-xs text-slate-600">
-              Coordinator is always included. Check both to make Coordinator +
-              Teacher + Parent on one user.
-            </p>
-            <label className="flex items-start gap-2.5 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={alsoTeacher}
-                disabled={isSubmitting || alreadyTeacher}
-                onChange={(event) => setAlsoTeacher(event.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Teacher</span>
-                {alreadyTeacher ? (
-                  <span className="text-slate-500"> — already assigned</span>
-                ) : null}
-              </span>
-            </label>
-            <label className="flex items-start gap-2.5 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={alsoParent}
-                disabled={isSubmitting || alreadyParent}
-                onChange={(event) => setAlsoParent(event.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Parent</span>
-                {alreadyParent ? (
-                  <span className="text-slate-500"> — already assigned</span>
-                ) : null}
-              </span>
-            </label>
-          </fieldset>
 
           <div className="flex justify-end gap-3 pt-2">
             <button

@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, type LucideIcon } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, type LucideIcon } from "lucide-react";
 import { AppCard } from "@/components/ui/app-card";
 import { AppEmptyState } from "@/components/ui/app-empty-state";
 import { AppErrorState } from "@/components/ui/app-error-state";
@@ -82,6 +83,108 @@ export function DirectoryIconAction({
     >
       <Icon className="h-4 w-4" />
     </Button>
+  );
+}
+
+export type DirectoryOverflowMenuItem = {
+  id: string;
+  label: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  tone?: "default" | "danger";
+};
+
+interface DirectoryRowOverflowMenuProps {
+  label?: string;
+  disabled?: boolean;
+  items: DirectoryOverflowMenuItem[];
+}
+
+/** Compact ⋯ menu for secondary row actions (keeps the actions column tidy). */
+export function DirectoryRowOverflowMenu({
+  label = "More actions",
+  disabled,
+  items,
+}: DirectoryRowOverflowMenuProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div ref={rootRef} className="relative inline-flex">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-9 w-9 rounded-lg"
+        aria-label={label}
+        title={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        disabled={disabled}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+      {open ? (
+        <div
+          id={menuId}
+          role="menu"
+          className="absolute right-0 z-30 mt-1 min-w-[11.5rem] overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg"
+        >
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              disabled={item.disabled}
+              className={cn(
+                "flex w-full px-3 py-2 text-left text-sm transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50",
+                item.tone === "danger"
+                  ? "text-destructive"
+                  : "text-foreground",
+              )}
+              onClick={() => {
+                setOpen(false);
+                item.onSelect();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

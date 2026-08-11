@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Pencil, UserCheck, UserX } from "lucide-react";
+import { Pencil } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
@@ -10,7 +10,6 @@ import { useAuth } from "@/features/authentication/presentation/context/AuthProv
 import type {
   CreateDirectoryCoordinatorInput,
   DirectoryCoordinator,
-  GrantTeacherRoleInput,
   UpdateDirectoryCoordinatorInput,
 } from "@/features/directory/domain/directoryTypes";
 import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
@@ -24,6 +23,7 @@ import {
   DirectoryListPanel,
   DirectoryMobileList,
   DirectoryPageShell,
+  DirectoryRowOverflowMenu,
   DirectoryTable,
   DirectoryTableHead,
   DirectoryTd,
@@ -53,17 +53,69 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
+type CompanionRolesFilter =
+  | "all"
+  | "withTeacher"
+  | "withParent"
+  | "coordinatorOnly";
+
+function formatCompanionRoles(coordinator: DirectoryCoordinator): string {
+  const roles = coordinator.roles ?? [];
+  const extras = roles.filter((role) => role !== "Coordinator");
+  if (extras.length === 0) {
+    return "Coordinator only";
+  }
+  return extras.join(", ");
+}
+
+function matchesCompanionRolesFilter(
+  coordinator: DirectoryCoordinator,
+  filter: CompanionRolesFilter,
+): boolean {
+  const roles = coordinator.roles ?? [];
+  const hasTeacher = roles.includes("Teacher");
+  const hasParent = roles.includes("Parent");
+
+  switch (filter) {
+    case "withTeacher":
+      return hasTeacher;
+    case "withParent":
+      return hasParent;
+    case "coordinatorOnly":
+      return !hasTeacher && !hasParent;
+    default:
+      return true;
+  }
+}
+
 /** Paginated coordinator directory with school/campus filters and CRUD actions. */
 export function DirectoryCoordinatorsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
+  const isPortalAdmin = user?.role === "PortalAdmin";
+  const isSchoolAdmin = user?.role === "SchoolAdmin";
+  const isCampusAdmin = user?.role === "CampusAdmin";
+  const lockedSchoolId =
+    (isSchoolAdmin || isCampusAdmin) && user?.schoolId != null
+      ? user.schoolId
+      : null;
+  const lockedCampusId =
+    isCampusAdmin && user?.campusId != null ? user.campusId : null;
+  const showSchoolFilter = isPortalAdmin;
+  const showCampusFilter = isPortalAdmin || isSchoolAdmin;
+
   const [searchParams] = useSearchParams();
   const initialSearch = searchParams.get("search") ?? "";
 
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
-  const [schoolId, setSchoolId] = useState("");
-  const [campusId, setCampusId] = useState("");
+  const [schoolId, setSchoolId] = useState(
+    lockedSchoolId != null ? String(lockedSchoolId) : "",
+  );
+  const [campusId, setCampusId] = useState(
+    lockedCampusId != null ? String(lockedCampusId) : "",
+  );
+  const [rolesFilter, setRolesFilter] = useState<CompanionRolesFilter>("all");
   const [activeFilter, setActiveFilter] =
     useState<DirectoryAccountStatusFilter>("all");
   const [pageNumber, setPageNumber] = useState(1);
@@ -75,16 +127,19 @@ export function DirectoryCoordinatorsPage() {
     useState<DirectoryCoordinator | null>(null);
   const [grantTeacherTarget, setGrantTeacherTarget] =
     useState<DirectoryCoordinator | null>(null);
+  const [deactivateTarget, setDeactivateTarget] =
+    useState<DirectoryCoordinator | null>(null);
+  const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const selectedSchoolId = Number(schoolId) || null;
-  const selectedCampusId = Number(campusId) || null;
+  const selectedSchoolId = lockedSchoolId ?? (Number(schoolId) || null);
+  const selectedCampusId = lockedCampusId ?? (Number(campusId) || null);
 
   const { data: schools = [] } = useDirectorySchoolsQuery(canManage);
   const { data: campuses = [] } = useDirectoryCampusesQuery(
     selectedSchoolId ?? 0,
-    selectedSchoolId != null,
+    canManage && showCampusFilter && selectedSchoolId != null,
   );
 
   const filters = useMemo(
@@ -113,23 +168,27 @@ export function DirectoryCoordinatorsPage() {
 
   const visibleCoordinators = useMemo(() => {
     const items = data?.items ?? [];
-    return items.filter((coordinator) =>
-      matchesDirectoryAccountStatusFilter(
-        coordinator.accountStatus,
-        coordinator.isActive,
-        activeFilter,
-      ),
+    return items.filter(
+      (coordinator) =>
+        matchesDirectoryAccountStatusFilter(
+          coordinator.accountStatus,
+          coordinator.isActive,
+          activeFilter,
+        ) && matchesCompanionRolesFilter(coordinator, rolesFilter),
     );
-  }, [data?.items, activeFilter]);
+  }, [data?.items, activeFilter, rolesFilter]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [pageNumber, search, schoolId, campusId, activeFilter]);
+  }, [pageNumber, search, schoolId, campusId, rolesFilter, activeFilter]);
 
   useEffect(() => {
+    if (lockedSchoolId != null || lockedCampusId != null) {
+      return;
+    }
     setCampusId("");
     setPageNumber(1);
-  }, [schoolId]);
+  }, [schoolId, lockedSchoolId, lockedCampusId]);
 
   const busy =
     createMutation.isPending ||
@@ -185,15 +244,8 @@ export function DirectoryCoordinatorsPage() {
       const created = await createMutation.mutateAsync(
         payload.input as CreateDirectoryCoordinatorInput,
       );
-      const createInput = payload.input as CreateDirectoryCoordinatorInput;
       setSuccessMessage(
-        `Created coordinator ${created.fullName}${
-          createInput.alsoTeacher || createInput.alsoParent
-            ? ` with roles: Coordinator${
-                createInput.alsoTeacher ? ", Teacher" : ""
-              }${createInput.alsoParent ? ", Parent" : ""}`
-            : ""
-        }. User must set password on first login.`,
+        `Created coordinator ${created.fullName}. User must set password on first login.`,
       );
     } else if (coordinatorDialog && coordinatorDialog !== "create") {
       await updateMutation.mutateAsync({
@@ -207,17 +259,14 @@ export function DirectoryCoordinatorsPage() {
 
   async function toggleActive(coordinator: DirectoryCoordinator) {
     clearMessages();
+    if (coordinator.isActive) {
+      setDeactivateTarget(coordinator);
+      return;
+    }
+
     try {
-      if (coordinator.isActive) {
-        if (!window.confirm(`Deactivate ${coordinator.fullName}?`)) {
-          return;
-        }
-        await deactivateMutation.mutateAsync(coordinator.userId);
-        setSuccessMessage(`Deactivated ${coordinator.fullName}.`);
-      } else {
-        await activateMutation.mutateAsync(coordinator.userId);
-        setSuccessMessage(`Activated ${coordinator.fullName}.`);
-      }
+      await activateMutation.mutateAsync(coordinator.userId);
+      setSuccessMessage(`Activated ${coordinator.fullName}.`);
     } catch (err) {
       const apiError = err as ApiError;
       setActionError(
@@ -226,16 +275,28 @@ export function DirectoryCoordinatorsPage() {
     }
   }
 
-  async function handleBulkDeactivate() {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) {
+  async function confirmDeactivate() {
+    if (!deactivateTarget) {
       return;
     }
-    if (
-      !window.confirm(
-        `Deactivate ${ids.length} selected coordinator${ids.length === 1 ? "" : "s"}?`,
-      )
-    ) {
+
+    clearMessages();
+    try {
+      await deactivateMutation.mutateAsync(deactivateTarget.userId);
+      setSuccessMessage(`Deactivated ${deactivateTarget.fullName}.`);
+      setDeactivateTarget(null);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setActionError(
+        apiError.message ?? "Unable to update coordinator status.",
+      );
+    }
+  }
+
+  async function confirmBulkDeactivate() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      setBulkDeactivateOpen(false);
       return;
     }
 
@@ -244,6 +305,7 @@ export function DirectoryCoordinatorsPage() {
       const result = await bulkDeactivateMutation.mutateAsync(ids);
       setSuccessMessage(`Deactivated ${result.affectedCount} coordinator(s).`);
       setSelectedIds(new Set());
+      setBulkDeactivateOpen(false);
     } catch (err) {
       const apiError = err as ApiError;
       setActionError(
@@ -259,6 +321,42 @@ export function DirectoryCoordinatorsPage() {
     const roles = coordinator.roles ?? [];
     const hasParentRole = roles.includes("Parent");
     const hasTeacherRole = roles.includes("Teacher");
+    const overflowItems = [
+      {
+        id: "toggle-active",
+        label: coordinator.isActive ? "Deactivate" : "Activate",
+        onSelect: () => void toggleActive(coordinator),
+        disabled: busy,
+        tone: coordinator.isActive ? ("danger" as const) : ("default" as const),
+      },
+      ...(!hasTeacherRole
+        ? [
+            {
+              id: "add-teacher",
+              label: "Add Teacher role",
+              onSelect: () => {
+                clearMessages();
+                setGrantTeacherTarget(coordinator);
+              },
+              disabled: busy,
+            },
+          ]
+        : []),
+      ...(!hasParentRole
+        ? [
+            {
+              id: "add-parent",
+              label: "Add Parent role",
+              onSelect: () => {
+                clearMessages();
+                setGrantParentTarget(coordinator);
+              },
+              disabled: busy,
+            },
+          ]
+        : []),
+    ];
+
     return (
       <>
         <DirectoryIconAction
@@ -270,45 +368,10 @@ export function DirectoryCoordinatorsPage() {
             setCoordinatorDialog(coordinator);
           }}
         />
-        {!hasTeacherRole ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-9"
-            disabled={busy}
-            onClick={() => {
-              clearMessages();
-              setGrantTeacherTarget(coordinator);
-            }}
-          >
-            + Teacher
-          </Button>
-        ) : null}
-        {!hasParentRole ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-9"
-            disabled={busy}
-            onClick={() => {
-              clearMessages();
-              setGrantParentTarget(coordinator);
-            }}
-          >
-            + Parent
-          </Button>
-        ) : null}
-        <DirectoryIconAction
-          icon={coordinator.isActive ? UserX : UserCheck}
-          label={
-            coordinator.isActive
-              ? `Deactivate ${coordinator.fullName}`
-              : `Activate ${coordinator.fullName}`
-          }
+        <DirectoryRowOverflowMenu
+          label={`More actions for ${coordinator.fullName}`}
           disabled={busy}
-          onClick={() => void toggleActive(coordinator)}
+          items={overflowItems}
         />
       </>
     );
@@ -334,7 +397,7 @@ export function DirectoryCoordinatorsPage() {
       }
     >
       <DirectoryFilterPanel>
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
           <AppSearchInput
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
@@ -343,38 +406,56 @@ export function DirectoryCoordinatorsPage() {
                 applyFilters();
               }
             }}
-            placeholder="Search coordinators..."
-            containerClassName="min-w-0 flex-1 lg:min-w-[200px]"
+            placeholder="Search by name, code, username, or mobile…"
+            containerClassName="min-w-[14rem] flex-1"
           />
+          {showSchoolFilter ? (
+            <select
+              value={schoolId}
+              onChange={(event) => setSchoolId(event.target.value)}
+              className={cn(directorySelectClassName, "w-36 shrink-0")}
+              aria-label="Filter by school"
+            >
+              <option value="">All schools</option>
+              {schools.map((school) => (
+                <option key={school.id} value={school.id}>
+                  {school.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {showCampusFilter ? (
+            <select
+              value={campusId}
+              onChange={(event) => {
+                setCampusId(event.target.value);
+                setPageNumber(1);
+              }}
+              disabled={selectedSchoolId == null}
+              className={cn(directorySelectClassName, "w-36 shrink-0")}
+              aria-label="Filter by campus"
+            >
+              <option value="">All campuses</option>
+              {campuses.map((campus) => (
+                <option key={campus.id} value={campus.id}>
+                  {campus.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <select
-            value={schoolId}
-            onChange={(event) => setSchoolId(event.target.value)}
-            className={cn(directorySelectClassName, "lg:w-44")}
-            aria-label="Filter by school"
-          >
-            <option value="">All schools</option>
-            {schools.map((school) => (
-              <option key={school.id} value={school.id}>
-                {school.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={campusId}
+            value={rolesFilter}
             onChange={(event) => {
-              setCampusId(event.target.value);
+              setRolesFilter(event.target.value as CompanionRolesFilter);
               setPageNumber(1);
             }}
-            disabled={!selectedSchoolId}
-            className={cn(directorySelectClassName, "lg:w-44")}
-            aria-label="Filter by campus"
+            className={cn(directorySelectClassName, "w-44 shrink-0")}
+            aria-label="Filter by companion roles"
           >
-            <option value="">All campuses</option>
-            {campuses.map((campus) => (
-              <option key={campus.id} value={campus.id}>
-                {campus.name}
-              </option>
-            ))}
+            <option value="all">All roles</option>
+            <option value="withTeacher">Also Teacher</option>
+            <option value="withParent">Also Parent</option>
+            <option value="coordinatorOnly">Coordinator only</option>
           </select>
           <select
             value={activeFilter}
@@ -383,8 +464,8 @@ export function DirectoryCoordinatorsPage() {
                 event.target.value as DirectoryAccountStatusFilter,
               )
             }
-            className={cn(directorySelectClassName, "lg:w-40")}
-            aria-label="Filter by status"
+            className={cn(directorySelectClassName, "w-36 shrink-0")}
+            aria-label="Filter by account status"
           >
             {DIRECTORY_ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -414,7 +495,7 @@ export function DirectoryCoordinatorsPage() {
           variant="destructive"
           size="sm"
           disabled={busy}
-          onClick={() => void handleBulkDeactivate()}
+          onClick={() => setBulkDeactivateOpen(true)}
         >
           Bulk deactivate
         </Button>
@@ -466,12 +547,11 @@ export function DirectoryCoordinatorsPage() {
               }
               meta={
                 <>
-                  {coordinator.teacherCode ? (
-                    <p>Code {coordinator.teacherCode}</p>
-                  ) : null}
+                  <p>Code {coordinator.teacherCode || "—"}</p>
                   <p>
                     {coordinator.schoolName} · {coordinator.campusName}
                   </p>
+                  <p>{formatCompanionRoles(coordinator)}</p>
                 </>
               }
               actions={rowActions(coordinator)}
@@ -495,6 +575,7 @@ export function DirectoryCoordinatorsPage() {
             <DirectoryTh>Name</DirectoryTh>
             <DirectoryTh>Code</DirectoryTh>
             <DirectoryTh>School / Campus</DirectoryTh>
+            <DirectoryTh>Roles</DirectoryTh>
             <DirectoryTh>Status</DirectoryTh>
             {canManage ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
           </DirectoryTableHead>
@@ -530,6 +611,9 @@ export function DirectoryCoordinatorsPage() {
                 <DirectoryTd className="text-muted-foreground">
                   {coordinator.schoolName} / {coordinator.campusName}
                 </DirectoryTd>
+                <DirectoryTd className="text-muted-foreground">
+                  {formatCompanionRoles(coordinator)}
+                </DirectoryTd>
                 <DirectoryTd>
                   <AccountStatusBadge
                     accountStatus={coordinator.accountStatus}
@@ -538,7 +622,7 @@ export function DirectoryCoordinatorsPage() {
                 </DirectoryTd>
                 {canManage ? (
                   <DirectoryTd align="right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-1.5">
                       {rowActions(coordinator)}
                     </div>
                   </DirectoryTd>
@@ -564,10 +648,17 @@ export function DirectoryCoordinatorsPage() {
       {grantTeacherTarget ? (
         <GrantTeacherRoleDialog
           person={grantTeacherTarget}
-          schools={schools}
           isSubmitting={grantTeacherMutation.isPending}
+          lockSchoolCampus
+          defaults={{
+            schoolId: grantTeacherTarget.schoolId,
+            campusId: grantTeacherTarget.campusId,
+            schoolName: grantTeacherTarget.schoolName,
+            campusName: grantTeacherTarget.campusName,
+            teacherCode: grantTeacherTarget.teacherCode,
+          }}
           onClose={() => setGrantTeacherTarget(null)}
-          onSubmit={async (input: GrantTeacherRoleInput) => {
+          onSubmit={async (input) => {
             clearMessages();
             try {
               await grantTeacherMutation.mutateAsync({
@@ -623,6 +714,40 @@ export function DirectoryCoordinatorsPage() {
             }
           })();
         }}
+      />
+
+      <AppConfirmDialog
+        open={deactivateTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !deactivateMutation.isPending) {
+            setDeactivateTarget(null);
+          }
+        }}
+        title="Deactivate coordinator"
+        description={
+          deactivateTarget
+            ? `Deactivate ${deactivateTarget.fullName}? They will not be able to sign in until activated again.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        destructive
+        loading={deactivateMutation.isPending}
+        onConfirm={() => void confirmDeactivate()}
+      />
+
+      <AppConfirmDialog
+        open={bulkDeactivateOpen}
+        onOpenChange={(open) => {
+          if (!open && !bulkDeactivateMutation.isPending) {
+            setBulkDeactivateOpen(false);
+          }
+        }}
+        title="Bulk deactivate coordinators"
+        description={`Deactivate ${selectedIds.size} selected coordinator${selectedIds.size === 1 ? "" : "s"}? They will not be able to sign in until activated again.`}
+        confirmLabel="Deactivate"
+        destructive
+        loading={bulkDeactivateMutation.isPending}
+        onConfirm={() => void confirmBulkDeactivate()}
       />
     </DirectoryPageShell>
   );

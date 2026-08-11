@@ -9,6 +9,8 @@ import type {
   CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
   CreateDirectoryTeacherInput,
+  GrantCoordinatorRoleInput,
+  GrantTeacherCoordinatorRoleInput,
   GrantTeacherRoleInput,
   DirectoryCampusAdminFilters,
   DirectoryParentFilters,
@@ -421,8 +423,13 @@ export function useGrantCoordinatorRoleToTeacherMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (teacherId: number) =>
-      directoryApi.grantCoordinatorRoleToTeacher(teacherId),
+    mutationFn: ({
+      teacherId,
+      input,
+    }: {
+      teacherId: number;
+      input: GrantTeacherCoordinatorRoleInput;
+    }) => directoryApi.grantCoordinatorRoleToTeacher(teacherId, input),
     onSuccess: () => invalidateComboRoles(queryClient),
   });
 }
@@ -432,8 +439,13 @@ export function useGrantCoordinatorRoleToParentMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (parentId: number) =>
-      directoryApi.grantCoordinatorRoleToParent(parentId),
+    mutationFn: ({
+      parentId,
+      input,
+    }: {
+      parentId: number;
+      input: GrantCoordinatorRoleInput;
+    }) => directoryApi.grantCoordinatorRoleToParent(parentId, input),
     onSuccess: () => invalidateComboRoles(queryClient),
   });
 }

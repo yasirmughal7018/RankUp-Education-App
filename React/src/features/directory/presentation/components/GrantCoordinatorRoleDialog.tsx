@@ -4,7 +4,8 @@ import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
   DirectoryCampus,
   DirectorySchool,
-  GrantTeacherRoleInput,
+  GrantCoordinatorRoleInput,
+  GrantTeacherCoordinatorRoleInput,
 } from "@/features/directory/domain/directoryTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { Button } from "@/components/ui/button";
@@ -18,36 +19,39 @@ import {
 } from "@/components/ui/dialog";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
-interface GrantTeacherRolePerson {
+interface GrantCoordinatorRolePerson {
   fullName: string;
   username: string;
   mobileNumber?: string | null;
 }
 
-interface GrantTeacherRoleDefaults {
+interface GrantCoordinatorRoleDefaults {
   schoolId?: number | null;
   campusId?: number | null;
   schoolName?: string | null;
   campusName?: string | null;
-  teacherCode?: string | null;
+  coordinatorCode?: string | null;
 }
 
-interface GrantTeacherRoleDialogProps {
-  person: GrantTeacherRolePerson;
+interface GrantCoordinatorRoleDialogProps {
+  person: GrantCoordinatorRolePerson;
   schools?: DirectorySchool[];
   isSubmitting: boolean;
-  defaults?: GrantTeacherRoleDefaults;
+  /** Optional starting values (e.g. teacher's current school/campus/code). */
+  defaults?: GrantCoordinatorRoleDefaults;
   /**
-   * When true, school/campus are read-only from the existing assignment
-   * (coordinators). Parents keep editable school/campus selects.
+   * When true, school/campus are shown read-only from the existing assignment
+   * (teachers). Parents keep editable school/campus selects.
    */
   lockSchoolCampus?: boolean;
   onClose: () => void;
-  onSubmit: (input: GrantTeacherRoleInput) => Promise<void>;
+  onSubmit: (
+    input: GrantCoordinatorRoleInput | GrantTeacherCoordinatorRoleInput,
+  ) => Promise<void>;
 }
 
-/** Grant Teacher role to an existing Parent or Coordinator. */
-export function GrantTeacherRoleDialog({
+/** Grant Coordinator role to an existing Parent or Teacher. */
+export function GrantCoordinatorRoleDialog({
   person,
   schools = [],
   isSubmitting,
@@ -55,7 +59,7 @@ export function GrantTeacherRoleDialog({
   lockSchoolCampus = false,
   onClose,
   onSubmit,
-}: GrantTeacherRoleDialogProps) {
+}: GrantCoordinatorRoleDialogProps) {
   const [schoolId, setSchoolId] = useState(
     defaults?.schoolId != null && defaults.schoolId > 0
       ? String(defaults.schoolId)
@@ -66,8 +70,8 @@ export function GrantTeacherRoleDialog({
       ? String(defaults.campusId)
       : "",
   );
-  const [teacherCode, setTeacherCode] = useState(
-    defaults?.teacherCode?.trim() ?? "",
+  const [coordinatorCode, setCoordinatorCode] = useState(
+    defaults?.coordinatorCode?.trim() ?? "",
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -82,46 +86,42 @@ export function GrantTeacherRoleDialog({
     event.preventDefault();
     setError(null);
 
-    const trimmedCode = teacherCode.trim();
+    const trimmedCode = coordinatorCode.trim();
     if (!trimmedCode) {
-      setError("Teacher code is required.");
-      return;
-    }
-
-    const parsedSchoolId = lockSchoolCampus
-      ? (defaults?.schoolId ?? 0)
-      : Number(schoolId);
-    const parsedCampusId = lockSchoolCampus
-      ? (defaults?.campusId ?? 0)
-      : Number(campusId);
-
-    if (!parsedSchoolId || parsedSchoolId < 1) {
-      setError(
-        lockSchoolCampus
-          ? "This account has no school assigned."
-          : "Select a school.",
-      );
-      return;
-    }
-    if (!parsedCampusId || parsedCampusId < 1) {
-      setError(
-        lockSchoolCampus
-          ? "This account has no campus assigned."
-          : "Select a campus.",
-      );
+      setError("Coordinator code is required.");
       return;
     }
 
     try {
+      if (lockSchoolCampus) {
+        await onSubmit({
+          coordinatorCode: trimmedCode,
+          mobileNumber: person.mobileNumber ?? null,
+        } satisfies GrantTeacherCoordinatorRoleInput);
+        return;
+      }
+
+      const parsedSchoolId = Number(schoolId);
+      const parsedCampusId = Number(campusId);
+
+      if (!parsedSchoolId || parsedSchoolId < 1) {
+        setError("Select a school.");
+        return;
+      }
+      if (!parsedCampusId || parsedCampusId < 1) {
+        setError("Select a campus.");
+        return;
+      }
+
       await onSubmit({
         schoolId: parsedSchoolId,
         campusId: parsedCampusId,
-        teacherCode: trimmedCode,
+        coordinatorCode: trimmedCode,
         mobileNumber: person.mobileNumber ?? null,
-      });
+      } satisfies GrantCoordinatorRoleInput);
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError.message ?? "Unable to add Teacher role.");
+      setError(apiError.message ?? "Unable to add Coordinator role.");
     }
   }
 
@@ -136,11 +136,11 @@ export function GrantTeacherRoleDialog({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Teacher role</DialogTitle>
+          <DialogTitle>Add Coordinator role</DialogTitle>
           <DialogDescription>
             {lockSchoolCampus
-              ? `Grant the Teacher role to ${person.fullName} (${person.username}). They keep their current school and campus. Set a teacher code.`
-              : `Grant the Teacher role to ${person.fullName} (${person.username}). Choose the school and campus, and set a teacher code. Parent, Teacher, and Coordinator may share one account.`}
+              ? `Grant the Coordinator role to ${person.fullName} (${person.username}). They will coordinate for their current school and campus. Set a coordinator code.`
+              : `Grant the Coordinator role to ${person.fullName} (${person.username}). Choose the school and campus this coordinator belongs to, and set a code. Parent, Teacher, and Coordinator may share one account.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -165,11 +165,11 @@ export function GrantTeacherRoleDialog({
           ) : (
             <>
               <div>
-                <FieldLabel htmlFor="grant-teacher-school" required>
+                <FieldLabel htmlFor="grant-coordinator-school" required>
                   School
                 </FieldLabel>
                 <select
-                  id="grant-teacher-school"
+                  id="grant-coordinator-school"
                   value={schoolId}
                   onChange={(event) => {
                     setSchoolId(event.target.value);
@@ -189,11 +189,11 @@ export function GrantTeacherRoleDialog({
               </div>
 
               <div>
-                <FieldLabel htmlFor="grant-teacher-campus" required>
+                <FieldLabel htmlFor="grant-coordinator-campus" required>
                   Campus
                 </FieldLabel>
                 <select
-                  id="grant-teacher-campus"
+                  id="grant-coordinator-campus"
                   value={campusId}
                   onChange={(event) => setCampusId(event.target.value)}
                   className={FORM_FIELD_CLASS}
@@ -216,14 +216,14 @@ export function GrantTeacherRoleDialog({
           )}
 
           <div>
-            <FieldLabel htmlFor="grant-teacher-code" required>
-              Teacher code
+            <FieldLabel htmlFor="grant-coordinator-code" required>
+              Coordinator code
             </FieldLabel>
             <input
-              id="grant-teacher-code"
+              id="grant-coordinator-code"
               type="text"
-              value={teacherCode}
-              onChange={(event) => setTeacherCode(event.target.value)}
+              value={coordinatorCode}
+              onChange={(event) => setCoordinatorCode(event.target.value)}
               className={FORM_FIELD_CLASS}
               required
               disabled={isSubmitting}
@@ -240,7 +240,7 @@ export function GrantTeacherRoleDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Adding…" : "Add Teacher role"}
+              {isSubmitting ? "Adding…" : "Add Coordinator role"}
             </Button>
           </DialogFooter>
         </form>

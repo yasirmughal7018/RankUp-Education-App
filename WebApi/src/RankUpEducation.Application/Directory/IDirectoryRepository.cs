@@ -67,11 +67,17 @@ public interface IDirectoryRepository
         int pageSize,
         CancellationToken cancellationToken);
 
-    /// <summary>Page of teachers with optional school, campus, and search filters.</summary>
+    /// <summary>Page of teachers with optional school, campus, search, and students filters.</summary>
+    /// <param name="hasStudents">
+    /// When true, only teachers with at least one active student in their groups.
+    /// When false, only teachers with no active students.
+    /// When null, no students filter.
+    /// </param>
     Task<(IReadOnlyList<DirectoryTeacherResponse> Items, int TotalCount)> ListTeachersAsync(
         int? schoolId,
         int? campusId,
         string? search,
+        bool? hasStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken);
@@ -80,10 +86,16 @@ public interface IDirectoryRepository
     /// Page of parents with optional search. When schoolId/campusId are set, only parents
     /// linked to at least one student in that school/campus are returned.
     /// </summary>
+    /// <param name="hasLinkedStudents">
+    /// When true, only parents with at least one active student link.
+    /// When false, only parents with no active student links.
+    /// When null, no linked-student filter.
+    /// </param>
     Task<(IReadOnlyList<DirectoryParentResponse> Items, int TotalCount)> ListParentsAsync(
         string? search,
         int? schoolId,
         int? campusId,
+        bool? hasLinkedStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken);

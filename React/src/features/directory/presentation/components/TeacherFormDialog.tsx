@@ -44,11 +44,6 @@ export function TeacherFormDialog({
   );
   const [teacherCode, setTeacherCode] = useState(teacher?.teacherCode ?? "");
   const [mobileNumber, setMobileNumber] = useState(teacher?.mobileNumber ?? "");
-  const existingRoles = teacher?.roles ?? [];
-  const alreadyParent = existingRoles.includes("Parent");
-  const alreadyCoordinator = existingRoles.includes("Coordinator");
-  const [alsoParent, setAlsoParent] = useState(alreadyParent);
-  const [alsoCoordinator, setAlsoCoordinator] = useState(alreadyCoordinator);
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;
@@ -100,8 +95,6 @@ export function TeacherFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
-            alsoParent,
-            alsoCoordinator,
           },
         });
       } else {
@@ -125,8 +118,6 @@ export function TeacherFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
-            alsoParent,
-            alsoCoordinator,
           },
         });
       }
@@ -153,8 +144,8 @@ export function TeacherFormDialog({
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
-              ? `Update details for ${teacher.fullName}. You can add Parent and Coordinator on this same login.`
-              : "Add a teacher to the directory. Optionally also assign Parent and Coordinator so one login holds all three roles. User must set password on first login."}
+              ? `Update details for ${teacher.fullName}.`
+              : "Add a teacher to the directory. User must set password on first login. Extra roles can be added later from the Teachers list."}
           </p>
         </div>
 
@@ -289,46 +280,6 @@ export function TeacherFormDialog({
               disabled={isSubmitting}
             />
           </div>
-
-          <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <legend className="px-1 text-sm font-semibold text-slate-800">
-              Additional roles on this account
-            </legend>
-            <p className="text-xs text-slate-600">
-              Teacher is always included. Check both to make Teacher + Parent +
-              Coordinator on one user.
-            </p>
-            <label className="flex items-start gap-2.5 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={alsoParent}
-                disabled={isSubmitting || alreadyParent}
-                onChange={(event) => setAlsoParent(event.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Parent</span>
-                {alreadyParent ? (
-                  <span className="text-slate-500"> — already assigned</span>
-                ) : null}
-              </span>
-            </label>
-            <label className="flex items-start gap-2.5 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={alsoCoordinator}
-                disabled={isSubmitting || alreadyCoordinator}
-                onChange={(event) => setAlsoCoordinator(event.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Coordinator</span>
-                {alreadyCoordinator ? (
-                  <span className="text-slate-500"> — already assigned</span>
-                ) : null}
-              </span>
-            </label>
-          </fieldset>
 
           <div className="flex justify-end gap-3 pt-2">
             <button

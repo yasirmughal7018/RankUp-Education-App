@@ -332,6 +332,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         int? schoolId,
         int? campusId,
         string? search,
+        bool? hasStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken)
@@ -352,13 +353,37 @@ public sealed class DirectoryRepository : IDirectoryRepository
             query = query.Where(row => row.user.CampusId == campusId.Value);
         }
 
+        if (hasStudents == true)
+        {
+            query = query.Where(row =>
+                _dbContext.StudentGroups.Any(group =>
+                    group.ReferralId == row.teacher.Id
+                    && group.IsActive
+                    && group.CreatorRole == UserRole.Teacher
+                    && _dbContext.StudentGroupMembers.Any(member =>
+                        member.StudentGroupId == group.Id)));
+        }
+        else if (hasStudents == false)
+        {
+            query = query.Where(row =>
+                !_dbContext.StudentGroups.Any(group =>
+                    group.ReferralId == row.teacher.Id
+                    && group.IsActive
+                    && group.CreatorRole == UserRole.Teacher
+                    && _dbContext.StudentGroupMembers.Any(member =>
+                        member.StudentGroupId == group.Id)));
+        }
+
         if (search.HasTrimmedText())
         {
             var term = search.AsTrimmedString();
             query = query.Where(row =>
                 row.user.FullName.Contains(term)
                 || row.user.Username.Contains(term)
-                || (row.user.RollNumberTeacherCode != null && row.user.RollNumberTeacherCode.Contains(term)));
+                || (row.user.RollNumberTeacherCode != null && row.user.RollNumberTeacherCode.Contains(term))
+                || (row.user.MobileNumber != null && row.user.MobileNumber.Contains(term))
+                || (row.teacher.MobileNumber != null && row.teacher.MobileNumber.Contains(term))
+                || (row.user.EmailAddress != null && row.user.EmailAddress.Contains(term)));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -440,6 +465,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         string? search,
         int? schoolId,
         int? campusId,
+        bool? hasLinkedStudents,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken)
@@ -460,11 +486,29 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     && scopedStudentIds.Contains(relation.StudentId)));
         }
 
+        if (hasLinkedStudents == true)
+        {
+            query = query.Where(row =>
+                _dbContext.ParentStudentRelations.Any(relation =>
+                    relation.ParentId == row.parent.Id && relation.IsActive));
+        }
+        else if (hasLinkedStudents == false)
+        {
+            query = query.Where(row =>
+                !_dbContext.ParentStudentRelations.Any(relation =>
+                    relation.ParentId == row.parent.Id && relation.IsActive));
+        }
+
         if (search.HasTrimmedText())
         {
             var term = search.AsTrimmedString();
             query = query.Where(row =>
-                row.user.FullName.Contains(term) || row.user.Username.Contains(term));
+                row.user.FullName.Contains(term)
+                || row.user.Username.Contains(term)
+                || (row.user.MobileNumber != null && row.user.MobileNumber.Contains(term))
+                || (row.parent.MobileNumber != null && row.parent.MobileNumber.Contains(term))
+                || (row.user.Cnic != null && row.user.Cnic.Contains(term))
+                || (row.user.EmailAddress != null && row.user.EmailAddress.Contains(term)));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -854,6 +898,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
             query = query.Where(user =>
                 user.FullName.Contains(term)
                 || user.Username.Contains(term)
+                || (user.RollNumberTeacherCode != null && user.RollNumberTeacherCode.Contains(term))
                 || (user.MobileNumber != null && user.MobileNumber.Contains(term))
                 || (user.EmailAddress != null && user.EmailAddress.Contains(term)));
         }
