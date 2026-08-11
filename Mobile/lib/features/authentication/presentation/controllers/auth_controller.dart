@@ -162,6 +162,8 @@ class AuthController extends StateNotifier<AuthState> {
     String? cnic,
     int? schoolId,
     int? campusId,
+    int? grade,
+    String? section,
   }) async {
     state = state.copyWith(
       isLoading: true,
@@ -179,6 +181,8 @@ class AuthController extends StateNotifier<AuthState> {
         cnic: cnic,
         schoolId: schoolId,
         campusId: campusId,
+        grade: grade,
+        section: section,
       );
       final routing = schoolId != null && campusId != null
           ? 'Campus Admin / School Admin (recorded) and Portal Admin '

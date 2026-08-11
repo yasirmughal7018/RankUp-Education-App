@@ -42,6 +42,20 @@ export interface RankingReport {
   items: RankingItem[];
 }
 
+export type RankingScope = "class" | "school";
+
+/** Student peer leaderboard from `GET /reports/rankings/me`. */
+export interface StudentRankingReport {
+  scope: RankingScope | string;
+  quizId: number | null;
+  title: string;
+  viewerStudentId: number;
+  myRank: number | null;
+  myBestPercentage: number | null;
+  myAttemptCount: number;
+  items: RankingItem[];
+}
+
 export interface StudentQuizHistoryItem {
   quizId: number;
   quizTitle: string;

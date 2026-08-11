@@ -21,6 +21,9 @@ export interface PendingRegistration {
   createdDate: string | null;
   reasonMessage: string | null;
   rollNumberTeacherCode: string | null;
+  grade: number | null;
+  section: string | null;
+  gradeName: string | null;
   pendingApprovers: PendingApprover[];
   /** True when this admin already approved and the request still awaits activation. */
   currentUserHasApproved: boolean;

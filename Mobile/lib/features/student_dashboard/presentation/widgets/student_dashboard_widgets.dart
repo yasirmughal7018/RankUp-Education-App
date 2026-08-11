@@ -87,23 +87,16 @@ class StudentHeaderCard extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 10),
-                _StatusPill(
-                  icon: Icons.local_fire_department_outlined,
-                  label: '${dashboard.streak.currentDays} Day Learning Streak',
-                  tone: DashboardTone.amber,
-                ),
+                if (dashboard.streak.currentDays > 0) ...[
+                  const SizedBox(height: 10),
+                  _StatusPill(
+                    icon: Icons.local_fire_department_outlined,
+                    label: '${dashboard.streak.currentDays} Day Learning Streak',
+                    tone: DashboardTone.amber,
+                  ),
+                ],
               ],
             ),
-          ),
-          _IconCounter(
-            icon: Icons.notifications_outlined,
-            count: dashboard.notificationCount,
-          ),
-          const SizedBox(width: 6),
-          _IconCounter(
-            icon: Icons.chat_bubble_outline,
-            count: dashboard.messageCount,
           ),
         ],
       ),
@@ -1015,36 +1008,6 @@ class _StatusPill extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _IconCounter extends StatelessWidget {
-  const _IconCounter({required this.icon, required this.count});
-
-  final IconData icon;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(onPressed: () {}, icon: Icon(icon)),
-        if (count > 0)
-          PositionedDirectional(
-            end: 2,
-            top: 4,
-            child: CircleAvatar(
-              radius: 9,
-              backgroundColor: Theme.of(context).colorScheme.error,
-              child: Text(
-                count.toString(),
-                style: const TextStyle(color: Colors.white, fontSize: 10),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

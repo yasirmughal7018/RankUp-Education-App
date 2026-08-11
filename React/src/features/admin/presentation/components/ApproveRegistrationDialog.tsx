@@ -103,6 +103,14 @@ export function ApproveRegistrationDialog({
             value={registration.rollNumberTeacherCode || "—"}
           />
           <DetailRow
+            label="Grade"
+            value={
+              registration.gradeName ||
+              (registration.grade != null ? String(registration.grade) : "—")
+            }
+          />
+          <DetailRow label="Section" value={registration.section || "—"} />
+          <DetailRow
             label="Reason"
             value={registration.reasonMessage || "—"}
           />

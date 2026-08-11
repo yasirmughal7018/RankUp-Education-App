@@ -100,7 +100,8 @@ public sealed record QuizApprovalEventItem(
 public sealed record StudentSchoolContext(
     int? SchoolId,
     int? CampusId,
-    short Grade);
+    short Grade,
+    string Section = "");
 
 /// <summary>Assignment row with student display name and attempt count for manage UI.</summary>
 public sealed record QuizAssignmentListItem(

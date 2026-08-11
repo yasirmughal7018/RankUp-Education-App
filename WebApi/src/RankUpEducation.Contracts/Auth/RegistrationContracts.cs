@@ -10,7 +10,9 @@ public sealed record RegisterAccountRequest(
     string? ReasonMessage,
     int? SchoolId = null,
     int? CampusId = null,
-    string? Cnic = null);
+    string? Cnic = null,
+    short? Grade = null,
+    string? Section = null);
 
 /// <summary>Acknowledgement after a registration request is queued.</summary>
 public sealed record RegisterAccountResponse(
@@ -41,6 +43,9 @@ public sealed record PendingRegistrationResponse(
     DateOnly? CreatedDate,
     string? ReasonMessage,
     string? RollNumberTeacherCode,
+    short? Grade,
+    string? Section,
+    string? GradeName,
     IReadOnlyList<PendingApproverResponse> PendingApprovers,
     /// <summary>True when the current admin already recorded approval and is waiting on Portal Admin.</summary>
     bool CurrentUserHasApproved);

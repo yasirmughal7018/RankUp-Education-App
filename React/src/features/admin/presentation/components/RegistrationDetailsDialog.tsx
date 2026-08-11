@@ -185,6 +185,19 @@ export function RegistrationDetailsDialog({
               <DetailRow label="School" value={schoolName} />
               <DetailRow label="Campus" value={campusName || "—"} />
               <DetailRow
+                label="Grade"
+                value={
+                  registration.gradeName ||
+                  (registration.grade != null
+                    ? String(registration.grade)
+                    : "—")
+                }
+              />
+              <DetailRow
+                label="Section"
+                value={registration.section || "—"}
+              />
+              <DetailRow
                 label="Roll / teacher code"
                 value={registration.rollNumberTeacherCode || "—"}
               />

@@ -64,6 +64,10 @@ public sealed class User : SoftDeleteEntity
     public string? ReasonMessage { get; private set; }
     /// <summary>Student roll number or teacher code (shared identity field).</summary>
     public string? RollNumberTeacherCode { get; private set; }
+    /// <summary>Pending student Class lookup id collected at self-registration.</summary>
+    public short? RegistrationGrade { get; private set; }
+    /// <summary>Pending student section collected at self-registration.</summary>
+    public string? RegistrationSection { get; private set; }
     public DateOnly? CreatedDate { get; private set; }
     public DateOnly? ModifiedDate { get; private set; }
     /// <summary>False while registration is pending or account is locked (e.g. school-change).</summary>
@@ -161,7 +165,9 @@ public sealed class User : SoftDeleteEntity
         int? schoolId = null,
         int? campusId = null,
         string? reasonMessage = null,
-        string? rollNumberTeacherCode = null)
+        string? rollNumberTeacherCode = null,
+        short? registrationGrade = null,
+        string? registrationSection = null)
     {
         return new User
         {
@@ -178,6 +184,8 @@ public sealed class User : SoftDeleteEntity
             CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow),
             ReasonMessage = reasonMessage.AsTrimmedOrNull(),
             RollNumberTeacherCode = rollNumberTeacherCode.AsTrimmedOrNull(),
+            RegistrationGrade = registrationGrade,
+            RegistrationSection = registrationSection.AsTrimmedOrNull(),
             MustChangePassword = null
         }.WithInitialRole(role);
     }

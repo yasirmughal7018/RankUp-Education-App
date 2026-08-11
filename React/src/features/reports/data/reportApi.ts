@@ -4,7 +4,9 @@ import type {
   QuizPerformanceReport,
   QuizSummaryReport,
   RankingReport,
+  RankingScope,
   StudentQuizHistory,
+  StudentRankingReport,
 } from "@/features/reports/domain/reportTypes";
 
 function toQuery(params: Record<string, string | number | null | undefined>) {
@@ -47,6 +49,19 @@ export async function getRankingsReport(
 ): Promise<RankingReport> {
   return apiRequest<RankingReport>(
     `/reports/rankings${toQuery({ quizId })}`,
+  );
+}
+
+/** Class or school peer rankings for the signed-in student. */
+export async function getMyRankingsReport(options?: {
+  scope?: RankingScope;
+  quizId?: number | null;
+}): Promise<StudentRankingReport> {
+  return apiRequest<StudentRankingReport>(
+    `/reports/rankings/me${toQuery({
+      scope: options?.scope,
+      quizId: options?.quizId,
+    })}`,
   );
 }
 

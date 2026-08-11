@@ -21,12 +21,16 @@ export function RequestAccessPage() {
     schoolId: "",
     campusId: "",
     rollNumberTeacherCode: "",
+    grade: "",
+    section: "",
     reasonMessage: "",
   });
   const [schools, setSchools] = useState<authApi.RegistrationSchoolOption[]>([]);
   const [campuses, setCampuses] = useState<authApi.RegistrationCampusOption[]>([]);
+  const [grades, setGrades] = useState<authApi.RegistrationGradeOption[]>([]);
   const [isLoadingSchools, setIsLoadingSchools] = useState(true);
   const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
+  const [isLoadingGrades, setIsLoadingGrades] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -45,8 +49,10 @@ export function RequestAccessPage() {
       ...current,
       userType,
       ...(userType === "Parent"
-        ? { schoolId: "", campusId: "", rollNumberTeacherCode: "" }
-        : {}),
+        ? { schoolId: "", campusId: "", rollNumberTeacherCode: "", grade: "", section: "" }
+        : userType === "Teacher"
+          ? { grade: "", section: "" }
+          : {}),
     }));
     if (userType === "Parent") {
       setCampuses([]);
@@ -71,6 +77,32 @@ export function RequestAccessPage() {
       .finally(() => {
         if (!cancelled) {
           setIsLoadingSchools(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingGrades(true);
+    void authApi
+      .listRegistrationGrades()
+      .then((items) => {
+        if (!cancelled) {
+          setGrades(items);
+        }
+      })
+      .catch((caught: { message?: string }) => {
+        if (!cancelled) {
+          setError(caught.message || "Unable to load grades.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingGrades(false);
         }
       });
 
@@ -141,6 +173,16 @@ export function RequestAccessPage() {
       return;
     }
 
+    if (isStudent && !form.grade) {
+      setError("Grade is required for student account requests.");
+      return;
+    }
+
+    if (isStudent && !form.section.trim()) {
+      setError("Section is required for student account requests.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -156,6 +198,8 @@ export function RequestAccessPage() {
         schoolId,
         campusId,
         cnic: form.cnic.trim() || null,
+        grade: isStudent ? Number(form.grade) : null,
+        section: isStudent ? form.section.trim() : null,
       });
 
       const routing =
@@ -177,6 +221,8 @@ export function RequestAccessPage() {
         schoolId: "",
         campusId: "",
         rollNumberTeacherCode: "",
+        grade: "",
+        section: "",
         reasonMessage: "",
       });
       setCampuses([]);
@@ -191,7 +237,7 @@ export function RequestAccessPage() {
   const description = isParent
     ? "Parent requests go to Portal Admin. Email is your username. School and campus are not required."
     : isStudent
-      ? "Email is your username. Mobile is optional. Roll number is required only when you select a school."
+      ? "Email is your username. Grade and section are required. Roll number is required only when you select a school."
       : "Email is your username. Optional school/campus routes approval. Campus/School Admin can activate in scope; without a school, Portal Admin approves.";
 
   const rollRequired = isStudent && Boolean(form.schoolId);
@@ -332,6 +378,51 @@ export function RequestAccessPage() {
                 ))}
               </select>
             </div>
+
+            {isStudent ? (
+              <>
+                <div>
+                  <FieldLabel htmlFor="grade" required>
+                    Grade
+                  </FieldLabel>
+                  <SearchableSelect
+                    id="grade"
+                    required
+                    allowEmpty={false}
+                    disabled={isSubmitting || isLoadingGrades}
+                    value={form.grade}
+                    emptyLabel={
+                      isLoadingGrades ? "Loading grades..." : "Select grade"
+                    }
+                    placeholder={
+                      isLoadingGrades ? "Loading grades..." : "Select grade"
+                    }
+                    options={grades.map((grade) => ({
+                      value: String(grade.id),
+                      label: grade.name,
+                    }))}
+                    onChange={(next) => updateField("grade", next)}
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel htmlFor="section" required>
+                    Section
+                  </FieldLabel>
+                  <input
+                    id="section"
+                    required
+                    disabled={isSubmitting}
+                    value={form.section}
+                    onChange={(event) =>
+                      updateField("section", event.target.value)
+                    }
+                    className={inputClassName}
+                    placeholder="e.g. A"
+                  />
+                </div>
+              </>
+            ) : null}
 
             {showSchoolFields ? (
               <div>

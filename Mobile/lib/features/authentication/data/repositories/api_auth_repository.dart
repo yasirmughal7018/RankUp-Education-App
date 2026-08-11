@@ -70,6 +70,8 @@ class ApiAuthRepository implements AuthRepository {
     String? cnic,
     int? schoolId,
     int? campusId,
+    int? grade,
+    String? section,
   }) {
     return _remoteDataSource.requestAccountAccess(
       fullName: fullName,
@@ -81,6 +83,8 @@ class ApiAuthRepository implements AuthRepository {
       cnic: cnic,
       schoolId: schoolId,
       campusId: campusId,
+      grade: grade,
+      section: section,
     );
   }
 
@@ -92,6 +96,11 @@ class ApiAuthRepository implements AuthRepository {
   @override
   Future<List<({int id, String name})>> listRegistrationCampuses(int schoolId) {
     return _remoteDataSource.listRegistrationCampuses(schoolId);
+  }
+
+  @override
+  Future<List<({int id, String name})>> listRegistrationGrades() {
+    return _remoteDataSource.listRegistrationGrades();
   }
 
   @override

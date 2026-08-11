@@ -66,6 +66,7 @@ export function AppLayout() {
         { to: "/student/dashboard", label: "Learning" },
         { to: "/student/quizzes", label: "My quizzes" },
         { to: "/student/history", label: "History" },
+        { to: "/student/rankings", label: "Rankings" },
       );
     }
     return items;
@@ -101,7 +102,7 @@ export function AppLayout() {
       items.push(
         { to: "/student/dashboard", label: "Learn" },
         { to: "/student/quizzes", label: "Quizzes" },
-        { to: "/student/history", label: "History" },
+        { to: "/student/rankings", label: "Ranks" },
       );
     }
     return items.slice(0, 5);

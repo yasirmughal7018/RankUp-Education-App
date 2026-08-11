@@ -58,6 +58,7 @@ import { StudentQuizAttemptPage } from "@/features/student/presentation/pages/St
 import { StudentQuizDetailPage } from "@/features/student/presentation/pages/StudentQuizDetailPage";
 import { StudentQuizHistoryPage } from "@/features/student/presentation/pages/StudentQuizHistoryPage";
 import { StudentQuizResultPage } from "@/features/student/presentation/pages/StudentQuizResultPage";
+import { StudentRankingsPage } from "@/features/student/presentation/pages/StudentRankingsPage";
 import { StudentQuizzesPage } from "@/features/student/presentation/pages/StudentQuizzesPage";
 
 /** Application route tree with role-based nested guards. */
@@ -196,6 +197,7 @@ export function AppRouter() {
               <Route path="student/dashboard" element={<StudentDashboardPage />} />
               <Route path="student/quizzes" element={<StudentQuizzesPage />} />
               <Route path="student/history" element={<StudentQuizHistoryPage />} />
+              <Route path="student/rankings" element={<StudentRankingsPage />} />
               <Route
                 path="student/quizzes/:quizId"
                 element={<StudentQuizDetailPage />}

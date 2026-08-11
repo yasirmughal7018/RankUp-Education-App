@@ -34,4 +34,14 @@ public interface IReportRepository
         int? campusId,
         long? creatorUserId,
         CancellationToken cancellationToken);
+
+    /// <summary>Builds a student cohort leaderboard from submitted quiz attempts.</summary>
+    Task<StudentRankingReportResponse> GetStudentCohortRankingsAsync(
+        IReadOnlyList<long> cohortStudentIds,
+        long viewerStudentId,
+        string scope,
+        long? quizId,
+        int schoolId,
+        int? campusId,
+        CancellationToken cancellationToken);
 }

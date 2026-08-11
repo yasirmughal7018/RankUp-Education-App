@@ -555,6 +555,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           cnic: request.cnic,
           schoolId: request.schoolId,
           campusId: request.campusId,
+          grade: request.grade,
+          section: request.section,
         );
   }
 }
@@ -660,21 +662,30 @@ class _AccountAccessRequestSheetState
   final _emailAddressController = TextEditingController();
   final _cnicController = TextEditingController();
   final _rollNumberTeacherCodeController = TextEditingController();
+  final _sectionController = TextEditingController();
   final _reasonMessageController = TextEditingController();
 
   String _userType = 'Student';
   int? _schoolId;
   int? _campusId;
+  int? _gradeId;
   List<({int id, String name})> _schools = const [];
   List<({int id, String name})> _campuses = const [];
+  List<({int id, String name})> _grades = const [];
   bool _loadingSchools = true;
   bool _loadingCampuses = false;
+  bool _loadingGrades = true;
   String? _optionsError;
+
+  bool get _isStudent => _userType == 'Student';
+  bool get _isTeacher => _userType == 'Teacher';
+  bool get _isParent => _userType == 'Parent';
 
   @override
   void initState() {
     super.initState();
     _loadSchools();
+    _loadGrades();
   }
 
   Future<void> _loadSchools() async {
@@ -698,6 +709,32 @@ class _AccountAccessRequestSheetState
       }
       setState(() {
         _loadingSchools = false;
+        _optionsError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _loadGrades() async {
+    setState(() {
+      _loadingGrades = true;
+      _optionsError = null;
+    });
+    try {
+      final grades =
+          await ref.read(authRepositoryProvider).listRegistrationGrades();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _grades = grades;
+        _loadingGrades = false;
+      });
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingGrades = false;
         _optionsError = error.toString();
       });
     }
@@ -739,13 +776,11 @@ class _AccountAccessRequestSheetState
     _emailAddressController.dispose();
     _cnicController.dispose();
     _rollNumberTeacherCodeController.dispose();
+    _sectionController.dispose();
     _reasonMessageController.dispose();
     super.dispose();
   }
 
-  bool get _isParent => _userType == 'Parent';
-  bool get _isStudent => _userType == 'Student';
-  bool get _isTeacher => _userType == 'Teacher';
   bool get _showSchoolFields => _isStudent || _isTeacher;
 
   String get _helperDescription {
@@ -759,10 +794,8 @@ class _AccountAccessRequestSheetState
           'School Admin then Portal Admin. Only Portal Admin approval activates '
           'the account.';
     }
-    return 'Enter a roll number. Optionally select school and campus. '
-        'No school → Portal Admin. School only → School Admin then Portal Admin. '
-        'Campus → Campus Admin / School Admin then Portal Admin. Only Portal Admin '
-        'approval activates the account.';
+    return 'Grade and section are required. Roll number is required when a school '
+        'is selected. Optionally select school and campus for routing.';
   }
 
   void _onUserTypeChanged(String? value) {
@@ -774,8 +807,13 @@ class _AccountAccessRequestSheetState
       if (value == 'Parent') {
         _schoolId = null;
         _campusId = null;
+        _gradeId = null;
         _campuses = const [];
         _rollNumberTeacherCodeController.clear();
+        _sectionController.clear();
+      } else if (value == 'Teacher') {
+        _gradeId = null;
+        _sectionController.clear();
       }
     });
   }
@@ -865,6 +903,54 @@ class _AccountAccessRequestSheetState
                 ],
                 onChanged: _onUserTypeChanged,
               ),
+              if (_isStudent) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: ValueKey('grade-$_userType-$_gradeId-${_grades.length}'),
+                  initialValue: _gradeId,
+                  decoration: InputDecoration(
+                    label: buildFieldLabel(
+                      _loadingGrades ? 'Grade (loading...)' : 'Grade',
+                      required: true,
+                    ),
+                    prefixIcon: const Icon(Icons.school_outlined),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      child: Text('Select grade'),
+                    ),
+                    ..._grades.map(
+                      (grade) => DropdownMenuItem<int?>(
+                        value: grade.id,
+                        child: Text(grade.name),
+                      ),
+                    ),
+                  ],
+                  validator: (value) {
+                    if (!_isStudent) {
+                      return null;
+                    }
+                    if (value == null) {
+                      return 'Grade is required';
+                    }
+                    return null;
+                  },
+                  onChanged: _loadingGrades
+                      ? null
+                      : (value) => setState(() => _gradeId = value),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _sectionController,
+                  decoration: InputDecoration(
+                    label: buildFieldLabel('Section', required: true),
+                    prefixIcon: const Icon(Icons.tag_outlined),
+                  ),
+                  validator: _isStudent ? _required : null,
+                  textInputAction: TextInputAction.next,
+                  onTap: _showSoftKeyboard,
+                ),
+              ],
               if (_showSchoolFields) ...[
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int?>(
@@ -938,12 +1024,16 @@ class _AccountAccessRequestSheetState
                   controller: _rollNumberTeacherCodeController,
                   decoration: InputDecoration(
                     label: buildFieldLabel(
-                      _isTeacher ? 'Teacher code (optional)' : 'Roll number',
-                      required: _isStudent,
+                      _isTeacher
+                          ? 'Teacher code (optional)'
+                          : _schoolId == null
+                              ? 'Roll number (optional)'
+                              : 'Roll number',
+                      required: _isStudent && _schoolId != null,
                     ),
                     prefixIcon: const Icon(Icons.badge_outlined),
                   ),
-                  validator: _isStudent ? _required : null,
+                  validator: _isStudent && _schoolId != null ? _required : null,
                   textInputAction: TextInputAction.next,
                   onTap: _showSoftKeyboard,
                 ),
@@ -978,6 +1068,7 @@ class _AccountAccessRequestSheetState
     }
 
     final isParent = _userType == 'Parent';
+    final isStudent = _userType == 'Student';
     Navigator.of(context).pop(
       _AccountAccessRequest(
         fullName: _fullNameController.text.trim(),
@@ -990,6 +1081,8 @@ class _AccountAccessRequestSheetState
         cnic: _cnicController.text.trim(),
         schoolId: isParent ? null : _schoolId,
         campusId: isParent || _schoolId == null ? null : _campusId,
+        grade: isStudent ? _gradeId : null,
+        section: isStudent ? _sectionController.text.trim() : null,
       ),
     );
   }
@@ -1006,6 +1099,8 @@ class _AccountAccessRequest {
     this.cnic,
     this.schoolId,
     this.campusId,
+    this.grade,
+    this.section,
   });
 
   final String fullName;
@@ -1017,6 +1112,8 @@ class _AccountAccessRequest {
   final String? cnic;
   final int? schoolId;
   final int? campusId;
+  final int? grade;
+  final String? section;
 }
 
 String? _required(String? value) {

@@ -87,6 +87,8 @@ class AuthRemoteDataSource {
     String? cnic,
     int? schoolId,
     int? campusId,
+    int? grade,
+    String? section,
   }) {
     return _requestVoid(
       '/auth/register',
@@ -101,6 +103,8 @@ class AuthRemoteDataSource {
         if (cnic != null && cnic.isNotEmpty) 'cnic': cnic,
         if (schoolId != null) 'schoolId': schoolId,
         if (schoolId != null && campusId != null) 'campusId': campusId,
+        if (grade != null) 'grade': grade,
+        if (section != null && section.isNotEmpty) 'section': section,
       },
     );
   }
@@ -119,6 +123,28 @@ class AuthRemoteDataSource {
             (item) => (
               id: (item['id'] as num).toInt(),
               name: item['name'] as String? ?? 'School ${item['id']}',
+            ),
+          )
+          .toList();
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
+  Future<List<({int id, String name})>> listRegistrationGrades() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/auth/registration-options/grades',
+        options: Options(extra: {'skipAuthRefresh': true}),
+      );
+      final payload = _unwrap(response.data);
+      final items = payload['items'] as List<dynamic>? ?? const [];
+      return items
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (item) => (
+              id: (item['id'] as num).toInt(),
+              name: item['name'] as String? ?? 'Grade ${item['id']}',
             ),
           )
           .toList();

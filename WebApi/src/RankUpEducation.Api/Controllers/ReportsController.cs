@@ -63,4 +63,16 @@ public sealed class ReportsController : ControllerBase
         var response = await _reportService.GetRankingsAsync(quizId, cancellationToken);
         return Ok(ApiResponse<RankingReportResponse>.Ok(response));
     }
+
+    /// <summary>Returns class or school peer rankings for the signed-in student.</summary>
+    [HttpGet("rankings/me")]
+    [Authorize(Roles = "Student")]
+    public async Task<ActionResult<ApiResponse<StudentRankingReportResponse>>> GetMyRankingsAsync(
+        [FromQuery] string? scope,
+        [FromQuery] long? quizId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _reportService.GetMyRankingsAsync(scope, quizId, cancellationToken);
+        return Ok(ApiResponse<StudentRankingReportResponse>.Ok(response));
+    }
 }

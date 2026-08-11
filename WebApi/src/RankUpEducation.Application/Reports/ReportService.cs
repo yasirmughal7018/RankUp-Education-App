@@ -64,6 +64,80 @@ public sealed class ReportService : IReportService
         return await _reports.GetRankingsAsync(quizId, schoolId, campusId, creatorUserId, cancellationToken);
     }
 
+    public async Task<StudentRankingReportResponse> GetMyRankingsAsync(
+        string? scope,
+        long? quizId,
+        CancellationToken cancellationToken)
+    {
+        if (ParseRole() != UserRole.Student)
+        {
+            throw new ForbiddenAppException("Only students can view peer rankings.");
+        }
+
+        var studentId = _currentUser.ProfileId ?? _currentUser.UserId
+            ?? throw new ForbiddenAppException("Student profile was not found.");
+
+        var context = await _studentScope.GetStudentSchoolContextAsync(studentId, cancellationToken)
+            ?? throw new ForbiddenAppException("Student school context was not found.");
+
+        if (context.SchoolId is not > 0)
+        {
+            throw new ValidationAppException(["Your account is not linked to a school yet."]);
+        }
+
+        var normalizedScope = string.IsNullOrWhiteSpace(scope)
+            ? "class"
+            : scope.Trim().ToLowerInvariant();
+
+        if (normalizedScope is not ("class" or "school"))
+        {
+            throw new ValidationAppException(["Scope must be 'class' or 'school'."]);
+        }
+
+        var schoolId = context.SchoolId.Value;
+        var campusId = context.CampusId;
+        IReadOnlyList<long> cohort;
+
+        if (normalizedScope == "class")
+        {
+            if (campusId is not > 0)
+            {
+                throw new ValidationAppException(["Your account is not linked to a campus yet."]);
+            }
+
+            if (!string.IsNullOrWhiteSpace(context.Section))
+            {
+                cohort = await _studentScope.GetStudentIdsInCampusByGradeAndSectionAsync(
+                    schoolId,
+                    campusId.Value,
+                    context.Grade,
+                    context.Section,
+                    cancellationToken);
+            }
+            else
+            {
+                cohort = await _studentScope.GetStudentIdsInSchoolByGradeAsync(
+                    schoolId,
+                    campusId.Value,
+                    context.Grade,
+                    cancellationToken);
+            }
+        }
+        else
+        {
+            cohort = await _studentScope.GetStudentIdsInSchoolAsync(schoolId, cancellationToken);
+        }
+
+        return await _reports.GetStudentCohortRankingsAsync(
+            cohort,
+            studentId,
+            normalizedScope,
+            quizId,
+            schoolId,
+            normalizedScope == "class" ? campusId : null,
+            cancellationToken);
+    }
+
     private async Task EnsureCanViewStudentAsync(long studentId, CancellationToken cancellationToken)
     {
         var role = ParseRole();

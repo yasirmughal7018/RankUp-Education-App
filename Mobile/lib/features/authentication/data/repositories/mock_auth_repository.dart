@@ -73,6 +73,8 @@ class MockAuthRepository implements AuthRepository {
     String? cnic,
     int? schoolId,
     int? campusId,
+    int? grade,
+    String? section,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
   }
@@ -87,6 +89,11 @@ class MockAuthRepository implements AuthRepository {
     int schoolId,
   ) async {
     return const [(id: 1, name: 'Main Campus')];
+  }
+
+  @override
+  Future<List<({int id, String name})>> listRegistrationGrades() async {
+    return const [(id: 1, name: 'Class 1')];
   }
 
   @override

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Directory;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Auth;
@@ -38,6 +39,7 @@ public sealed class AuthService : IAuthService
     private readonly IPasswordResetRequestRepository _passwordResets;
     private readonly IDirectoryRepository _directory;
     private readonly IStudentScopeRepository _studentScope;
+    private readonly ILookupRepository _lookups;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -55,6 +57,7 @@ public sealed class AuthService : IAuthService
         IPasswordResetRequestRepository passwordResets,
         IDirectoryRepository directory,
         IStudentScopeRepository studentScope,
+        ILookupRepository lookups,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         IDateTimeProvider dateTimeProvider,
@@ -71,6 +74,7 @@ public sealed class AuthService : IAuthService
         _passwordResets = passwordResets;
         _directory = directory;
         _studentScope = studentScope;
+        _lookups = lookups;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _dateTimeProvider = dateTimeProvider;
@@ -397,6 +401,22 @@ public sealed class AuthService : IAuthService
             ? null
             : request.RollNumberTeacherCode;
 
+        short? registrationGrade = null;
+        string? registrationSection = null;
+        if (role == UserRole.Student)
+        {
+            registrationGrade = request.Grade;
+            registrationSection = request.Section.AsTrimmedOrNull();
+            var gradeLookup = await _lookups.GetByIdAndTypeAsync(
+                registrationGrade!.Value,
+                LookupNames.Class,
+                cancellationToken);
+            if (gradeLookup is null)
+            {
+                throw new ValidationAppException(["Grade must be a valid Class option."]);
+            }
+        }
+
         var user = User.CreateRegistrationRequest(
             username,
             request.FullName.AsTrimmedString(),
@@ -408,7 +428,9 @@ public sealed class AuthService : IAuthService
             schoolId,
             campusId,
             request.ReasonMessage,
-            rollNumberTeacherCode);
+            rollNumberTeacherCode,
+            registrationGrade,
+            registrationSection);
 
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -514,7 +536,19 @@ public sealed class AuthService : IAuthService
                 viewerRole,
                 cancellationToken);
 
-            responses.Add(pendingUser.ToPendingResponse(approvers, currentUserHasApproved));
+            string? gradeName = null;
+            if (pendingUser.RegistrationGrade is > 0)
+            {
+                gradeName = await _lookups.GetLookupNameAsync(
+                    pendingUser.RegistrationGrade.Value,
+                    cancellationToken);
+                if (string.Equals(gradeName, "Unknown", StringComparison.OrdinalIgnoreCase))
+                {
+                    gradeName = null;
+                }
+            }
+
+            responses.Add(pendingUser.ToPendingResponse(approvers, currentUserHasApproved, gradeName));
         }
 
         return responses;
@@ -1805,9 +1839,19 @@ public sealed class AuthService : IAuthService
                     throw new BusinessRuleException("Student profile already exists.");
                 }
 
-                // Grade/section are not collected at request time; use defaults until profile is updated later.
+                if (user.RegistrationGrade is not > 0
+                    || !user.RegistrationSection.HasTrimmedText())
+                {
+                    throw new ValidationAppException([
+                        "This student registration is missing grade/section. Ask the student to submit a new request."]);
+                }
+
                 await _users.AddStudentProfileAsync(
-                    new Student(user.Id, grade: 1, section: "A", mobileNumber),
+                    new Student(
+                        user.Id,
+                        user.RegistrationGrade.Value,
+                        user.RegistrationSection!,
+                        mobileNumber),
                     cancellationToken);
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
@@ -2645,6 +2689,11 @@ public sealed class AuthService : IAuthService
             {
                 errors.Add("Roll number / teacher code is not used for Parent account requests.");
             }
+
+            if (request.Grade.HasValue || request.Section.HasTrimmedText())
+            {
+                errors.Add("Grade and section are only used for Student account requests.");
+            }
         }
         else if (role == UserRole.Student || role == UserRole.Teacher)
         {
@@ -2669,6 +2718,23 @@ public sealed class AuthService : IAuthService
                 && !request.RollNumberTeacherCode.HasTrimmedText())
             {
                 errors.Add("Roll number is required when a school is selected.");
+            }
+
+            if (role == UserRole.Student)
+            {
+                if (request.Grade is not > 0)
+                {
+                    errors.Add("Grade is required for Student account requests.");
+                }
+
+                if (!request.Section.HasTrimmedText())
+                {
+                    errors.Add("Section is required for Student account requests.");
+                }
+            }
+            else if (request.Grade.HasValue || request.Section.HasTrimmedText())
+            {
+                errors.Add("Grade and section are only used for Student account requests.");
             }
         }
 

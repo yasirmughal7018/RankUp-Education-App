@@ -232,6 +232,8 @@ export interface RegisterAccountRequest {
   schoolId?: number | null;
   campusId?: number | null;
   cnic?: string | null;
+  grade?: number | null;
+  section?: string | null;
 }
 
 export interface ChangePasswordRequest {
@@ -261,6 +263,13 @@ export interface RegistrationCampusOption {
   isActive: boolean;
 }
 
+export interface RegistrationGradeOption {
+  id: number;
+  name: string;
+  type: string;
+  parentId: number | null;
+}
+
 /** Schools available during public self-registration. */
 export async function listRegistrationSchools(): Promise<
   RegistrationSchoolOption[]
@@ -278,6 +287,17 @@ export async function listRegistrationCampuses(
 ): Promise<RegistrationCampusOption[]> {
   const response = await apiRequest<{ items: RegistrationCampusOption[] }>(
     `/auth/registration-options/schools/${schoolId}/campuses`,
+    { skipAuth: true },
+  );
+  return response.items;
+}
+
+/** Class (grade) options for student self-registration. */
+export async function listRegistrationGrades(): Promise<
+  RegistrationGradeOption[]
+> {
+  const response = await apiRequest<{ items: RegistrationGradeOption[] }>(
+    "/auth/registration-options/grades",
     { skipAuth: true },
   );
   return response.items;

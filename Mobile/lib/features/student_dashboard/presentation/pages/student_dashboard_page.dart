@@ -80,6 +80,9 @@ class _StudentDashboardContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 700;
+    final hasSubjects = dashboard.subjectPerformance.isNotEmpty;
+    final hasResults = dashboard.recentResults.isNotEmpty;
+    final hasUpcoming = dashboard.upcomingActivities.isNotEmpty;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -90,23 +93,21 @@ class _StudentDashboardContent extends StatelessWidget {
           greeting: _greetingFor(DateTime.now()),
         ),
         const SizedBox(height: 14),
-        LevelRankCard(level: dashboard.level),
-        const SizedBox(height: 18),
         _StudentDashboardTiles(dashboard: dashboard),
         const SizedBox(height: 18),
-        DashboardSectionHeader(
-          title: 'Quick Statistics',
-          actionLabel: 'View all',
-          onAction: () {},
-        ),
+        const DashboardSectionHeader(title: 'Quiz statistics'),
         QuickStatStrip(stats: dashboard.quickStats),
         const SizedBox(height: 18),
-        const DashboardSectionHeader(title: "Today's Learning Plan"),
+        DashboardSectionHeader(
+          title: "Today's quizzes",
+          actionLabel: 'All quizzes',
+          onAction: () => context.go('/quizzes'),
+        ),
         if (dashboard.todayActivities.isEmpty)
           const _InlineEmptyState(
             icon: Icons.task_alt_outlined,
-            title: 'You have no pending activities.',
-            message: 'Great job. Explore a practice quiz when ready.',
+            title: 'No pending quizzes',
+            message: 'When a teacher assigns work, it will show up here.',
           )
         else
           for (final activity in dashboard.todayActivities) ...[
@@ -116,95 +117,37 @@ class _StudentDashboardContent extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-        DashboardSectionHeader(
-          title: 'AI Recommendation',
-          actionLabel: 'AI Assistant',
-          onAction: () => context.go('/ai-assistant'),
-        ),
-        AiRecommendationCard(
-          recommendation: dashboard.aiRecommendation,
-          onStart: () => context.go('/worksheets'),
-        ),
-        const SizedBox(height: 18),
-        const DashboardSectionHeader(title: 'Subject Performance'),
-        _ResponsiveGrid(
-          wide: wide,
-          children: [
-            for (final subject in dashboard.subjectPerformance)
-              SubjectPerformanceCard(
-                subject: subject,
-                onTap: () => context.go('/reports'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        const DashboardSectionHeader(title: 'Strong Topics'),
-        _ResponsiveGrid(
-          wide: wide,
-          compact: true,
-          children: [
-            for (final topic in dashboard.strongTopics)
-              TopicCard(topic: topic, weak: false),
-          ],
-        ),
-        const SizedBox(height: 18),
-        const DashboardSectionHeader(title: 'Topics Needing Improvement'),
-        if (dashboard.weakTopics.isEmpty)
-          const _InlineEmptyState(
-            icon: Icons.check_circle_outline,
-            title: 'No major weak topics detected.',
-            message: 'Keep completing activities to maintain your progress.',
-          )
-        else
+        if (hasUpcoming) ...[
+          const SizedBox(height: 6),
+          const DashboardSectionHeader(title: 'Upcoming'),
+          UpcomingListCard(items: dashboard.upcomingActivities),
+          const SizedBox(height: 18),
+        ],
+        if (hasSubjects) ...[
+          const DashboardSectionHeader(title: 'Subject averages'),
           _ResponsiveGrid(
             wide: wide,
             children: [
-              for (final topic in dashboard.weakTopics)
-                TopicCard(topic: topic, weak: true),
+              for (final subject in dashboard.subjectPerformance)
+                SubjectPerformanceCard(
+                  subject: subject,
+                  onTap: () => context.go('/reports'),
+                ),
             ],
           ),
-        const SizedBox(height: 18),
-        _TwoColumnSection(
-          wide: wide,
-          leftTitle: 'Your Rankings',
-          left: RankingCard(rankings: dashboard.rankings),
-          rightTitle: 'Learning Streak',
-          right: StreakCalendarCard(streak: dashboard.streak),
-        ),
-        const SizedBox(height: 18),
-        const DashboardSectionHeader(title: 'Recent Results'),
-        for (final result in dashboard.recentResults) ...[
-          ResultCard(result: result),
-          const SizedBox(height: 12),
+          const SizedBox(height: 18),
         ],
-        const DashboardSectionHeader(title: 'Learning Goals'),
-        _ResponsiveGrid(
-          wide: wide,
-          children: [
-            for (final goal in dashboard.learningGoals)
-              GoalProgressCard(goal: goal),
+        if (hasResults) ...[
+          DashboardSectionHeader(
+            title: 'Recent results',
+            actionLabel: 'History',
+            onAction: () => context.go('/reports'),
+          ),
+          for (final result in dashboard.recentResults) ...[
+            ResultCard(result: result),
+            const SizedBox(height: 12),
           ],
-        ),
-        const SizedBox(height: 18),
-        DashboardSectionHeader(
-          title: 'Recent Achievements',
-          actionLabel: 'View all',
-          onAction: () => context.go('/rankings'),
-        ),
-        for (final achievement in dashboard.achievements) ...[
-          AchievementCard(achievement: achievement),
-          const SizedBox(height: 12),
         ],
-        _TwoColumnSection(
-          wide: wide,
-          leftTitle: 'Upcoming',
-          left: UpcomingListCard(items: dashboard.upcomingActivities),
-          rightTitle: 'Teacher Feedback',
-          right: TeacherFeedbackCard(feedback: dashboard.teacherFeedback),
-        ),
-        const SizedBox(height: 18),
-        const DashboardSectionHeader(title: 'Discussion Activity'),
-        DiscussionActivityCard(items: dashboard.discussionActivity),
       ],
     );
   }
@@ -222,11 +165,6 @@ class _StudentDashboardContent extends StatelessWidget {
   }
 
   void _openActivity(BuildContext context, LearningActivityModel activity) {
-    if (activity.activityType.toLowerCase().contains('worksheet')) {
-      context.go('/worksheets');
-      return;
-    }
-
     context.go('/quizzes');
   }
 }
@@ -235,12 +173,10 @@ class _ResponsiveGrid extends StatelessWidget {
   const _ResponsiveGrid({
     required this.children,
     required this.wide,
-    this.compact = false,
   });
 
   final List<Widget> children;
   final bool wide;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +188,7 @@ class _ResponsiveGrid extends StatelessWidget {
       mainAxisSpacing: 12,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: wide ? (compact ? 3.1 : 2.0) : (compact ? 3.6 : 2.55),
+      childAspectRatio: wide ? 2.0 : 2.55,
       children: children,
     );
   }
@@ -274,18 +210,18 @@ class _StudentDashboardTiles extends StatelessWidget {
       _DashboardActionTile(
         icon: Icons.quiz_outlined,
         title: 'Quizzes',
-        subtitle: 'Assigned, upcoming and practice quizzes',
-        meta: 'Start or continue',
+        subtitle: 'Assigned and in-progress quizzes',
+        meta: 'Open quizzes',
         onTap: () => context.go('/quizzes'),
       ),
       _DashboardActionTile(
-        icon: Icons.event_outlined,
-        title: 'Upcoming',
+        icon: Icons.history_outlined,
+        title: 'History',
         subtitle: nextUpcoming == null
-            ? 'No upcoming activities'
-            : '${nextUpcoming.day}: ${nextUpcoming.title}',
-        meta: 'View schedule',
-        onTap: () => context.go('/quizzes'),
+            ? 'Review completed attempts'
+            : 'Next: ${nextUpcoming.title}',
+        meta: 'View history',
+        onTap: () => context.go('/reports'),
       ),
     ];
 
@@ -376,62 +312,6 @@ class _DashboardActionTile extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _TwoColumnSection extends StatelessWidget {
-  const _TwoColumnSection({
-    required this.wide,
-    required this.leftTitle,
-    required this.left,
-    required this.rightTitle,
-    required this.right,
-  });
-
-  final bool wide;
-  final String leftTitle;
-  final Widget left;
-  final String rightTitle;
-  final Widget right;
-
-  @override
-  Widget build(BuildContext context) {
-    final sections = [
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DashboardSectionHeader(title: leftTitle),
-          left,
-        ],
-      ),
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DashboardSectionHeader(title: rightTitle),
-          right,
-        ],
-      ),
-    ];
-
-    if (!wide) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          sections.first,
-          const SizedBox(height: 18),
-          sections.last,
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: sections.first),
-        const SizedBox(width: 12),
-        Expanded(child: sections.last),
-      ],
     );
   }
 }

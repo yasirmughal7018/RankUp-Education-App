@@ -1,13 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import {
-  Trophy,
-  Sparkles,
-  ClipboardList,
-  Target,
-  Flame,
-  Activity,
-} from "lucide-react";
+import { ClipboardList, Flame, Activity } from "lucide-react";
 import { useStudentQuizzesQuery } from "@/features/student/presentation/hooks/useStudentQuizQueries";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { AppStatCard } from "@/components/ui/app-stat-card";
@@ -21,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
 /**
- * Student Learning Dashboard — design-system example.
- * Uses Poppins via studentFacing header; progress + achievement accents.
+ * Student Learning Dashboard — quiz progress from assigned quizzes only.
+ * Rank / AI / weak-topic cards are omitted until those APIs exist.
  */
 export function StudentDashboardPage() {
   const { data: quizzes = [], isLoading, error, refetch } =
@@ -45,7 +38,7 @@ export function StudentDashboardPage() {
       <AppPageHeader
         studentFacing
         title="Today’s learning"
-        subtitle="Stay focused — track quizzes, rank, and AI tips in one calm view."
+        subtitle="Track assigned quizzes and pick up where you left off."
         action={
           <Button asChild>
             <Link to="/student/quizzes">My quizzes</Link>
@@ -58,7 +51,7 @@ export function StudentDashboardPage() {
       ) : null}
 
       {isLoading ? (
-        <AppLoadingSkeleton count={6} />
+        <AppLoadingSkeleton count={3} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <AppStatCard
@@ -73,35 +66,14 @@ export function StudentDashboardPage() {
             value={progress.inProgress}
             icon={Flame}
             colorVariant="warning"
-            description="Keep going"
+            description="Continue an open attempt"
           />
           <AppStatCard
-            title="Rank & level"
-            value="—"
-            icon={Trophy}
-            colorVariant="achievement"
-            description="Earn ranks by completing quizzes"
-          />
-          <AppStatCard
-            title="AI recommendation"
-            value="Practice"
-            icon={Sparkles}
-            colorVariant="ai"
-            description="Review weak topics after your next quiz"
-          />
-          <AppStatCard
-            title="Weak topic"
-            value="—"
-            icon={Target}
-            colorVariant="danger"
-            description="Appears after graded attempts"
-          />
-          <AppStatCard
-            title="Recent activity"
+            title="Assigned"
             value={progress.total}
             icon={Activity}
             colorVariant="success"
-            description="Assigned quizzes"
+            description="Quizzes on your list"
           />
         </div>
       )}
@@ -109,7 +81,7 @@ export function StudentDashboardPage() {
       <AppCard>
         <AppSectionHeader
           title="Overall completion"
-          description="Simple progress bar — charts stay optional."
+          description="Based on quizzes currently assigned to you."
         />
         <Progress value={progress.pct} className="h-3" />
         <p className="mt-2 text-sm text-muted-foreground">
@@ -138,7 +110,8 @@ export function StudentDashboardPage() {
                     {quiz.title}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Due {quiz.dueAt ? new Date(quiz.dueAt).toLocaleString() : "—"}
+                    Due{" "}
+                    {quiz.dueAt ? new Date(quiz.dueAt).toLocaleString() : "—"}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -151,6 +124,13 @@ export function StudentDashboardPage() {
                 </div>
               </AppCard>
             ))}
+            {quizzes.length > 6 ? (
+              <div className="pt-1">
+                <Button variant="outline" asChild>
+                  <Link to="/student/quizzes">View all quizzes</Link>
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </section>

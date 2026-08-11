@@ -98,6 +98,8 @@ class RoleAwareAuthRepository implements AuthRepository {
     String? cnic,
     int? schoolId,
     int? campusId,
+    int? grade,
+    String? section,
   }) {
     return _apiRepository.requestAccountAccess(
       fullName: fullName,
@@ -109,6 +111,8 @@ class RoleAwareAuthRepository implements AuthRepository {
       cnic: cnic,
       schoolId: schoolId,
       campusId: campusId,
+      grade: grade,
+      section: section,
     );
   }
 
@@ -120,6 +124,11 @@ class RoleAwareAuthRepository implements AuthRepository {
   @override
   Future<List<({int id, String name})>> listRegistrationCampuses(int schoolId) {
     return _apiRepository.listRegistrationCampuses(schoolId);
+  }
+
+  @override
+  Future<List<({int id, String name})>> listRegistrationGrades() {
+    return _apiRepository.listRegistrationGrades();
   }
 
   @override

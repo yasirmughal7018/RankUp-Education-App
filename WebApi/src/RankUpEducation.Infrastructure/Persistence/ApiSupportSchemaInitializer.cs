@@ -1897,6 +1897,12 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             ADD COLUMN IF NOT EXISTS roll_number_teacher_code VARCHAR(80) NULL;
 
         ALTER TABLE public.app_users
+            ADD COLUMN IF NOT EXISTS registration_grade SMALLINT NULL;
+
+        ALTER TABLE public.app_users
+            ADD COLUMN IF NOT EXISTS registration_section VARCHAR(40) NULL;
+
+        ALTER TABLE public.app_users
             ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ NULL;
 
         -- Migrate legacy identity columns into app_users before dropping them.

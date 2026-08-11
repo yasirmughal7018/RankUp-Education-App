@@ -53,6 +53,17 @@ public sealed record RankingReportResponse(
     string Title,
     IReadOnlyList<RankingItemResponse> Items);
 
+/// <summary>Student-facing leaderboard for class or school peers.</summary>
+public sealed record StudentRankingReportResponse(
+    string Scope,
+    long? QuizId,
+    string Title,
+    long ViewerStudentId,
+    int? MyRank,
+    short? MyBestPercentage,
+    int MyAttemptCount,
+    IReadOnlyList<RankingItemResponse> Items);
+
 /// <summary>One row on a quiz ranking leaderboard.</summary>
 public sealed record RankingItemResponse(
     int Rank,

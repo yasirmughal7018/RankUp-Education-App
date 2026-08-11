@@ -40,6 +40,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.RollNumberTeacherCode)
             .HasColumnName("roll_number_teacher_code")
             .HasMaxLength(80);
+        builder.Property(user => user.RegistrationGrade)
+            .HasColumnName("registration_grade");
+        builder.Property(user => user.RegistrationSection)
+            .HasColumnName("registration_section")
+            .HasMaxLength(40);
         builder.Property(user => user.LastLoginAt).HasColumnName("last_login_at");
 
         builder.Ignore(user => user.ProfileId);

@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using RankUpEducation.Application.Auth;
 using RankUpEducation.Application.Directory;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Contracts.Auth;
 using RankUpEducation.Contracts.Common;
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Contracts.Lookups;
 
 namespace RankUpEducation.Api.Controllers;
 
@@ -121,6 +123,18 @@ public sealed class AuthController : ControllerBase
     {
             var response = await directoryService.ListPublicCampusesAsync(schoolId, cancellationToken);
         return Ok(ApiResponse<CampusListResponse>.Ok(response));
+    }
+
+    /// <summary>Public Class (grade) list for student self-registration.</summary>
+    [HttpGet("registration-options/grades")]
+    [AllowAnonymous]
+    [EnableRateLimiting("UsersAnonymous")]
+    public async Task<ActionResult<ApiResponse<LookupListResponse>>> ListRegistrationGradesAsync(
+        [FromServices] ILookupService lookupService,
+        CancellationToken cancellationToken)
+    {
+        var response = await lookupService.ListAsync(LookupNames.Class, null, cancellationToken);
+        return Ok(ApiResponse<LookupListResponse>.Ok(response));
     }
 
     /// <summary>Admin queue of pending self-registration requests.</summary>

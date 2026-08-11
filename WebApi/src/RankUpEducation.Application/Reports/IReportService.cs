@@ -25,4 +25,10 @@ public interface IReportService
     Task<RankingReportResponse> GetRankingsAsync(
         long? quizId,
         CancellationToken cancellationToken);
+
+    /// <summary>Class or school leaderboard for the signed-in student.</summary>
+    Task<StudentRankingReportResponse> GetMyRankingsAsync(
+        string? scope,
+        long? quizId,
+        CancellationToken cancellationToken);
 }

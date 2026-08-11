@@ -81,4 +81,6 @@ export const queryKeys = {
     ["reports", "quizzes", quizId, "performance"] as const,
   reportRankings: (quizId?: number | null) =>
     ["reports", "rankings", quizId ?? null] as const,
+  myRankings: (scope?: string | null, quizId?: number | null) =>
+    ["reports", "rankings", "me", scope ?? "class", quizId ?? null] as const,
 };

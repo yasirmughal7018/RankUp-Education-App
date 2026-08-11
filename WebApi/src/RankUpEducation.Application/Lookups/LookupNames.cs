@@ -101,6 +101,7 @@ public static class LookupNames
     }
 
     public const string DifficultyLevel = "DifficultyLevel";
+    public const string Class = "Class";
 
     public static readonly string[] EasyDifficultyNames = ["Easy"];
     public static readonly string[] MediumDifficultyNames = ["Medium"];

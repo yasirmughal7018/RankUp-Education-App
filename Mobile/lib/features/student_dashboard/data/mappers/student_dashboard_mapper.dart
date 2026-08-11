@@ -112,7 +112,7 @@ class StudentDashboardMapper {
         estimatedTime: pending.isEmpty
             ? '-'
             : '${pending.first.timeLimitMinutes ?? 15} minutes',
-        expectedImprovement: 'Keep your learning streak going.',
+        expectedImprovement: 'Open Quizzes to continue.',
       ),
       recentResults: [
         for (final quiz in completed.take(5)) _resultFromQuiz(quiz),
@@ -129,10 +129,10 @@ class StudentDashboardMapper {
           ),
       ],
       teacherFeedback: const TeacherFeedbackModel(
-        teacherName: 'Teacher',
-        subject: 'Feedback',
-        dateLabel: 'Pending',
-        feedback: 'Teacher feedback will appear after quiz reviews are completed.',
+        teacherName: '',
+        subject: '',
+        dateLabel: '',
+        feedback: '',
       ),
       discussionActivity: const [],
       messageCount: 0,

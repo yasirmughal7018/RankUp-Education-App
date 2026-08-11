@@ -66,25 +66,21 @@ void main() {
     final dashboardScroll = find.byType(Scrollable).first;
 
     await tester.scrollUntilVisible(
-      find.text("Today's Learning Plan"),
+      find.text('Quiz statistics'),
       400,
       scrollable: dashboardScroll,
     );
-    expect(find.text("Today's Learning Plan"), findsOneWidget);
+    expect(find.text('Quiz statistics'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('AI Recommendation'),
+      find.text("Today's quizzes"),
       400,
       scrollable: dashboardScroll,
     );
-    expect(find.text('AI Recommendation'), findsOneWidget);
+    expect(find.text("Today's quizzes"), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('Subject Performance'),
-      400,
-      scrollable: dashboardScroll,
-    );
-    expect(find.text('Subject Performance'), findsOneWidget);
+    expect(find.text('AI Recommendation'), findsNothing);
+    expect(find.text('Level & Rank'), findsNothing);
   });
 }
 

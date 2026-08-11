@@ -286,4 +286,119 @@ public sealed class ReportRepository : IReportRepository
 
         return new RankingReportResponse(quizId, title, items);
     }
+
+    public async Task<StudentRankingReportResponse> GetStudentCohortRankingsAsync(
+        IReadOnlyList<long> cohortStudentIds,
+        long viewerStudentId,
+        string scope,
+        long? quizId,
+        int schoolId,
+        int? campusId,
+        CancellationToken cancellationToken)
+    {
+        var title = scope == "class" ? "Class quiz rankings" : "School quiz rankings";
+        if (cohortStudentIds.Count == 0)
+        {
+            return new StudentRankingReportResponse(
+                scope,
+                quizId,
+                title,
+                viewerStudentId,
+                null,
+                null,
+                0,
+                Array.Empty<RankingItemResponse>());
+        }
+
+        var quizzes = _dbContext.Quizzes.AsNoTracking()
+            .Where(quiz => quiz.IsActive && !quiz.IsDeleted && quiz.SchoolId == schoolId);
+
+        if (campusId is > 0)
+        {
+            quizzes = quizzes.Where(quiz => quiz.SchoolCampusId == campusId.Value);
+        }
+
+        if (quizId is not null)
+        {
+            quizzes = quizzes.Where(quiz => quiz.Id == quizId.Value);
+        }
+
+        var quizRows = await quizzes.Select(quiz => new { quiz.Id, quiz.QuizTitle }).ToListAsync(cancellationToken);
+        var quizIds = quizRows.Select(quiz => quiz.Id).ToArray();
+        if (quizId is not null)
+        {
+            title = quizRows.FirstOrDefault()?.QuizTitle ?? title;
+        }
+
+        if (quizIds.Length == 0)
+        {
+            return new StudentRankingReportResponse(
+                scope,
+                quizId,
+                title,
+                viewerStudentId,
+                null,
+                null,
+                0,
+                Array.Empty<RankingItemResponse>());
+        }
+
+        var cohortIds = cohortStudentIds.Distinct().ToArray();
+        var attemptRows = await _dbContext.QuizAttempts.AsNoTracking()
+            .Where(attempt =>
+                quizIds.Contains(attempt.QuizId)
+                && attempt.SubmittedDate != default
+                && cohortIds.Contains(attempt.StudentId))
+            .GroupBy(attempt => attempt.StudentId)
+            .Select(group => new
+            {
+                StudentId = group.Key,
+                BestPercentage = group.Max(item => item.Percentage),
+                AttemptCount = group.Count()
+            })
+            .OrderByDescending(item => item.BestPercentage)
+            .ThenBy(item => item.StudentId)
+            .ToListAsync(cancellationToken);
+
+        var ranked = attemptRows
+            .Select((item, index) => new
+            {
+                Rank = index + 1,
+                item.StudentId,
+                item.BestPercentage,
+                item.AttemptCount
+            })
+            .ToArray();
+
+        var viewer = ranked.FirstOrDefault(item => item.StudentId == viewerStudentId);
+        var top = ranked.Take(50).ToList();
+        if (viewer is not null && top.All(item => item.StudentId != viewerStudentId))
+        {
+            top.Add(viewer);
+        }
+
+        var names = await QuizQueryHelper.LoadStudentNamesAsync(
+            _dbContext,
+            top.Select(item => item.StudentId),
+            cancellationToken);
+
+        var items = top
+            .Select(item => new RankingItemResponse(
+                item.Rank,
+                item.StudentId,
+                names.GetValueOrDefault(item.StudentId, $"Student {item.StudentId}"),
+                item.BestPercentage,
+                item.AttemptCount))
+            .ToArray();
+
+        return new StudentRankingReportResponse(
+            scope,
+            quizId,
+            title,
+            viewerStudentId,
+            viewer?.Rank,
+            viewer?.BestPercentage,
+            viewer?.AttemptCount ?? 0,
+            items);
+    }
 }

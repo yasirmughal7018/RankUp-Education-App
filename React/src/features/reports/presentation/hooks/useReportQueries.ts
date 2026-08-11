@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
 import * as reportApi from "@/features/reports/data/reportApi";
+import type { RankingScope } from "@/features/reports/domain/reportTypes";
 
 /** Aggregate quiz metrics for a date range. */
 export function useQuizSummaryReportQuery(
@@ -32,6 +33,19 @@ export function useRankingsReportQuery(quizId?: number | null, enabled = true) {
   return useQuery({
     queryKey: queryKeys.reportRankings(quizId),
     queryFn: () => reportApi.getRankingsReport(quizId),
+    enabled,
+  });
+}
+
+/** Student class/school peer rankings. */
+export function useMyRankingsQuery(
+  scope: RankingScope = "class",
+  quizId?: number | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.myRankings(scope, quizId),
+    queryFn: () => reportApi.getMyRankingsReport({ scope, quizId }),
     enabled,
   });
 }

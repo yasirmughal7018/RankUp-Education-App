@@ -32,11 +32,15 @@ abstract class AuthRepository {
     String? cnic,
     int? schoolId,
     int? campusId,
+    int? grade,
+    String? section,
   });
 
   Future<List<({int id, String name})>> listRegistrationSchools();
 
   Future<List<({int id, String name})>> listRegistrationCampuses(int schoolId);
+
+  Future<List<({int id, String name})>> listRegistrationGrades();
 
   Future<AuthSession> refreshSession();
 
