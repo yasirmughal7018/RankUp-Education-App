@@ -233,7 +233,16 @@ export function AccountPage() {
     selectedRoleRequest && availableRoleRequests.includes(selectedRoleRequest)
       ? selectedRoleRequest
       : (availableRoleRequests[0] ?? null);
-  const needsSchoolsForRoleRequest = availableRoleRequests.includes("Teacher");
+  const needsSchoolsForRoleRequest =
+    availableRoleRequests.includes("Teacher") ||
+    availableRoleRequests.includes("Coordinator");
+  const roleRequestNeedsPlacement =
+    activeRoleChoice === "Teacher" || activeRoleChoice === "Coordinator";
+  /** Teacher already school-scoped: keep school/campus, only collect coordinator code. */
+  const lockCoordinatorPlacement =
+    activeRoleChoice === "Coordinator" &&
+    profile?.schoolId != null &&
+    profile.campusId != null;
 
   useEffect(() => {
     let cancelled = false;
@@ -306,7 +315,7 @@ export function AccountPage() {
 
   useEffect(() => {
     const schoolId = roleForm.schoolId ? Number(roleForm.schoolId) : NaN;
-    if (activeRoleChoice !== "Teacher" || !Number.isFinite(schoolId)) {
+    if (!roleRequestNeedsPlacement || !Number.isFinite(schoolId)) {
       setRoleCampuses([]);
       return;
     }
@@ -326,7 +335,18 @@ export function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeRoleChoice, roleForm.schoolId]);
+  }, [roleRequestNeedsPlacement, roleForm.schoolId]);
+
+  useEffect(() => {
+    if (!lockCoordinatorPlacement || !profile) {
+      return;
+    }
+    setRoleForm((current) => ({
+      ...current,
+      schoolId: String(profile.schoolId),
+      campusId: String(profile.campusId),
+    }));
+  }, [lockCoordinatorPlacement, profile]);
 
   useEffect(() => {
     const hash = location.hash.replace("#", "");
@@ -404,37 +424,50 @@ export function AccountPage() {
     setRoleError(null);
     setRoleSuccess(null);
 
-    if (activeRoleChoice === "Teacher") {
+    if (activeRoleChoice === "Teacher" || activeRoleChoice === "Coordinator") {
       if (!roleForm.schoolId) {
-        setRoleError("Select the school you teach at.");
+        setRoleError(
+          activeRoleChoice === "Coordinator"
+            ? "Select the school for Coordinator."
+            : "Select the school you teach at.",
+        );
         return;
       }
       if (!roleForm.campusId) {
-        setRoleError("Select the campus you teach at.");
+        setRoleError(
+          activeRoleChoice === "Coordinator"
+            ? "Select the campus for Coordinator."
+            : "Select the campus you teach at.",
+        );
         return;
       }
       if (!roleForm.teacherCode.trim()) {
-        setRoleError("Teacher code is required.");
+        setRoleError(
+          activeRoleChoice === "Coordinator"
+            ? "Coordinator code is required."
+            : "Teacher code is required.",
+        );
         return;
       }
     }
 
     setIsSubmittingRole(true);
     try {
+      const needsPlacement =
+        activeRoleChoice === "Teacher" || activeRoleChoice === "Coordinator";
       const result = await authApi.requestAdditionalRole({
         role: activeRoleChoice,
         schoolId:
-          activeRoleChoice === "Teacher" && roleForm.schoolId
+          needsPlacement && roleForm.schoolId
             ? Number(roleForm.schoolId)
             : null,
         campusId:
-          activeRoleChoice === "Teacher" && roleForm.campusId
+          needsPlacement && roleForm.campusId
             ? Number(roleForm.campusId)
             : null,
-        teacherCode:
-          activeRoleChoice === "Teacher"
-            ? roleForm.teacherCode.trim() || null
-            : null,
+        teacherCode: needsPlacement
+          ? roleForm.teacherCode.trim() || null
+          : null,
         reasonMessage: roleForm.reasonMessage.trim() || null,
       });
       setRoleForm(emptyRoleRequestForm);
@@ -961,7 +994,7 @@ export function AccountPage() {
                     </p>
                   )}
 
-                  {activeRoleChoice === "Teacher" ? (
+                  {roleRequestNeedsPlacement ? (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <FieldLabel htmlFor="roleSchoolId" required>
@@ -969,7 +1002,11 @@ export function AccountPage() {
                         </FieldLabel>
                         <SearchableSelect
                           id="roleSchoolId"
-                          disabled={isSubmittingRole || isLoadingSchools}
+                          disabled={
+                            isSubmittingRole ||
+                            isLoadingSchools ||
+                            lockCoordinatorPlacement
+                          }
                           value={roleForm.schoolId}
                           allowEmpty
                           emptyLabel={
@@ -997,7 +1034,8 @@ export function AccountPage() {
                           disabled={
                             isSubmittingRole ||
                             !roleForm.schoolId ||
-                            isLoadingRoleCampuses
+                            isLoadingRoleCampuses ||
+                            lockCoordinatorPlacement
                           }
                           value={roleForm.campusId}
                           allowEmpty
@@ -1024,9 +1062,17 @@ export function AccountPage() {
                           }
                         />
                       </div>
+                      {lockCoordinatorPlacement ? (
+                        <p className="sm:col-span-2 text-xs text-muted-foreground">
+                          School and campus stay as on your Teacher profile;
+                          enter your coordinator code only.
+                        </p>
+                      ) : null}
                       <div className="sm:col-span-2">
                         <FieldLabel htmlFor="roleTeacherCode" required>
-                          Teacher code
+                          {activeRoleChoice === "Coordinator"
+                            ? "Coordinator code"
+                            : "Teacher code"}
                         </FieldLabel>
                         <input
                           id="roleTeacherCode"

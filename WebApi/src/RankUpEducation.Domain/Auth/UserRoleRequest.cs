@@ -79,6 +79,19 @@ public sealed class UserRoleRequest
             }
         }
 
+        if (requestedRole == UserRole.Coordinator)
+        {
+            if (schoolId is null or <= 0 || campusId is null or <= 0)
+            {
+                throw new BusinessRuleException("School and campus are required when requesting Coordinator.");
+            }
+
+            if (string.IsNullOrWhiteSpace(teacherCode))
+            {
+                throw new BusinessRuleException("Coordinator code is required when requesting Coordinator.");
+            }
+        }
+
         var trimmedCode = string.IsNullOrWhiteSpace(teacherCode)
             ? null
             : teacherCode.Trim();

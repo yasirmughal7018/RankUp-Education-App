@@ -8,6 +8,8 @@ import 'package:rankup_education/features/authentication/data/models/auth_sessio
 import 'package:rankup_education/features/authentication/data/models/auth_tokens_model.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
+import 'package:rankup_education/features/authentication/domain/entities/school_change_request_result.dart';
+import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
 /// REST client for `/auth/*` endpoints.
 class AuthRemoteDataSource {
@@ -201,7 +203,7 @@ class AuthRemoteDataSource {
     }
   }
 
-  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+  Future<SchoolChangeRequestResult> requestSchoolChange({
     int? schoolId,
     int? campusId,
   }) async {
@@ -214,11 +216,34 @@ class AuthRemoteDataSource {
         },
       );
       final payload = _unwrap(response.data);
-      return (
+      final accessToken = payload['accessToken'] as String?;
+      final refreshToken = payload['refreshToken'] as String?;
+      final userJson = payload['user'];
+      AuthSession? continuedSession;
+      if (accessToken != null &&
+          accessToken.isNotEmpty &&
+          refreshToken != null &&
+          refreshToken.isNotEmpty &&
+          userJson is Map) {
+        continuedSession = AuthSessionModel(
+          user: AppUserModel.fromJson(Map<String, dynamic>.from(userJson)),
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        );
+      }
+
+      final lockedRaw = payload['lockedRole']?.toString();
+      return SchoolChangeRequestResult(
         requestId: (payload['requestId'] as num?)?.toInt() ?? 0,
         isLocked: payload['isLocked'] as bool? ?? true,
+        isAccountFullyLocked: payload['isAccountFullyLocked'] as bool? ?? true,
         message: payload['message'] as String? ??
             'Your account is locked until an admin finishes the school or campus change.',
+        lockedRole:
+            lockedRaw == null || lockedRaw.isEmpty
+                ? null
+                : parseUserRole(lockedRaw),
+        continuedSession: continuedSession,
       );
     } on DioException catch (error) {
       throw mapDioException(error);

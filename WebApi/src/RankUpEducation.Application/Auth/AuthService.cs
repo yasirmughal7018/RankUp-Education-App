@@ -1171,11 +1171,16 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException([exception.Message]);
         }
 
-        if (requestedRole == UserRole.Teacher)
+        if (requestedRole is UserRole.Teacher or UserRole.Coordinator)
         {
             if (request.SchoolId is null or <= 0 || request.CampusId is null or <= 0)
             {
-                throw new ValidationAppException(["School and campus are required for Teacher."]);
+                throw new ValidationAppException(
+                    [
+                        requestedRole == UserRole.Coordinator
+                            ? "School and campus are required for Coordinator."
+                            : "School and campus are required for Teacher.",
+                    ]);
             }
 
             await EnsureCampusBelongsToSchoolForRoleRequestAsync(
@@ -1327,6 +1332,21 @@ public sealed class AuthService : IAuthService
                     cancellationToken);
             }
 
+            user.AttachProfileContext(user.Id, schoolId, campusId);
+        }
+        else if (request.RequestedRole == UserRole.Coordinator)
+        {
+            var schoolId = request.SchoolId
+                ?? throw new ValidationAppException(["School is required for Coordinator."]);
+            var campusId = request.CampusId
+                ?? throw new ValidationAppException(["Campus is required for Coordinator."]);
+            if (!request.TeacherCode.HasTrimmedText())
+            {
+                throw new ValidationAppException(["Coordinator code is required."]);
+            }
+
+            user.AssignSchoolCampus(schoolId, campusId);
+            user.SetRollNumberTeacherCode(request.TeacherCode);
             user.AttachProfileContext(user.Id, schoolId, campusId);
         }
         else if (request.RequestedRole == UserRole.Parent)

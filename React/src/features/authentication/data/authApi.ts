@@ -190,7 +190,8 @@ export interface RequestAdditionalRoleResponse {
   message: string;
 }
 
-/** Request Parent, Teacher, or Coordinator as an additional role (account stays active). */
+/** Request Parent, Teacher, or Coordinator as an additional role (account stays active).
+ * For Teacher/Coordinator, teacherCode is the role code; schoolId + campusId are required. */
 export async function requestAdditionalRole(
   request: RequestAdditionalRoleRequest,
 ): Promise<RequestAdditionalRoleResponse> {

@@ -2,6 +2,7 @@ import 'package:rankup_education/core/storage/token_store.dart';
 import 'package:rankup_education/features/authentication/data/models/auth_session_model.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
+import 'package:rankup_education/features/authentication/domain/entities/school_change_request_result.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
@@ -129,14 +130,15 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+  Future<SchoolChangeRequestResult> requestSchoolChange({
     int? schoolId,
     int? campusId,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
-    return (
+    return const SchoolChangeRequestResult(
       requestId: 1,
       isLocked: true,
+      isAccountFullyLocked: true,
       message:
           'Your account is locked because you requested a school or campus change. An admin for the destination school or campus must approve (or reject) the change before you can sign in again.',
     );

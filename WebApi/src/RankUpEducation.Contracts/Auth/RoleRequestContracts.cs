@@ -1,6 +1,10 @@
 namespace RankUpEducation.Contracts.Auth;
 
-/// <summary>Self-service request to add Parent or Teacher as an additional role.</summary>
+/// <summary>
+/// Self-service request to add Parent, Teacher, or Coordinator as an additional role.
+/// For Teacher and Coordinator, <paramref name="TeacherCode"/> holds the role code
+/// (teacher code or coordinator code).
+/// </summary>
 public sealed record RequestAdditionalRoleRequest(
     string Role,
     int? SchoolId = null,

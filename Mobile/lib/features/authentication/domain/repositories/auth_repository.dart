@@ -1,5 +1,6 @@
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
+import 'package:rankup_education/features/authentication/domain/entities/school_change_request_result.dart';
 
 /// Contract for sign-in, registration, and session lifecycle operations.
 abstract class AuthRepository {
@@ -46,8 +47,9 @@ abstract class AuthRepository {
     String? currentPassword,
   });
 
-  /// Teacher / Student / CampusAdmin: request school or campus move (locks account).
-  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+  /// Teacher / Student / CampusAdmin / Coordinator: request school or campus move.
+  /// Multi-role: may return [SchoolChangeRequestResult.continuedSession] instead of full lock.
+  Future<SchoolChangeRequestResult> requestSchoolChange({
     int? schoolId,
     int? campusId,
   });

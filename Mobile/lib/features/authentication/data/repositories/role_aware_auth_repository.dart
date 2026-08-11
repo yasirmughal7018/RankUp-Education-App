@@ -2,6 +2,7 @@ import 'package:rankup_education/app/environment.dart';
 import 'package:rankup_education/core/storage/token_store.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/auth_session.dart';
+import 'package:rankup_education/features/authentication/domain/entities/school_change_request_result.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
 /// Uses the real API by default. Offline demo accounts are only available when
@@ -143,7 +144,7 @@ class RoleAwareAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+  Future<SchoolChangeRequestResult> requestSchoolChange({
     int? schoolId,
     int? campusId,
   }) async {

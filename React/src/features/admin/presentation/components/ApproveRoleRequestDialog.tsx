@@ -83,7 +83,11 @@ export function ApproveRoleRequestDialog({
           <DetailRow label="School" value={schoolName} />
           <DetailRow label="Campus" value={campusName || "—"} />
           <DetailRow
-            label="Teacher code"
+            label={
+              request.requestedRole === "Coordinator"
+                ? "Coordinator code"
+                : "Teacher code"
+            }
             value={request.teacherCode || "—"}
           />
         </dl>

@@ -23,8 +23,11 @@ class ProfilePage extends ConsumerWidget {
     final authState = ref.watch(authControllerProvider);
     final user = authState.user;
     final roles = user?.roles ?? const <UserRole>[];
+    final lockedRole = user?.pendingSchoolChange?.lockedRole;
     final canRequestSchoolChange =
-        user != null && _schoolChangeRoles.contains(user.role);
+        user != null &&
+        _schoolChangeRoles.contains(user.role) &&
+        user.pendingSchoolChange == null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -44,6 +47,37 @@ class ProfilePage extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Center(child: Text(user?.role.label ?? 'Guest')),
+          if (authState.successMessage != null) ...[
+            const SizedBox(height: 16),
+            Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: ListTile(
+                title: Text(authState.successMessage!),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => ref
+                      .read(authControllerProvider.notifier)
+                      .clearMessages(),
+                ),
+              ),
+            ),
+          ],
+          if (user?.pendingSchoolChange != null) ...[
+            const SizedBox(height: 16),
+            Card(
+              color: Theme.of(context).colorScheme.tertiaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  lockedRole != null
+                      ? '${lockedRole.label} is locked pending school/campus '
+                          'change approval'
+                          '${user!.pendingSchoolChange!.isAccountFullyLocked ? '.' : '. Other roles remain available.'}'
+                      : 'A school/campus change is pending admin review.',
+                ),
+              ),
+            ),
+          ],
           if (roles.length > 1) ...[
             const SizedBox(height: 24),
             Text(
@@ -58,7 +92,11 @@ class ProfilePage extends ConsumerWidget {
                   .map(
                     (role) => DropdownMenuItem(
                       value: role,
-                      child: Text(role.label),
+                      child: Text(
+                        role == lockedRole
+                            ? '${role.label} (locked)'
+                            : role.label,
+                      ),
                     ),
                   )
                   .toList(),
@@ -66,6 +104,17 @@ class ProfilePage extends ConsumerWidget {
                   ? null
                   : (role) async {
                       if (role == null || role == user?.role) {
+                        return;
+                      }
+                      if (role == lockedRole) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '${role.label} is locked pending school/campus '
+                              'change approval.',
+                            ),
+                          ),
+                        );
                         return;
                       }
                       await ref
@@ -118,6 +167,8 @@ class _SchoolChangeSectionState extends ConsumerState<_SchoolChangeSection> {
   String? _error;
 
   bool get _isCampusAdminOnly => widget.user.role == UserRole.campusAdmin;
+
+  bool get _hasOtherRoles => widget.user.roles.length > 1;
 
   int? get _currentSchoolId => int.tryParse(widget.user.schoolId);
 
@@ -236,14 +287,17 @@ class _SchoolChangeSectionState extends ConsumerState<_SchoolChangeSection> {
       return;
     }
 
+    final confirmBody = _hasOtherRoles
+        ? 'This role will lock until an admin for the destination school or '
+            'campus approves or rejects the change. Your other role(s) stay usable.'
+        : 'Your account will lock until an admin for the destination school or '
+            'campus approves or rejects the change. You will be signed out.';
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Request school / campus change?'),
-        content: const Text(
-          'Your account will lock until an admin for the destination school or '
-          'campus approves or rejects the change. You will be signed out.',
-        ),
+        content: Text(confirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -251,7 +305,9 @@ class _SchoolChangeSectionState extends ConsumerState<_SchoolChangeSection> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Request & lock'),
+            child: Text(
+              _hasOtherRoles ? 'Request & continue' : 'Request & lock',
+            ),
           ),
         ],
       ),
@@ -268,6 +324,16 @@ class _SchoolChangeSectionState extends ConsumerState<_SchoolChangeSection> {
             schoolId: nextSchoolId,
             campusId: nextCampusId,
           );
+      if (!mounted) {
+        return;
+      }
+
+      if (result.canContinueAsOtherRole && result.continuedSession != null) {
+        setState(() => _submitting = false);
+        context.go(_dashboardPath(result.continuedSession!.user.role));
+        return;
+      }
+
       await ref.read(authControllerProvider.notifier).logout();
       if (!mounted) {
         return;
@@ -313,9 +379,13 @@ class _SchoolChangeSectionState extends ConsumerState<_SchoolChangeSection> {
             ),
             const SizedBox(height: 6),
             Text(
-              _isCampusAdminOnly
-                  ? 'Choose a different campus in your school. Your account locks until an admin applies or rejects the change.'
-                  : 'Request a move to another school or campus. Your account locks until an admin applies or rejects the change.',
+              _hasOtherRoles
+                  ? (_isCampusAdminOnly
+                      ? 'Choose a different campus in your school. This role locks for review; other roles stay usable.'
+                      : 'Request a move to another school or campus. This role locks for review; other roles stay usable.')
+                  : (_isCampusAdminOnly
+                      ? 'Choose a different campus in your school. Your account locks until an admin applies or rejects the change.'
+                      : 'Request a move to another school or campus. Your account locks until an admin applies or rejects the change.'),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 16),

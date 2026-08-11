@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/errors/app_exception.dart';
 import 'package:rankup_education/core/notifications/notification_service.dart';
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
+import 'package:rankup_education/features/authentication/domain/entities/school_change_request_result.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/domain/repositories/auth_repository.dart';
 
@@ -246,7 +247,7 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<({int requestId, bool isLocked, String message})> requestSchoolChange({
+  Future<SchoolChangeRequestResult> requestSchoolChange({
     int? schoolId,
     int? campusId,
   }) async {
@@ -260,7 +261,19 @@ class AuthController extends StateNotifier<AuthState> {
         schoolId: schoolId,
         campusId: campusId,
       );
-      state = state.copyWith(isLoading: false);
+      final session = result.continuedSession;
+      if (result.canContinueAsOtherRole && session != null) {
+        final locked = result.lockedRole?.label ?? 'That role';
+        state = state.copyWith(
+          user: session.user,
+          isLoading: false,
+          successMessage: result.message.isNotEmpty
+              ? result.message
+              : '$locked is locked pending approval. You can keep using your other role.',
+        );
+      } else {
+        state = state.copyWith(isLoading: false);
+      }
       return result;
     } on AppException catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.message);
@@ -293,5 +306,9 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _repository.logout();
     state = const AuthState();
+  }
+
+  void clearMessages() {
+    state = state.copyWith(clearError: true, clearSuccess: true);
   }
 }

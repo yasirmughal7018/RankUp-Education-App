@@ -533,16 +533,18 @@ def build_doc():
         add_bullet(doc, item)
 
     doc.add_heading("7b. Additional role requests & remove role", level=1)
-    doc.add_heading("7b.1 Self-service request (Parent or Teacher)", level=2)
+    doc.add_heading("7b.1 Self-service request (Parent, Teacher, or Coordinator)", level=2)
     for item in [
-        "POST /api/auth/me/role-requests — request Parent or Teacher as additional role (does not lock account).",
-        "Teacher request needs school/campus (+ optional teacher code). Creates app_user_role_request; notifies RoleRequest.",
+        "POST /api/auth/me/role-requests — request Parent, Teacher, or Coordinator as additional role (does not lock account).",
+        "Teacher: school/campus + teacher code required. Coordinator: school/campus + coordinator code (teacherCode field). Parent: optional reason only.",
+        "Teacher→Coordinator: Web Account locks school/campus to profile; code only (matches directory grant).",
         "GET /api/auth/me may include pendingRoleRequest while open.",
     ]:
         add_bullet(doc, item)
     doc.add_heading("7b.2 Admin review", level=2)
     for item in [
         "Admin: GET /api/auth/role-requests/pending; POST …/approve; POST …/reject { reason }.",
+        "Approve applies school/campus/code for Teacher and Coordinator; creates Teacher/Parent profile when needed.",
         "Web: /admin/directory/role-requests (filters, bulk approve/reject).",
     ]:
         add_bullet(doc, item)

@@ -1,4 +1,5 @@
 import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
+import 'package:rankup_education/features/authentication/domain/entities/pending_school_change.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
 /// JSON-serializable user model with tolerant field name parsing.
@@ -13,6 +14,7 @@ class AppUserModel extends AppUser {
     required super.campusId,
     required super.profileId,
     super.mustChangePassword = false,
+    super.pendingSchoolChange,
   });
 
   factory AppUserModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class AppUserModel extends AppUser {
       campusId: _readString(json, ['campusId']),
       profileId: _readString(json, ['profileId']),
       mustChangePassword: _readBool(json, ['mustChangePassword']),
+      pendingSchoolChange: _readPendingSchoolChange(json['pendingSchoolChange']),
     );
   }
 
@@ -43,6 +46,7 @@ class AppUserModel extends AppUser {
       campusId: user.campusId,
       profileId: user.profileId,
       mustChangePassword: user.mustChangePassword,
+      pendingSchoolChange: user.pendingSchoolChange,
     );
   }
 
@@ -57,8 +61,39 @@ class AppUserModel extends AppUser {
       'campusId': campusId,
       'profileId': profileId,
       'mustChangePassword': mustChangePassword,
+      if (pendingSchoolChange != null)
+        'pendingSchoolChange': {
+          'id': pendingSchoolChange!.id,
+          'toSchoolId': pendingSchoolChange!.toSchoolId,
+          'toCampusId': pendingSchoolChange!.toCampusId,
+          'requestedAt': pendingSchoolChange!.requestedAt,
+          'status': pendingSchoolChange!.status,
+          'lockedRole': pendingSchoolChange!.lockedRole?.apiName,
+          'isAccountFullyLocked': pendingSchoolChange!.isAccountFullyLocked,
+        },
     };
   }
+}
+
+PendingSchoolChange? _readPendingSchoolChange(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  final json = Map<String, dynamic>.from(value);
+  final lockedRaw = _readString(json, ['lockedRole']);
+  return PendingSchoolChange(
+    id: _readString(json, ['id']),
+    toSchoolId: _readInt(json, ['toSchoolId']),
+    toCampusId: _readInt(json, ['toCampusId']),
+    requestedAt: _readString(json, ['requestedAt']),
+    status: _readString(json, ['status']),
+    lockedRole: lockedRaw.isEmpty ? null : parseUserRole(lockedRaw),
+    isAccountFullyLocked: _readBool(
+      json,
+      ['isAccountFullyLocked'],
+      defaultValue: true,
+    ),
+  );
 }
 
 String _readString(Map<String, dynamic> json, List<String> keys) {
@@ -75,7 +110,24 @@ String _readString(Map<String, dynamic> json, List<String> keys) {
   return '';
 }
 
-bool _readBool(Map<String, dynamic> json, List<String> keys) {
+int? _readInt(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value);
+    }
+  }
+  return null;
+}
+
+bool _readBool(
+  Map<String, dynamic> json,
+  List<String> keys, {
+  bool defaultValue = false,
+}) {
   for (final key in keys) {
     final value = json[key];
     if (value is bool) {
@@ -83,7 +135,7 @@ bool _readBool(Map<String, dynamic> json, List<String> keys) {
     }
   }
 
-  return false;
+  return defaultValue;
 }
 
 List<String> _readStringList(Object? value) {

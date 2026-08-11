@@ -165,7 +165,7 @@
     <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / Coordinator / SchoolAdmin / CampusAdmin with <strong>email (username) required</strong>, no password → auto-approved → user sets password on first login. Create/Edit forms do <strong>not</strong> include companion-role checkboxes.</li>
     <li><strong>Companion roles (Web directory)</strong> — From Teachers / Parents / Coordinators list ⋯ menu, admin may <strong>Add</strong> or <strong>Remove</strong> Teacher / Parent / Coordinator companions (rules in §7b / §8). Single-role accounts cannot remove their only role; each list cannot remove its own primary role.</li>
     <li><strong>Add role to existing account</strong> — Directory create matching an existing identity may add a second role when combination rules allow. <strong>Teacher</strong> matches on <strong>mobile only</strong>; <strong>Parent / SchoolAdmin / CampusAdmin</strong> match on mobile or CNIC.</li>
-    <li><strong>School / campus change</strong> — Teacher / Student / CampusAdmin request a change from Profile (Web <code>/account</code> or Mobile Profile) → confirmation → account <strong>locks</strong> → destination admin applies or rejects on the <strong>Web</strong> queue (<code>/admin/directory/school-changes</code>; PortalAdmin any; SchoolAdmin for their school; CampusAdmin for Teacher/Student into their campus) → account <strong>unlocks</strong>. <strong>Parent cannot request</strong> school/campus change (parents are not school-scoped). Mobile does not implement the admin apply queue.</li>
+    <li><strong>School / campus change</strong> — Teacher / Student / CampusAdmin / Coordinator request from Profile (Web <code>/account</code> or Mobile Profile) → confirmation. <strong>Single-role:</strong> account locks → sign out → locked messaging. <strong>Multi-role:</strong> only the requesting role locks; Web and Mobile keep the session on another role (switch to locked role blocked). Destination admin applies or rejects on the <strong>Web</strong> queue (<code>/admin/directory/school-changes</code>). <strong>Parent cannot request</strong>. Mobile does not implement the admin apply queue.</li>
     <li><strong>Password reset</strong> — User requests via Forgot password (username = email) → pending row in <code>app_user_password_reset_request</code> + email link (<code>/reset-password?token=</code>) + scoped admin notifications (<code>PasswordResetRequest</code>) when account is <strong>active</strong> with a password → completion via emailed token <strong>or</strong> admin Clear (Web bell; Parent for linked Student) — <strong>first completion wins</strong> → user sets or chooses a new password. Always returns success (no existence leak).</li>
   </ol>
   <p><strong>PortalAdmin</strong> is not created via the app (seed/DB). <strong>SchoolAdmin</strong> is created by PortalAdmin only. <strong>CampusAdmin</strong> is created by PortalAdmin or SchoolAdmin.</p>
@@ -385,6 +385,7 @@
     </thead>
     <tbody>
       <tr><td>Teacher</td><td>Yes</td><td>Yes</td></tr>
+      <tr><td>Coordinator</td><td>Yes</td><td>Yes</td></tr>
       <tr><td>Student</td><td>Yes</td><td>Yes</td></tr>
       <tr><td>Parent</td><td>No</td><td>No</td></tr>
       <tr><td>CampusAdmin</td><td>No (school fixed)</td><td>Yes</td></tr>
@@ -396,8 +397,13 @@
   <ol>
     <li>User opens Profile school/campus section — Web <code>/account</code> or Mobile Profile.</li>
     <li>Selects new school and/or campus → clicks <strong>Request school / campus change</strong>.</li>
-    <li><strong>Confirmation popup</strong> explains that the account will lock and they will be signed out.</li>
-    <li>On confirm → <code>POST /api/auth/me/school-change</code> → pending request created → <code>is_active=false</code> → refresh tokens revoked → user logged out → Web <code>/account-locked</code> or Mobile login locked step.</li>
+    <li><strong>Confirmation popup</strong> — single-role: account will lock and sign out; multi-role: this role locks, other roles stay usable.</li>
+    <li>On confirm → <code>POST /api/auth/me/school-change</code>:
+      <ul>
+        <li><strong>Single-role:</strong> <code>isAccountFullyLocked=true</code> → sessions revoked → logout → Web <code>/account-locked</code> or Mobile login locked step.</li>
+        <li><strong>Multi-role:</strong> <code>isAccountFullyLocked=false</code> + continuation tokens/user → Web and Mobile keep the session on another role; locked role cannot be switched to until approve/reject.</li>
+      </ul>
+    </li>
   </ol>
 
   <h3>Lock behaviour (critical)</h3>
@@ -406,10 +412,11 @@
       <tr><th>Event</th><th>Effect</th></tr>
     </thead>
     <tbody>
-      <tr><td>Change requested</td><td>Account locked (<code>is_active=false</code>); sessions revoked; login-status = <code>LockedPendingSchoolChange</code></td></tr>
-      <tr><td>User tries to sign in while locked</td><td>Web opens <code>/account-locked</code> with message explaining school/campus change is pending approval</td></tr>
-      <tr><td>PortalAdmin / SchoolAdmin / CampusAdmin Approves (when allowed to apply)</td><td>New school/campus applied; account unlocked (<code>is_active=true</code>); user can sign in again</td></tr>
-      <tr><td>Any allowed reviewer Rejects</td><td>School/campus unchanged (optional <code>leaveWithoutSchool</code> for Student clears school/campus); account unlocked; user can sign in again</td></tr>
+      <tr><td>Change requested (single role)</td><td>Account locked (<code>is_active=false</code>); sessions revoked; login-status = <code>LockedPendingSchoolChange</code></td></tr>
+      <tr><td>Change requested (multi-role)</td><td>Account stays active; only <code>requester_role</code> locked; other roles usable (Web + Mobile)</td></tr>
+      <tr><td>User tries to sign in while fully locked</td><td>Web opens <code>/account-locked</code>; Mobile shows in-login locked step</td></tr>
+      <tr><td>PortalAdmin / SchoolAdmin / CampusAdmin Approves (when allowed to apply)</td><td>New school/campus applied; unlock; user can use that role again</td></tr>
+      <tr><td>Any allowed reviewer Rejects</td><td>School/campus unchanged (optional <code>leaveWithoutSchool</code> for Student clears school/campus); unlock</td></tr>
     </tbody>
   </table>
   <div class="note">
@@ -561,6 +568,7 @@
     <li><code>POST /api/auth/switch-role</code> issues new tokens for the selected role.</li>
     <li>Refresh token stores <code>active_role</code> so refresh keeps the same acting role.</li>
     <li>Authorization uses the <strong>active</strong> role only — including school/campus change request rules (see §6).</li>
+    <li>Self-service request: <code>POST /api/auth/me/role-requests</code> for missing Parent / Teacher / Coordinator. Teacher and Coordinator require school, campus, and code; approve applies placement + code. Web <code>/account</code> only (Mobile out of scope).</li>
     <li>Self-service remove: <code>DELETE /api/auth/me/roles/{role}</code> for Parent / Teacher / Coordinator when another role remains.</li>
   </ol>
   <h3>UI</h3>
@@ -1181,6 +1189,18 @@
     <div class="expect">Expected: Same chrome as Teachers/Parents lists.</div>
   </div>
 
+  <div class="scenario" id="qa-44">
+    <h3><span class="id">QA-44</span> Self-service Coordinator role request + approve</h3>
+    <div class="platforms"><span class="web">Web</span><span class="api">API</span></div>
+    <ol class="steps">
+      <li>As Teacher (Ready) open <code>/account</code> → request Coordinator. School/campus are read-only; enter coordinator code → submit.</li>
+      <li>As Parent (no school) request Coordinator → must pick school, campus, and code.</li>
+      <li>Admin opens <code>/admin/directory/role-requests</code> → Approve. Confirm school/campus/code applied on the user.</li>
+      <li>User can switch to Coordinator; directory Coordinators list shows them.</li>
+    </ol>
+    <div class="expect">Expected: Approve applies placement + coordinator code (not role-only).</div>
+  </div>
+
   <h2 id="checklist">12. Quick verification checklist</h2>
   <table>
     <thead>
@@ -1233,6 +1253,7 @@
       <tr><td>44</td><td>Remove companion only (not list primary); sole role has no Remove</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>45</td><td>Coordinators directory: filters, create, grant Teacher/Parent, deactivate confirm</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>46</td><td>Create/Edit Teacher/Parent/Coordinator forms have no companion checkboxes</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>47</td><td>Self-service Coordinator request requires school/campus/code; approve applies them</td><td>☐</td><td>—</td><td></td></tr>
     </tbody>
   </table>
 
@@ -1286,7 +1307,8 @@
     React directory Teachers / Parents / Coordinators (grant + remove companions), AccountPage,
     and Flutter Mobile login / profile school-change request / logout revoke.
     <strong>Combinable:</strong> Teacher + Parent + Coordinator. <strong>Exclusive:</strong> Student, PortalAdmin, SchoolAdmin, CampusAdmin.
-    Directory companion grant/remove — §7b; QA-41–43. Directory create / school-change admin queue / password Clear remain <strong>Web only</strong>.
+    Directory companion grant/remove — §7b; QA-41–43. Self-service Coordinator request+approve — QA-44.
+    Directory create / school-change admin queue / password Clear remain <strong>Web only</strong>.
     Password reset: request + email token (Web+Mobile) + Clear (Web). Self-deactivate Web-only — QA-39. Active-role school-change — QA-40.
     Directory badges: <code>ApprovedInactive</code> = NeedsPasswordSetup; <code>Active</code> = Ready.
     Tables: <code>app_user_roles</code>, <code>app_approval</code>, <code>app_user_role_request</code>,

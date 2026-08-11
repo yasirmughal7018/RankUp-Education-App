@@ -1,3 +1,4 @@
+import 'package:rankup_education/features/authentication/domain/entities/pending_school_change.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 
 /// Signed-in user profile with role, scope, and permission claims.
@@ -12,6 +13,7 @@ class AppUser {
     required this.campusId,
     required this.profileId,
     this.mustChangePassword = false,
+    this.pendingSchoolChange,
   });
 
   final String id;
@@ -23,6 +25,7 @@ class AppUser {
   final String campusId;
   final String profileId;
   final bool mustChangePassword;
+  final PendingSchoolChange? pendingSchoolChange;
 
   AppUser copyWith({
     String? id,
@@ -34,6 +37,8 @@ class AppUser {
     String? campusId,
     String? profileId,
     bool? mustChangePassword,
+    PendingSchoolChange? pendingSchoolChange,
+    bool clearPendingSchoolChange = false,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -45,6 +50,9 @@ class AppUser {
       campusId: campusId ?? this.campusId,
       profileId: profileId ?? this.profileId,
       mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+      pendingSchoolChange: clearPendingSchoolChange
+          ? null
+          : pendingSchoolChange ?? this.pendingSchoolChange,
     );
   }
 }
