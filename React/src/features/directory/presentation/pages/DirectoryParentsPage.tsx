@@ -34,6 +34,8 @@ import {
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { GrantCoordinatorRoleDialog } from "@/features/directory/presentation/components/GrantCoordinatorRoleDialog";
 import { GrantTeacherRoleDialog } from "@/features/directory/presentation/components/GrantTeacherRoleDialog";
+import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
+import { ManageLinkedStudentsDialog } from "@/features/directory/presentation/components/ManageLinkedStudentsDialog";
 import { ParentFormDialog } from "@/features/directory/presentation/components/ParentFormDialog";
 import { RemoveDirectoryRoleDialog } from "@/features/directory/presentation/components/RemoveDirectoryRoleDialog";
 import {
@@ -46,7 +48,9 @@ import {
   useDirectorySchoolsQuery,
   useGrantCoordinatorRoleToParentMutation,
   useGrantTeacherRoleToParentMutation,
+  useLinkParentStudentMutation,
   useRemoveDirectoryRoleMutation,
+  useUnlinkParentStudentMutation,
   useUpdateParentMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import {
@@ -79,7 +83,7 @@ function formatChildren(parent: DirectoryParent): string {
   return `${count} ${count === 1 ? "child" : "children"}`;
 }
 
-/** Paginated parent directory with account management (children are view-only). */
+/** Paginated parent directory with account and child link management. */
 export function DirectoryParentsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
@@ -120,6 +124,10 @@ export function DirectoryParentsPage() {
     fullName: string;
     role: DirectoryCombinableRole;
   } | null>(null);
+  const [manageChildrenTarget, setManageChildrenTarget] =
+    useState<DirectoryParent | null>(null);
+  const [linkStudentTarget, setLinkStudentTarget] =
+    useState<DirectoryParent | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -165,6 +173,8 @@ export function DirectoryParentsPage() {
   const grantTeacherMutation = useGrantTeacherRoleToParentMutation();
   const grantCoordinatorMutation = useGrantCoordinatorRoleToParentMutation();
   const removeRoleMutation = useRemoveDirectoryRoleMutation();
+  const linkStudentMutation = useLinkParentStudentMutation();
+  const unlinkStudentMutation = useUnlinkParentStudentMutation();
 
   const totalCount = data?.totalCount ?? 0;
 
@@ -199,7 +209,9 @@ export function DirectoryParentsPage() {
     bulkDeactivateMutation.isPending ||
     grantTeacherMutation.isPending ||
     grantCoordinatorMutation.isPending ||
-    removeRoleMutation.isPending;
+    removeRoleMutation.isPending ||
+    linkStudentMutation.isPending ||
+    unlinkStudentMutation.isPending;
 
   const allVisibleSelected =
     visibleParents.length > 0 &&
@@ -317,6 +329,24 @@ export function DirectoryParentsPage() {
     const hasCoordinatorRole = roles.includes("Coordinator");
     const removableRoles = getRemovableDirectoryRoles(roles, "Parent");
     const overflowItems = [
+      {
+        id: "manage-children",
+        label: "Manage children",
+        onSelect: () => {
+          clearMessages();
+          setManageChildrenTarget(parent);
+        },
+        disabled: busy,
+      },
+      {
+        id: "link-student",
+        label: "Link student",
+        onSelect: () => {
+          clearMessages();
+          setLinkStudentTarget(parent);
+        },
+        disabled: busy,
+      },
       {
         id: "toggle-active",
         label: parent.isActive ? "Deactivate" : "Activate",
@@ -760,6 +790,66 @@ export function DirectoryParentsPage() {
           })();
         }}
       />
+
+      {manageChildrenTarget ? (
+        <ManageLinkedStudentsDialog
+          parentName={manageChildrenTarget.fullName}
+          linkedStudents={manageChildrenTarget.linkedStudents ?? []}
+          isSubmitting={unlinkStudentMutation.isPending}
+          onClose={() => setManageChildrenTarget(null)}
+          onUnlink={async (studentId, studentName) => {
+            await unlinkStudentMutation.mutateAsync({
+              parentId: manageChildrenTarget.parentId,
+              studentId,
+            });
+            setSuccessMessage(
+              `Unlinked ${studentName} from ${manageChildrenTarget.fullName}.`,
+            );
+            setManageChildrenTarget((current) =>
+              current
+                ? {
+                    ...current,
+                    linkedStudents: (current.linkedStudents ?? []).filter(
+                      (student) => student.studentId !== studentId,
+                    ),
+                    linkedStudentCount: Math.max(
+                      0,
+                      current.linkedStudentCount - 1,
+                    ),
+                    linkedStudentNames: (current.linkedStudentNames ?? []).filter(
+                      (name) => name !== studentName,
+                    ),
+                  }
+                : current,
+            );
+            void refetch();
+          }}
+          onAddLink={() => {
+            const parent = manageChildrenTarget;
+            setManageChildrenTarget(null);
+            setLinkStudentTarget(parent);
+          }}
+        />
+      ) : null}
+
+      {linkStudentTarget ? (
+        <LinkStudentDialog
+          parentName={linkStudentTarget.fullName}
+          isSubmitting={linkStudentMutation.isPending}
+          onClose={() => setLinkStudentTarget(null)}
+          onSubmit={async (studentId, relationship) => {
+            await linkStudentMutation.mutateAsync({
+              parentId: linkStudentTarget.parentId,
+              input: { studentId, relationship },
+            });
+            setSuccessMessage(
+              `Linked student #${studentId} to ${linkStudentTarget.fullName}.`,
+            );
+            setLinkStudentTarget(null);
+            void refetch();
+          }}
+        />
+      ) : null}
     </DirectoryPageShell>
   );
 }

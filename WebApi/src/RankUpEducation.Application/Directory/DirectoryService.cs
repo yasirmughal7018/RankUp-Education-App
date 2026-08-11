@@ -779,7 +779,8 @@ public sealed class DirectoryService : IDirectoryService
             user.NeedsPasswordSetup,
             Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user),
-            RoleNames(user));
+            RoleNames(user),
+            Array.Empty<DirectoryLinkedStudentSummary>());
     }
 
     public async Task<DirectoryParentResponse> UpdateParentAsync(
@@ -828,7 +829,8 @@ public sealed class DirectoryService : IDirectoryService
             user.NeedsPasswordSetup,
             Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user),
-            RoleNames(user));
+            RoleNames(user),
+            Array.Empty<DirectoryLinkedStudentSummary>());
     }
 
     public async Task ActivateParentAsync(long parentId, CancellationToken cancellationToken)
@@ -2348,7 +2350,8 @@ public sealed class DirectoryService : IDirectoryService
             existing.NeedsPasswordSetup,
             Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(existing),
-            RoleNames(existing));
+            RoleNames(existing),
+            Array.Empty<DirectoryLinkedStudentSummary>());
     }
 
     public async Task<DirectoryTeacherResponse> GrantTeacherRoleToParentAsync(

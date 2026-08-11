@@ -200,12 +200,19 @@ export interface UpdateDirectoryCoordinatorInput {
   alsoParent?: boolean;
 }
 
+export interface DirectoryLinkedStudentSummary {
+  studentId: number;
+  fullName: string;
+}
+
 export interface DirectoryParent extends DirectoryAccountAuditFields {
   parentId: number;
   fullName: string;
   username: string;
   linkedStudentCount: number;
   linkedStudentNames?: string[];
+  /** Active linked children with ids (for unlink UI). */
+  linkedStudents?: DirectoryLinkedStudentSummary[];
   isActive: boolean;
   avatarUrl?: string | null;
   mobileNumber?: string | null;

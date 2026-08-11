@@ -13,6 +13,8 @@ import 'package:rankup_education/features/authentication/presentation/providers/
 import 'package:rankup_education/features/discussions/presentation/pages/discussions_page.dart';
 import 'package:rankup_education/features/messaging/presentation/pages/messages_page.dart';
 import 'package:rankup_education/features/notifications/presentation/pages/notifications_page.dart';
+import 'package:rankup_education/features/parent/presentation/pages/parent_child_history_page.dart';
+import 'package:rankup_education/features/parent/presentation/pages/parent_children_page.dart';
 import 'package:rankup_education/features/parent_dashboard/presentation/pages/parent_dashboard_page.dart';
 import 'package:rankup_education/features/profile/presentation/pages/profile_page.dart';
 import 'package:rankup_education/features/questions/presentation/pages/questions_page.dart';
@@ -104,6 +106,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/parent',
             builder: (context, state) => const ParentDashboardPage(),
+          ),
+          GoRoute(
+            path: '/parent/children',
+            builder: (context, state) => const ParentChildrenPage(),
+          ),
+          GoRoute(
+            path: '/parent/children/:studentId/history',
+            builder: (context, state) {
+              final studentId =
+                  int.tryParse(state.pathParameters['studentId'] ?? '') ?? 0;
+              return ParentChildHistoryPage(studentId: studentId);
+            },
           ),
           GoRoute(
             path: '/teacher',
@@ -267,21 +281,21 @@ List<_NavDestination> _destinationsFor(UserRole role) {
         _NavDestination('Home', '/parent', Icons.home_outlined, Icons.home),
         _NavDestination(
           'Children',
-          '/reports',
+          '/parent/children',
           Icons.family_restroom_outlined,
           Icons.family_restroom,
+        ),
+        _NavDestination(
+          'Quizzes',
+          '/quizzes',
+          Icons.assignment_outlined,
+          Icons.assignment,
         ),
         _NavDestination(
           'Messages',
           '/messages',
           Icons.chat_bubble_outline,
           Icons.chat_bubble,
-        ),
-        _NavDestination(
-          'Reports',
-          '/rankings',
-          Icons.assessment_outlined,
-          Icons.assessment,
         ),
         _NavDestination(
           'Profile',

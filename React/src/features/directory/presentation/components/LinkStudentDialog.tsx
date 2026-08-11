@@ -1,6 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
+import { SearchableSelect } from "@/core/components/SearchableSelect";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import { useDirectoryStudentsQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 
 interface LinkStudentDialogProps {
   parentName: string;
@@ -11,6 +13,7 @@ interface LinkStudentDialogProps {
 
 const inputClassName = FORM_FIELD_CLASS;
 
+/** Link a directory student to a parent (searchable student picker). */
 export function LinkStudentDialog({
   parentName,
   isSubmitting,
@@ -18,8 +21,24 @@ export function LinkStudentDialog({
   onSubmit,
 }: LinkStudentDialogProps) {
   const [studentId, setStudentId] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
   const [relationship, setRelationship] = useState("Guardian");
   const [error, setError] = useState<string | null>(null);
+
+  const studentsQuery = useDirectoryStudentsQuery({
+    search: studentSearch.trim() || undefined,
+    pageNumber: 1,
+    pageSize: 50,
+  });
+
+  const studentOptions = useMemo(
+    () =>
+      (studentsQuery.data?.items ?? []).map((student) => ({
+        value: String(student.studentId),
+        label: `${student.fullName} · @${student.username} · ID ${student.studentId}`,
+      })),
+    [studentsQuery.data?.items],
+  );
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -38,7 +57,7 @@ export function LinkStudentDialog({
 
     const parsedId = Number(studentId);
     if (!parsedId || parsedId < 1) {
-      setError("Enter a valid student ID.");
+      setError("Select a student to link.");
       return;
     }
 
@@ -58,26 +77,59 @@ export function LinkStudentDialog({
           Link a student to {parentName}.
         </p>
 
-        <form onSubmit={(event) => void handleSubmit(event)} className="mt-5 space-y-4">
+        <form
+          onSubmit={(event) => void handleSubmit(event)}
+          className="mt-5 space-y-4"
+        >
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Student ID
+            <label
+              htmlFor="linkStudentSearch"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
+              Search students
             </label>
             <input
-              type="number"
-              min={1}
-              value={studentId}
-              onChange={(event) => setStudentId(event.target.value)}
+              id="linkStudentSearch"
+              type="search"
+              value={studentSearch}
+              onChange={(event) => setStudentSearch(event.target.value)}
               className={inputClassName}
-              required
+              placeholder="Name, username, roll…"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="linkStudentId"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
+              Student <span className="text-destructive">*</span>
+            </label>
+            <SearchableSelect
+              id="linkStudentId"
+              value={studentId}
+              allowEmpty
+              emptyLabel={
+                studentsQuery.isLoading ? "Loading…" : "Select student"
+              }
+              placeholder={
+                studentsQuery.isLoading ? "Loading…" : "Select student"
+              }
+              options={studentOptions}
+              onChange={setStudentId}
+              disabled={isSubmitting || studentsQuery.isLoading}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="linkRelationship"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
               Relationship
             </label>
             <input
+              id="linkRelationship"
               type="text"
               value={relationship}
               onChange={(event) => setRelationship(event.target.value)}

@@ -208,6 +208,9 @@ public sealed record DirectoryParentListResponse(
     int PageSize,
     int TotalCount);
 
+/// <summary>Linked child summary on a directory parent row.</summary>
+public sealed record DirectoryLinkedStudentSummary(long StudentId, string FullName);
+
 public sealed record DirectoryParentResponse(
     long ParentId,
     string FullName,
@@ -229,7 +232,9 @@ public sealed record DirectoryParentResponse(
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus,
     /// <summary>All roles on this account (e.g. Parent, Teacher).</summary>
-    IReadOnlyList<string> Roles);
+    IReadOnlyList<string> Roles,
+    /// <summary>Active linked students (id + name) for link/unlink UI.</summary>
+    IReadOnlyList<DirectoryLinkedStudentSummary> LinkedStudents);
 
 public sealed record CreateDirectoryParentRequest(
     string FullName,

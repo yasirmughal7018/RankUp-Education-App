@@ -528,7 +528,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
             from relation in _dbContext.ParentStudentRelations.AsNoTracking()
             join studentUser in _dbContext.Users.AsNoTracking() on relation.StudentId equals studentUser.Id
             where parentIds.Contains(relation.ParentId) && relation.IsActive
-            select new { relation.ParentId, studentUser.FullName, studentUser.SchoolId, studentUser.CampusId };
+            select new { relation.ParentId, relation.StudentId, studentUser.FullName, studentUser.SchoolId, studentUser.CampusId };
 
         if (schoolId is not null)
         {
@@ -539,39 +539,48 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         var linkedStudents = await linkedStudentsQuery
             .OrderBy(row => row.FullName)
-            .Select(row => new { row.ParentId, row.FullName })
+            .Select(row => new { row.ParentId, row.StudentId, row.FullName })
             .ToListAsync(cancellationToken);
 
-        var linkedNamesByParent = linkedStudents
+        var linkedByParent = linkedStudents
             .GroupBy(item => item.ParentId)
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyList<string>)group.Select(item => item.FullName).ToArray());
+                group => group
+                    .Select(item => new DirectoryLinkedStudentSummary(item.StudentId, item.FullName))
+                    .ToArray());
 
         var lockedSet = await GetLockedUserIdsAsync(parentIds, cancellationToken);
         var approvalHistory = await GetApprovalHistoryByUserIdsAsync(parentIds, cancellationToken);
         var rolesByUser = await GetRoleNamesByUserIdsAsync(parentIds, cancellationToken);
 
-        var items = rows.Select(row => new DirectoryParentResponse(
-            row.parent.Id,
-            row.user.FullName,
-            row.user.Username,
-            linkedNamesByParent.GetValueOrDefault(row.parent.Id, Array.Empty<string>()).Count,
-            linkedNamesByParent.GetValueOrDefault(row.parent.Id, Array.Empty<string>()),
-            row.user.IsActive,
-            row.user.AvatarUrl,
-            row.user.MobileNumber ?? row.parent.MobileNumber,
-            row.user.Cnic,
-            row.user.EmailAddress,
-            row.user.CreatedDate,
-            row.user.RequestedAt,
-            row.user.RejectedAt,
-            row.user.LastLoginAt,
-            row.user.ReasonMessage,
-            row.user.NeedsPasswordSetup,
-            approvalHistory.GetValueOrDefault(row.parent.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
-            DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.parent.Id)),
-            rolesByUser.GetValueOrDefault(row.parent.Id, Array.Empty<string>()))).ToArray();
+        var items = rows.Select(row =>
+        {
+            var linked = (IReadOnlyList<DirectoryLinkedStudentSummary>)linkedByParent
+                .GetValueOrDefault(row.parent.Id, Array.Empty<DirectoryLinkedStudentSummary>());
+            var names = (IReadOnlyList<string>)linked.Select(student => student.FullName).ToArray();
+            return new DirectoryParentResponse(
+                row.parent.Id,
+                row.user.FullName,
+                row.user.Username,
+                linked.Count,
+                names,
+                row.user.IsActive,
+                row.user.AvatarUrl,
+                row.user.MobileNumber ?? row.parent.MobileNumber,
+                row.user.Cnic,
+                row.user.EmailAddress,
+                row.user.CreatedDate,
+                row.user.RequestedAt,
+                row.user.RejectedAt,
+                row.user.LastLoginAt,
+                row.user.ReasonMessage,
+                row.user.NeedsPasswordSetup,
+                approvalHistory.GetValueOrDefault(row.parent.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
+                DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.parent.Id)),
+                rolesByUser.GetValueOrDefault(row.parent.Id, Array.Empty<string>()),
+                linked);
+        }).ToArray();
 
         return (items, totalCount);
     }
