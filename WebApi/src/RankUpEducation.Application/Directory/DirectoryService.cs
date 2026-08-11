@@ -2517,6 +2517,85 @@ public sealed class DirectoryService : IDirectoryService
         return await AddCoordinatorRoleAsync(user, cancellationToken);
     }
 
+    public async Task<GrantCoordinatorRoleResponse> RemoveDirectoryRoleAsync(
+        long userId,
+        UserRole contextRole,
+        UserRole roleToRemove,
+        CancellationToken cancellationToken)
+    {
+        EnsureAdmin();
+
+        if (contextRole is not (UserRole.Teacher or UserRole.Parent or UserRole.Coordinator))
+        {
+            throw new ValidationAppException(["Invalid directory context role."]);
+        }
+
+        if (roleToRemove is not (UserRole.Teacher or UserRole.Parent or UserRole.Coordinator))
+        {
+            throw new ValidationAppException([
+                "Only Parent, Teacher, or Coordinator can be removed from a multi-role account.",
+            ]);
+        }
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundAppException($"{contextRole} was not found.");
+
+        EnsureSchoolAccess(user.SchoolId);
+        EnsureCampusAccess(user.CampusId);
+
+        if (!user.HasRole(contextRole))
+        {
+            throw new NotFoundAppException($"{contextRole} was not found.");
+        }
+
+        if (!user.HasRole(roleToRemove))
+        {
+            throw new ValidationAppException([$"This account does not have the {roleToRemove} role."]);
+        }
+
+        if (roleToRemove == contextRole)
+        {
+            throw new ValidationAppException([
+                $"Cannot remove the {contextRole} role from the {contextRole} directory. Remove Parent, Teacher, or Coordinator companion roles instead.",
+            ]);
+        }
+
+        if (await _users.HasStudentGroupsForRoleAsync(user.Id, roleToRemove, cancellationToken))
+        {
+            throw new ValidationAppException([
+                $"Cannot remove {roleToRemove}: student groups still reference this role. Delete or reassign those groups first.",
+            ]);
+        }
+
+        if (roleToRemove == UserRole.Parent)
+        {
+            var linkedCount = await _directory.CountParentStudentLinksAsync(user.Id, cancellationToken);
+            if (linkedCount > 0)
+            {
+                throw new ValidationAppException([
+                    "Cannot remove Parent: unlink linked students first.",
+                ]);
+            }
+        }
+
+        try
+        {
+            user.RemoveRole(roleToRemove);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new GrantCoordinatorRoleResponse(
+            user.Id,
+            user.FullName,
+            user.Username,
+            RoleNames(user));
+    }
+
     private async Task<GrantCoordinatorRoleResponse> AddCoordinatorRoleAsync(
         User user,
         CancellationToken cancellationToken)

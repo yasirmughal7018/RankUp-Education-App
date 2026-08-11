@@ -79,9 +79,9 @@ const doc = new Document({
     {
       children: [
         h1("RankUp Education — Authentication & Login Logic"),
-        p("API shared; React full; Flutter Mobile partial. Version: 2 Aug 2026."),
+        p("API shared; React full; Flutter Mobile partial. Version: 11 Aug 2026."),
         p(
-          "Source of truth: AuthService + React. Companion QA: docs/03_RankUp_User_Creation_Approval_QA.html",
+          "Source of truth: AuthService + UserRoleRules + React. Companion QA: docs/03_RankUp_User_Creation_Approval_QA.html",
         ),
 
         h2("1. Executive summary"),
@@ -91,8 +91,9 @@ const doc = new Document({
         bullet("Registration activation: PortalAdmin any; SchoolAdmin/CampusAdmin Student/Teacher in scope; no-school/Parent → PortalAdmin only."),
         bullet("Forgot password: username request → email link + pending app_user_password_reset_request + notify helpers; first completion wins."),
         bullet("Soft reject (rejected_at + rejection_reason). School/campus change locks until destination apply/reject (optional leaveWithoutSchool for Student)."),
-        bullet("Multi-role: app_user_roles; Student/PortalAdmin exclusive; Parent+Teacher may combine. Session role = JWT / refresh_tokens.active_role (Acting as)."),
-        bullet("Additional role request (Parent/Teacher) via app_user_role_request; self-remove Parent/Teacher when another role remains."),
+        bullet("Seven roles. Exclusive: Student, PortalAdmin, SchoolAdmin, CampusAdmin. Combinable: Teacher + Parent + Coordinator (any subset)."),
+        bullet("Session role = JWT / refresh_tokens.active_role (Acting as). Self-remove Parent/Teacher/Coordinator when another role remains."),
+        bullet("Directory admins grant/remove companions from Teachers / Parents / Coordinators lists (§7b in HTML)."),
 
         h2("2. Username & login"),
         bullet("Self-register and directory create: email required; username = normalized email; no CNIC rewrite on activate."),
@@ -123,7 +124,14 @@ const doc = new Document({
           ],
         ),
 
-        h2("5. Forgot password (first completion wins)"),
+        h2("5. Multi-role & directory companions"),
+        bullet("Allowed: Teacher+Parent, Teacher+Coordinator, Parent+Coordinator, all three."),
+        bullet("Blocked: Student/PortalAdmin/SchoolAdmin/CampusAdmin with any other role."),
+        bullet("Grant APIs: POST /api/directory/teachers|parents|coordinators/{id}/roles/{parent|teacher|coordinator}."),
+        bullet("Remove APIs: DELETE /api/directory/…/{id}/roles/{role} — companion only; not list primary; not sole role."),
+        bullet("Teacher→Coordinator grant: coordinatorCode only; school/campus kept. Self-service: DELETE /api/auth/me/roles/{role}."),
+
+        h2("6. Forgot password (first completion wins)"),
         bullet("POST /api/auth/password-reset/request { username } — always success; email link + pending row + notify."),
         bullet("POST /api/auth/password-reset/complete { token, newPassword } — emailed self-reset."),
         bullet("POST /api/auth/password-reset/clear { username } — PortalAdmin / SchoolAdmin / CampusAdmin / linked Parent."),
@@ -139,27 +147,29 @@ const doc = new Document({
         ),
         bullet("Web: /forgot-password + /reset-password?token=. Mobile: request only."),
 
-        h2("6. School / campus change"),
+        h2("7. School / campus change"),
         bullet("Request: Teacher / Student / CampusAdmin (campus only). Parent cannot."),
-        bullet("Locks account (LockedPendingSchoolChange). Destination admin applies or rejects."),
+        bullet("Rules follow active role. Multi-role (e.g. Teacher+Parent): only requesting role locks."),
+        bullet("Locks account when single-role (LockedPendingSchoolChange). Destination admin applies or rejects."),
         bullet("Reject unlocks; optional leaveWithoutSchool for Student."),
 
-        h2("7. Key APIs"),
+        h2("8. Key APIs"),
         bullet("POST /api/auth/login-status | set-initial-password | login | register | switch-role"),
-        bullet("DELETE /api/auth/me/roles/{role} — remove Parent/Teacher when another role remains"),
+        bullet("DELETE /api/auth/me/roles/{role} — remove Parent/Teacher/Coordinator when another role remains"),
         bullet("POST /api/auth/me/role-requests; GET/approve/reject /api/auth/role-requests/…"),
+        bullet("Directory grant/remove companion roles on teachers|parents|coordinators"),
         bullet("POST /api/auth/registrations/{id}/approve|reject — activate when authorized; reject requires reason"),
         bullet("POST /api/auth/password-reset/request|complete|clear"),
         bullet("POST /api/auth/me/school-change; school-changes/{id}/approve|reject"),
 
-        h2("8. Tables"),
+        h2("9. Tables"),
         bullet("app_users (username=email; rejection_reason), app_user_roles (no is_active), app_user_role_request"),
         bullet("app_approval"),
         bullet("app_user_school_change_request / _approval"),
         bullet("app_user_password_reset_request — pending reset; first completion wins"),
         bullet("App:PublicWebBaseUrl — reset email link base"),
 
-        h2("9. Client parity"),
+        h2("10. Client parity"),
         simpleTable(
           ["Capability", "React", "Flutter"],
           [
@@ -170,7 +180,8 @@ const doc = new Document({
             ["School-change request", "Yes", "Yes"],
             ["School-change admin queue", "Yes", "No"],
             ["Multi-role switch", "Acting as toggle", "Profile dropdown"],
-            ["Role request / remove Parent|Teacher", "Yes", "Limited / Web first"],
+            ["Role request / remove Parent|Teacher|Coordinator", "Yes", "Limited / Web first"],
+            ["Directory grant/remove companions", "Yes", "No"],
             ["Directory manage", "Yes", "No"],
           ],
         ),

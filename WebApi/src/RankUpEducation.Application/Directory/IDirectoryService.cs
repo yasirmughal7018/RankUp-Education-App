@@ -1,4 +1,5 @@
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Directory;
 
@@ -259,6 +260,15 @@ public interface IDirectoryService
     Task<DirectoryTeacherResponse> GrantTeacherRoleToCoordinatorAsync(
         long userId,
         GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes a Parent/Teacher/Coordinator role from a multi-role account in the given directory context.
+    /// </summary>
+    Task<GrantCoordinatorRoleResponse> RemoveDirectoryRoleAsync(
+        long userId,
+        UserRole contextRole,
+        UserRole roleToRemove,
         CancellationToken cancellationToken);
 
     /// <summary>Provisions a campus admin for the given school and campus.</summary>

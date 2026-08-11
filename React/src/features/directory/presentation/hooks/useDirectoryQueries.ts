@@ -534,6 +534,24 @@ export function useGrantTeacherRoleToCoordinatorMutation() {
   });
 }
 
+/** Remove a Parent/Teacher/Coordinator role from a multi-role directory account. */
+export function useRemoveDirectoryRoleMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      context,
+      userId,
+      role,
+    }: {
+      context: "teachers" | "parents" | "coordinators";
+      userId: number;
+      role: "Parent" | "Teacher" | "Coordinator";
+    }) => directoryApi.removeDirectoryRole(context, userId, role),
+    onSuccess: () => invalidateComboRoles(queryClient),
+  });
+}
+
 /** Create parent. */
 export function useCreateParentMutation() {
   const queryClient = useQueryClient();

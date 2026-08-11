@@ -226,13 +226,15 @@ def build_doc():
         "Forgot password: enter username (email) → email reset link + pending app_user_password_reset_request + notify role-scoped helpers. First completion wins (email complete or admin/parent clear).",
         "Reject is soft (rejected_at + required rejection_reason). Unique indexes ignore rejected rows so the person can re-request.",
         "Roles live in app_user_roles (multi-role where allowed). Session role on JWT and refresh_tokens.active_role "
-        "(UI “Current / Acting as” — not an is_active column on role rows). Student and PortalAdmin are exclusive; "
-        "SchoolAdmin/CampusAdmin/Teacher/Parent may combine (typical: Parent+Teacher).",
-        "Users may request Parent/Teacher as an extra role (app_user_role_request; account stays active) or remove "
-        "Parent/Teacher when another role remains. Directory admins may grant Parent↔Teacher directly.",
+        "(UI “Current / Acting as” — not an is_active column on role rows). "
+        "Exclusive (single-role only): Student, PortalAdmin, SchoolAdmin, CampusAdmin. "
+        "Combinable on one login: Teacher + Parent + Coordinator (any subset; typical Parent+Teacher or all three).",
+        "Users may request Parent/Teacher as an extra role (app_user_role_request; account stays active) or "
+        "self-remove Parent/Teacher/Coordinator when another role remains. Directory admins may grant and remove "
+        "companion roles from Teachers / Parents / Coordinators lists (see §7b).",
         "School/campus change (Teacher/Student/CampusAdmin) locks the account until destination apply or reject. Parent cannot request school/campus change. Student reject may optionally leaveWithoutSchool.",
         "admin_target and app_users.role columns are dropped / unused.",
-        "Six roles: PortalAdmin, SchoolAdmin, CampusAdmin, Teacher, Student, Parent.",
+        "Seven roles: PortalAdmin, SchoolAdmin, CampusAdmin, Teacher, Parent, Coordinator, Student.",
     ]:
         add_bullet(doc, item)
 
@@ -402,20 +404,23 @@ def build_doc():
         [
             ["Exclusive", "Student — cannot combine with any other role"],
             ["Exclusive", "PortalAdmin — cannot combine with any other role"],
-            ["May combine", "SchoolAdmin, CampusAdmin, Teacher, Parent (any mix)"],
-            ["Self-remove", "Only Parent or Teacher; account must keep at least one other role"],
+            ["Exclusive", "SchoolAdmin — cannot combine (separate login)"],
+            ["Exclusive", "CampusAdmin — cannot combine (separate login)"],
+            ["May combine", "Teacher, Parent, Coordinator — any subset on one account"],
+            ["Self-remove", "Parent / Teacher / Coordinator when another role remains"],
+            ["Directory remove", "Companion roles only from list view (not list primary; not sole role)"],
         ],
         [2000, 7360],
     )
-    add_bullet(doc, "Examples allowed: Teacher+Parent; CampusAdmin+Teacher; SchoolAdmin+CampusAdmin+Teacher/Parent.")
+    add_bullet(doc, "Examples allowed: Teacher+Parent; Teacher+Coordinator; Parent+Coordinator; all three. Blocked: SchoolAdmin+Teacher; CampusAdmin+Parent.")
     for item in [
         "Roles stored in app_user_roles only (user_id, role, created_at). No is_active flag on role rows.",
         "Default login active role = earliest assignment in app_user_roles.",
         "POST /api/auth/switch-role (JWT) issues new access + refresh for selected role.",
-        "DELETE /api/auth/me/roles/{role} removes Parent/Teacher and re-issues tokens; blocked if student groups reference that user+role.",
+        "DELETE /api/auth/me/roles/{role} removes Parent/Teacher/Coordinator and re-issues tokens; blocked if student groups reference that user+role.",
         "refresh_tokens.active_role scopes refresh to that role.",
         "Authorization uses the active session role only (CurrentUser.role); CurrentUser.roles = all assignments.",
-        "UI: React user-menu Acting as segmented toggle; Account shows Current + Switch/Remove. Mobile Profile switcher when multi-role.",
+        "UI: React user-menu Acting as segmented toggle; Account shows Current + Switch/Remove. Directory list ⋯ Add/Remove companions. Mobile Profile switcher when multi-role.",
     ]:
         add_bullet(doc, item)
 
@@ -528,13 +533,35 @@ def build_doc():
         add_bullet(doc, item)
 
     doc.add_heading("7b. Additional role requests & remove role", level=1)
+    doc.add_heading("7b.1 Self-service request (Parent or Teacher)", level=2)
     for item in [
         "POST /api/auth/me/role-requests — request Parent or Teacher as additional role (does not lock account).",
         "Teacher request needs school/campus (+ optional teacher code). Creates app_user_role_request; notifies RoleRequest.",
         "GET /api/auth/me may include pendingRoleRequest while open.",
-        "Admin: GET /api/auth/role-requests/pending; POST …/approve; POST …/reject { reason }. Web: /admin/directory/role-requests.",
-        "Directory grant: POST /api/directory/parents/{id}/roles/teacher; POST /api/directory/teachers/{id}/roles/parent.",
-        "DELETE /api/auth/me/roles/{role} — self-remove Parent/Teacher when another role remains (Web Account Remove).",
+    ]:
+        add_bullet(doc, item)
+    doc.add_heading("7b.2 Admin review", level=2)
+    for item in [
+        "Admin: GET /api/auth/role-requests/pending; POST …/approve; POST …/reject { reason }.",
+        "Web: /admin/directory/role-requests (filters, bulk approve/reject).",
+    ]:
+        add_bullet(doc, item)
+    doc.add_heading("7b.3 Directory grant (immediate)", level=2)
+    for item in [
+        "Create/Edit forms do not offer companion-role checkboxes — grants are list ⋯ only.",
+        "Teachers: POST …/teachers/{id}/roles/parent; POST …/teachers/{id}/roles/coordinator (coordinatorCode; keep school/campus).",
+        "Parents: POST …/parents/{id}/roles/teacher; POST …/parents/{id}/roles/coordinator (school/campus/code).",
+        "Coordinators: POST …/coordinators/{id}/roles/parent; POST …/coordinators/{id}/roles/teacher (teacherCode; keep school/campus).",
+        "Same UserRoleRules; exclusive roles cannot receive a second role.",
+    ]:
+        add_bullet(doc, item)
+    doc.add_heading("7b.4 Remove role (self-service + directory)", level=2)
+    for item in [
+        "DELETE /api/auth/me/roles/{role} — self-remove Parent/Teacher/Coordinator when another role remains (Web Account).",
+        "Directory: DELETE /api/directory/teachers|parents|coordinators/{id}/roles/{role}.",
+        "Teachers list may remove Parent/Coordinator only; Parents list Teacher/Coordinator; Coordinators list Teacher/Parent.",
+        "Blocked: sole remaining role; removing list primary role; Teacher remove with student groups; Parent remove with linked students.",
+        "UI: RemoveDirectoryRoleDialog (themed confirm).",
     ]:
         add_bullet(doc, item)
 
@@ -641,11 +668,18 @@ def build_doc():
             ["POST", "/api/auth/set-initial-password", "Anonymous", "First password after approval"],
             ["POST", "/api/auth/login", "Anonymous", "Email/CNIC/mobile + password → tokens"],
             ["POST", "/api/auth/switch-role", "JWT", "Tokens for another assigned role"],
-            ["DELETE", "/api/auth/me/roles/{role}", "JWT", "Remove Parent/Teacher; re-issue tokens"],
+            ["DELETE", "/api/auth/me/roles/{role}", "JWT", "Remove Parent/Teacher/Coordinator; re-issue tokens"],
             ["POST", "/api/auth/me/role-requests", "JWT", "Request additional Parent or Teacher"],
             ["GET", "/api/auth/role-requests/pending", "Admin", "List pending additional-role requests"],
             ["POST", "/api/auth/role-requests/{id}/approve", "Admin", "Approve additional role"],
             ["POST", "/api/auth/role-requests/{id}/reject", "Admin", "Reject additional role (reason)"],
+            ["POST", "/api/directory/teachers/{id}/roles/parent", "Admin", "Grant Parent to Teacher"],
+            ["POST", "/api/directory/teachers/{id}/roles/coordinator", "Admin", "Grant Coordinator (code; keep school/campus)"],
+            ["POST", "/api/directory/parents/{id}/roles/teacher", "Admin", "Grant Teacher to Parent"],
+            ["POST", "/api/directory/parents/{id}/roles/coordinator", "Admin", "Grant Coordinator to Parent"],
+            ["POST", "/api/directory/coordinators/{id}/roles/parent", "Admin", "Grant Parent to Coordinator"],
+            ["POST", "/api/directory/coordinators/{id}/roles/teacher", "Admin", "Grant Teacher (code; keep school/campus)"],
+            ["DELETE", "/api/directory/…/{id}/roles/{role}", "Admin", "Remove companion role (not list primary)"],
             ["POST", "/api/auth/register", "Anonymous", "Pending user + approval queue (email username)"],
             ["GET", "/api/auth/registration-options/schools", "Anonymous", "School dropdown"],
             ["GET", "/api/auth/registration-options/schools/{id}/campuses", "Anonymous", "Campus dropdown"],
@@ -798,10 +832,11 @@ def build_doc():
     add_note(
         doc,
         "Version",
-        "Aligned with live API (2 Aug 2026). Multi-role Parent+Teacher; role request/remove; "
-        "reject reason; Acting as toggle. Client parity: React = full admin/web; "
+        "Aligned with live API (11 Aug 2026). Combinable: Teacher+Parent+Coordinator. "
+        "Exclusive: Student, PortalAdmin, SchoolAdmin, CampusAdmin. Directory admin grant/remove companions; "
+        "self-service remove Parent/Teacher/Coordinator. Client parity: React = full admin/web; "
         "Flutter Mobile = auth + school-change request + role switch; "
-        "role-request admin queue and remove-role remain Web-first.",
+        "directory grant/remove and role-request admin queue remain Web-first.",
         "EEF8F1",
     )
 

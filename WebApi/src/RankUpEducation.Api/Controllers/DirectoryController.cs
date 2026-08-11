@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Directory;
 using RankUpEducation.Contracts.Common;
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Api.Controllers;
 
@@ -392,6 +394,25 @@ public sealed class DirectoryController : ControllerBase
             "Coordinator role added to teacher account."));
     }
 
+    /// <summary>Removes a Parent/Teacher/Coordinator role from a Teacher multi-role account.</summary>
+    [HttpDelete("teachers/{teacherId:long}/roles/{role}")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> RemoveRoleFromTeacherAsync(
+        long teacherId,
+        string role,
+        CancellationToken cancellationToken)
+    {
+        var roleToRemove = ParseCombinableDirectoryRole(role);
+        var response = await _directoryService.RemoveDirectoryRoleAsync(
+            teacherId,
+            UserRole.Teacher,
+            roleToRemove,
+            cancellationToken);
+        return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
+            response,
+            $"{roleToRemove} role removed."));
+    }
+
     /// <summary>Adds the Coordinator role to an existing Parent account.</summary>
     [HttpPost("parents/{parentId:long}/roles/coordinator")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
@@ -407,6 +428,25 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
             response,
             "Coordinator role added to parent account."));
+    }
+
+    /// <summary>Removes a Parent/Teacher/Coordinator role from a Parent multi-role account.</summary>
+    [HttpDelete("parents/{parentId:long}/roles/{role}")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> RemoveRoleFromParentAsync(
+        long parentId,
+        string role,
+        CancellationToken cancellationToken)
+    {
+        var roleToRemove = ParseCombinableDirectoryRole(role);
+        var response = await _directoryService.RemoveDirectoryRoleAsync(
+            parentId,
+            UserRole.Parent,
+            roleToRemove,
+            cancellationToken);
+        return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
+            response,
+            $"{roleToRemove} role removed."));
     }
 
     /// <summary>Updates an existing parent.</summary>
@@ -716,5 +756,37 @@ public sealed class DirectoryController : ControllerBase
             request,
             cancellationToken);
         return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(response, "Teacher role added."));
+    }
+
+    /// <summary>Removes a Parent/Teacher/Coordinator role from a Coordinator multi-role account.</summary>
+    [HttpDelete("coordinators/{userId:long}/roles/{role}")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> RemoveRoleFromCoordinatorAsync(
+        long userId,
+        string role,
+        CancellationToken cancellationToken)
+    {
+        var roleToRemove = ParseCombinableDirectoryRole(role);
+        var response = await _directoryService.RemoveDirectoryRoleAsync(
+            userId,
+            UserRole.Coordinator,
+            roleToRemove,
+            cancellationToken);
+        return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
+            response,
+            $"{roleToRemove} role removed."));
+    }
+
+    private static UserRole ParseCombinableDirectoryRole(string role)
+    {
+        if (!Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsed)
+            || parsed is not (UserRole.Parent or UserRole.Teacher or UserRole.Coordinator))
+        {
+            throw new ValidationAppException([
+                "Role must be Parent, Teacher, or Coordinator.",
+            ]);
+        }
+
+        return parsed;
     }
 }

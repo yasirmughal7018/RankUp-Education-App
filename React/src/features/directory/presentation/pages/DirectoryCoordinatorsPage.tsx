@@ -32,6 +32,7 @@ import {
 } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { GrantTeacherRoleDialog } from "@/features/directory/presentation/components/GrantTeacherRoleDialog";
+import { RemoveDirectoryRoleDialog } from "@/features/directory/presentation/components/RemoveDirectoryRoleDialog";
 import {
   useActivateCoordinatorMutation,
   useBulkDeactivateCoordinatorsMutation,
@@ -42,6 +43,7 @@ import {
   useDirectorySchoolsQuery,
   useGrantParentRoleToCoordinatorMutation,
   useGrantTeacherRoleToCoordinatorMutation,
+  useRemoveDirectoryRoleMutation,
   useUpdateCoordinatorMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import {
@@ -49,6 +51,10 @@ import {
   matchesDirectoryAccountStatusFilter,
   type DirectoryAccountStatusFilter,
 } from "@/features/directory/presentation/utils/accountStatus";
+import {
+  getRemovableDirectoryRoles,
+  type DirectoryCombinableRole,
+} from "@/features/directory/presentation/utils/directoryRoles";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -130,6 +136,11 @@ export function DirectoryCoordinatorsPage() {
   const [deactivateTarget, setDeactivateTarget] =
     useState<DirectoryCoordinator | null>(null);
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
+  const [removeRoleTarget, setRemoveRoleTarget] = useState<{
+    userId: number;
+    fullName: string;
+    role: DirectoryCombinableRole;
+  } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -163,6 +174,7 @@ export function DirectoryCoordinatorsPage() {
   const bulkDeactivateMutation = useBulkDeactivateCoordinatorsMutation();
   const grantParentMutation = useGrantParentRoleToCoordinatorMutation();
   const grantTeacherMutation = useGrantTeacherRoleToCoordinatorMutation();
+  const removeRoleMutation = useRemoveDirectoryRoleMutation();
 
   const totalCount = data?.totalCount ?? 0;
 
@@ -197,7 +209,8 @@ export function DirectoryCoordinatorsPage() {
     deactivateMutation.isPending ||
     bulkDeactivateMutation.isPending ||
     grantParentMutation.isPending ||
-    grantTeacherMutation.isPending;
+    grantTeacherMutation.isPending ||
+    removeRoleMutation.isPending;
 
   const allVisibleSelected =
     visibleCoordinators.length > 0 &&
@@ -321,6 +334,7 @@ export function DirectoryCoordinatorsPage() {
     const roles = coordinator.roles ?? [];
     const hasParentRole = roles.includes("Parent");
     const hasTeacherRole = roles.includes("Teacher");
+    const removableRoles = getRemovableDirectoryRoles(roles, "Coordinator");
     const overflowItems = [
       {
         id: "toggle-active",
@@ -355,6 +369,20 @@ export function DirectoryCoordinatorsPage() {
             },
           ]
         : []),
+      ...removableRoles.map((role) => ({
+        id: `remove-${role.toLowerCase()}`,
+        label: `Remove ${role} role`,
+        onSelect: () => {
+          clearMessages();
+          setRemoveRoleTarget({
+            userId: coordinator.userId,
+            fullName: coordinator.fullName,
+            role,
+          });
+        },
+        disabled: busy,
+        tone: "danger" as const,
+      })),
     ];
 
     return (
@@ -748,6 +776,37 @@ export function DirectoryCoordinatorsPage() {
         destructive
         loading={bulkDeactivateMutation.isPending}
         onConfirm={() => void confirmBulkDeactivate()}
+      />
+
+      <RemoveDirectoryRoleDialog
+        open={removeRoleTarget != null}
+        personName={removeRoleTarget?.fullName ?? ""}
+        role={removeRoleTarget?.role ?? null}
+        isSubmitting={removeRoleMutation.isPending}
+        onClose={() => setRemoveRoleTarget(null)}
+        onConfirm={() => {
+          if (!removeRoleTarget) {
+            return;
+          }
+          void (async () => {
+            try {
+              await removeRoleMutation.mutateAsync({
+                context: "coordinators",
+                userId: removeRoleTarget.userId,
+                role: removeRoleTarget.role,
+              });
+              setSuccessMessage(
+                `${removeRoleTarget.role} role removed from ${removeRoleTarget.fullName}.`,
+              );
+              setRemoveRoleTarget(null);
+            } catch (err) {
+              const apiError = err as ApiError;
+              setActionError(
+                apiError.message ?? "Unable to remove role.",
+              );
+            }
+          })();
+        }}
       />
     </DirectoryPageShell>
   );

@@ -626,6 +626,17 @@ export async function grantTeacherRoleToCoordinator(
   );
 }
 
+/** Remove a Parent/Teacher/Coordinator role from a multi-role directory account. */
+export async function removeDirectoryRole(
+  context: "teachers" | "parents" | "coordinators",
+  userId: number,
+  role: "Parent" | "Teacher" | "Coordinator",
+): Promise<{ userId: number; fullName: string; username: string; roles: string[] }> {
+  return apiRequest(`/directory/${context}/${userId}/roles/${role.toLowerCase()}`, {
+    method: "DELETE",
+  });
+}
+
 /** Create campus admin account. */
 export async function createCampusAdmin(
   input: CreateDirectoryCampusAdminInput,

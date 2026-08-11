@@ -132,9 +132,9 @@
     <h1>User Creation, Approval &amp; Login — QA Guide</h1>
     <p class="subtitle">RankUp Education — Web (React), Mobile (Flutter), and API</p>
     <div class="meta">
-      <span class="chip">Version: current codebase</span>
+      <span class="chip">Version: 11 Aug 2026 · UserRoleRules + directory companions</span>
       <span class="chip">Date: 2 Aug 2026</span>
-      <span class="chip">Roles: PortalAdmin · SchoolAdmin · CampusAdmin · Teacher · Parent · Student</span>
+      <span class="chip">Roles: PortalAdmin · SchoolAdmin · CampusAdmin · Teacher · Parent · Coordinator · Student</span>
       <span class="chip">Registration + school/campus change lock</span>
     </div>
   </header>
@@ -148,6 +148,7 @@
     <li><a href="#approval">5. Registration approval &amp; activation</a></li>
     <li><a href="#school-change">6. School / campus change (request, lock, unlock)</a></li>
     <li><a href="#directory">7. Directory (admin) create rules</a></li>
+    <li><a href="#directory-roles">7b. Directory companion grant &amp; remove</a></li>
     <li><a href="#multirole">8. Multi-role &amp; active role</a></li>
     <li><a href="#login">9. Login / password / active / locked checks</a></li>
     <li><a href="#password-reset">9b. Password reset (email link + admin clear)</a></li>
@@ -161,8 +162,9 @@
   <p>RankUp supports these user-creation and access paths:</p>
   <ol>
     <li><strong>Self-service registration</strong> — Student / Parent / Teacher submit (email = username) → approval queue in <code>app_approval</code> → School/Campus Admin may approve and <strong>activate Student/Teacher in scope</strong>; PortalAdmin activates any (required for Parent / no-school) → user sets password → Login.</li>
-    <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / SchoolAdmin / CampusAdmin with <strong>email (username) required</strong>, no password → auto-approved → user sets password on first login.</li>
-    <li><strong>Add role to existing account</strong> — Directory create matching an existing identity adds a second role (multi-role) when combination rules allow. <strong>Teacher</strong> matches on <strong>mobile only</strong>; <strong>Parent / SchoolAdmin / CampusAdmin</strong> match on mobile or CNIC.</li>
+    <li><strong>Directory create (Web)</strong> — Admin creates Student / Teacher / Parent / Coordinator / SchoolAdmin / CampusAdmin with <strong>email (username) required</strong>, no password → auto-approved → user sets password on first login. Create/Edit forms do <strong>not</strong> include companion-role checkboxes.</li>
+    <li><strong>Companion roles (Web directory)</strong> — From Teachers / Parents / Coordinators list ⋯ menu, admin may <strong>Add</strong> or <strong>Remove</strong> Teacher / Parent / Coordinator companions (rules in §7b / §8). Single-role accounts cannot remove their only role; each list cannot remove its own primary role.</li>
+    <li><strong>Add role to existing account</strong> — Directory create matching an existing identity may add a second role when combination rules allow. <strong>Teacher</strong> matches on <strong>mobile only</strong>; <strong>Parent / SchoolAdmin / CampusAdmin</strong> match on mobile or CNIC.</li>
     <li><strong>School / campus change</strong> — Teacher / Student / CampusAdmin request a change from Profile (Web <code>/account</code> or Mobile Profile) → confirmation → account <strong>locks</strong> → destination admin applies or rejects on the <strong>Web</strong> queue (<code>/admin/directory/school-changes</code>; PortalAdmin any; SchoolAdmin for their school; CampusAdmin for Teacher/Student into their campus) → account <strong>unlocks</strong>. <strong>Parent cannot request</strong> school/campus change (parents are not school-scoped). Mobile does not implement the admin apply queue.</li>
     <li><strong>Password reset</strong> — User requests via Forgot password (username = email) → pending row in <code>app_user_password_reset_request</code> + email link (<code>/reset-password?token=</code>) + scoped admin notifications (<code>PasswordResetRequest</code>) when account is <strong>active</strong> with a password → completion via emailed token <strong>or</strong> admin Clear (Web bell; Parent for linked Student) — <strong>first completion wins</strong> → user sets or chooses a new password. Always returns success (no existence leak).</li>
   </ol>
@@ -374,7 +376,7 @@
 
   <h2 id="school-change">6. School / campus change (request, lock, unlock)</h2>
   <p>This is <strong>separate from registration</strong>. An already-active Teacher / Student / CampusAdmin can request a school and/or campus change from Profile. The request does <strong>not</strong> use the profile “Save” button — it has its own save action and confirmation. <strong>Parent cannot request</strong> a school/campus change (same rule as registration: parents are not assigned school/campus).</p>
-  <p><strong>Active role matters:</strong> capability follows the <em>current</em> session role (Web profile / Mobile Profile “Acting as”). Example: CampusAdmin+Teacher — as <strong>Teacher</strong> can change school+campus; as <strong>CampusAdmin</strong> school is fixed (campus only). Parent active role cannot request even if another role on the account could.</p>
+  <p><strong>Active role matters:</strong> capability follows the <em>current</em> session role (Web profile / Mobile Profile “Acting as”). Example: Teacher+Parent — as <strong>Teacher</strong> can request school+campus change; as <strong>Parent</strong> cannot request. CampusAdmin (exclusive login) may change campus only (school fixed). SchoolAdmin / CampusAdmin cannot combine with Teacher/Parent/Coordinator.</p>
 
   <h3>Who can request</h3>
   <table>
@@ -450,7 +452,7 @@
 
   <h3>Directory overview (Web)</h3>
   <ul>
-    <li>Route: <code>/admin/directory</code> — summary tiles drive the active section (Schools, School Admins, Campus Admins, Parents, Teachers, Students).</li>
+    <li>Route: <code>/admin/directory</code> — summary tiles drive the active section (Schools, School Admins, Campus Admins, Parents, Teachers, Coordinators, Students).</li>
     <li>Active list shows <strong>Active</strong> (= login-status <code>Ready</code>) records only. Clicking a people tile opens a details popup (contact, audit fields, approval history when present). Header shows stats already visible on the tile; those fields are not repeated in the body.</li>
     <li><strong>Directory status badges vs login-status:</strong> <code>Active</code> ↔ Ready; <code>ApprovedInactive</code> ↔ NeedsPasswordSetup (active, no password); <code>PendingApproval</code> / <code>Locked</code> / <code>Deactivated</code> / <code>Rejected</code> map to the matching overview states. Do not look for the string “Ready” on directory tiles.</li>
     <li><strong>Last login</strong> is shown on the right of active people tiles and in the popup header (date on one line, time on the next). Source: <code>app_users.last_login_at</code>, updated on successful password login (<code>POST /api/auth/login</code>).</li>
@@ -472,13 +474,19 @@
         <td>Teacher</td>
         <td>Portal / School / Campus Admin</td>
         <td>fullName, email (username), school, campus, teacherCode</td>
-        <td>mobile, cnic</td>
+        <td>mobile</td>
       </tr>
       <tr>
         <td>Parent</td>
         <td>Portal / School / Campus Admin</td>
         <td>fullName, email (username)</td>
         <td>cnic, mobile</td>
+      </tr>
+      <tr>
+        <td>Coordinator</td>
+        <td>Portal / School / Campus Admin</td>
+        <td>fullName, email (username), school, campus, coordinator code</td>
+        <td>mobile</td>
       </tr>
       <tr>
         <td>SchoolAdmin</td>
@@ -495,24 +503,56 @@
     </tbody>
   </table>
   <ul>
-    <li>Web: <code>/admin/directory/school-admins</code>, <code>/admin/directory/campus-admins</code></li>
+    <li>Web: <code>/admin/directory/teachers</code>, <code>/admin/directory/parents</code>, <code>/admin/directory/coordinators</code>, <code>/admin/directory/school-admins</code>, <code>/admin/directory/campus-admins</code></li>
+    <li>List UX (Teachers / Parents / Coordinators): one-row filters (search, school/campus by admin scope, entity filter, account status); Edit + ⋯ overflow (activate/deactivate, add/remove companion roles); themed confirm dialogs for deactivate and remove-role.</li>
     <li>CampusAdmin create/list is forced to own school for SchoolAdmin; CampusAdmin cannot manage Campus Admins.</li>
     <li>Path C identity match: Teacher by <strong>mobile only</strong>; Parent / SchoolAdmin / CampusAdmin by mobile or CNIC. If match and role rules allow, the role is <strong>added</strong> to that account.</li>
   </ul>
 
+  <h2 id="directory-roles">7b. Directory companion grant &amp; remove</h2>
+  <p>Applies to accounts that may hold <strong>Teacher + Parent + Coordinator</strong> together. Admins manage companions from the list ⋯ menu — not from Create/Edit forms.</p>
+
+  <h3>Grant (Add role)</h3>
+  <table>
+    <thead>
+      <tr><th>List</th><th>Overflow action</th><th>Dialog</th><th>API</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Teachers</td><td>Add Parent role</td><td>Confirm</td><td><code>POST …/teachers/{id}/roles/parent</code></td></tr>
+      <tr><td>Teachers</td><td>Add Coordinator role</td><td>Code editable; school/campus read-only</td><td><code>POST …/teachers/{id}/roles/coordinator</code></td></tr>
+      <tr><td>Parents</td><td>Add Teacher role</td><td>School, campus, teacher code</td><td><code>POST …/parents/{id}/roles/teacher</code></td></tr>
+      <tr><td>Parents</td><td>Add Coordinator role</td><td>School, campus, coordinator code</td><td><code>POST …/parents/{id}/roles/coordinator</code></td></tr>
+      <tr><td>Coordinators</td><td>Add Teacher role</td><td>Code editable; school/campus read-only</td><td><code>POST …/coordinators/{id}/roles/teacher</code></td></tr>
+      <tr><td>Coordinators</td><td>Add Parent role</td><td>Confirm</td><td><code>POST …/coordinators/{id}/roles/parent</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Remove role</h3>
+  <ul>
+    <li>Shown only when the account has <strong>more than one</strong> combinable role.</li>
+    <li>Themed popup: <code>RemoveDirectoryRoleDialog</code> (same Dialog pattern as Add-role dialogs).</li>
+    <li><strong>Teachers</strong> list may remove Parent / Coordinator — not Teacher.</li>
+    <li><strong>Parents</strong> list may remove Teacher / Coordinator — not Parent.</li>
+    <li><strong>Coordinators</strong> list may remove Teacher / Parent — not Coordinator.</li>
+    <li>API: <code>DELETE /api/directory/{teachers|parents|coordinators}/{id}/roles/{role}</code>.</li>
+    <li>Blocked: sole remaining role; removing list primary role; Teacher remove with student groups still on that role; Parent remove with linked students still attached.</li>
+  </ul>
+
   <h2 id="multirole">8. Multi-role &amp; active role</h2>
-  <p>One person can hold multiple roles on one login. Roles are stored in <code>app_user_roles</code> only.</p>
+  <p>One person can hold multiple roles on one login. Roles are stored in <code>app_user_roles</code> only. Domain: <code>UserRoleRules</code>.</p>
   <h3>Allowed combinations</h3>
   <ul>
     <li>Teacher + Parent</li>
-    <li>CampusAdmin + Teacher and/or Parent</li>
-    <li>SchoolAdmin + Teacher and/or Parent</li>
-    <li>SchoolAdmin + CampusAdmin + Teacher/Parent (allowed by rules)</li>
+    <li>Teacher + Coordinator</li>
+    <li>Parent + Coordinator</li>
+    <li>Teacher + Parent + Coordinator</li>
   </ul>
-  <h3>Blocked combinations</h3>
+  <h3>Blocked combinations (exclusive roles)</h3>
   <ul>
-    <li><strong>Student</strong> cannot combine with any other role</li>
-    <li><strong>PortalAdmin</strong> cannot combine with any other role</li>
+    <li><strong>Student</strong> — cannot combine with any other role</li>
+    <li><strong>PortalAdmin</strong> — cannot combine with any other role</li>
+    <li><strong>SchoolAdmin</strong> — cannot combine with any other role (use a separate login)</li>
+    <li><strong>CampusAdmin</strong> — cannot combine with any other role (use a separate login)</li>
   </ul>
   <h3>Session behaviour</h3>
   <ol>
@@ -521,10 +561,11 @@
     <li><code>POST /api/auth/switch-role</code> issues new tokens for the selected role.</li>
     <li>Refresh token stores <code>active_role</code> so refresh keeps the same acting role.</li>
     <li>Authorization uses the <strong>active</strong> role only — including school/campus change request rules (see §6).</li>
+    <li>Self-service remove: <code>DELETE /api/auth/me/roles/{role}</code> for Parent / Teacher / Coordinator when another role remains.</li>
   </ol>
   <h3>UI</h3>
   <ul>
-    <li>Web: role switcher in the user menu when <code>roles.length &gt; 1</code>.</li>
+    <li>Web: role switcher in the user menu when <code>roles.length &gt; 1</code>; Account page Switch / Remove; Directory list ⋯ Add / Remove companions (§7b).</li>
     <li>Mobile: role switcher on Profile when multiple roles exist.</li>
   </ul>
 
@@ -619,8 +660,12 @@
       <tr><td>Password reset clear (admin / Parent)</td><td>Notifications bell → Clear password</td><td>Not available (Web only)</td></tr>
       <tr><td>Self-deactivate account</td><td><code>/account</code> → Deactivate (current password)</td><td>Not available (Web only)</td></tr>
       <tr><td>Role switcher</td><td>User menu</td><td>Profile → Acting as</td></tr>
+      <tr><td>Self-service role request / remove role</td><td><code>/account</code></td><td>Out of scope (Web only)</td></tr>
+      <tr><td>Admin role-request queue</td><td><code>/admin/directory/role-requests</code></td><td>Out of scope (Web only)</td></tr>
+      <tr><td>Directory companion grant/remove</td><td>Teachers / Parents / Coordinators ⋯</td><td>Out of scope (Web only)</td></tr>
     </tbody>
   </table>
+  <p><strong>Mobile scope:</strong> Admin directory, companion grant/remove, role-request (self + admin), self-remove role, school-change admin queue, password Clear, and self-deactivate are <strong>Web only by product decision</strong> (not pending Mobile work).</p>
 
   <h2 id="scenarios">11. QA scenarios (step-by-step)</h2>
 
@@ -1089,12 +1134,51 @@
     <h3><span class="id">QA-40</span> Multi-role school change follows active role</h3>
     <div class="platforms"><span class="web">Web</span><span class="mobile">Mobile</span></div>
     <ol class="steps">
-      <li>Use CampusAdmin + Teacher (Ready). Switch active role to <strong>Teacher</strong>.</li>
-      <li>Profile school/campus section allows school + campus change.</li>
-      <li>Switch active role to <strong>CampusAdmin</strong> → school selector fixed; campus editable only.</li>
-      <li>Optional: switch to Parent (if also Parent) → school-change section hidden / request forbidden.</li>
+      <li>Use Teacher + Parent (Ready). Switch active role to <strong>Teacher</strong>.</li>
+      <li>Profile school/campus section allows school + campus change (Teacher may request).</li>
+      <li>Switch active role to <strong>Parent</strong> → school-change section hidden / request forbidden (Parent cannot request).</li>
+      <li>Optional: add Coordinator and confirm switch-role still works for all three.</li>
     </ol>
-    <div class="expect">Expected: Request rules follow active role, not the full roles list.</div>
+    <div class="expect">Expected: Request rules follow active role, not the full roles list. SchoolAdmin/CampusAdmin are exclusive (separate logins).</div>
+  </div>
+
+  <div class="scenario" id="qa-41">
+    <h3><span class="id">QA-41</span> Directory grant Coordinator on Teacher (keep school/campus)</h3>
+    <div class="platforms"><span class="web">Web</span><span class="api">API</span></div>
+    <ol class="steps">
+      <li>Open <code>/admin/directory/teachers</code> → ⋯ on a Teacher without Coordinator → <strong>Add Coordinator role</strong>.</li>
+      <li>Confirm themed dialog shows school/campus <strong>read-only</strong>; enter coordinator code → submit.</li>
+      <li>List shows Roles including Coordinator; user can switch role after login.</li>
+      <li>Negative: Create Teacher form has no “Also Coordinator” checkbox.</li>
+    </ol>
+    <div class="expect">Expected: Coordinator added; school/campus unchanged; code required.</div>
+  </div>
+
+  <div class="scenario" id="qa-42">
+    <h3><span class="id">QA-42</span> Directory remove companion roles (view-scoped)</h3>
+    <div class="platforms"><span class="web">Web</span><span class="api">API</span></div>
+    <ol class="steps">
+      <li>Prepare Teacher+Parent+Coordinator account.</li>
+      <li>Teachers list ⋯ → shows Remove Parent and Remove Coordinator — <strong>not</strong> Remove Teacher.</li>
+      <li>Parents list ⋯ → Remove Teacher / Coordinator — not Parent.</li>
+      <li>Coordinators list ⋯ → Remove Teacher / Parent — not Coordinator.</li>
+      <li>Confirm themed <code>RemoveDirectoryRoleDialog</code> → remove one companion → remaining roles stay.</li>
+      <li>When only one role remains, no Remove actions appear.</li>
+      <li>Negative: cannot remove Parent while linked students exist; cannot remove Teacher while student groups reference that role.</li>
+    </ol>
+    <div class="expect">Expected: Companion-only remove per list; themed confirm; sole role protected.</div>
+  </div>
+
+  <div class="scenario" id="qa-43">
+    <h3><span class="id">QA-43</span> Coordinators directory parity</h3>
+    <div class="platforms"><span class="web">Web</span></div>
+    <ol class="steps">
+      <li>Overview tile Coordinators → <code>/admin/directory/coordinators</code>.</li>
+      <li>One-row filters: search (incl. code), school/campus by admin role, companion roles filter, account status.</li>
+      <li>Create coordinator (code required); Edit has no companion checkboxes.</li>
+      <li>⋯ Add Teacher / Add Parent; deactivate uses AppConfirmDialog.</li>
+    </ol>
+    <div class="expect">Expected: Same chrome as Teachers/Parents lists.</div>
   </div>
 
   <h2 id="checklist">12. Quick verification checklist</h2>
@@ -1118,8 +1202,8 @@
       <tr><td>13</td><td>Directory create → NeedsPasswordSetup (no approval queue)</td><td>☐</td><td>login only</td><td></td></tr>
       <tr><td>14</td><td>PortalAdmin creates SchoolAdmin; first login set password</td><td>☐</td><td>login only</td><td></td></tr>
       <tr><td>15</td><td>Portal/School Admin creates CampusAdmin; first login set password</td><td>☐</td><td>login only</td><td></td></tr>
-      <tr><td>16</td><td>Multi-role add Teacher to Parent; switch role</td><td>☐</td><td>☐</td><td></td></tr>
-      <tr><td>17</td><td>Student / PortalAdmin cannot combine roles</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>16</td><td>Multi-role: grant Teacher/Parent/Coordinator from directory ⋯; switch role</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>17</td><td>Student / PortalAdmin / SchoolAdmin / CampusAdmin cannot combine roles</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>18</td><td>Directory deactivate → “not active” (not school-change lock)</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>19</td><td>Profile school change uses separate button + confirm popup</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>20</td><td>School/campus change request locks account + signs out</td><td>☐</td><td>☐</td><td></td></tr>
@@ -1139,12 +1223,16 @@
       <tr><td>34</td><td>Logout sends refresh token and revokes it</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>35</td><td>Password reset first completion wins (token OR Clear)</td><td>☐</td><td>token only</td><td></td></tr>
       <tr><td>36</td><td>Self-deactivate (Web) → “not active”; PortalAdmin cannot self-deactivate</td><td>☐</td><td>—</td><td></td></tr>
-      <tr><td>37</td><td>Multi-role school change follows active role (Teacher vs CampusAdmin)</td><td>☐</td><td>☐</td><td></td></tr>
+      <tr><td>37</td><td>Multi-role school change follows active role (Teacher vs Parent)</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>38</td><td>Directory badge ApprovedInactive = NeedsPasswordSetup (not “Ready”)</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>39</td><td>Directory create requires email (username); Parent may Clear linked Student reset</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>40</td><td>Complete reset via <code>/reset-password?token=</code> → Ready login</td><td>☐</td><td>☐</td><td></td></tr>
       <tr><td>41</td><td>Username stays email on activate (no CNIC rewrite)</td><td>☐</td><td>—</td><td></td></tr>
       <tr><td>42</td><td>School-change reject optional leaveWithoutSchool (Student)</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>43</td><td>Teacher ⋯ Add Coordinator: school/campus read-only; code required</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>44</td><td>Remove companion only (not list primary); sole role has no Remove</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>45</td><td>Coordinators directory: filters, create, grant Teacher/Parent, deactivate confirm</td><td>☐</td><td>—</td><td></td></tr>
+      <tr><td>46</td><td>Create/Edit Teacher/Parent/Coordinator forms have no companion checkboxes</td><td>☐</td><td>—</td><td></td></tr>
     </tbody>
   </table>
 
@@ -1177,9 +1265,16 @@
       <tr><td>GET</td><td><code>/api/auth/school-changes/pending</code></td><td>Portal/School/Campus Admin</td><td>Pending changes + <code>schoolAdminHasApproved</code></td></tr>
       <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/approve</code></td><td>Portal/School/Campus Admin</td><td>Apply+unlock when allowed: PortalAdmin any; SchoolAdmin destination school; CampusAdmin Teacher/Student into own campus</td></tr>
       <tr><td>POST</td><td><code>/api/auth/school-changes/{id}/reject</code></td><td>Portal/School/Campus Admin</td><td>Reject + unlock (no apply); optional <code>leaveWithoutSchool</code> for Student</td></tr>
-      <tr><td>GET</td><td><code>/api/directory/summary</code></td><td>Admins</td><td>Directory overview counts + <code>visibleSections</code> (includes <code>schoolChanges</code>)</td></tr>
-      <tr><td>GET</td><td><code>/api/directory/students|teachers|parents|…</code></td><td>Admins</td><td>List users (includes contact, audit fields, <code>lastLoginAt</code>, approval history)</td></tr>
-      <tr><td>POST</td><td><code>/api/directory/students|teachers|parents</code></td><td>Admins</td><td>Create / add-role users</td></tr>
+      <tr><td>GET</td><td><code>/api/directory/summary</code></td><td>Admins</td><td>Directory overview counts + <code>visibleSections</code> (includes coordinators, schoolChanges)</td></tr>
+      <tr><td>GET</td><td><code>/api/directory/students|teachers|parents|coordinators|…</code></td><td>Admins</td><td>List users (contact, audit, <code>lastLoginAt</code>, <code>roles</code>, approval history)</td></tr>
+      <tr><td>POST</td><td><code>/api/directory/students|teachers|parents|coordinators</code></td><td>Admins</td><td>Create users (no companion checkboxes on form)</td></tr>
+      <tr><td>POST</td><td><code>/api/directory/teachers/{id}/roles/parent</code></td><td>Admins</td><td>Grant Parent to Teacher</td></tr>
+      <tr><td>POST</td><td><code>/api/directory/teachers/{id}/roles/coordinator</code></td><td>Admins</td><td>Grant Coordinator to Teacher (code; keep school/campus)</td></tr>
+      <tr><td>POST</td><td><code>/api/directory/parents/{id}/roles/teacher</code></td><td>Admins</td><td>Grant Teacher to Parent (school/campus/code)</td></tr>
+      <tr><td>POST</td><td><code>/api/directory/parents/{id}/roles/coordinator</code></td><td>Admins</td><td>Grant Coordinator to Parent (school/campus/code)</td></tr>
+      <tr><td>POST</td><td><code>/api/directory/coordinators/{id}/roles/parent</code></td><td>Admins</td><td>Grant Parent to Coordinator</td></tr>
+      <tr><td>POST</td><td><code>/api/directory/coordinators/{id}/roles/teacher</code></td><td>Admins</td><td>Grant Teacher to Coordinator (code; keep school/campus)</td></tr>
+      <tr><td>DELETE</td><td><code>/api/directory/teachers|parents|coordinators/{id}/roles/{role}</code></td><td>Admins</td><td>Remove companion role (not list primary; not sole role)</td></tr>
       <tr><td>POST</td><td><code>/api/directory/school-admins</code></td><td>PortalAdmin</td><td>Create SchoolAdmin</td></tr>
       <tr><td>POST</td><td><code>/api/directory/campus-admins</code></td><td>Portal/School Admin</td><td>Create CampusAdmin</td></tr>
       <tr><td>POST</td><td><code>/api/directory/.../activate|deactivate</code></td><td>Admins</td><td>Active status</td></tr>
@@ -1187,17 +1282,16 @@
   </table>
 
   <footer>
-    Updated 2 Aug 2026 from current business logic in WebApi AuthService / DirectoryService,
-    React AccountPage / AccountLockedPage / PendingSchoolChangesPage / DirectoryOverviewPage / LoginPage / ForgotPasswordPage / ResetPasswordPage / NotificationsBell,
+    Updated 11 Aug 2026 from WebApi <code>UserRoleRules</code> / AuthService / DirectoryService,
+    React directory Teachers / Parents / Coordinators (grant + remove companions), AccountPage,
     and Flutter Mobile login / profile school-change request / logout revoke.
-    Directory create / admin school-change queue / password-reset Clear remain <strong>Web only</strong> (scenario chips QA-14–17; QA-37 Clear step).
-    Password reset: request + email token (Web+Mobile) + Clear (Web; Parent for linked Student) — QA-37 / QA-38. First completion wins.
-    Self-deactivate Web-only — QA-39. Active-role school-change — QA-40.
+    <strong>Combinable:</strong> Teacher + Parent + Coordinator. <strong>Exclusive:</strong> Student, PortalAdmin, SchoolAdmin, CampusAdmin.
+    Directory companion grant/remove — §7b; QA-41–43. Directory create / school-change admin queue / password Clear remain <strong>Web only</strong>.
+    Password reset: request + email token (Web+Mobile) + Clear (Web). Self-deactivate Web-only — QA-39. Active-role school-change — QA-40.
     Directory badges: <code>ApprovedInactive</code> = NeedsPasswordSetup; <code>Active</code> = Ready.
-    Tables: <code>app_user_roles</code>, <code>app_approval</code>,
-    <code>app_user_school_change_request</code>,
-    <code>app_user_password_reset_request</code>, <code>app_users.last_login_at</code>.
-    Companion DOCX (if present): <code>docs/03_RankUp_User_Creation_Approval_QA.docx</code> — update manually or rebuild when a generator script is available.
+    Tables: <code>app_user_roles</code>, <code>app_approval</code>, <code>app_user_role_request</code>,
+    <code>app_user_school_change_request</code>, <code>app_user_password_reset_request</code>, <code>app_users.last_login_at</code>.
+    Companion DOCX: rebuild via <code>npm run build:user-qa-docx</code> in <code>docs/</code> (keep in sync with this HTML).
   </footer>
 </main>
 </body>
