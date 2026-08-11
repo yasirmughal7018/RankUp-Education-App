@@ -220,13 +220,13 @@ export function AccountPage() {
   const isCampusAdminRole = accountRoles.includes("CampusAdmin");
   /** Exclusive single-role accounts — no Roles section on Account. */
   const hideRolesSection =
-    isPortalAdmin || isSchoolAdminRole || isCampusAdminRole;
+    isPortalAdmin ||
+    isSchoolAdminRole ||
+    isCampusAdminRole ||
+    isStudentRole;
   const pendingRoleRequest = profile?.pendingRoleRequest ?? null;
   const availableRoleRequests: RequestableRole[] =
-    !profile ||
-    hideRolesSection ||
-    isStudentRole ||
-    pendingRoleRequest
+    !profile || hideRolesSection || pendingRoleRequest
       ? []
       : REQUESTABLE_ROLES.filter((role) => !accountRoles.includes(role));
   const activeRoleChoice: RequestableRole | null =
@@ -927,11 +927,7 @@ export function AccountPage() {
             {roleError ? <Notice tone="error">{roleError}</Notice> : null}
             {roleSuccess ? <Notice tone="success">{roleSuccess}</Notice> : null}
 
-            {isStudentRole ? (
-              <Notice tone="info">
-                Student accounts cannot add other roles.
-              </Notice>
-            ) : pendingRoleRequest ? (
+            {pendingRoleRequest ? (
               <Notice tone="warn">
                 A request for the{" "}
                 <span className="font-semibold">
