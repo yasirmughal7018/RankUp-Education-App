@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Link2, Users } from "lucide-react";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { APPROVAL_STATUS_CHIP } from "@/lib/constants/approval-status";
+import { isAdminRole } from "@/core/api/types";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import type {
   DirectoryAccountAuditFields,
   DirectoryAccountStatus,
@@ -12,6 +14,7 @@ import type {
   DirectoryCampus,
   DirectoryCampusAdmin,
   DirectoryCoordinator,
+  DirectoryLinkedStudentSummary,
   DirectoryParent,
   DirectorySchool,
   DirectorySchoolAdmin,
@@ -21,6 +24,9 @@ import type {
   DirectoryStudent,
   DirectoryTeacher,
 } from "@/features/directory/domain/directoryTypes";
+import { DirectoryIconAction } from "@/features/directory/presentation/components/DirectoryListChrome";
+import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
+import { ManageLinkedStudentsDialog } from "@/features/directory/presentation/components/ManageLinkedStudentsDialog";
 import {
   useDirectoryCampusAdminsQuery,
   useDirectoryCampusesQuery,
@@ -31,6 +37,8 @@ import {
   useDirectoryStudentsQuery,
   useDirectorySummaryQuery,
   useDirectoryTeachersQuery,
+  useLinkParentStudentMutation,
+  useUnlinkParentStudentMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import {
@@ -62,6 +70,9 @@ type PreviewItem = {
   meta: string;
   /** Present only for school tiles — drives campus inspect flow. */
   schoolId?: number;
+  /** Present only for parent tiles — child link actions. */
+  parentId?: number;
+  linkedStudents?: DirectoryLinkedStudentSummary[];
   /** Shown for people tiles (not schools). */
   username?: string;
   /** Compact stats row under subtitle (campuses / teachers / students). */
@@ -334,15 +345,17 @@ function mapParent(item: DirectoryParent): PreviewItem {
   return {
     id: `parent-${item.parentId}`,
     title: item.fullName,
-    subtitle: `${item.linkedStudentCount} linked child${item.linkedStudentCount === 1 ? "" : "ren"}`,
+    subtitle: "",
     meta: item.username,
+    parentId: item.parentId,
+    linkedStudents: item.linkedStudents ?? [],
     username: item.username,
     stats: [{ label: "Children", value: item.linkedStudentCount }],
     details: [
       detailOrDash("Username", item.username ? `@${item.username}` : null),
-      detailOrDash("Linked children", item.linkedStudentCount),
+      detailOrDash("Children", item.linkedStudentCount),
       detailOrDash(
-        "Linked students",
+        "Student names",
         linkedNames.length > 0 ? linkedNames.join(", ") : null,
       ),
       detailOrDash("Mobile", item.mobileNumber),
@@ -486,6 +499,8 @@ function mapCampusAdmin(item: DirectoryCampusAdmin): PreviewItem {
 
 /** Directory dashboard: summary cards, searchable tabs, and record preview drawer. */
 export function DirectoryOverviewPage() {
+  const { user } = useAuth();
+  const canManageParents = user != null && isAdminRole(user.role);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState("");
@@ -493,6 +508,16 @@ export function DirectoryOverviewPage() {
   const [selectedItem, setSelectedItem] = useState<PreviewItem | null>(null);
   /** School-tile flow: load campuses, pick one if multiple, then show details. */
   const [schoolInspect, setSchoolInspect] = useState<SchoolInspectState | null>(
+    null,
+  );
+  const [linkStudentTarget, setLinkStudentTarget] =
+    useState<DirectoryParent | null>(null);
+  const [manageChildrenTarget, setManageChildrenTarget] =
+    useState<DirectoryParent | null>(null);
+  const [parentActionMessage, setParentActionMessage] = useState<string | null>(
+    null,
+  );
+  const [parentActionError, setParentActionError] = useState<string | null>(
     null,
   );
   /** Expanded summary cards show status details; collapsed by default. */
@@ -559,6 +584,61 @@ export function DirectoryOverviewPage() {
     previewFilters,
     activeTab === "parents",
   );
+  const linkStudentMutation = useLinkParentStudentMutation();
+  const unlinkStudentMutation = useUnlinkParentStudentMutation();
+
+  function resolveParentFromPreview(
+    item: PreviewItem,
+  ): DirectoryParent | null {
+    if (item.parentId == null) {
+      return null;
+    }
+    const fromQuery = (parentsQuery.data?.items ?? []).find(
+      (parent) => parent.parentId === item.parentId,
+    );
+    if (fromQuery) {
+      return fromQuery;
+    }
+    return {
+      parentId: item.parentId,
+      fullName: item.title,
+      username: item.username ?? item.meta,
+      linkedStudentCount: item.linkedStudents?.length ?? 0,
+      linkedStudents: item.linkedStudents ?? [],
+      linkedStudentNames: (item.linkedStudents ?? []).map(
+        (student) => student.fullName,
+      ),
+      isActive: item.statusCode === "Active",
+      accountStatus: "Active",
+      avatarUrl: item.avatarUrl,
+      lastLoginAt: item.lastLoginAt,
+    };
+  }
+
+  function openLinkStudent(item: PreviewItem) {
+    const parent = resolveParentFromPreview(item);
+    if (!parent) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setManageChildrenTarget(null);
+    setLinkStudentTarget(parent);
+  }
+
+  function openManageChildren(item: PreviewItem) {
+    const parent = resolveParentFromPreview(item);
+    if (!parent) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setLinkStudentTarget(null);
+    setManageChildrenTarget(parent);
+  }
+
   const teachersQuery = useDirectoryTeachersQuery(
     previewFilters,
     activeTab === "teachers",
@@ -989,6 +1069,17 @@ export function DirectoryOverviewPage() {
                 <p className="text-xs text-slate-400">Updating…</p>
               ) : null}
 
+              {parentActionMessage ? (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {parentActionMessage}
+                </p>
+              ) : null}
+              {parentActionError ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                  {parentActionError}
+                </p>
+              ) : null}
+
               <div>
                 {listLoading ? <DirectoryListSkeleton /> : null}
 
@@ -1009,7 +1100,7 @@ export function DirectoryOverviewPage() {
                     description={
                       search
                         ? "Try a different search, or open the full list for other statuses."
-                        : "No active records for your role in this section yet. Open the full list to manage pending or inactive accounts."
+                        : "No active records for this section yet. Open the full list to manage pending or inactive accounts."
                     }
                   />
                 ) : null}
@@ -1020,6 +1111,17 @@ export function DirectoryOverviewPage() {
                       <li key={item.id}>
                         <DirectoryPreviewTile
                           item={item}
+                          canManageParents={canManageParents}
+                          onLinkStudent={
+                            item.parentId != null
+                              ? () => openLinkStudent(item)
+                              : undefined
+                          }
+                          onManageChildren={
+                            item.parentId != null
+                              ? () => openManageChildren(item)
+                              : undefined
+                          }
                           onSelect={() => {
                             if (item.schoolId != null) {
                               const school = (schoolsQuery.data ?? []).find(
@@ -1047,7 +1149,79 @@ export function DirectoryOverviewPage() {
       {selectedItem ? (
         <DirectoryDetailSheet
           item={selectedItem}
+          canManageParents={canManageParents}
           onClose={() => setSelectedItem(null)}
+          onLinkStudent={
+            selectedItem.parentId != null
+              ? () => openLinkStudent(selectedItem)
+              : undefined
+          }
+          onManageChildren={
+            selectedItem.parentId != null
+              ? () => openManageChildren(selectedItem)
+              : undefined
+          }
+        />
+      ) : null}
+
+      {manageChildrenTarget ? (
+        <ManageLinkedStudentsDialog
+          parentName={manageChildrenTarget.fullName}
+          linkedStudents={manageChildrenTarget.linkedStudents ?? []}
+          isSubmitting={unlinkStudentMutation.isPending}
+          onClose={() => setManageChildrenTarget(null)}
+          onUnlink={async (studentId, studentName) => {
+            await unlinkStudentMutation.mutateAsync({
+              parentId: manageChildrenTarget.parentId,
+              studentId,
+            });
+            setParentActionMessage(
+              `Unlinked ${studentName} from ${manageChildrenTarget.fullName}.`,
+            );
+            setManageChildrenTarget((current) =>
+              current
+                ? {
+                    ...current,
+                    linkedStudents: (current.linkedStudents ?? []).filter(
+                      (student) => student.studentId !== studentId,
+                    ),
+                    linkedStudentCount: Math.max(
+                      0,
+                      current.linkedStudentCount - 1,
+                    ),
+                    linkedStudentNames: (
+                      current.linkedStudentNames ?? []
+                    ).filter((name) => name !== studentName),
+                  }
+                : current,
+            );
+            void parentsQuery.refetch();
+          }}
+          onAddLink={() => {
+            const parent = manageChildrenTarget;
+            setManageChildrenTarget(null);
+            setLinkStudentTarget(parent);
+          }}
+        />
+      ) : null}
+
+      {linkStudentTarget ? (
+        <LinkStudentDialog
+          parentName={linkStudentTarget.fullName}
+          isSubmitting={linkStudentMutation.isPending}
+          onClose={() => setLinkStudentTarget(null)}
+          onSubmit={async (studentId, relationship) => {
+            await linkStudentMutation.mutateAsync({
+              parentId: linkStudentTarget.parentId,
+              input: { studentId, relationship },
+            });
+            setParentActionMessage(
+              `Linked student #${studentId} to ${linkStudentTarget.fullName}.`,
+            );
+            setParentActionError(null);
+            setLinkStudentTarget(null);
+            void parentsQuery.refetch();
+          }}
         />
       ) : null}
 
@@ -1134,20 +1308,34 @@ function DirectoryLoadingSkeleton() {
 function DirectoryPreviewTile({
   item,
   onSelect,
+  canManageParents = false,
+  onLinkStudent,
+  onManageChildren,
 }: {
   item: PreviewItem;
   onSelect: () => void;
+  canManageParents?: boolean;
+  onLinkStudent?: () => void;
+  onManageChildren?: () => void;
 }) {
   const initials = initialsFromName(item.title);
   const imageUrl = resolvePublicUrl(item.avatarUrl);
+  const showParentActions =
+    canManageParents &&
+    item.parentId != null &&
+    onLinkStudent != null &&
+    onManageChildren != null;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="group flex h-full w-full items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-    >
-      <span className="relative inline-flex h-14 w-14 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-brand-100 to-brand-200 ring-2 ring-white shadow-sm">
+    <div className="group relative flex h-full w-full items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
+      <button
+        type="button"
+        onClick={onSelect}
+        className="absolute inset-0 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+        aria-label={`Open details for ${item.title}`}
+      />
+
+      <span className="relative z-10 inline-flex h-14 w-14 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-brand-100 to-brand-200 ring-2 ring-white shadow-sm">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -1161,7 +1349,7 @@ function DirectoryPreviewTile({
         )}
       </span>
 
-      <div className="min-w-0 flex-1">
+      <div className="relative z-10 min-w-0 flex-1 pointer-events-none">
         <p className="truncate text-[15px] font-semibold tracking-tight text-slate-900">
           {item.title}
         </p>
@@ -1170,7 +1358,9 @@ function DirectoryPreviewTile({
             @{item.username}
           </p>
         ) : null}
-        <p className="mt-0.5 truncate text-sm text-slate-500">{item.subtitle}</p>
+        {item.subtitle ? (
+          <p className="mt-0.5 truncate text-sm text-slate-500">{item.subtitle}</p>
+        ) : null}
         {item.stats && item.stats.length > 0 ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             {item.stats.map((stat) => (
@@ -1189,10 +1379,34 @@ function DirectoryPreviewTile({
         ) : null}
       </div>
 
-      {item.schoolId == null ? (
-        <LastLoginAside value={item.lastLoginAt} />
-      ) : null}
-    </button>
+      <div className="relative z-10 flex shrink-0 flex-col items-end gap-2">
+        {showParentActions ? (
+          <div className="flex items-center gap-1.5">
+            <DirectoryIconAction
+              icon={Link2}
+              label={`Link student to ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onLinkStudent();
+              }}
+            />
+            <DirectoryIconAction
+              icon={Users}
+              label={`Manage children for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onManageChildren();
+              }}
+            />
+          </div>
+        ) : null}
+        {item.schoolId == null ? (
+          <LastLoginAside value={item.lastLoginAt} />
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1249,12 +1463,23 @@ function DirectoryErrorState({
 function DirectoryDetailSheet({
   item,
   onClose,
+  canManageParents = false,
+  onLinkStudent,
+  onManageChildren,
 }: {
   item: PreviewItem;
   onClose: () => void;
+  canManageParents?: boolean;
+  onLinkStudent?: () => void;
+  onManageChildren?: () => void;
 }) {
   const initials = initialsFromName(item.title);
   const imageUrl = resolvePublicUrl(item.avatarUrl);
+  const showParentActions =
+    canManageParents &&
+    item.parentId != null &&
+    onLinkStudent != null &&
+    onManageChildren != null;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1323,9 +1548,11 @@ function DirectoryDetailSheet({
                   @{item.username}
                 </p>
               ) : null}
-              <p className="mt-0.5 truncate text-sm text-slate-500">
-                {item.subtitle}
-              </p>
+              {item.subtitle ? (
+                <p className="mt-0.5 truncate text-sm text-slate-500">
+                  {item.subtitle}
+                </p>
+              ) : null}
               {item.stats && item.stats.length > 0 ? (
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                   {item.stats.map((stat) => (
@@ -1352,6 +1579,29 @@ function DirectoryDetailSheet({
               <LastLoginAside value={item.lastLoginAt} />
             ) : null}
           </div>
+
+          {showParentActions ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onLinkStudent}
+              >
+                <Link2 className="mr-1.5 h-4 w-4" />
+                Link student
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onManageChildren}
+              >
+                <Users className="mr-1.5 h-4 w-4" />
+                Manage children
+              </Button>
+            </div>
+          ) : null}
 
           <div className="mt-5">
             <DetailRows details={item.details} />

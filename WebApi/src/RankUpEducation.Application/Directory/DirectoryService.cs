@@ -1,7 +1,9 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Teachers;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Directory;
+using RankUpEducation.Contracts.Teachers;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Parents;
@@ -16,6 +18,7 @@ namespace RankUpEducation.Application.Directory;
 public sealed class DirectoryService : IDirectoryService
 {
     private readonly IDirectoryRepository _directory;
+    private readonly ITeacherRepository _teacherRepository;
     private readonly IUserRepository _users;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -23,12 +26,14 @@ public sealed class DirectoryService : IDirectoryService
 
     public DirectoryService(
         IDirectoryRepository directory,
+        ITeacherRepository teacherRepository,
         IUserRepository users,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
         IUnitOfWork unitOfWork)
     {
         _directory = directory;
+        _teacherRepository = teacherRepository;
         _users = users;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -560,6 +565,10 @@ public sealed class DirectoryService : IDirectoryService
             request.AlsoCoordinator,
             cancellationToken);
 
+        var classSections = NormalizeClassSections(request.ClassSections);
+        await _teacherRepository.ReplaceClassSectionsAsync(user.Id, classSections, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         return new DirectoryTeacherResponse(
             user.Id,
             user.FullName,
@@ -583,7 +592,8 @@ public sealed class DirectoryService : IDirectoryService
             user.NeedsPasswordSetup,
             Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user),
-            RoleNames(user));
+            RoleNames(user),
+            classSections);
     }
 
     public async Task<DirectoryTeacherResponse> UpdateTeacherAsync(
@@ -622,6 +632,24 @@ public sealed class DirectoryService : IDirectoryService
             request.AlsoCoordinator,
             cancellationToken);
 
+        IReadOnlyList<TeacherClassSectionItem> classSections;
+        if (request.ClassSections is not null)
+        {
+            classSections = NormalizeClassSections(request.ClassSections);
+            await _teacherRepository.ReplaceClassSectionsAsync(teacherId, classSections, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            classSections = await _teacherRepository.GetClassSectionsAsync(teacherId, cancellationToken);
+        }
+
+        var rosterCount = (await _teacherRepository.GetRosterStudentsAsync(
+            teacherId,
+            user.SchoolId ?? 0,
+            user.CampusId ?? 0,
+            cancellationToken)).Count;
+
         return new DirectoryTeacherResponse(
             teacher.Id,
             user.FullName,
@@ -633,7 +661,7 @@ public sealed class DirectoryService : IDirectoryService
             user.AvatarUrl,
             "—",
             "—",
-            0,
+            rosterCount,
             user.MobileNumber,
             user.Cnic,
             user.EmailAddress,
@@ -645,7 +673,8 @@ public sealed class DirectoryService : IDirectoryService
             user.NeedsPasswordSetup,
             Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(user),
-            RoleNames(user));
+            RoleNames(user),
+            classSections);
     }
 
     public async Task ActivateTeacherAsync(long teacherId, CancellationToken cancellationToken)
@@ -2137,6 +2166,24 @@ public sealed class DirectoryService : IDirectoryService
         }
     }
 
+    private static IReadOnlyList<TeacherClassSectionItem> NormalizeClassSections(
+        IReadOnlyList<TeacherClassSectionItem>? classSections)
+    {
+        if (classSections is null || classSections.Count == 0)
+        {
+            return Array.Empty<TeacherClassSectionItem>();
+        }
+
+        return classSections
+            .Where(item => item.Grade > 0 && item.Section.HasTrimmedText())
+            .Select(item => new TeacherClassSectionItem(item.Grade, item.Section.AsTrimmedString()))
+            .GroupBy(item => (item.Grade, Section: item.Section.ToLowerInvariant()))
+            .Select(group => group.First())
+            .OrderBy(item => item.Grade)
+            .ThenBy(item => item.Section)
+            .ToArray();
+    }
+
     private static void ValidateCreateParentRequest(CreateDirectoryParentRequest request)
     {
         var errors = new List<string>();
@@ -2279,6 +2326,10 @@ public sealed class DirectoryService : IDirectoryService
         existing.AttachProfileContext(existing.Id, schoolId, campusId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var classSections = NormalizeClassSections(request.ClassSections);
+        await _teacherRepository.ReplaceClassSectionsAsync(existing.Id, classSections, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         return new DirectoryTeacherResponse(
             existing.Id,
             existing.FullName,
@@ -2302,7 +2353,8 @@ public sealed class DirectoryService : IDirectoryService
             existing.NeedsPasswordSetup,
             Array.Empty<DirectoryApprovalHistoryItem>(),
             DirectoryAccountStatuses.FromUser(existing),
-            RoleNames(existing));
+            RoleNames(existing),
+            classSections);
     }
 
     private async Task<DirectoryParentResponse> AddParentRoleToExistingUserAsync(

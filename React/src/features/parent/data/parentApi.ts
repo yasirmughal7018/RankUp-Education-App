@@ -1,6 +1,8 @@
 import { apiRequest } from "@/core/api/apiClient";
 import type {
   ChildQuizHistory,
+  LinkMyChildInput,
+  LinkMyChildResult,
   LinkedStudent,
 } from "@/features/parent/domain/parentTypes";
 
@@ -10,6 +12,19 @@ export async function listLinkedStudents(): Promise<LinkedStudent[]> {
   );
 
   return response.items;
+}
+
+/** Link a student to the signed-in parent by CNIC or username. */
+export async function linkMyChild(
+  input: LinkMyChildInput,
+): Promise<LinkMyChildResult> {
+  return apiRequest<LinkMyChildResult>("/parents/me/students", {
+    method: "POST",
+    body: {
+      identifier: input.identifier.trim(),
+      relationship: input.relationship?.trim() || "Guardian",
+    },
+  });
 }
 
 export async function getChildQuizHistory(

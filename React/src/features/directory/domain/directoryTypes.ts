@@ -153,6 +153,13 @@ export interface DirectoryTeacher extends DirectoryAccountAuditFields {
   accountStatus: DirectoryAccountStatus;
   /** All roles on this account (e.g. Teacher, Parent). */
   roles?: string[];
+  /** Class (grade) + section combinations this teacher teaches. */
+  classSections?: TeacherClassSection[];
+}
+
+export interface TeacherClassSection {
+  grade: number;
+  section: string;
 }
 
 /** User with Coordinator role (often also Teacher and/or Parent). */
@@ -263,6 +270,8 @@ export interface CreateDirectoryTeacherInput {
   alsoParent?: boolean;
   /** Also assign Coordinator on the same login. */
   alsoCoordinator?: boolean;
+  /** Class/section pairs the teacher teaches. */
+  classSections?: TeacherClassSection[];
 }
 
 export interface UpdateDirectoryTeacherInput {
@@ -274,6 +283,8 @@ export interface UpdateDirectoryTeacherInput {
   alsoParent?: boolean;
   /** Ensure Coordinator is on this account. */
   alsoCoordinator?: boolean;
+  /** Replaces class/section assignments when provided. */
+  classSections?: TeacherClassSection[];
 }
 
 export interface CreateDirectoryParentInput {

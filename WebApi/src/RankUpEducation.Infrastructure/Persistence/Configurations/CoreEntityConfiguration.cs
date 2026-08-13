@@ -185,3 +185,18 @@ public sealed class StudentGroupMemberConfiguration : IEntityTypeConfiguration<S
         builder.HasIndex(member => new { member.StudentGroupId, member.StudentId }).IsUnique();
     }
 }
+
+public sealed class TeacherClassSectionConfiguration : IEntityTypeConfiguration<TeacherClassSection>
+{
+    public void Configure(EntityTypeBuilder<TeacherClassSection> builder)
+    {
+        builder.ToTable("teacher_class_sections");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(item => item.TeacherId).HasColumnName("teacher_id");
+        builder.Property(item => item.Grade).HasColumnName("grade");
+        builder.Property(item => item.Section).HasColumnName("section").HasMaxLength(40).IsRequired();
+        builder.Property(item => item.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        builder.HasIndex(item => new { item.TeacherId, item.Grade, item.Section }).IsUnique();
+    }
+}

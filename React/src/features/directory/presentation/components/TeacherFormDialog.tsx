@@ -6,6 +6,7 @@ import type {
   DirectoryCampus,
   DirectorySchool,
   DirectoryTeacher,
+  TeacherClassSection,
   UpdateDirectoryTeacherInput,
 } from "@/features/directory/domain/directoryTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
@@ -24,6 +25,10 @@ interface TeacherFormDialogProps {
 }
 
 const inputClassName = FORM_FIELD_CLASS;
+
+function emptyClassSection(): TeacherClassSection {
+  return { grade: 0, section: "" };
+}
 
 /** Modal form to create or update a teacher with school/campus assignment. */
 export function TeacherFormDialog({
@@ -44,6 +49,14 @@ export function TeacherFormDialog({
   );
   const [teacherCode, setTeacherCode] = useState(teacher?.teacherCode ?? "");
   const [mobileNumber, setMobileNumber] = useState(teacher?.mobileNumber ?? "");
+  const [classSections, setClassSections] = useState<TeacherClassSection[]>(
+    teacher?.classSections?.length
+      ? teacher.classSections.map((item) => ({
+          grade: item.grade,
+          section: item.section,
+        }))
+      : [emptyClassSection()],
+  );
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;
@@ -67,6 +80,17 @@ export function TeacherFormDialog({
     }
   }, [schoolId, isEdit]);
 
+  function updateClassSection(
+    index: number,
+    patch: Partial<TeacherClassSection>,
+  ) {
+    setClassSections((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -84,6 +108,18 @@ export function TeacherFormDialog({
       return;
     }
 
+    const normalizedSections = classSections
+      .map((item) => ({
+        grade: Number(item.grade) || 0,
+        section: item.section.trim(),
+      }))
+      .filter((item) => item.grade > 0 && item.section.length > 0);
+
+    if (normalizedSections.length === 0) {
+      setError("Add at least one class (grade) and section.");
+      return;
+    }
+
     const mobile = mobileNumber.trim() || null;
 
     try {
@@ -95,6 +131,7 @@ export function TeacherFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
+            classSections: normalizedSections,
           },
         });
       } else {
@@ -118,6 +155,7 @@ export function TeacherFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
+            classSections: normalizedSections,
           },
         });
       }
@@ -144,8 +182,8 @@ export function TeacherFormDialog({
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
-              ? `Update details for ${teacher.fullName}.`
-              : "Add a teacher to the directory. User must set password on first login. Extra roles can be added later from the Teachers list."}
+              ? `Update details for ${teacher.fullName}. Assign the classes and sections they teach.`
+              : "Add a teacher and the class/section combinations they teach. Students in those classes appear on their roster automatically."}
           </p>
         </div>
 
@@ -279,6 +317,75 @@ export function TeacherFormDialog({
               className={inputClassName}
               disabled={isSubmitting}
             />
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-slate-800">
+                  Classes & sections
+                </p>
+                <p className="text-xs text-slate-500">
+                  Teachers may have multiple class/section pairs.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() =>
+                  setClassSections((current) => [...current, emptyClassSection()])
+                }
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+              >
+                Add
+              </button>
+            </div>
+
+            {classSections.map((item, index) => (
+              <div
+                key={`class-section-${index}`}
+                className="grid grid-cols-[1fr_1fr_auto] gap-2"
+              >
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Grade"
+                  value={item.grade || ""}
+                  onChange={(event) =>
+                    updateClassSection(index, {
+                      grade: Number(event.target.value) || 0,
+                    })
+                  }
+                  className={inputClassName}
+                  disabled={isSubmitting}
+                  aria-label={`Grade ${index + 1}`}
+                />
+                <input
+                  type="text"
+                  placeholder="Section"
+                  value={item.section}
+                  onChange={(event) =>
+                    updateClassSection(index, { section: event.target.value })
+                  }
+                  className={inputClassName}
+                  disabled={isSubmitting}
+                  aria-label={`Section ${index + 1}`}
+                />
+                <button
+                  type="button"
+                  disabled={isSubmitting || classSections.length <= 1}
+                  onClick={() =>
+                    setClassSections((current) =>
+                      current.filter((_, itemIndex) => itemIndex !== index),
+                    )
+                  }
+                  className="rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+                  aria-label={`Remove class section ${index + 1}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

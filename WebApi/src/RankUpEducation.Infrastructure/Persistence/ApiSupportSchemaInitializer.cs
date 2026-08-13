@@ -58,8 +58,23 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(ApprovalRequestIdUnificationSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(PasswordResetRequestSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(TeacherClassSectionSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
+
+    private const string TeacherClassSectionSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.teacher_class_sections (
+            id BIGSERIAL PRIMARY KEY,
+            teacher_id BIGINT NOT NULL
+                REFERENCES public.app_user_teachers (teacher_id) ON DELETE CASCADE,
+            grade SMALLINT NOT NULL,
+            section VARCHAR(40) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_teacher_class_sections_teacher_grade_section
+            ON public.teacher_class_sections (teacher_id, grade, section);
+        """;
 
     private const string UserRoleRequestSupportSql = """
         CREATE TABLE IF NOT EXISTS public.app_user_role_request (

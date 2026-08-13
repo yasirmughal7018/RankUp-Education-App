@@ -41,3 +41,39 @@ class LinkedStudent {
     return '$fullName ($gradeSection)';
   }
 }
+
+/// Result of POST /parents/me/students (parent self-link).
+class LinkMyChildResult {
+  const LinkMyChildResult({
+    required this.studentId,
+    required this.fullName,
+    required this.username,
+    required this.rollNumber,
+    required this.grade,
+    required this.section,
+    required this.relationship,
+    required this.alreadyLinked,
+  });
+
+  factory LinkMyChildResult.fromJson(Map<String, dynamic> json) {
+    return LinkMyChildResult(
+      studentId: (json['studentId'] as num?)?.toInt() ?? 0,
+      fullName: (json['fullName'] as String?)?.trim() ?? '',
+      username: (json['username'] as String?)?.trim() ?? '',
+      rollNumber: (json['rollNumber'] as String?)?.trim() ?? '',
+      grade: (json['grade'] as num?)?.toInt() ?? 0,
+      section: (json['section'] as String?)?.trim() ?? '',
+      relationship: (json['relationship'] as String?)?.trim() ?? 'Guardian',
+      alreadyLinked: json['alreadyLinked'] as bool? ?? false,
+    );
+  }
+
+  final int studentId;
+  final String fullName;
+  final String username;
+  final String rollNumber;
+  final int grade;
+  final String section;
+  final String relationship;
+  final bool alreadyLinked;
+}

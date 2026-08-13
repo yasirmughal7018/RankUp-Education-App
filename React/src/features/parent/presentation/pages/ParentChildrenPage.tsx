@@ -1,17 +1,25 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { formatStudentLabel } from "@/features/parent/domain/parentTypes";
-import { useLinkedStudentsQuery } from "@/features/parent/presentation/hooks/useParentQueries";
+import { AddChildDialog } from "@/features/parent/presentation/components/AddChildDialog";
+import {
+  useLinkMyChildMutation,
+  useLinkedStudentsQuery,
+} from "@/features/parent/presentation/hooks/useParentQueries";
 
 export function ParentChildrenPage() {
   const { data: students = [], isLoading, error, refetch, isFetching } =
     useLinkedStudentsQuery(true);
+  const linkMutation = useLinkMyChildMutation();
+  const [showAddChild, setShowAddChild] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <PageHeader
         title="My children"
-        description="Linked students for quiz assignment, history, and progress monitoring."
+        description="Add children by CNIC or username, then monitor quiz history and progress."
         action={
           <div className="flex gap-2">
             <button
@@ -22,9 +30,19 @@ export function ParentChildrenPage() {
             >
               Refresh
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSuccessMessage(null);
+                setShowAddChild(true);
+              }}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+            >
+              Add child
+            </button>
             <Link
               to="/quizzes/assignments"
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Assignment board
             </Link>
@@ -38,6 +56,12 @@ export function ParentChildrenPage() {
         </div>
       ) : null}
 
+      {successMessage ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {successMessage}
+        </div>
+      ) : null}
+
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
@@ -45,7 +69,15 @@ export function ParentChildrenPage() {
           </div>
         ) : students.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No linked students found for this parent account.
+            No linked students yet. Use{" "}
+            <button
+              type="button"
+              onClick={() => setShowAddChild(true)}
+              className="font-medium text-brand-700 underline-offset-2 hover:underline"
+            >
+              Add child
+            </button>{" "}
+            with their CNIC or username.
           </div>
         ) : (
           <div className="divide-y divide-slate-200">
@@ -82,6 +114,29 @@ export function ParentChildrenPage() {
           </div>
         )}
       </div>
+
+      {showAddChild ? (
+        <AddChildDialog
+          isSubmitting={linkMutation.isPending}
+          onClose={() => {
+            if (!linkMutation.isPending) {
+              setShowAddChild(false);
+            }
+          }}
+          onSubmit={async (identifier, relationship) => {
+            const result = await linkMutation.mutateAsync({
+              identifier,
+              relationship,
+            });
+            setShowAddChild(false);
+            setSuccessMessage(
+              result.alreadyLinked
+                ? `${result.fullName} was already linked to your account.`
+                : `${result.fullName} was linked successfully.`,
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }

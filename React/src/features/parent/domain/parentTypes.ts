@@ -8,6 +8,16 @@ export interface LinkedStudent {
   relationship: string;
 }
 
+/** Parent self-link by CNIC or username. */
+export interface LinkMyChildInput {
+  identifier: string;
+  relationship?: string;
+}
+
+export interface LinkMyChildResult extends LinkedStudent {
+  alreadyLinked: boolean;
+}
+
 export interface ChildQuizHistoryItem {
   quizId: number;
   quizTitle: string;

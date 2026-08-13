@@ -9,6 +9,7 @@ using RankUpEducation.Application.Questions;
 using RankUpEducation.Application.QuizQuestions;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Application.Reports;
+using RankUpEducation.Application.Teachers;
 
 namespace RankUpEducation.Application;
 
@@ -53,6 +54,7 @@ public static class DependencyInjection
         });
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IParentService, ParentService>();
+        services.AddScoped<ITeacherService, TeacherService>();
         services.AddScoped<IDirectoryService, DirectoryService>();
         services.AddScoped<IReportService, ReportService>();
 

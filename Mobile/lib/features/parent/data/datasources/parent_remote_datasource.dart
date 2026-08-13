@@ -32,6 +32,28 @@ class ParentRemoteDataSource {
     }
   }
 
+  /// Links a student to the signed-in parent by CNIC or username.
+  Future<LinkMyChildResult> linkMyChild({
+    required String identifier,
+    String relationship = 'Guardian',
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/parents/me/students',
+        data: {
+          'identifier': identifier.trim(),
+          'relationship': relationship.trim().isEmpty
+              ? 'Guardian'
+              : relationship.trim(),
+        },
+      );
+      final payload = _readObject(response.data, (data) => data);
+      return LinkMyChildResult.fromJson(payload);
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
   Map<String, dynamic> _readObject(
     Map<String, dynamic>? json,
     Map<String, dynamic> Function(Map<String, dynamic> data) mapper,

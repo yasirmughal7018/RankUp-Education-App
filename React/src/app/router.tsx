@@ -34,6 +34,8 @@ import { ParentChildHistoryPage } from "@/features/parent/presentation/pages/Par
 import { ParentChildResultPage } from "@/features/parent/presentation/pages/ParentChildResultPage";
 import { ParentChildrenPage } from "@/features/parent/presentation/pages/ParentChildrenPage";
 import { ParentQuizDashboardPage } from "@/features/parent/presentation/pages/ParentQuizDashboardPage";
+import { TeacherRoute } from "@/features/teacher/presentation/components/TeacherRoute";
+import { TeacherRosterPage } from "@/features/teacher/presentation/pages/TeacherRosterPage";
 import { QuestionManageRoute } from "@/features/questions/presentation/components/QuestionManageRoute";
 import { QuestionCreatePage } from "@/features/questions/presentation/pages/QuestionCreatePage";
 import { QuestionSessionReviewPage } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
@@ -191,6 +193,10 @@ export function AppRouter() {
                 path="parent/children/:studentId/quizzes/:quizId/attempts/:attemptId/result"
                 element={<ParentChildResultPage />}
               />
+            </Route>
+
+            <Route element={<TeacherRoute />}>
+              <Route path="teacher/students" element={<TeacherRosterPage />} />
             </Route>
 
             <Route element={<StudentRoute />}>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Pencil } from "lucide-react";
+import { Link2, Pencil, Users } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
@@ -70,16 +70,9 @@ type LinkedStudentsFilter = "all" | "linked" | "unlinked";
 
 function formatChildren(parent: DirectoryParent): string {
   const count = parent.linkedStudentCount;
-  const names = parent.linkedStudentNames?.filter(Boolean) ?? [];
-
   if (count === 0) {
     return "No children attached";
   }
-
-  if (names.length > 0) {
-    return `${count} ${count === 1 ? "child" : "children"} · ${names.join(", ")}`;
-  }
-
   return `${count} ${count === 1 ? "child" : "children"}`;
 }
 
@@ -330,24 +323,6 @@ export function DirectoryParentsPage() {
     const removableRoles = getRemovableDirectoryRoles(roles, "Parent");
     const overflowItems = [
       {
-        id: "manage-children",
-        label: "Manage children",
-        onSelect: () => {
-          clearMessages();
-          setManageChildrenTarget(parent);
-        },
-        disabled: busy,
-      },
-      {
-        id: "link-student",
-        label: "Link student",
-        onSelect: () => {
-          clearMessages();
-          setLinkStudentTarget(parent);
-        },
-        disabled: busy,
-      },
-      {
         id: "toggle-active",
         label: parent.isActive ? "Deactivate" : "Activate",
         onSelect: () => void toggleActive(parent),
@@ -398,6 +373,24 @@ export function DirectoryParentsPage() {
 
     return (
       <>
+        <DirectoryIconAction
+          icon={Link2}
+          label={`Link student to ${parent.fullName}`}
+          disabled={busy}
+          onClick={() => {
+            clearMessages();
+            setLinkStudentTarget(parent);
+          }}
+        />
+        <DirectoryIconAction
+          icon={Users}
+          label={`Manage children for ${parent.fullName}`}
+          disabled={busy}
+          onClick={() => {
+            clearMessages();
+            setManageChildrenTarget(parent);
+          }}
+        />
         <DirectoryIconAction
           icon={Pencil}
           label={`Edit ${parent.fullName}`}
@@ -644,12 +637,6 @@ export function DirectoryParentsPage() {
                 </DirectoryTd>
                 <DirectoryTd>
                   <p>{parent.linkedStudentCount}</p>
-                  {parent.linkedStudentNames &&
-                  parent.linkedStudentNames.length > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      {parent.linkedStudentNames.join(", ")}
-                    </p>
-                  ) : null}
                 </DirectoryTd>
                 <DirectoryTd>
                   <AccountStatusBadge

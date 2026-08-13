@@ -1,3 +1,5 @@
+using RankUpEducation.Contracts.Teachers;
+
 namespace RankUpEducation.Contracts.Directory;
 
 /// <summary>
@@ -158,7 +160,9 @@ public sealed record DirectoryTeacherResponse(
     /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
     string AccountStatus,
     /// <summary>All roles on this account (e.g. Teacher, Parent).</summary>
-    IReadOnlyList<string> Roles);
+    IReadOnlyList<string> Roles,
+    /// <summary>Class (grade) + section combinations this teacher teaches.</summary>
+    IReadOnlyList<TeacherClassSectionItem> ClassSections);
 
 public sealed record CreateDirectoryTeacherRequest(
     string FullName,
@@ -171,7 +175,9 @@ public sealed record CreateDirectoryTeacherRequest(
     /// <summary>Also assign Parent on the same account (Teacher + Parent + optional Coordinator).</summary>
     bool AlsoParent = false,
     /// <summary>Also assign Coordinator on the same account.</summary>
-    bool AlsoCoordinator = false);
+    bool AlsoCoordinator = false,
+    /// <summary>Class/section pairs the teacher teaches (multiple allowed).</summary>
+    IReadOnlyList<TeacherClassSectionItem>? ClassSections = null);
 
 public sealed record UpdateDirectoryTeacherRequest(
     string FullName,
@@ -181,7 +187,9 @@ public sealed record UpdateDirectoryTeacherRequest(
     /// <summary>Ensure Parent is on this account (no-op if already present).</summary>
     bool AlsoParent = false,
     /// <summary>Ensure Coordinator is on this account (no-op if already present).</summary>
-    bool AlsoCoordinator = false);
+    bool AlsoCoordinator = false,
+    /// <summary>Replaces the teacher's class/section assignments when provided.</summary>
+    IReadOnlyList<TeacherClassSectionItem>? ClassSections = null);
 
 /// <summary>Grant Teacher role to an existing Parent account.</summary>
 public sealed record GrantTeacherRoleRequest(

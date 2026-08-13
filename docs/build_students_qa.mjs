@@ -85,6 +85,7 @@ const parentLinking = [
   ["POST /directory/parents/{parentId}/students", "Admin link student + relationship (default Guardian)"],
   ["DELETE /directory/parents/{parentId}/students/{studentId}", "Admin unlink"],
   ["GET /parents/me/students", "Parent-only: linked children"],
+  ["POST /parents/me/students", "Parent self-link child by CNIC or username (+ optional relationship)"],
   ["Student “my parents”", "Not implemented — no student-facing parents list API/UI"],
 ];
 
@@ -163,7 +164,7 @@ const mobileNav = [
 const gaps = [
   ["AI assistant", "Mobile static UI; no AI backend; dashboard AI omitted on live home"],
   ["Worksheets / messaging / discussions / attendance / rewards", "Stub APIs or placeholder UI; permission strings may still appear"],
-  ["Student “my parents”", "Missing — admin/parent linking only"],
+  ["Student “my parents”", "Missing — student cannot list parents; parents can self-link via CNIC/username"],
   ["Subject / city rankings", "Not built — only class and school scopes"],
   ["Directory Class lookup validation", "Register validates Class lookup; directory create only requires grade > 0"],
   ["CampusAdmin quiz history", "Not in student quiz-history ACL"],

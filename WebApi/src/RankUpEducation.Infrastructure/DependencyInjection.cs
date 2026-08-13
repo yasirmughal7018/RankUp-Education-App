@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Directory;
 using RankUpEducation.Application.Reports;
+using RankUpEducation.Application.Teachers;
 using RankUpEducation.Infrastructure.Authentication;
 using RankUpEducation.Infrastructure.Common;
 using RankUpEducation.Infrastructure.Persistence;
@@ -39,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
         services.AddScoped<IQuizReviewRepository, QuizReviewRepository>();
         services.AddScoped<IStudentScopeRepository, StudentScopeRepository>();
+        services.AddScoped<ITeacherRepository, TeacherRepository>();
         services.AddScoped<IDirectoryRepository, DirectoryRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<RankUpDbContext>());

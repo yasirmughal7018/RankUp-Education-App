@@ -64,10 +64,14 @@ type StudentsFilter = "all" | "withStudents" | "noStudents";
 
 function formatStudents(teacher: DirectoryTeacher): string {
   const count = teacher.studentCount ?? 0;
-  if (count === 0) {
-    return "No students";
-  }
-  return `${count} student${count === 1 ? "" : "s"}`;
+  const classes = (teacher.classSections ?? [])
+    .map((item) => `G${item.grade}${item.section}`)
+    .join(", ");
+  const roster =
+    count === 0
+      ? "No students"
+      : `${count} student${count === 1 ? "" : "s"}`;
+  return classes ? `${roster} · ${classes}` : roster;
 }
 
 /** Paginated teacher directory with school/campus filters and CRUD actions. */

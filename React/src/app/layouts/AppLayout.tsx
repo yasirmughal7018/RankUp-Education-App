@@ -40,7 +40,10 @@ export function AppLayout() {
       );
     }
     if (user?.role === "Teacher" || user?.role === "Coordinator") {
-      items.push({ to: "/admin/directory/students", label: "Students" });
+      items.push(
+        { to: "/teacher/students", label: "My students" },
+        { to: "/admin/directory/students", label: "Students" },
+      );
     }
     if (user && canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });
@@ -84,7 +87,7 @@ export function AppLayout() {
       items.push({ to: "/admin/directory", label: "Directory" });
     }
     if (user.role === "Teacher" || user.role === "Coordinator") {
-      items.push({ to: "/admin/directory/students", label: "Students" });
+      items.push({ to: "/teacher/students", label: "Students" });
     }
     if (canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });
