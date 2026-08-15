@@ -24,8 +24,10 @@ import type {
   DirectoryStudent,
   DirectoryTeacher,
   DirectoryTutor,
+  CoordinatorClassSection,
   TeacherClassSection,
 } from "@/features/directory/domain/directoryTypes";
+import { AddCoordinatorClassSectionDialog } from "@/features/directory/presentation/components/AddCoordinatorClassSectionDialog";
 import { AddTeacherClassSectionDialog } from "@/features/directory/presentation/components/AddTeacherClassSectionDialog";
 import { DirectoryIconAction } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
@@ -44,6 +46,7 @@ import {
   useDirectoryTutorsQuery,
   useLinkParentStudentMutation,
   useUnlinkParentStudentMutation,
+  useUpdateCoordinatorMutation,
   useUpdateTeacherMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
@@ -53,6 +56,9 @@ import {
   directoryReadyStatusClass,
   normalizeDirectoryAccountStatus,
 } from "@/features/directory/presentation/utils/accountStatus";
+import {
+  formatCoordinatorClassSection,
+} from "@/features/directory/presentation/utils/coordinatorClassSections";
 
 type DashboardTab = Exclude<DirectorySectionKey, "schoolChanges">;
 
@@ -81,7 +87,12 @@ type PreviewItem = {
   linkedStudents?: DirectoryLinkedStudentSummary[];
   /** Present only for teacher tiles — class/section actions. */
   teacherId?: number;
-  classSections?: TeacherClassSection[];
+  /** Present only for coordinator tiles — class/section actions. */
+  coordinatorUserId?: number;
+  classSections?: Array<{
+    grade: number;
+    section?: string;
+  }>;
   /** Shown for people tiles (not schools). */
   username?: string;
   /** Compact stats row under subtitle (campuses / teachers / students). */
@@ -360,8 +371,6 @@ function mapParent(item: DirectoryParent): PreviewItem {
     item.accountStatus,
     item.isActive,
   );
-  const linkedNames =
-    item.linkedStudentNames?.filter((name) => name.trim().length > 0) ?? [];
   return {
     id: `parent-${item.parentId}`,
     title: item.fullName,
@@ -372,12 +381,8 @@ function mapParent(item: DirectoryParent): PreviewItem {
     username: item.username,
     stats: [{ label: "Children", value: item.linkedStudentCount }],
     details: [
-      detailOrDash("Username", item.username ? `@${item.username}` : null),
+      detailOrDash("Username", item.username || null),
       detailOrDash("Children", item.linkedStudentCount),
-      detailOrDash(
-        "Student names",
-        linkedNames.length > 0 ? linkedNames.join(", ") : null,
-      ),
       detailOrDash("Mobile", item.mobileNumber),
       detailOrDash("CNIC", item.cnic),
       detailOrDash("Email", item.emailAddress),
@@ -408,7 +413,7 @@ function mapTutor(item: DirectoryTutor): PreviewItem {
     username: item.username,
     stats: [{ label: "Students", value: item.linkedStudentCount }],
     details: [
-      detailOrDash("Username", item.username ? `@${item.username}` : null),
+      detailOrDash("Username", item.username || null),
       detailOrDash("Linked students", item.linkedStudentCount),
       detailOrDash(
         "Student names",
@@ -445,12 +450,6 @@ function mapTeacher(item: DirectoryTeacher): PreviewItem {
     stats: [{ label: "Students", value: item.studentCount ?? 0 }],
     details: [
       detailOrDash("Teacher code", item.teacherCode),
-      detailOrDash(
-        "Classes",
-        (item.classSections ?? [])
-          .map((row) => `Grade ${row.grade}${row.section}`)
-          .join(", ") || null,
-      ),
       detailOrDash("Mobile", item.mobileNumber),
       detailOrDash("CNIC", item.cnic),
       detailOrDash("Email", item.emailAddress),
@@ -471,17 +470,20 @@ function mapCoordinator(item: DirectoryCoordinator): PreviewItem {
     item.accountStatus,
     item.isActive,
   );
-  const roles = item.roles?.filter(Boolean) ?? [];
-  const rolesLabel = roles.length > 0 ? roles.join(", ") : "Coordinator";
+  const classSections = item.classSections ?? [];
   return {
     id: `coordinator-${item.userId}`,
     title: item.fullName,
     subtitle: `${item.schoolName || "—"} | ${item.campusName || "—"}`,
-    meta: rolesLabel,
+    meta: item.username,
     username: item.username,
-    stats: [{ label: "Roles", value: rolesLabel }],
+    coordinatorUserId: item.userId,
+    classSections,
+    stats:
+      classSections.length > 0
+        ? [{ label: "Classes", value: classSections.length }]
+        : undefined,
     details: [
-      detailOrDash("Roles", rolesLabel),
       detailOrDash("Teacher code", item.teacherCode),
       detailOrDash("Mobile", item.mobileNumber),
       detailOrDash("CNIC", item.cnic),
@@ -566,6 +568,7 @@ export function DirectoryOverviewPage() {
   const { user } = useAuth();
   const canManageParents = user != null && isAdminRole(user.role);
   const canManageTeachers = canManageParents;
+  const canManageCoordinators = canManageParents;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState("");
@@ -590,6 +593,10 @@ export function DirectoryOverviewPage() {
   );
   const [manageClassTarget, setManageClassTarget] =
     useState<DirectoryTeacher | null>(null);
+  const [addCoordinatorClassTarget, setAddCoordinatorClassTarget] =
+    useState<DirectoryCoordinator | null>(null);
+  const [manageCoordinatorClassTarget, setManageCoordinatorClassTarget] =
+    useState<DirectoryCoordinator | null>(null);
   /** Expanded summary cards show status details; collapsed by default. */
   const [expandedCards, setExpandedCards] = useState<
     Partial<Record<DashboardTab, boolean>>
@@ -763,6 +770,59 @@ export function DirectoryOverviewPage() {
     };
   }
 
+  function resolveCoordinatorFromPreview(
+    item: PreviewItem,
+  ): DirectoryCoordinator | null {
+    if (item.coordinatorUserId == null) {
+      return null;
+    }
+    return (
+      (coordinatorsQuery.data?.items ?? []).find(
+        (coordinator) => coordinator.userId === item.coordinatorUserId,
+      ) ?? null
+    );
+  }
+
+  function openAddCoordinatorClass(item: PreviewItem) {
+    const coordinator = resolveCoordinatorFromPreview(item);
+    if (!coordinator) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setManageCoordinatorClassTarget(null);
+    setAddCoordinatorClassTarget(coordinator);
+  }
+
+  function openManageCoordinatorClass(item: PreviewItem) {
+    const coordinator = resolveCoordinatorFromPreview(item);
+    if (!coordinator) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setAddCoordinatorClassTarget(null);
+    setManageCoordinatorClassTarget(coordinator);
+  }
+
+  function coordinatorUpdateInput(
+    coordinator: DirectoryCoordinator,
+    classSections: CoordinatorClassSection[],
+  ) {
+    const roles = coordinator.roles ?? [];
+    return {
+      fullName: coordinator.fullName,
+      campusId: coordinator.campusId,
+      teacherCode: coordinator.teacherCode ?? "",
+      mobileNumber: coordinator.mobileNumber ?? null,
+      alsoTeacher: roles.includes("Teacher"),
+      alsoParent: roles.includes("Parent"),
+      classSections: classSections.map((item) => ({ grade: item.grade })),
+    };
+  }
+
   const teachersQuery = useDirectoryTeachersQuery(
     previewFilters,
     activeTab === "teachers",
@@ -772,6 +832,7 @@ export function DirectoryOverviewPage() {
     previewFilters,
     activeTab === "coordinators",
   );
+  const updateCoordinatorMutation = useUpdateCoordinatorMutation();
   const schoolAdminsQuery = useDirectorySchoolAdminsQuery(
     previewFilters,
     activeTab === "schoolAdmins",
@@ -1250,6 +1311,7 @@ export function DirectoryOverviewPage() {
                           item={item}
                           canManageParents={canManageParents}
                           canManageTeachers={canManageTeachers}
+                          canManageCoordinators={canManageCoordinators}
                           onLinkStudent={
                             item.parentId != null
                               ? () => openLinkStudent(item)
@@ -1268,6 +1330,16 @@ export function DirectoryOverviewPage() {
                           onManageTeacherClasses={
                             item.teacherId != null
                               ? () => openManageTeacherClass(item)
+                              : undefined
+                          }
+                          onAddCoordinatorClass={
+                            item.coordinatorUserId != null
+                              ? () => openAddCoordinatorClass(item)
+                              : undefined
+                          }
+                          onManageCoordinatorClasses={
+                            item.coordinatorUserId != null
+                              ? () => openManageCoordinatorClass(item)
                               : undefined
                           }
                           onSelect={() => {
@@ -1297,29 +1369,7 @@ export function DirectoryOverviewPage() {
       {selectedItem ? (
         <DirectoryDetailSheet
           item={selectedItem}
-          canManageParents={canManageParents}
-          canManageTeachers={canManageTeachers}
           onClose={() => setSelectedItem(null)}
-          onLinkStudent={
-            selectedItem.parentId != null
-              ? () => openLinkStudent(selectedItem)
-              : undefined
-          }
-          onManageChildren={
-            selectedItem.parentId != null
-              ? () => openManageChildren(selectedItem)
-              : undefined
-          }
-          onAddTeacherClass={
-            selectedItem.teacherId != null
-              ? () => openAddTeacherClass(selectedItem)
-              : undefined
-          }
-          onManageTeacherClasses={
-            selectedItem.teacherId != null
-              ? () => openManageTeacherClass(selectedItem)
-              : undefined
-          }
         />
       ) : null}
 
@@ -1458,6 +1508,82 @@ export function DirectoryOverviewPage() {
         />
       ) : null}
 
+      {addCoordinatorClassTarget ? (
+        <AddCoordinatorClassSectionDialog
+          coordinatorName={addCoordinatorClassTarget.fullName}
+          isSubmitting={updateCoordinatorMutation.isPending}
+          onClose={() => setAddCoordinatorClassTarget(null)}
+          onSubmit={async (grade) => {
+            const current = addCoordinatorClassTarget.classSections ?? [];
+            if (current.some((row) => row.grade === grade)) {
+              throw new Error(`Grade ${grade} is already assigned.`);
+            }
+            const nextSections: CoordinatorClassSection[] = [
+              ...current.map((row) => ({ grade: row.grade })),
+              { grade },
+            ];
+            await updateCoordinatorMutation.mutateAsync({
+              userId: addCoordinatorClassTarget.userId,
+              input: coordinatorUpdateInput(
+                addCoordinatorClassTarget,
+                nextSections,
+              ),
+            });
+            setParentActionMessage(
+              `Added Grade ${grade} to ${addCoordinatorClassTarget.fullName}.`,
+            );
+            setParentActionError(null);
+            setAddCoordinatorClassTarget(null);
+            void coordinatorsQuery.refetch();
+          }}
+        />
+      ) : null}
+
+      {manageCoordinatorClassTarget ? (
+        <ManageTeacherClassSectionsDialog
+          teacherName={manageCoordinatorClassTarget.fullName}
+          classSections={(manageCoordinatorClassTarget.classSections ?? []).map(
+            (item) => ({ grade: item.grade, section: "" }),
+          )}
+          isSubmitting={updateCoordinatorMutation.isPending}
+          title="Classes"
+          description={`Whole classes assigned to ${manageCoordinatorClassTarget.fullName}.`}
+          formatItem={(item) =>
+            formatCoordinatorClassSection({ grade: item.grade })
+          }
+          onClose={() => setManageCoordinatorClassTarget(null)}
+          onAdd={() => {
+            const coordinator = manageCoordinatorClassTarget;
+            setManageCoordinatorClassTarget(null);
+            setAddCoordinatorClassTarget(coordinator);
+          }}
+          onRemove={async (grade) => {
+            const nextSections = (
+              manageCoordinatorClassTarget.classSections ?? []
+            )
+              .filter((row) => row.grade !== grade)
+              .map((row) => ({ grade: row.grade }));
+            await updateCoordinatorMutation.mutateAsync({
+              userId: manageCoordinatorClassTarget.userId,
+              input: coordinatorUpdateInput(
+                manageCoordinatorClassTarget,
+                nextSections,
+              ),
+            });
+            setParentActionMessage(
+              `Removed Grade ${grade} from ${manageCoordinatorClassTarget.fullName}.`,
+            );
+            setParentActionError(null);
+            setManageCoordinatorClassTarget((current) =>
+              current
+                ? { ...current, classSections: nextSections }
+                : current,
+            );
+            void coordinatorsQuery.refetch();
+          }}
+        />
+      ) : null}
+
       {schoolInspect ? (
         <SchoolInspectSheet
           school={schoolInspect.school}
@@ -1543,19 +1669,25 @@ function DirectoryPreviewTile({
   onSelect,
   canManageParents = false,
   canManageTeachers = false,
+  canManageCoordinators = false,
   onLinkStudent,
   onManageChildren,
   onAddTeacherClass,
   onManageTeacherClasses,
+  onAddCoordinatorClass,
+  onManageCoordinatorClasses,
 }: {
   item: PreviewItem;
   onSelect: () => void;
   canManageParents?: boolean;
   canManageTeachers?: boolean;
+  canManageCoordinators?: boolean;
   onLinkStudent?: () => void;
   onManageChildren?: () => void;
   onAddTeacherClass?: () => void;
   onManageTeacherClasses?: () => void;
+  onAddCoordinatorClass?: () => void;
+  onManageCoordinatorClasses?: () => void;
 }) {
   const initials = initialsFromName(item.title);
   const imageUrl = resolvePublicUrl(item.avatarUrl);
@@ -1569,6 +1701,11 @@ function DirectoryPreviewTile({
     item.teacherId != null &&
     onAddTeacherClass != null &&
     onManageTeacherClasses != null;
+  const showCoordinatorActions =
+    canManageCoordinators &&
+    item.coordinatorUserId != null &&
+    onAddCoordinatorClass != null &&
+    onManageCoordinatorClasses != null;
 
   return (
     <div className="group relative flex h-full w-full items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
@@ -1599,7 +1736,7 @@ function DirectoryPreviewTile({
         </p>
         {item.username ? (
           <p className="mt-0.5 truncate text-xs font-medium text-slate-400">
-            @{item.username}
+            {item.username}
           </p>
         ) : null}
         {item.subtitle ? (
@@ -1664,6 +1801,28 @@ function DirectoryPreviewTile({
               onClick={(event) => {
                 event.stopPropagation();
                 onManageTeacherClasses();
+              }}
+            />
+          </div>
+        ) : null}
+        {showCoordinatorActions ? (
+          <div className="flex items-center gap-1.5">
+            <DirectoryIconAction
+              icon={Plus}
+              label={`Add class and section for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onAddCoordinatorClass();
+              }}
+            />
+            <DirectoryIconAction
+              icon={MinusCircle}
+              label={`Manage classes and sections for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onManageCoordinatorClasses();
               }}
             />
           </div>
@@ -1822,7 +1981,7 @@ function DirectoryDetailSheet({
               </h2>
               {item.username ? (
                 <p className="mt-0.5 truncate text-xs font-medium text-slate-400">
-                  @{item.username}
+                  {item.username}
                 </p>
               ) : null}
               {item.subtitle ? (

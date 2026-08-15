@@ -218,7 +218,7 @@ public sealed record DirectoryParentListResponse(
     int TotalCount);
 
 /// <summary>Linked child summary on a directory parent row.</summary>
-public sealed record DirectoryLinkedStudentSummary(long StudentId, string FullName);
+public sealed record DirectoryLinkedStudentSummary(long StudentId, string FullName, string Username);
 
 public sealed record DirectoryParentResponse(
     long ParentId,
@@ -333,7 +333,8 @@ public sealed record DirectoryCoordinatorResponse(
     bool NeedsPasswordSetup,
     string AccountStatus,
     IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
-    IReadOnlyList<string> Roles);
+    IReadOnlyList<string> Roles,
+    IReadOnlyList<CoordinatorClassSectionItem> ClassSections);
 
 /// <summary>Create a Coordinator account (optionally also Teacher and/or Parent).</summary>
 public sealed record CreateDirectoryCoordinatorRequest(
@@ -347,18 +348,21 @@ public sealed record CreateDirectoryCoordinatorRequest(
     /// <summary>Also assign Teacher on the same account (requires teacher code).</summary>
     bool AlsoTeacher = true,
     /// <summary>Also assign Parent on the same account.</summary>
-    bool AlsoParent = false);
+    bool AlsoParent = false,
+    IReadOnlyList<CoordinatorClassSectionItem>? ClassSections = null);
 
 /// <summary>Update a Coordinator account and optional companion roles.</summary>
 public sealed record UpdateDirectoryCoordinatorRequest(
     string FullName,
     int CampusId,
-    string TeacherCode,
+    /// <summary>When null or blank, the existing coordinator code is kept.</summary>
+    string? TeacherCode = null,
     string? MobileNumber = null,
     /// <summary>Ensure Teacher is on this account.</summary>
-    bool AlsoTeacher = true,
+    bool AlsoTeacher = false,
     /// <summary>Ensure Parent is on this account.</summary>
-    bool AlsoParent = false);
+    bool AlsoParent = false,
+    IReadOnlyList<CoordinatorClassSectionItem>? ClassSections = null);
 
 public sealed record LinkParentStudentRequest(long StudentId, string Relationship = "Guardian");
 

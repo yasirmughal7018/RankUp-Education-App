@@ -72,8 +72,8 @@ export function ManageLinkedStudentsDialog({
                   <p className="truncate text-sm font-medium text-slate-900">
                     {student.fullName}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    Student ID {student.studentId}
+                  <p className="truncate text-xs text-slate-500">
+                    {student.username}
                   </p>
                 </div>
                 <Button

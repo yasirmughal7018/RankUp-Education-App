@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Coordinators;
 using RankUpEducation.Application.Teachers;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Directory;
@@ -20,6 +21,7 @@ public sealed class DirectoryService : IDirectoryService
 {
     private readonly IDirectoryRepository _directory;
     private readonly ITeacherRepository _teacherRepository;
+    private readonly ICoordinatorRepository _coordinatorRepository;
     private readonly IUserRepository _users;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -28,6 +30,7 @@ public sealed class DirectoryService : IDirectoryService
     public DirectoryService(
         IDirectoryRepository directory,
         ITeacherRepository teacherRepository,
+        ICoordinatorRepository coordinatorRepository,
         IUserRepository users,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
@@ -35,6 +38,7 @@ public sealed class DirectoryService : IDirectoryService
     {
         _directory = directory;
         _teacherRepository = teacherRepository;
+        _coordinatorRepository = coordinatorRepository;
         _users = users;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -1505,6 +1509,7 @@ public sealed class DirectoryService : IDirectoryService
         ValidateCreateCoordinatorRequest(request);
 
         var alsoTeacher = request.AlsoTeacher;
+        var classSections = NormalizeCoordinatorClassSections(request.ClassSections);
         var (schoolId, campusId) = ResolveCreateSchoolCampus(request.SchoolId, request.CampusId);
         await EnsureCampusBelongsToSchoolAsync(schoolId, campusId, cancellationToken);
 
@@ -1552,8 +1557,12 @@ public sealed class DirectoryService : IDirectoryService
                     cancellationToken);
             }
 
+            await _coordinatorRepository.ReplaceClassSectionsAsync(
+                existing.Id,
+                classSections,
+                cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return ToCoordinatorResponse(existing, schoolId, campusId);
+            return ToCoordinatorResponse(existing, schoolId, campusId, classSections);
         }
 
         var user = User.CreateProvisionedAccount(
@@ -1587,6 +1596,10 @@ public sealed class DirectoryService : IDirectoryService
         }
 
         user.AttachProfileContext(user.Id, schoolId, campusId);
+        await _coordinatorRepository.ReplaceClassSectionsAsync(
+            user.Id,
+            classSections,
+            cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         await EnsureTeacherCompanionRolesAsync(
@@ -1595,7 +1608,7 @@ public sealed class DirectoryService : IDirectoryService
             alsoCoordinator: false,
             cancellationToken);
 
-        return ToCoordinatorResponse(user, schoolId, campusId);
+        return ToCoordinatorResponse(user, schoolId, campusId, classSections);
     }
 
     public async Task<DirectoryCoordinatorResponse> UpdateCoordinatorAsync(
@@ -1627,7 +1640,11 @@ public sealed class DirectoryService : IDirectoryService
         user.UpdateProfile(request.FullName);
         user.AssignSchoolCampus(user.SchoolId, request.CampusId);
         user.UpdateContactInfo(request.MobileNumber.AsTrimmedOrNull(), user.Cnic);
-        user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
+        if (request.TeacherCode.HasTrimmedText())
+        {
+            user.SetRollNumberTeacherCode(request.TeacherCode.AsTrimmedString());
+        }
+
         user.AttachProfileContext(user.Id, user.SchoolId, request.CampusId);
 
         if (request.AlsoTeacher && !user.HasRole(UserRole.Teacher))
@@ -1654,6 +1671,22 @@ public sealed class DirectoryService : IDirectoryService
             teacher?.Update(request.MobileNumber);
         }
 
+        IReadOnlyList<CoordinatorClassSectionItem> classSections;
+        if (request.ClassSections is not null)
+        {
+            classSections = NormalizeCoordinatorClassSections(request.ClassSections);
+            await _coordinatorRepository.ReplaceClassSectionsAsync(
+                userId,
+                classSections,
+                cancellationToken);
+        }
+        else
+        {
+            classSections = await _coordinatorRepository.GetClassSectionsAsync(
+                userId,
+                cancellationToken);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         await EnsureTeacherCompanionRolesAsync(
@@ -1662,7 +1695,7 @@ public sealed class DirectoryService : IDirectoryService
             alsoCoordinator: false,
             cancellationToken);
 
-        return ToCoordinatorResponse(user, user.SchoolId ?? 0, request.CampusId);
+        return ToCoordinatorResponse(user, user.SchoolId ?? 0, request.CampusId, classSections);
     }
 
     public async Task ActivateCoordinatorAsync(long userId, CancellationToken cancellationToken)
@@ -1837,7 +1870,8 @@ public sealed class DirectoryService : IDirectoryService
     private static DirectoryCoordinatorResponse ToCoordinatorResponse(
         User user,
         int schoolId,
-        int campusId)
+        int campusId,
+        IReadOnlyList<CoordinatorClassSectionItem>? classSections = null)
         => new(
             user.Id,
             user.FullName,
@@ -1860,7 +1894,8 @@ public sealed class DirectoryService : IDirectoryService
             user.NeedsPasswordSetup,
             DirectoryAccountStatuses.FromUser(user),
             Array.Empty<DirectoryApprovalHistoryItem>(),
-            RoleNames(user));
+            RoleNames(user),
+            classSections ?? Array.Empty<CoordinatorClassSectionItem>());
 
     private static void ValidateCreateCoordinatorRequest(CreateDirectoryCoordinatorRequest request)
     {
@@ -1894,10 +1929,8 @@ public sealed class DirectoryService : IDirectoryService
             errors.Add("Full name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.TeacherCode))
-        {
-            errors.Add("Coordinator code is required.");
-        }
+        // Coordinator code may be omitted on partial updates (e.g. class sections only);
+        // existing code on the user is preserved in that case.
 
         if (errors.Count > 0)
         {
@@ -2389,6 +2422,23 @@ public sealed class DirectoryService : IDirectoryService
             .Select(group => group.First())
             .OrderBy(item => item.Grade)
             .ThenBy(item => item.Section)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<CoordinatorClassSectionItem> NormalizeCoordinatorClassSections(
+        IReadOnlyList<CoordinatorClassSectionItem>? classSections)
+    {
+        if (classSections is null || classSections.Count == 0)
+        {
+            return Array.Empty<CoordinatorClassSectionItem>();
+        }
+
+        return classSections
+            .Where(item => item.Grade > 0)
+            .Select(item => item.Grade)
+            .Distinct()
+            .OrderBy(grade => grade)
+            .Select(grade => new CoordinatorClassSectionItem(grade))
             .ToArray();
     }
 

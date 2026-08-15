@@ -65,15 +65,6 @@ type CompanionRolesFilter =
   | "withParent"
   | "coordinatorOnly";
 
-function formatCompanionRoles(coordinator: DirectoryCoordinator): string {
-  const roles = coordinator.roles ?? [];
-  const extras = roles.filter((role) => role !== "Coordinator");
-  if (extras.length === 0) {
-    return "Coordinator only";
-  }
-  return extras.join(", ");
-}
-
 function matchesCompanionRolesFilter(
   coordinator: DirectoryCoordinator,
   filter: CompanionRolesFilter,
@@ -562,11 +553,7 @@ export function DirectoryCoordinatorsPage() {
                 canManage ? () => toggleSelect(coordinator.userId) : undefined
               }
               title={coordinator.fullName}
-              subtitle={
-                (coordinator.roles?.length ?? 0) > 1
-                  ? `${coordinator.username} · ${coordinator.roles?.join(", ")}`
-                  : coordinator.username
-              }
+              subtitle={coordinator.username}
               badge={
                 <AccountStatusBadge
                   accountStatus={coordinator.accountStatus}
@@ -576,10 +563,11 @@ export function DirectoryCoordinatorsPage() {
               meta={
                 <>
                   <p>Code {coordinator.teacherCode || "—"}</p>
+                  <p>{coordinator.schoolName || "—"}</p>
+                  <p>{coordinator.campusName || "—"}</p>
                   <p>
-                    {coordinator.schoolName} · {coordinator.campusName}
+                    Classes {(coordinator.classSections ?? []).length}
                   </p>
-                  <p>{formatCompanionRoles(coordinator)}</p>
                 </>
               }
               actions={rowActions(coordinator)}
@@ -603,7 +591,7 @@ export function DirectoryCoordinatorsPage() {
             <DirectoryTh>Name</DirectoryTh>
             <DirectoryTh>Code</DirectoryTh>
             <DirectoryTh>School / Campus</DirectoryTh>
-            <DirectoryTh>Roles</DirectoryTh>
+            <DirectoryTh>Classes</DirectoryTh>
             <DirectoryTh>Status</DirectoryTh>
             {canManage ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
           </DirectoryTableHead>
@@ -629,18 +617,18 @@ export function DirectoryCoordinatorsPage() {
                   <p className="text-xs text-muted-foreground">
                     {coordinator.username}
                   </p>
-                  {(coordinator.roles?.length ?? 0) > 1 ? (
-                    <p className="mt-0.5 text-xs font-medium text-primary">
-                      Roles: {coordinator.roles?.join(", ")}
-                    </p>
-                  ) : null}
                 </DirectoryTd>
                 <DirectoryTd>{coordinator.teacherCode || "—"}</DirectoryTd>
                 <DirectoryTd className="text-muted-foreground">
-                  {coordinator.schoolName} / {coordinator.campusName}
+                  <p className="text-foreground">
+                    {coordinator.schoolName || "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {coordinator.campusName || "—"}
+                  </p>
                 </DirectoryTd>
-                <DirectoryTd className="text-muted-foreground">
-                  {formatCompanionRoles(coordinator)}
+                <DirectoryTd className="text-muted-foreground tabular-nums">
+                  {(coordinator.classSections ?? []).length}
                 </DirectoryTd>
                 <DirectoryTd>
                   <AccountStatusBadge

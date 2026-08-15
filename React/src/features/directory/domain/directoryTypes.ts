@@ -164,6 +164,11 @@ export interface TeacherClassSection {
   section: string;
 }
 
+/** Grade a coordinator oversees (always the whole class / all sections). */
+export interface CoordinatorClassSection {
+  grade: number;
+}
+
 /** User with Coordinator role (often also Teacher and/or Parent). */
 export interface DirectoryCoordinator extends DirectoryAccountAuditFields {
   userId: number;
@@ -182,6 +187,7 @@ export interface DirectoryCoordinator extends DirectoryAccountAuditFields {
   needsPasswordSetup?: boolean;
   accountStatus: DirectoryAccountStatus;
   roles: string[];
+  classSections?: CoordinatorClassSection[];
 }
 
 export interface CreateDirectoryCoordinatorInput {
@@ -196,22 +202,25 @@ export interface CreateDirectoryCoordinatorInput {
   alsoTeacher?: boolean;
   /** Also assign Parent on the same login. */
   alsoParent?: boolean;
+  classSections?: CoordinatorClassSection[];
 }
 
 export interface UpdateDirectoryCoordinatorInput {
   fullName: string;
   campusId: number;
-  teacherCode: string;
+  teacherCode?: string | null;
   mobileNumber?: string | null;
   /** Ensure Teacher is on this account. */
   alsoTeacher?: boolean;
   /** Ensure Parent is on this account. */
   alsoParent?: boolean;
+  classSections?: CoordinatorClassSection[];
 }
 
 export interface DirectoryLinkedStudentSummary {
   studentId: number;
   fullName: string;
+  username: string;
 }
 
 export interface DirectoryParent extends DirectoryAccountAuditFields {

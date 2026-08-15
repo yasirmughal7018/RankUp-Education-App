@@ -35,7 +35,7 @@ export function LinkStudentDialog({
     () =>
       (studentsQuery.data?.items ?? []).map((student) => ({
         value: String(student.studentId),
-        label: `${student.fullName} · @${student.username} · ID ${student.studentId}`,
+        label: `${student.fullName} | ${student.username}`,
       })),
     [studentsQuery.data?.items],
   );

@@ -63,15 +63,7 @@ const PAGE_SIZE = 50;
 type StudentsFilter = "all" | "withStudents" | "noStudents";
 
 function formatStudents(teacher: DirectoryTeacher): string {
-  const count = teacher.studentCount ?? 0;
-  const classes = (teacher.classSections ?? [])
-    .map((item) => `G${item.grade}${item.section}`)
-    .join(", ");
-  const roster =
-    count === 0
-      ? "No students"
-      : `${count} student${count === 1 ? "" : "s"}`;
-  return classes ? `${roster} · ${classes}` : roster;
+  return String(teacher.studentCount ?? 0);
 }
 
 /** Paginated teacher directory with school/campus filters and CRUD actions. */
@@ -566,9 +558,15 @@ export function DirectoryTeachersPage() {
                 <>
                   <p>Code {teacher.teacherCode || "—"}</p>
                   <p>
-                    {teacher.schoolName} · {teacher.campusName}
+                    {teacher.schoolName || "—"}
+                    {teacher.campusName ? (
+                      <>
+                        <br />
+                        {teacher.campusName}
+                      </>
+                    ) : null}
                   </p>
-                  <p>{formatStudents(teacher)}</p>
+                  <p>{formatStudents(teacher)} students</p>
                 </>
               }
               actions={rowActions(teacher)}
@@ -626,9 +624,12 @@ export function DirectoryTeachersPage() {
                 </DirectoryTd>
                 <DirectoryTd>{teacher.teacherCode || "—"}</DirectoryTd>
                 <DirectoryTd className="text-muted-foreground">
-                  {teacher.schoolName} / {teacher.campusName}
+                  <p className="text-foreground">{teacher.schoolName || "—"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {teacher.campusName || "—"}
+                  </p>
                 </DirectoryTd>
-                <DirectoryTd className="text-muted-foreground">
+                <DirectoryTd className="text-muted-foreground tabular-nums">
                   {formatStudents(teacher)}
                 </DirectoryTd>
                 <DirectoryTd>

@@ -10,13 +10,17 @@ interface ManageTeacherClassSectionsDialogProps {
   onClose: () => void;
   onRemove: (grade: number, section: string) => Promise<void>;
   onAdd?: () => void;
+  /** Optional label formatter (e.g. coordinator full-class display). */
+  formatItem?: (item: TeacherClassSection) => string;
+  title?: string;
+  description?: string;
 }
 
-function formatClassSection(item: TeacherClassSection): string {
+function defaultFormatClassSection(item: TeacherClassSection): string {
   return `Grade ${item.grade}${item.section}`;
 }
 
-/** View and remove a teacher’s assigned class/section pairs. */
+/** View and remove assigned class/section pairs. */
 export function ManageTeacherClassSectionsDialog({
   teacherName,
   classSections,
@@ -24,6 +28,9 @@ export function ManageTeacherClassSectionsDialog({
   onClose,
   onRemove,
   onAdd,
+  formatItem = defaultFormatClassSection,
+  title = "Classes & sections",
+  description,
 }: ManageTeacherClassSectionsDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
@@ -40,7 +47,7 @@ export function ManageTeacherClassSectionsDialog({
 
   async function handleRemove(grade: number, section: string) {
     setError(null);
-    const key = `${grade}|${section}`;
+    const key = `${grade}|${section || "*"}`;
     setRemovingKey(key);
     try {
       await onRemove(grade, section);
@@ -56,11 +63,9 @@ export function ManageTeacherClassSectionsDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-slate-900">
-          Classes & sections
-        </h2>
+        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Classes assigned to {teacherName}.
+          {description ?? `Classes assigned to ${teacherName}.`}
         </p>
 
         {error ? (
@@ -76,14 +81,14 @@ export function ManageTeacherClassSectionsDialog({
             </p>
           ) : (
             classSections.map((item) => {
-              const key = `${item.grade}|${item.section}`;
+              const key = `${item.grade}|${item.section || "*"}`;
               return (
                 <div
                   key={key}
                   className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5"
                 >
                   <p className="truncate text-sm font-medium text-slate-900">
-                    {formatClassSection(item)}
+                    {formatItem(item)}
                   </p>
                   <Button
                     type="button"

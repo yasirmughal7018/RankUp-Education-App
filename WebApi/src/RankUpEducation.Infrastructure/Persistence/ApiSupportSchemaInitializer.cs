@@ -59,6 +59,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(PasswordResetRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(TeacherClassSectionSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(CoordinatorClassSectionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(TutorSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
@@ -75,6 +76,20 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         CREATE UNIQUE INDEX IF NOT EXISTS ux_teacher_class_sections_teacher_grade_section
             ON public.teacher_class_sections (teacher_id, grade, section);
+        """;
+
+    private const string CoordinatorClassSectionSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.coordinator_class_sections (
+            id BIGSERIAL PRIMARY KEY,
+            coordinator_user_id BIGINT NOT NULL
+                REFERENCES public.app_users (id) ON DELETE CASCADE,
+            grade SMALLINT NOT NULL,
+            section VARCHAR(40) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_coordinator_class_sections_user_grade_section
+            ON public.coordinator_class_sections (coordinator_user_id, grade, section);
         """;
 
     private const string TutorSupportSql = """

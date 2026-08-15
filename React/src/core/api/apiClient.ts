@@ -43,18 +43,29 @@ function isGenericClientMessage(message: string | undefined): boolean {
 /** Prefer concrete validation errors over a generic envelope message. */
 export function resolveApiErrorMessage(payload: {
   message?: string;
-  errors?: string[] | null;
+  title?: string;
+  errors?: string[] | Record<string, string[]> | null;
 }): string {
-  const errors = (payload.errors ?? []).filter(
-    (item) => typeof item === "string" && item.trim().length > 0,
-  );
+  const rawErrors = payload.errors;
+  let errors: string[] = [];
+  if (Array.isArray(rawErrors)) {
+    errors = rawErrors.filter(
+      (item) => typeof item === "string" && item.trim().length > 0,
+    );
+  } else if (rawErrors && typeof rawErrors === "object") {
+    errors = Object.values(rawErrors)
+      .flat()
+      .filter((item) => typeof item === "string" && item.trim().length > 0);
+  }
 
-  if (errors.length > 0 && isGenericClientMessage(payload.message)) {
+  const message = payload.message?.trim() || payload.title?.trim();
+
+  if (errors.length > 0 && isGenericClientMessage(message)) {
     return errors.join(" ");
   }
 
-  if (payload.message?.trim()) {
-    return payload.message.trim();
+  if (message) {
+    return message;
   }
 
   if (errors.length > 0) {
@@ -82,17 +93,21 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok || ("success" in payload && !payload.success)) {
     const errors =
-      "errors" in payload && Array.isArray(payload.errors)
-        ? payload.errors
+      "errors" in payload
+        ? (payload as { errors?: string[] | Record<string, string[]> }).errors
         : undefined;
 
     throw {
       message: resolveApiErrorMessage({
         message: "message" in payload ? payload.message : undefined,
+        title:
+          "title" in payload && typeof (payload as { title?: string }).title === "string"
+            ? (payload as { title: string }).title
+            : undefined,
         errors,
       }),
       status: response.status,
-      errors,
+      errors: Array.isArray(errors) ? errors : undefined,
     } satisfies ApiError;
   }
 

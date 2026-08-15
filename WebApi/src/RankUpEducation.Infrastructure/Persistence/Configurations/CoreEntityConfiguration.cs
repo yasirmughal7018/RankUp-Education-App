@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using RankUpEducation.Domain.Auth;
+using RankUpEducation.Domain.Coordinators;
 using RankUpEducation.Domain.Lookups;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Quizzes;
@@ -233,5 +234,20 @@ public sealed class TeacherClassSectionConfiguration : IEntityTypeConfiguration<
         builder.Property(item => item.Section).HasColumnName("section").HasMaxLength(40).IsRequired();
         builder.Property(item => item.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.HasIndex(item => new { item.TeacherId, item.Grade, item.Section }).IsUnique();
+    }
+}
+
+public sealed class CoordinatorClassSectionConfiguration : IEntityTypeConfiguration<CoordinatorClassSection>
+{
+    public void Configure(EntityTypeBuilder<CoordinatorClassSection> builder)
+    {
+        builder.ToTable("coordinator_class_sections");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(item => item.CoordinatorUserId).HasColumnName("coordinator_user_id");
+        builder.Property(item => item.Grade).HasColumnName("grade");
+        builder.Property(item => item.Section).HasColumnName("section").HasMaxLength(40).IsRequired();
+        builder.Property(item => item.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        builder.HasIndex(item => new { item.CoordinatorUserId, item.Grade, item.Section }).IsUnique();
     }
 }

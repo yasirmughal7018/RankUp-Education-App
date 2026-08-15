@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
+using RankUpEducation.Domain.Coordinators;
 using RankUpEducation.Domain.Lookups;
 using RankUpEducation.Domain.Notifications;
 using RankUpEducation.Domain.Parents;
@@ -49,6 +50,7 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<ParentStudentRelation> ParentStudentRelations => Set<ParentStudentRelation>();
     public DbSet<Teacher> Teachers => Set<Teacher>();
     public DbSet<TeacherClassSection> TeacherClassSections => Set<TeacherClassSection>();
+    public DbSet<CoordinatorClassSection> CoordinatorClassSections => Set<CoordinatorClassSection>();
     public DbSet<Tutor> Tutors => Set<Tutor>();
     public DbSet<TutorStudentRelation> TutorStudentRelations => Set<TutorStudentRelation>();
     public DbSet<StudentGroup> StudentGroups => Set<StudentGroup>();

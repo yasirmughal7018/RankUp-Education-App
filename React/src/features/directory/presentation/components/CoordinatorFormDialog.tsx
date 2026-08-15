@@ -6,6 +6,7 @@ import type {
   DirectoryCampus,
   DirectoryCoordinator,
   DirectorySchool,
+  CoordinatorClassSection,
   UpdateDirectoryCoordinatorInput,
 } from "@/features/directory/domain/directoryTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
@@ -24,6 +25,10 @@ interface CoordinatorFormDialogProps {
 }
 
 const inputClassName = FORM_FIELD_CLASS;
+
+function emptyClassSection(): CoordinatorClassSection {
+  return { grade: 0 };
+}
 
 /** Modal form to create or update a coordinator with school/campus assignment. */
 export function CoordinatorFormDialog({
@@ -48,6 +53,11 @@ export function CoordinatorFormDialog({
   const [mobileNumber, setMobileNumber] = useState(
     coordinator?.mobileNumber ?? "",
   );
+  const [classSections, setClassSections] = useState<CoordinatorClassSection[]>(
+    coordinator?.classSections?.length
+      ? coordinator.classSections.map((item) => ({ grade: item.grade }))
+      : [emptyClassSection()],
+  );
   const [error, setError] = useState<string | null>(null);
 
   const selectedSchoolId = Number(schoolId) || 0;
@@ -71,6 +81,17 @@ export function CoordinatorFormDialog({
     }
   }, [schoolId, isEdit]);
 
+  function updateClassSection(
+    index: number,
+    patch: Partial<CoordinatorClassSection>,
+  ) {
+    setClassSections((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -88,10 +109,19 @@ export function CoordinatorFormDialog({
       return;
     }
 
+    const normalizedSections = classSections
+      .map((item) => ({ grade: Number(item.grade) || 0 }))
+      .filter((item) => item.grade > 0)
+      .filter(
+        (item, index, list) =>
+          list.findIndex((row) => row.grade === item.grade) === index,
+      );
+
     const mobile = mobileNumber.trim() || null;
 
     try {
       if (isEdit) {
+        const roles = coordinator.roles ?? [];
         await onSubmit({
           mode: "edit",
           input: {
@@ -99,6 +129,9 @@ export function CoordinatorFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
+            alsoTeacher: roles.includes("Teacher"),
+            alsoParent: roles.includes("Parent"),
+            classSections: normalizedSections,
           },
         });
       } else {
@@ -122,6 +155,7 @@ export function CoordinatorFormDialog({
             campusId: parsedCampusId,
             teacherCode: trimmedCode,
             mobileNumber: mobile,
+            classSections: normalizedSections,
           },
         });
       }
@@ -283,6 +317,63 @@ export function CoordinatorFormDialog({
               className={inputClassName}
               disabled={isSubmitting}
             />
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-slate-800">Classes</p>
+                <p className="text-xs text-slate-500">
+                  Coordinator covers the whole class (all sections) for each
+                  grade.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() =>
+                  setClassSections((current) => [...current, emptyClassSection()])
+                }
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+              >
+                Add
+              </button>
+            </div>
+
+            {classSections.map((item, index) => (
+              <div
+                key={`class-section-${index}`}
+                className="grid grid-cols-[1fr_auto] gap-2"
+              >
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Grade / class"
+                  value={item.grade || ""}
+                  onChange={(event) =>
+                    updateClassSection(index, {
+                      grade: Number(event.target.value) || 0,
+                    })
+                  }
+                  className={inputClassName}
+                  disabled={isSubmitting}
+                  aria-label={`Class ${index + 1}`}
+                />
+                <button
+                  type="button"
+                  disabled={isSubmitting || classSections.length <= 1}
+                  onClick={() =>
+                    setClassSections((current) =>
+                      current.filter((_, itemIndex) => itemIndex !== index),
+                    )
+                  }
+                  className="rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+                  aria-label={`Remove class ${index + 1}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
