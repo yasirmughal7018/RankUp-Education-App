@@ -52,7 +52,8 @@ public sealed class ReportService : IReportService
         CancellationToken cancellationToken)
     {
         await EnsureCanViewStudentAsync(studentId, cancellationToken);
-        return await _reports.GetStudentQuizHistoryAsync(studentId, cancellationToken);
+        long? creatorUserId = ParseRole() == UserRole.Tutor ? _currentUser.UserId : null;
+        return await _reports.GetStudentQuizHistoryAsync(studentId, cancellationToken, creatorUserId);
     }
 
     public async Task<RankingReportResponse> GetRankingsAsync(
@@ -165,7 +166,41 @@ public sealed class ReportService : IReportService
             return;
         }
 
-        if (role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin)
+        if (role == UserRole.Tutor)
+        {
+            var tutorId = _currentUser.ProfileId ?? _currentUser.UserId
+                ?? throw new ForbiddenAppException("Tutor profile was not found.");
+            if (!await _studentScope.IsTutorLinkedStudentAsync(tutorId, studentId, cancellationToken))
+            {
+                throw new ForbiddenAppException("You can only view linked student history.");
+            }
+
+            return;
+        }
+
+        if (role is UserRole.Teacher or UserRole.Coordinator)
+        {
+            var teacherId = _currentUser.ProfileId ?? _currentUser.UserId
+                ?? throw new ForbiddenAppException("Teacher profile was not found.");
+            var schoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            var campusId = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+            if (!await _studentScope.IsStudentInTeacherRosterAsync(
+                    teacherId,
+                    studentId,
+                    schoolId,
+                    campusId,
+                    cancellationToken))
+            {
+                throw new ForbiddenAppException(
+                    "You can only view students in your assigned classes and sections.");
+            }
+
+            return;
+        }
+
+        if (role == UserRole.SchoolAdmin)
         {
             var schoolId = _currentUser.SchoolId
                 ?? throw new ForbiddenAppException("School context was not found.");
@@ -188,7 +223,7 @@ public sealed class ReportService : IReportService
     private void EnsureAdminOrTeacher()
     {
         var role = ParseRole();
-        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher or UserRole.Coordinator))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher or UserRole.Coordinator or UserRole.Tutor))
         {
             throw new ForbiddenAppException("You do not have access to reports.");
         }
@@ -201,6 +236,11 @@ public sealed class ReportService : IReportService
         if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             return (_currentUser.SchoolId, _currentUser.CampusId, _currentUser.UserId);
+        }
+
+        if (role == UserRole.Tutor)
+        {
+            return (null, null, _currentUser.UserId);
         }
 
         if (role == UserRole.SchoolAdmin)

@@ -29,7 +29,7 @@ const panelCopy: Record<
   },
   "request-access": {
     headline: "Request access to RankUp Education",
-    lead: "New students, parents, and teachers can request an account. Campus and School admins can activate students in their scope; Portal Admin can activate any request (and must for accounts without a school).",
+    lead: "New students, parents, teachers, and tutors can request an account. Campus and School admins can activate students in their scope; Portal Admin can activate any request (and must for accounts without a school, including tutors).",
     points: [
       "Email address is required and becomes the username for every role",
       "Optional school and campus route your approval queue",

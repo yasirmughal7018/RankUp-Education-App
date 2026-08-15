@@ -104,6 +104,13 @@ function headerCopy(role: UserRole | undefined): { title: string; subtitle: stri
     };
   }
 
+  if (role === "Tutor") {
+    return {
+      title: "Notifications",
+      subtitle: "Your quizzes and linked students",
+    };
+  }
+
   if (role === "Student") {
     return {
       title: "Notifications",

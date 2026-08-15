@@ -10,7 +10,6 @@ import { useAuth } from "@/features/authentication/presentation/context/AuthProv
 import type {
   CreateDirectoryParentInput,
   DirectoryParent,
-  GrantCoordinatorRoleInput,
   GrantTeacherRoleInput,
   UpdateDirectoryParentInput,
 } from "@/features/directory/domain/directoryTypes";
@@ -691,7 +690,10 @@ export function DirectoryParentsPage() {
           schools={schools}
           isSubmitting={grantCoordinatorMutation.isPending}
           onClose={() => setGrantCoordinatorTarget(null)}
-          onSubmit={async (input: GrantCoordinatorRoleInput) => {
+          onSubmit={async (input) => {
+            if (!("schoolId" in input)) {
+              return;
+            }
             clearMessages();
             try {
               await grantCoordinatorMutation.mutateAsync({

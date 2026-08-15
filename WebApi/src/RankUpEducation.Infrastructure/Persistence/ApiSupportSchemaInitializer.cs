@@ -59,6 +59,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(PasswordResetRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(TeacherClassSectionSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(TutorSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
 
@@ -74,6 +75,28 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         CREATE UNIQUE INDEX IF NOT EXISTS ux_teacher_class_sections_teacher_grade_section
             ON public.teacher_class_sections (teacher_id, grade, section);
+        """;
+
+    private const string TutorSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_user_tutors (
+            tutor_id BIGINT PRIMARY KEY
+                REFERENCES public.app_users (id) ON DELETE CASCADE,
+            mobile_number VARCHAR(40) NULL,
+            modified_date TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS public.tutor_student_relations (
+            id BIGSERIAL PRIMARY KEY,
+            tutor_id BIGINT NOT NULL
+                REFERENCES public.app_user_tutors (tutor_id) ON DELETE CASCADE,
+            student_id BIGINT NOT NULL
+                REFERENCES public.app_user_students (student_id) ON DELETE CASCADE,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_date DATE NOT NULL DEFAULT CURRENT_DATE
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_tutor_student_relations_tutor_student
+            ON public.tutor_student_relations (tutor_id, student_id);
         """;
 
     private const string UserRoleRequestSupportSql = """
@@ -1078,7 +1101,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
     private const string UserRoleSupportSql = """
         -- Ensure UserRole lookup rows exist (IDs match Domain.UserRole).
         -- Layout: 2010 PortalAdmin, 2011 SchoolAdmin, 2012 CampusAdmin,
-        --         2013 Parent, 2014 Teacher, 2015 Student, 2016 Coordinator.
+        --         2013 Parent, 2014 Teacher, 2015 Student, 2016 Coordinator, 2017 Tutor.
         INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
         SELECT seed.id, seed.name, 'UserRole', seed.order_by, TRUE, NULL
         FROM (
@@ -1089,7 +1112,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2013, 'Parent', 0),
                 (2014, 'Teacher', 0),
                 (2015, 'Student', 0),
-                (2016, 'Coordinator', 0)
+                (2016, 'Coordinator', 0),
+                (2017, 'Tutor', 0)
         ) AS seed(id, name, order_by)
         WHERE NOT EXISTS (
             SELECT 1
@@ -1110,7 +1134,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2013, 'Parent'),
                 (2014, 'Teacher'),
                 (2015, 'Student'),
-                (2016, 'Coordinator')
+                (2016, 'Coordinator'),
+                (2017, 'Tutor')
         ) AS seed(id, name)
         WHERE existing.id = seed.id
           AND existing.type = 'UserRole'
@@ -1149,6 +1174,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                     WHEN 'teacher' THEN 2014
                     WHEN 'student' THEN 2015
                     WHEN 'coordinator' THEN 2016
+                    WHEN 'tutor' THEN 2017
                     ELSE NULL
                 END
                 WHERE role_id IS NULL;
@@ -1171,7 +1197,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
                 ALTER TABLE public.app_users
                     ADD CONSTRAINT chk_app_users_role
-                    CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016]::int2[]));
+                    CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]));
 
                 -- student_groups.creator_role: text -> lookup id (Parent=2013, Teacher=2014)
                 IF EXISTS (
@@ -1212,7 +1238,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         END
         $migrate$;
 
-        -- Widen app_users role CHECK for Coordinator (2016) when the legacy column still exists.
+        -- Widen app_users role CHECK for Coordinator (2016) and Tutor (2017).
         DO $widen_users_role$
         BEGIN
             IF EXISTS (
@@ -1222,7 +1248,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 ALTER TABLE public.app_users DROP CONSTRAINT IF EXISTS chk_app_users_role;
                 ALTER TABLE public.app_users
                     ADD CONSTRAINT chk_app_users_role
-                    CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016]::int2[]));
+                    CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]));
             END IF;
         END
         $widen_users_role$;
@@ -1239,7 +1265,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             CONSTRAINT app_user_roles_role_fkey
                 FOREIGN KEY (role) REFERENCES public.lookups(id),
             CONSTRAINT chk_app_user_roles_role
-                CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016]::int2[]))
+                CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]))
         );
 
         CREATE INDEX IF NOT EXISTS ix_app_user_roles_role
@@ -1297,11 +1323,11 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.refresh_tokens
             ADD COLUMN IF NOT EXISTS active_role int2 NULL;
 
-        -- Widen role CHECK for Coordinator (2016).
+        -- Widen role CHECK for Coordinator (2016) and Tutor (2017).
         ALTER TABLE public.app_user_roles DROP CONSTRAINT IF EXISTS chk_app_user_roles_role;
         ALTER TABLE public.app_user_roles
             ADD CONSTRAINT chk_app_user_roles_role
-            CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016]::int2[]));
+            CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]));
         """;
 
     private const string DropAppUsersRoleAndAdminTargetSql = """
@@ -1438,7 +1464,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             CONSTRAINT app_approval_approved_by_user_id_fkey
                 FOREIGN KEY (approved_by_user_id) REFERENCES public.app_users(id) ON DELETE RESTRICT,
             CONSTRAINT chk_app_approval_role
-                CHECK (approved_by_role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016]::int2[]))
+                CHECK (approved_by_role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]))
         );
 
         -- Carry legacy constraint names over to the new table name.
@@ -1534,11 +1560,11 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         DROP INDEX IF EXISTS ix_app_approval_pending;
         DROP INDEX IF EXISTS ix_app_approval_question_trail;
 
-        -- Allow Coordinator (2016) as approver role.
+        -- Allow Coordinator (2016) and Tutor (2017) as approver role.
         ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_role;
         ALTER TABLE public.app_approval
             ADD CONSTRAINT chk_app_approval_role
-            CHECK (approved_by_role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016]::int2[]));
+            CHECK (approved_by_role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]));
 
         DO $legacy_quiz_id_early$
         BEGIN

@@ -11,6 +11,7 @@ using RankUpEducation.Domain.Quizzes;
 using RankUpEducation.Domain.Schools;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
+using RankUpEducation.Domain.Tutors;
 
 namespace RankUpEducation.Infrastructure.Persistence;
 
@@ -48,6 +49,8 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<ParentStudentRelation> ParentStudentRelations => Set<ParentStudentRelation>();
     public DbSet<Teacher> Teachers => Set<Teacher>();
     public DbSet<TeacherClassSection> TeacherClassSections => Set<TeacherClassSection>();
+    public DbSet<Tutor> Tutors => Set<Tutor>();
+    public DbSet<TutorStudentRelation> TutorStudentRelations => Set<TutorStudentRelation>();
     public DbSet<StudentGroup> StudentGroups => Set<StudentGroup>();
     public DbSet<StudentGroupMember> StudentGroupMembers => Set<StudentGroupMember>();
     public DbSet<Question> Questions => Set<Question>();

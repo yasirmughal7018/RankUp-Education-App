@@ -18,7 +18,8 @@ export type UserRole =
   | "Teacher"
   | "Student"
   | "Parent"
-  | "Coordinator";
+  | "Coordinator"
+  | "Tutor";
 
 export interface PendingSchoolChange {
   id: number;
@@ -106,6 +107,8 @@ export function getDashboardLabel(role: UserRole): string {
       return "Student Dashboard";
     case "Parent":
       return "Parent Dashboard";
+    case "Tutor":
+      return "Tutor Dashboard";
     default:
       return "Dashboard";
   }
@@ -134,6 +137,9 @@ export function dashboardPathForRole(role: UserRole): string {
   }
   if (role === "Parent") {
     return "/parent/children";
+  }
+  if (role === "Tutor") {
+    return "/tutor/students";
   }
   if (role === "Student") {
     return "/student/quizzes";

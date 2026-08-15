@@ -166,7 +166,8 @@ public sealed class ReportRepository : IReportRepository
 
     public async Task<StudentQuizHistoryResponse> GetStudentQuizHistoryAsync(
         long studentId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long? creatorUserId = null)
     {
         var studentName = await _dbContext.Users.AsNoTracking()
             .Where(user => user.Id == studentId)
@@ -174,12 +175,21 @@ public sealed class ReportRepository : IReportRepository
             .FirstOrDefaultAsync(cancellationToken)
             ?? $"Student {studentId}";
 
-        var rows = await (
+        var query =
             from assignment in _dbContext.QuizAssignments.AsNoTracking()
             join quiz in _dbContext.Quizzes.AsNoTracking() on assignment.QuizId equals quiz.Id
             where assignment.StudentId == studentId && quiz.IsActive && !quiz.IsDeleted
-            orderby assignment.StartDateTime descending
-            select new { assignment, quiz }).ToListAsync(cancellationToken);
+            select new { assignment, quiz };
+
+        if (creatorUserId is not null)
+        {
+            var creatorKey = creatorUserId.Value.ToString();
+            query = query.Where(row => row.quiz.CreatedByName == creatorKey);
+        }
+
+        var rows = await query
+            .OrderByDescending(row => row.assignment.StartDateTime)
+            .ToListAsync(cancellationToken);
 
         var resultStatusNames = await _dbContext.Lookups.AsNoTracking()
             .Where(lookup => rows.Select(row => row.assignment.QuizResultStatus).Contains(lookup.Id))

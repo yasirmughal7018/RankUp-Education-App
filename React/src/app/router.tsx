@@ -27,6 +27,7 @@ import { DirectorySchoolsPage } from "@/features/directory/presentation/pages/Di
 import { DirectoryStudentsRoute } from "@/features/directory/presentation/components/DirectoryStudentsRoute";
 import { DirectoryStudentsPage } from "@/features/directory/presentation/pages/DirectoryStudentsPage";
 import { DirectoryTeachersPage } from "@/features/directory/presentation/pages/DirectoryTeachersPage";
+import { DirectoryTutorsPage } from "@/features/directory/presentation/pages/DirectoryTutorsPage";
 import { HomePage } from "@/features/home/presentation/pages/HomePage";
 import { NotFoundPage } from "@/features/home/presentation/pages/NotFoundPage";
 import { ParentRoute } from "@/features/parent/presentation/components/ParentRoute";
@@ -36,6 +37,9 @@ import { ParentChildrenPage } from "@/features/parent/presentation/pages/ParentC
 import { ParentQuizDashboardPage } from "@/features/parent/presentation/pages/ParentQuizDashboardPage";
 import { TeacherRoute } from "@/features/teacher/presentation/components/TeacherRoute";
 import { TeacherRosterPage } from "@/features/teacher/presentation/pages/TeacherRosterPage";
+import { TutorRoute } from "@/features/tutor/presentation/components/TutorRoute";
+import { TutorStudentHistoryPage } from "@/features/tutor/presentation/pages/TutorStudentHistoryPage";
+import { TutorStudentsPage } from "@/features/tutor/presentation/pages/TutorStudentsPage";
 import { QuestionManageRoute } from "@/features/questions/presentation/components/QuestionManageRoute";
 import { QuestionCreatePage } from "@/features/questions/presentation/pages/QuestionCreatePage";
 import { QuestionSessionReviewPage } from "@/features/questions/presentation/pages/QuestionSessionReviewPage";
@@ -127,6 +131,10 @@ export function AppRouter() {
                 element={<DirectoryParentsPage />}
               />
               <Route
+                path="admin/directory/tutors"
+                element={<DirectoryTutorsPage />}
+              />
+              <Route
                 path="admin/directory/school-admins"
                 element={<DirectorySchoolAdminsPage />}
               />
@@ -197,6 +205,14 @@ export function AppRouter() {
 
             <Route element={<TeacherRoute />}>
               <Route path="teacher/students" element={<TeacherRosterPage />} />
+            </Route>
+
+            <Route element={<TutorRoute />}>
+              <Route path="tutor/students" element={<TutorStudentsPage />} />
+              <Route
+                path="tutor/students/:studentId/history"
+                element={<TutorStudentHistoryPage />}
+              />
             </Route>
 
             <Route element={<StudentRoute />}>

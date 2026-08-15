@@ -9,6 +9,7 @@ using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
+using RankUpEducation.Domain.Tutors;
 
 namespace RankUpEducation.Application.Directory;
 
@@ -79,6 +80,8 @@ public sealed class DirectoryService : IDirectoryService
             campusId,
             cancellationToken);
 
+        var tutors = new DirectoryStatusCounts(0, 0, 0, 0, 0, 0, 0, 0);
+
         // Parents are scoped via linked students (they usually have no school on the user row).
         var parents = await _directory.CountParentsLinkedToStudentsByStatusAsync(
             schoolId,
@@ -100,6 +103,12 @@ public sealed class DirectoryService : IDirectoryService
 
         if (role == UserRole.PortalAdmin)
         {
+            tutors = await _directory.CountUsersByStatusAsync(
+                UserRole.Tutor,
+                schoolId: null,
+                campusId: null,
+                cancellationToken);
+            visibleSections.Add("tutors");
             schoolAdmins = await _directory.CountUsersByStatusAsync(
                 UserRole.SchoolAdmin,
                 schoolId: null,
@@ -126,6 +135,7 @@ public sealed class DirectoryService : IDirectoryService
             schoolAdmins,
             campusAdmins,
             coordinators,
+            tutors,
             visibleSections);
     }
 
@@ -307,6 +317,27 @@ public sealed class DirectoryService : IDirectoryService
         EnsureDirectoryReader();
         var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
         var (resolvedSchoolId, resolvedCampusId) = ResolveSchoolCampusFilter(schoolId, campusId);
+
+        IReadOnlyList<long>? allowedStudentIds = null;
+        var role = ParseRole();
+        if (role is UserRole.Teacher or UserRole.Coordinator)
+        {
+            var teacherId = _currentUser.ProfileId ?? _currentUser.UserId
+                ?? throw new ForbiddenAppException("Teacher profile was not found.");
+            if (resolvedSchoolId is null || resolvedCampusId is null)
+            {
+                throw new ForbiddenAppException("Teacher school and campus context was not found.");
+            }
+
+            allowedStudentIds = (await _teacherRepository.GetRosterStudentsAsync(
+                    teacherId,
+                    resolvedSchoolId.Value,
+                    resolvedCampusId.Value,
+                    cancellationToken))
+                .Select(student => student.StudentId)
+                .ToArray();
+        }
+
         var (items, totalCount) = await _directory.ListStudentsAsync(
             resolvedSchoolId,
             resolvedCampusId,
@@ -314,7 +345,8 @@ public sealed class DirectoryService : IDirectoryService
             search,
             safePageNumber,
             safePageSize,
-            cancellationToken);
+            cancellationToken,
+            allowedStudentIds);
         return new DirectoryStudentListResponse(items, safePageNumber, safePageSize, totalCount);
     }
 
@@ -939,6 +971,182 @@ public sealed class DirectoryService : IDirectoryService
 
         await _directory.UnlinkParentStudentAsync(parentId, studentId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<DirectoryTutorListResponse> ListTutorsAsync(
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        EnsurePortalAdmin();
+        var (safePageNumber, safePageSize) = NormalizePaging(pageNumber, pageSize);
+        var (items, totalCount) = await _directory.ListTutorsAsync(
+            search,
+            safePageNumber,
+            safePageSize,
+            cancellationToken);
+        return new DirectoryTutorListResponse(items, safePageNumber, safePageSize, totalCount);
+    }
+
+    public async Task<DirectoryTutorResponse> CreateTutorAsync(
+        CreateDirectoryTutorRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsurePortalAdmin();
+        ValidateCreateTutorRequest(request);
+
+        var mobileNumber = request.MobileNumber.AsTrimmedOrNull();
+        var cnic = request.Cnic.AsTrimmedOrNull();
+        var emailAddress = ResolveEmailUsername(request.EmailAddress, request.Username);
+        var existing = await FindExistingUserForAdditionalRoleAsync(
+            mobileNumber,
+            cnic,
+            emailOrUsername: emailAddress,
+            cancellationToken);
+        if (existing is not null)
+        {
+            return await AddTutorRoleToExistingUserAsync(
+                existing,
+                request,
+                mobileNumber,
+                cnic,
+                cancellationToken);
+        }
+
+        var user = User.CreateProvisionedAccount(
+            emailAddress,
+            request.FullName.AsTrimmedString(),
+            UserRole.Tutor,
+            mobileNumber: mobileNumber,
+            cnic: cnic,
+            emailAddress: emailAddress);
+        await _users.AddAsync(user, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _users.AddTutorProfileAsync(new Tutor(user.Id, mobileNumber), cancellationToken);
+        user.AttachProfileContext(user.Id, null, null);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new DirectoryTutorResponse(
+            user.Id,
+            user.FullName,
+            user.Username,
+            0,
+            Array.Empty<string>(),
+            user.IsActive,
+            user.AvatarUrl,
+            user.MobileNumber,
+            user.Cnic,
+            user.EmailAddress,
+            user.CreatedDate,
+            user.RequestedAt,
+            user.RejectedAt,
+            user.LastLoginAt,
+            user.ReasonMessage,
+            user.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(user),
+            RoleNames(user),
+            Array.Empty<DirectoryLinkedStudentSummary>());
+    }
+
+    public async Task ActivateTutorAsync(long tutorId, CancellationToken cancellationToken)
+    {
+        await SetTutorActiveAsync(tutorId, true, cancellationToken);
+    }
+
+    public async Task DeactivateTutorAsync(long tutorId, CancellationToken cancellationToken)
+    {
+        await SetTutorActiveAsync(tutorId, false, cancellationToken);
+    }
+
+    private async Task SetTutorActiveAsync(long tutorId, bool isActive, CancellationToken cancellationToken)
+    {
+        EnsurePortalAdmin();
+        if (!await _directory.TutorExistsAsync(tutorId, cancellationToken))
+        {
+            throw new NotFoundAppException("Tutor was not found.");
+        }
+
+        await _directory.SetUserActiveAsync(tutorId, isActive, cancellationToken);
+        if (!isActive)
+        {
+            await _users.RevokeRefreshTokensForUserAsync(
+                tutorId,
+                _dateTimeProvider.UtcNow,
+                cancellationToken);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<DirectoryTutorResponse> AddTutorRoleToExistingUserAsync(
+        User existing,
+        CreateDirectoryTutorRequest request,
+        string? mobileNumber,
+        string? cnic,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            existing.AddRole(UserRole.Tutor, DateTimeOffset.UtcNow);
+        }
+        catch (BusinessRuleException exception)
+        {
+            throw new ValidationAppException([exception.Message]);
+        }
+
+        existing.UpdateProfile(request.FullName.AsTrimmedString());
+        existing.UpdateContactInfo(mobileNumber, cnic);
+
+        if (!await _users.HasTutorProfileAsync(existing.Id, cancellationToken))
+        {
+            await _users.AddTutorProfileAsync(new Tutor(existing.Id, mobileNumber), cancellationToken);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        var linkedCount = await _directory.CountTutorStudentLinksAsync(existing.Id, cancellationToken);
+        return new DirectoryTutorResponse(
+            existing.Id,
+            existing.FullName,
+            existing.Username,
+            linkedCount,
+            Array.Empty<string>(),
+            existing.IsActive,
+            existing.AvatarUrl,
+            existing.MobileNumber,
+            existing.Cnic,
+            existing.EmailAddress,
+            existing.CreatedDate,
+            existing.RequestedAt,
+            existing.RejectedAt,
+            existing.LastLoginAt,
+            existing.ReasonMessage,
+            existing.NeedsPasswordSetup,
+            Array.Empty<DirectoryApprovalHistoryItem>(),
+            DirectoryAccountStatuses.FromUser(existing),
+            RoleNames(existing),
+            Array.Empty<DirectoryLinkedStudentSummary>());
+    }
+
+    private static void ValidateCreateTutorRequest(CreateDirectoryTutorRequest request)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            errors.Add("Full name is required.");
+        }
+
+        if (ResolveEmailUsernameOrNull(request.EmailAddress, request.Username) is null)
+        {
+            errors.Add("Email address is required (it is the username).");
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationAppException(errors);
+        }
     }
 
     private async Task SetStudentActiveAsync(long studentId, bool isActive, CancellationToken cancellationToken)
@@ -2806,12 +3014,20 @@ public sealed class DirectoryService : IDirectoryService
             return (scopedSchoolId, scopedCampusId);
         }
 
-        if (role is UserRole.SchoolAdmin or UserRole.Teacher or UserRole.Coordinator)
+        if (role is UserRole.SchoolAdmin)
         {
             var scopedSchoolId = _currentUser.SchoolId
                 ?? throw new ForbiddenAppException("School context was not found.");
-            var scopedCampusId = campusId ?? _currentUser.CampusId;
-            return (scopedSchoolId, scopedCampusId);
+            return (scopedSchoolId, campusId ?? _currentUser.CampusId);
+        }
+
+        if (role is UserRole.Teacher or UserRole.Coordinator)
+        {
+            var scopedSchoolId = _currentUser.SchoolId
+                ?? throw new ForbiddenAppException("School context was not found.");
+            var teacherCampusId = _currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus context was not found.");
+            return (scopedSchoolId, teacherCampusId);
         }
 
         return (schoolId, campusId);

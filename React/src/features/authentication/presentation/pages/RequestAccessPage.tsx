@@ -9,7 +9,7 @@ import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 const inputClassName = FORM_FIELD_CLASS;
 
-const USER_TYPES = ["Student", "Parent", "Teacher"] as const;
+const USER_TYPES = ["Student", "Parent", "Teacher", "Tutor"] as const;
 
 export function RequestAccessPage() {
   const [form, setForm] = useState({
@@ -36,9 +36,11 @@ export function RequestAccessPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const isParent = form.userType === "Parent";
+  const isTutor = form.userType === "Tutor";
   const isStudent = form.userType === "Student";
   const isTeacher = form.userType === "Teacher";
   const showSchoolFields = isStudent || isTeacher;
+  const isSchoolLess = isParent || isTutor;
 
   function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -48,13 +50,13 @@ export function RequestAccessPage() {
     setForm((current) => ({
       ...current,
       userType,
-      ...(userType === "Parent"
+      ...(userType === "Parent" || userType === "Tutor"
         ? { schoolId: "", campusId: "", rollNumberTeacherCode: "", grade: "", section: "" }
         : userType === "Teacher"
           ? { grade: "", section: "" }
           : {}),
     }));
-    if (userType === "Parent") {
+    if (userType === "Parent" || userType === "Tutor") {
       setCampuses([]);
     }
   }
@@ -112,7 +114,7 @@ export function RequestAccessPage() {
   }, []);
 
   useEffect(() => {
-    if (isParent) {
+    if (isSchoolLess) {
       setCampuses([]);
       return;
     }
@@ -146,7 +148,7 @@ export function RequestAccessPage() {
     return () => {
       cancelled = true;
     };
-  }, [form.schoolId, isParent]);
+  }, [form.schoolId, isSchoolLess]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,9 +166,9 @@ export function RequestAccessPage() {
     }
 
     const schoolId =
-      isParent || !form.schoolId ? null : Number(form.schoolId);
+      isSchoolLess || !form.schoolId ? null : Number(form.schoolId);
     const campusId =
-      isParent || !schoolId || !form.campusId ? null : Number(form.campusId);
+      isSchoolLess || !schoolId || !form.campusId ? null : Number(form.campusId);
 
     if (isStudent && schoolId && !form.rollNumberTeacherCode.trim()) {
       setError("Roll number is required when a school is selected.");
@@ -191,7 +193,7 @@ export function RequestAccessPage() {
         mobileNumber: form.mobileNumber.trim() || null,
         emailAddress: form.emailAddress.trim() || null,
         userType: form.userType,
-        rollNumberTeacherCode: isParent || (isStudent && !schoolId)
+        rollNumberTeacherCode: isSchoolLess || (isStudent && !schoolId)
           ? null
           : form.rollNumberTeacherCode.trim() || null,
         reasonMessage: form.reasonMessage.trim() || null,
@@ -234,7 +236,9 @@ export function RequestAccessPage() {
     }
   }
 
-  const description = isParent
+  const description = isTutor
+    ? "Tutor requests go to Portal Admin. Email is your username. School and campus are not required — you teach students from many schools."
+    : isParent
     ? "Parent requests go to Portal Admin. Email is your username. School and campus are not required."
     : isStudent
       ? "Email is your username. Grade and section are required. Roll number is required only when you select a school."

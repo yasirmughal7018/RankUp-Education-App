@@ -91,7 +91,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     final role = ref.watch(authControllerProvider).user?.role;
     return role == UserRole.teacher ||
         role == UserRole.coordinator ||
-        role == UserRole.parent;
+        role == UserRole.parent ||
+        role == UserRole.tutor;
   }
 
   UserRole get _role =>

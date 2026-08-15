@@ -34,6 +34,12 @@ class TeacherDashboardPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
+            onPressed: () => context.push('/teacher/students'),
+            icon: const Icon(Icons.groups_outlined),
+            label: const Text('My students'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
             onPressed: () => context.push('/questions'),
             icon: const Icon(Icons.quiz_outlined),
             label: const Text('Question Bank'),

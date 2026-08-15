@@ -9,6 +9,7 @@ using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Schools;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
+using RankUpEducation.Domain.Tutors;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
@@ -220,13 +221,24 @@ public sealed class DirectoryRepository : IDirectoryRepository
         string? search,
         int pageNumber,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<long>? allowedStudentIds = null)
     {
+        if (allowedStudentIds is { Count: 0 })
+        {
+            return (Array.Empty<DirectoryStudentResponse>(), 0);
+        }
+
         var query =
             from student in _dbContext.Students.AsNoTracking()
             join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
             where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
             select new { student, user };
+
+        if (allowedStudentIds is not null)
+        {
+            query = query.Where(row => allowedStudentIds.Contains(row.student.Id));
+        }
 
         if (schoolId is not null)
         {
@@ -582,6 +594,94 @@ public sealed class DirectoryRepository : IDirectoryRepository
         return (items, totalCount);
     }
 
+    public async Task<(IReadOnlyList<DirectoryTutorResponse> Items, int TotalCount)> ListTutorsAsync(
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query =
+            from tutor in _dbContext.Tutors.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on tutor.Id equals user.Id
+            where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Tutor)
+            select new { tutor, user };
+
+        if (search.HasTrimmedText())
+        {
+            var term = search.AsTrimmedString();
+            query = query.Where(row =>
+                row.user.FullName.Contains(term)
+                || row.user.Username.Contains(term)
+                || (row.user.MobileNumber != null && row.user.MobileNumber.Contains(term))
+                || (row.tutor.MobileNumber != null && row.tutor.MobileNumber.Contains(term))
+                || (row.user.Cnic != null && row.user.Cnic.Contains(term))
+                || (row.user.EmailAddress != null && row.user.EmailAddress.Contains(term)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderBy(row => row.user.FullName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return (Array.Empty<DirectoryTutorResponse>(), totalCount);
+        }
+
+        var tutorIds = rows.Select(row => row.tutor.Id).ToArray();
+        var linkedStudents = await (
+            from relation in _dbContext.TutorStudentRelations.AsNoTracking()
+            join studentUser in _dbContext.Users.AsNoTracking() on relation.StudentId equals studentUser.Id
+            where tutorIds.Contains(relation.TutorId) && relation.IsActive
+            orderby studentUser.FullName
+            select new { relation.TutorId, relation.StudentId, studentUser.FullName })
+            .ToListAsync(cancellationToken);
+
+        var linkedByTutor = linkedStudents
+            .GroupBy(item => item.TutorId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(item => new DirectoryLinkedStudentSummary(item.StudentId, item.FullName))
+                    .ToArray());
+
+        var lockedSet = await GetLockedUserIdsAsync(tutorIds, cancellationToken);
+        var approvalHistory = await GetApprovalHistoryByUserIdsAsync(tutorIds, cancellationToken);
+        var rolesByUser = await GetRoleNamesByUserIdsAsync(tutorIds, cancellationToken);
+
+        var items = rows.Select(row =>
+        {
+            var linked = (IReadOnlyList<DirectoryLinkedStudentSummary>)linkedByTutor
+                .GetValueOrDefault(row.tutor.Id, Array.Empty<DirectoryLinkedStudentSummary>());
+            var names = (IReadOnlyList<string>)linked.Select(student => student.FullName).ToArray();
+            return new DirectoryTutorResponse(
+                row.tutor.Id,
+                row.user.FullName,
+                row.user.Username,
+                linked.Count,
+                names,
+                row.user.IsActive,
+                row.user.AvatarUrl,
+                row.user.MobileNumber ?? row.tutor.MobileNumber,
+                row.user.Cnic,
+                row.user.EmailAddress,
+                row.user.CreatedDate,
+                row.user.RequestedAt,
+                row.user.RejectedAt,
+                row.user.LastLoginAt,
+                row.user.ReasonMessage,
+                row.user.NeedsPasswordSetup,
+                approvalHistory.GetValueOrDefault(row.tutor.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
+                DirectoryAccountStatuses.FromUser(row.user, lockedSet.Contains(row.tutor.Id)),
+                rolesByUser.GetValueOrDefault(row.tutor.Id, Array.Empty<string>()),
+                linked);
+        }).ToArray();
+
+        return (items, totalCount);
+    }
+
     public async Task<bool> ParentHasStudentInScopeAsync(
         long parentId,
         int? schoolId,
@@ -620,6 +720,12 @@ public sealed class DirectoryRepository : IDirectoryRepository
     {
         return _dbContext.Parents
             .FirstOrDefaultAsync(parent => parent.Id == parentId, cancellationToken);
+    }
+
+    public Task<Tutor?> GetTutorEntityAsync(long tutorId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Tutors
+            .FirstOrDefaultAsync(tutor => tutor.Id == tutorId, cancellationToken);
     }
 
     public async Task SetUserActiveAsync(long userId, bool isActive, CancellationToken cancellationToken)
@@ -663,10 +769,44 @@ public sealed class DirectoryRepository : IDirectoryRepository
         existing?.Deactivate();
     }
 
+    public async Task LinkTutorStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken)
+    {
+        var existing = await _dbContext.TutorStudentRelations
+            .FirstOrDefaultAsync(
+                relation => relation.TutorId == tutorId && relation.StudentId == studentId,
+                cancellationToken);
+
+        if (existing is null)
+        {
+            await _dbContext.TutorStudentRelations.AddAsync(
+                new TutorStudentRelation(tutorId, studentId),
+                cancellationToken);
+            return;
+        }
+
+        existing.Activate();
+    }
+
+    public async Task UnlinkTutorStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken)
+    {
+        var existing = await _dbContext.TutorStudentRelations
+            .FirstOrDefaultAsync(
+                relation => relation.TutorId == tutorId && relation.StudentId == studentId && relation.IsActive,
+                cancellationToken);
+
+        existing?.Deactivate();
+    }
+
     public Task<bool> ParentExistsAsync(long parentId, CancellationToken cancellationToken)
     {
         return _dbContext.Parents.AsNoTracking()
             .AnyAsync(parent => parent.Id == parentId, cancellationToken);
+    }
+
+    public Task<bool> TutorExistsAsync(long tutorId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Tutors.AsNoTracking()
+            .AnyAsync(tutor => tutor.Id == tutorId, cancellationToken);
     }
 
     public Task<bool> StudentExistsAsync(long studentId, CancellationToken cancellationToken)
@@ -680,6 +820,14 @@ public sealed class DirectoryRepository : IDirectoryRepository
         return _dbContext.ParentStudentRelations.AsNoTracking()
             .CountAsync(
                 relation => relation.ParentId == parentId && relation.IsActive,
+                cancellationToken);
+    }
+
+    public Task<int> CountTutorStudentLinksAsync(long tutorId, CancellationToken cancellationToken)
+    {
+        return _dbContext.TutorStudentRelations.AsNoTracking()
+            .CountAsync(
+                relation => relation.TutorId == tutorId && relation.IsActive,
                 cancellationToken);
     }
 
@@ -1601,6 +1749,12 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 from parent in _dbContext.Parents.AsNoTracking()
                 join user in _dbContext.Users.AsNoTracking() on parent.Id equals user.Id
                 where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Parent)
+                select user,
+
+            UserRole.Tutor =>
+                from tutor in _dbContext.Tutors.AsNoTracking()
+                join user in _dbContext.Users.AsNoTracking() on tutor.Id equals user.Id
+                where user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Tutor)
                 select user,
 
             _ => _dbContext.Users.AsNoTracking()

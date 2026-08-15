@@ -4,6 +4,7 @@ export type DirectorySectionKey =
   | "parents"
   | "teachers"
   | "coordinators"
+  | "tutors"
   | "schoolAdmins"
   | "campusAdmins"
   | "schoolChanges";
@@ -54,6 +55,7 @@ export interface DirectorySummary {
   parents: DirectoryStatusCounts;
   teachers: DirectoryStatusCounts;
   coordinators: DirectoryStatusCounts;
+  tutors: DirectoryStatusCounts;
   schoolAdmins: DirectoryStatusCounts;
   campusAdmins: DirectoryStatusCounts;
   visibleSections: DirectorySectionKey[];
@@ -471,4 +473,32 @@ export interface DirectoryParentFilters extends DirectoryPaging {
   campusId?: number | null;
   /** true = has linked students, false = none, undefined = all. */
   hasLinkedStudents?: boolean | null;
+}
+
+export interface DirectoryTutor extends DirectoryAccountAuditFields {
+  tutorId: number;
+  fullName: string;
+  username: string;
+  linkedStudentCount: number;
+  linkedStudentNames?: string[];
+  linkedStudents?: DirectoryLinkedStudentSummary[];
+  isActive: boolean;
+  avatarUrl?: string | null;
+  mobileNumber?: string | null;
+  cnic?: string | null;
+  emailAddress?: string | null;
+  accountStatus: DirectoryAccountStatus;
+  roles?: string[];
+}
+
+export interface CreateDirectoryTutorInput {
+  fullName: string;
+  username: string;
+  cnic?: string | null;
+  mobileNumber?: string | null;
+  emailAddress?: string | null;
+}
+
+export interface DirectoryTutorFilters extends DirectoryPaging {
+  search?: string;
 }

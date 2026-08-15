@@ -53,6 +53,7 @@ public static class QuestionScopeResolver
         var role = ParseRole(currentUser.Role);
         if (role is not (
             UserRole.Parent
+            or UserRole.Tutor
             or UserRole.Teacher
             or UserRole.Coordinator
             or UserRole.CampusAdmin
@@ -236,11 +237,11 @@ public static class QuestionScopeResolver
 
     /// <summary>Creators CampusAdmin may still see in pending/restricted queues (Teacher/Parent only).</summary>
     public static bool IsCreatorVisibleToCampusAdmin(UserRole createdByRole)
-        => createdByRole is UserRole.Teacher or UserRole.Parent;
+        => createdByRole is UserRole.Teacher or UserRole.Parent or UserRole.Tutor;
 
     /// <summary>Creators SchoolAdmin may still see in pending/restricted queues.</summary>
     public static bool IsCreatorVisibleToSchoolAdmin(UserRole createdByRole)
-        => createdByRole is UserRole.Teacher or UserRole.Parent or UserRole.CampusAdmin;
+        => createdByRole is UserRole.Teacher or UserRole.Parent or UserRole.Tutor or UserRole.CampusAdmin;
 
     /// <summary>0 Teacher/Parent, 1 CampusAdmin, 2 SchoolAdmin, 3 PortalAdmin.</summary>
     public static int ApprovalTier(UserRole role) => role switch

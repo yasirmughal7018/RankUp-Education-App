@@ -20,7 +20,7 @@ export function RoleSwitcher() {
 
   const lockedRole = user.pendingSchoolChange?.lockedRole ?? null;
   const orderedRoles = [...user.roles].sort((a, b) => {
-    const order: UserRole[] = ["Teacher", "Coordinator", "Parent"];
+    const order: UserRole[] = ["Teacher", "Coordinator", "Parent", "Tutor"];
     const rank = (role: UserRole) => {
       const index = order.indexOf(role);
       return index === -1 ? 99 : index;

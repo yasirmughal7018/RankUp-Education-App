@@ -680,6 +680,8 @@ class _AccountAccessRequestSheetState
   bool get _isStudent => _userType == 'Student';
   bool get _isTeacher => _userType == 'Teacher';
   bool get _isParent => _userType == 'Parent';
+  bool get _isTutor => _userType == 'Tutor';
+  bool get _isSchoolLess => _isParent || _isTutor;
 
   @override
   void initState() {
@@ -784,6 +786,10 @@ class _AccountAccessRequestSheetState
   bool get _showSchoolFields => _isStudent || _isTeacher;
 
   String get _helperDescription {
+    if (_isTutor) {
+      return 'Tutor requests go to Portal Admin. School, campus, and roll '
+          'number are not required — you teach students from many schools.';
+    }
     if (_isParent) {
       return 'Parent requests go to Portal Admin. School, campus, and roll '
           'number are not required.';
@@ -804,7 +810,7 @@ class _AccountAccessRequestSheetState
     }
     setState(() {
       _userType = value;
-      if (value == 'Parent') {
+      if (value == 'Parent' || value == 'Tutor') {
         _schoolId = null;
         _campusId = null;
         _gradeId = null;
@@ -899,6 +905,7 @@ class _AccountAccessRequestSheetState
                 items: const [
                   DropdownMenuItem(value: 'Student', child: Text('Student')),
                   DropdownMenuItem(value: 'Parent', child: Text('Parent')),
+                  DropdownMenuItem(value: 'Tutor', child: Text('Tutor')),
                   DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
                 ],
                 onChanged: _onUserTypeChanged,
@@ -1067,7 +1074,7 @@ class _AccountAccessRequestSheetState
       return;
     }
 
-    final isParent = _userType == 'Parent';
+    final isSchoolLess = _isSchoolLess;
     final isStudent = _userType == 'Student';
     Navigator.of(context).pop(
       _AccountAccessRequest(
@@ -1076,11 +1083,11 @@ class _AccountAccessRequestSheetState
         emailAddress: _emailAddressController.text.trim(),
         userType: _userType,
         rollNumberTeacherCode:
-            isParent ? '' : _rollNumberTeacherCodeController.text.trim(),
+            isSchoolLess ? '' : _rollNumberTeacherCodeController.text.trim(),
         reasonMessage: _reasonMessageController.text.trim(),
         cnic: _cnicController.text.trim(),
-        schoolId: isParent ? null : _schoolId,
-        campusId: isParent || _schoolId == null ? null : _campusId,
+        schoolId: isSchoolLess ? null : _schoolId,
+        campusId: isSchoolLess || _schoolId == null ? null : _campusId,
         grade: isStudent ? _gradeId : null,
         section: isStudent ? _sectionController.text.trim() : null,
       ),

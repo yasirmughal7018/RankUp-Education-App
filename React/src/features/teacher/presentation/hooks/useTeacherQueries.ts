@@ -25,6 +25,14 @@ function invalidateTeacherStudentData(
   void queryClient.invalidateQueries({ queryKey: queryKeys.teacherGroups() });
 }
 
+export function useAddMyStudentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: teacherApi.addMyStudent,
+    onSuccess: () => invalidateTeacherStudentData(queryClient),
+  });
+}
+
 export function useCreateTeacherGroupMutation() {
   const queryClient = useQueryClient();
   return useMutation({

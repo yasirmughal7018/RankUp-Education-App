@@ -22,10 +22,10 @@ const SCHOOL_CHANGE_ROLES: UserRole[] = [
   "Coordinator",
 ];
 
-const REQUESTABLE_ROLES = ["Parent", "Teacher", "Coordinator"] as const;
+const REQUESTABLE_ROLES = ["Parent", "Teacher", "Coordinator", "Tutor"] as const;
 
 /** Roles the user may remove themselves when another role remains. */
-const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher", "Coordinator"];
+const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher", "Coordinator", "Tutor"];
 
 type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
@@ -1122,7 +1122,9 @@ export function AccountPage() {
             )}
           </SectionCard>
           ) : null}
+        </div>
 
+        <div className="space-y-5">
           {canRequestSchoolChange && schoolForm ? (
             <SectionCard
               id="school-campus"
@@ -1229,9 +1231,7 @@ export function AccountPage() {
               </form>
             </SectionCard>
           ) : null}
-        </div>
 
-        <div className="space-y-5">
           <SectionCard
             id="password"
             title="Password"

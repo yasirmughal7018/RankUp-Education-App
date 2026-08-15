@@ -1,11 +1,28 @@
 import { apiRequest, apiRequestVoid } from "@/core/api/apiClient";
 import type {
+  AddMyStudentResult,
   TeacherGroup,
   TeacherRoster,
 } from "@/features/teacher/domain/teacherTypes";
 
 export async function getMyRoster(): Promise<TeacherRoster> {
   return apiRequest<TeacherRoster>("/teachers/me/roster");
+}
+
+/** Add an existing student by CNIC or username to one of the teacher's classes. */
+export async function addMyStudent(input: {
+  identifier: string;
+  grade: number;
+  section: string;
+}): Promise<AddMyStudentResult> {
+  return apiRequest<AddMyStudentResult>("/teachers/me/students", {
+    method: "POST",
+    body: {
+      identifier: input.identifier.trim(),
+      grade: input.grade,
+      section: input.section.trim(),
+    },
+  });
 }
 
 export async function listMyGroups(): Promise<TeacherGroup[]> {

@@ -21,6 +21,9 @@ import {
   type DirectoryCoordinatorFilters,
   type DirectoryParent,
   type DirectoryParentFilters,
+  type DirectoryTutor,
+  type DirectoryTutorFilters,
+  type CreateDirectoryTutorInput,
   type DirectorySchool,
   type DirectorySchoolAdmin,
   type DirectorySchoolAdminFilters,
@@ -114,6 +117,7 @@ export async function getDirectorySummary(): Promise<DirectorySummary> {
     parents: normalizePeopleCounts(raw.parents),
     teachers: normalizePeopleCounts(raw.teachers),
     coordinators: normalizePeopleCounts(raw.coordinators),
+    tutors: normalizePeopleCounts(raw.tutors ?? EMPTY_STATUS_COUNTS),
     schoolAdmins: normalizePeopleCounts(raw.schoolAdmins),
     campusAdmins: normalizePeopleCounts(raw.campusAdmins),
     visibleSections: Array.isArray(raw.visibleSections)
@@ -373,6 +377,39 @@ export async function listParents(
       pageSize: filters.pageSize,
     })}`,
   );
+}
+
+export async function listTutors(
+  filters: DirectoryTutorFilters = {},
+): Promise<PagedDirectoryResult<DirectoryTutor>> {
+  return apiRequest<PagedDirectoryResult<DirectoryTutor>>(
+    `/directory/tutors${toQuery({
+      search: filters.search,
+      pageNumber: filters.pageNumber,
+      pageSize: filters.pageSize,
+    })}`,
+  );
+}
+
+export async function createTutor(
+  input: CreateDirectoryTutorInput,
+): Promise<DirectoryTutor> {
+  return apiRequest<DirectoryTutor>("/directory/tutors", {
+    method: "POST",
+    body: input,
+  });
+}
+
+export async function activateTutor(tutorId: number): Promise<void> {
+  await apiRequestVoid(`/directory/tutors/${tutorId}/activate`, {
+    method: "POST",
+  });
+}
+
+export async function deactivateTutor(tutorId: number): Promise<void> {
+  await apiRequestVoid(`/directory/tutors/${tutorId}/deactivate`, {
+    method: "POST",
+  });
 }
 
 /** Create parent account (or add Parent role to matching account). */

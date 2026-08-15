@@ -639,8 +639,19 @@ public sealed class QuizManageService : IQuizManageService
         int? requestCampusId,
         CancellationToken cancellationToken)
     {
-        if (scope.Role == UserRole.Parent)
+        if (scope.Role is UserRole.Parent or UserRole.Tutor)
         {
+            if (scope.Role == UserRole.Tutor)
+            {
+                var tutorLinkedStudentIds = await _studentScope.GetTutorLinkedStudentIdsAsync(scope.ProfileId, cancellationToken);
+                if (tutorLinkedStudentIds.Count == 0)
+                {
+                    throw new BusinessRuleException("Link at least one student before creating a quiz.");
+                }
+
+                return new StudentSchoolContext(null, null, 0);
+            }
+
             var linkedStudentIds = await _studentScope.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken);
             if (linkedStudentIds.Count == 0)
             {

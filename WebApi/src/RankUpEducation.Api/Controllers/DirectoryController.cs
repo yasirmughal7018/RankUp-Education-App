@@ -518,6 +518,55 @@ public sealed class DirectoryController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Parent-student link removed."));
     }
 
+    [HttpGet("tutors")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTutorListResponse>>> ListTutorsAsync(
+        [FromQuery] string? search,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _directoryService.ListTutorsAsync(
+            search,
+            pageNumber,
+            pageSize,
+            cancellationToken);
+        return Ok(ApiResponse<DirectoryTutorListResponse>.Ok(response));
+    }
+
+    [HttpPost("tutors")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTutorResponse>>> CreateTutorAsync(
+        [FromBody] CreateDirectoryTutorRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.CreateTutorAsync(request, cancellationToken);
+        var message = response.Roles.Count > 1
+            ? "Tutor role added to existing account."
+            : "Tutor created.";
+        return Ok(ApiResponse<DirectoryTutorResponse>.Ok(response, message));
+    }
+
+    [HttpPost("tutors/{tutorId:long}/activate")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> ActivateTutorAsync(
+        long tutorId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.ActivateTutorAsync(tutorId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Tutor activated."));
+    }
+
+    [HttpPost("tutors/{tutorId:long}/deactivate")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> DeactivateTutorAsync(
+        long tutorId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.DeactivateTutorAsync(tutorId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Tutor deactivated."));
+    }
+
     /// <summary>Lists school admins (portal admin only).</summary>
     [HttpGet("school-admins")]
     [Authorize(Roles = "PortalAdmin")]

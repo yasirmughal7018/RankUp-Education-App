@@ -1,5 +1,6 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Directory;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Teachers;
 using RankUpEducation.Domain.Auth;
@@ -33,6 +34,11 @@ public interface ITeacherService
         long groupId,
         long studentId,
         CancellationToken cancellationToken);
+
+    /// <summary>Adds an existing student to one of the teacher's assigned class/section pairs.</summary>
+    Task<AddMyStudentResponse> AddMyStudentAsync(
+        AddMyStudentRequest request,
+        CancellationToken cancellationToken);
 }
 
 public sealed class TeacherService : ITeacherService
@@ -40,17 +46,20 @@ public sealed class TeacherService : ITeacherService
     private readonly ICurrentUserService _currentUser;
     private readonly IUserRepository _users;
     private readonly ITeacherRepository _teachers;
+    private readonly IDirectoryRepository _directory;
     private readonly IUnitOfWork _unitOfWork;
 
     public TeacherService(
         ICurrentUserService currentUser,
         IUserRepository users,
         ITeacherRepository teachers,
+        IDirectoryRepository directory,
         IUnitOfWork unitOfWork)
     {
         _currentUser = currentUser;
         _users = users;
         _teachers = teachers;
+        _directory = directory;
         _unitOfWork = unitOfWork;
     }
 
@@ -191,6 +200,98 @@ public sealed class TeacherService : ITeacherService
             ?? throw new NotFoundAppException("Student group was not found.");
         await _teachers.RemoveGroupMemberAsync(groupId, studentId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<AddMyStudentResponse> AddMyStudentAsync(
+        AddMyStudentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (teacherId, schoolId, campusId) = await EnsureTeacherContextAsync(cancellationToken);
+        var identifier = request.Identifier.AsTrimmedOrNull()
+            ?? throw new ValidationAppException(["Enter the student’s CNIC or username."]);
+
+        var classSections = await _teachers.GetClassSectionsAsync(teacherId, cancellationToken);
+        if (classSections.Count == 0)
+        {
+            throw new ValidationAppException([
+                "Ask an admin to assign your classes and sections before adding students."]);
+        }
+
+        var section = request.Section.AsTrimmedOrNull()
+            ?? throw new ValidationAppException(["Select a class and section."]);
+        if (request.Grade <= 0)
+        {
+            throw new ValidationAppException(["Select a class and section."]);
+        }
+
+        var target = classSections.FirstOrDefault(item =>
+            item.Grade == request.Grade
+            && string.Equals(item.Section, section, StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+        {
+            throw new ValidationAppException([
+                "You can only add students to classes and sections assigned to you."]);
+        }
+
+        var studentUser = await _users.GetByCnicAsync(identifier, cancellationToken)
+            ?? await _users.GetByUsernameAsync(identifier, cancellationToken)
+            ?? throw new NotFoundAppException("No student was found with that CNIC or username.");
+
+        if (studentUser.Id == teacherId)
+        {
+            throw new ValidationAppException(["You cannot add your own account as a student."]);
+        }
+
+        if (!studentUser.HasRole(UserRole.Student)
+            || !await _users.HasStudentProfileAsync(studentUser.Id, cancellationToken))
+        {
+            throw new NotFoundAppException("No student was found with that CNIC or username.");
+        }
+
+        if (!studentUser.IsActive || studentUser.IsPendingRegistration || studentUser.IsRejectedRegistration)
+        {
+            throw new ValidationAppException([
+                "That student account is not active yet. Ask the school to activate it first."]);
+        }
+
+        if (studentUser.SchoolId is not null && studentUser.SchoolId != schoolId)
+        {
+            throw new ValidationAppException(["That student belongs to a different school."]);
+        }
+
+        if (studentUser.CampusId is not null && studentUser.CampusId != campusId)
+        {
+            throw new ValidationAppException(["That student belongs to a different campus."]);
+        }
+
+        var student = await _directory.GetStudentEntityAsync(studentUser.Id, cancellationToken)
+            ?? throw new NotFoundAppException("No student was found with that CNIC or username.");
+
+        var alreadyOnRoster =
+            student.Grade == target.Grade
+            && string.Equals(student.Section, target.Section, StringComparison.OrdinalIgnoreCase)
+            && studentUser.SchoolId == schoolId
+            && studentUser.CampusId == campusId;
+
+        if (!alreadyOnRoster)
+        {
+            student.Update(target.Grade, target.Section, student.MobileNumber ?? studentUser.MobileNumber);
+            if (studentUser.SchoolId != schoolId || studentUser.CampusId != campusId)
+            {
+                studentUser.AssignSchoolCampus(schoolId, campusId);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return new AddMyStudentResponse(
+            studentUser.Id,
+            studentUser.FullName,
+            studentUser.Username,
+            studentUser.RollNumberTeacherCode ?? string.Empty,
+            target.Grade,
+            target.Section,
+            alreadyOnRoster);
     }
 
     private async Task<(long TeacherId, int SchoolId, int CampusId)> EnsureTeacherContextAsync(

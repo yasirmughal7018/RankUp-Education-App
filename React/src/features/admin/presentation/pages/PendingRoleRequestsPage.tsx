@@ -28,7 +28,7 @@ import { BulkRejectRoleRequestsDialog } from "@/features/admin/presentation/comp
 import { RejectRoleRequestDialog } from "@/features/admin/presentation/components/RejectRoleRequestDialog";
 import { RoleRequestDetailsDialog } from "@/features/admin/presentation/components/RoleRequestDetailsDialog";
 
-type RoleRequestRoleFilter = "" | "Parent" | "Teacher" | "Coordinator";
+type RoleRequestRoleFilter = "" | "Parent" | "Teacher" | "Coordinator" | "Tutor";
 
 type ConfirmIntent = { kind: "bulk-approve"; count: number };
 
@@ -39,6 +39,7 @@ const ROLE_FILTER_OPTIONS: { value: RoleRequestRoleFilter; label: string }[] = [
   { value: "Parent", label: "Parent" },
   { value: "Teacher", label: "Teacher" },
   { value: "Coordinator", label: "Coordinator" },
+  { value: "Tutor", label: "Tutor" },
 ];
 
 function roleBadgeClass(role: string): string {
@@ -49,6 +50,8 @@ function roleBadgeClass(role: string): string {
       return "border border-[hsl(var(--ai))]/25 bg-[hsl(var(--ai-light))] text-[hsl(var(--ai))]";
     case "Coordinator":
       return "border border-brand-200 bg-brand-50 text-brand-700";
+    case "Tutor":
+      return "border border-slate-300 bg-slate-100 text-slate-700";
     default:
       return "border border-border bg-muted text-muted-foreground";
   }

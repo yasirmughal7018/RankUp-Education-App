@@ -218,6 +218,7 @@ export const QUIZ_MANAGER_ROLES: UserRole[] = [
   "Teacher",
   "Parent",
   "Coordinator",
+  "Tutor",
   "SchoolAdmin",
   "PortalAdmin",
 ];
@@ -227,6 +228,7 @@ export const QUIZ_AUTHOR_ROLES: UserRole[] = [
   "Teacher",
   "Parent",
   "Coordinator",
+  "Tutor",
   "SchoolAdmin",
   "PortalAdmin",
 ];
@@ -295,6 +297,17 @@ export function assignModesForRole(role: UserRole): Array<{
         value: "alllinked",
         label: "All linked children",
         group: "Parent",
+      },
+    ];
+  }
+
+  if (role === "Tutor") {
+    return [
+      ...studentModes,
+      {
+        value: "alllinked",
+        label: "All linked students",
+        group: "Tutor",
       },
     ];
   }

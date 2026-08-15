@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronDown, Link2, Users } from "lucide-react";
+import { ChevronDown, Link2, MinusCircle, Plus, Users } from "lucide-react";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,10 +23,14 @@ import type {
   DirectoryStatusCounts,
   DirectoryStudent,
   DirectoryTeacher,
+  DirectoryTutor,
+  TeacherClassSection,
 } from "@/features/directory/domain/directoryTypes";
+import { AddTeacherClassSectionDialog } from "@/features/directory/presentation/components/AddTeacherClassSectionDialog";
 import { DirectoryIconAction } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
 import { ManageLinkedStudentsDialog } from "@/features/directory/presentation/components/ManageLinkedStudentsDialog";
+import { ManageTeacherClassSectionsDialog } from "@/features/directory/presentation/components/ManageTeacherClassSectionsDialog";
 import {
   useDirectoryCampusAdminsQuery,
   useDirectoryCampusesQuery,
@@ -37,8 +41,10 @@ import {
   useDirectoryStudentsQuery,
   useDirectorySummaryQuery,
   useDirectoryTeachersQuery,
+  useDirectoryTutorsQuery,
   useLinkParentStudentMutation,
   useUnlinkParentStudentMutation,
+  useUpdateTeacherMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import {
@@ -73,6 +79,9 @@ type PreviewItem = {
   /** Present only for parent tiles — child link actions. */
   parentId?: number;
   linkedStudents?: DirectoryLinkedStudentSummary[];
+  /** Present only for teacher tiles — class/section actions. */
+  teacherId?: number;
+  classSections?: TeacherClassSection[];
   /** Shown for people tiles (not schools). */
   username?: string;
   /** Compact stats row under subtitle (campuses / teachers / students). */
@@ -246,6 +255,11 @@ const TAB_META: Record<
     href: "/admin/directory/coordinators",
     searchPlaceholder: "Search coordinators by name or username…",
   },
+  tutors: {
+    label: "Tutors",
+    href: "/admin/directory/tutors",
+    searchPlaceholder: "Search tutors by name or username…",
+  },
   students: {
     label: "Students",
     href: "/admin/directory/students",
@@ -261,8 +275,13 @@ const DASHBOARD_TAB_ORDER: DashboardTab[] = [
   "parents",
   "teachers",
   "coordinators",
+  "tutors",
   "students",
 ];
+
+/** One row on desktop so Portal Admin’s eight role cards stay on a single line. */
+const DIRECTORY_SUMMARY_GRID_CLASS =
+  "grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-8";
 
 /** Overview list shows Active/ready records only (not pending/locked/etc.). */
 const OVERVIEW_LIST_LIMIT = 8;
@@ -274,6 +293,7 @@ function isDashboardTab(value: string | null): value is DashboardTab {
     value === "parents" ||
     value === "teachers" ||
     value === "coordinators" ||
+    value === "tutors" ||
     value === "schoolAdmins" ||
     value === "campusAdmins"
   );
@@ -373,6 +393,42 @@ function mapParent(item: DirectoryParent): PreviewItem {
   };
 }
 
+function mapTutor(item: DirectoryTutor): PreviewItem {
+  const statusCode = normalizeDirectoryAccountStatus(
+    item.accountStatus,
+    item.isActive,
+  );
+  const linkedNames =
+    item.linkedStudentNames?.filter((name) => name.trim().length > 0) ?? [];
+  return {
+    id: `tutor-${item.tutorId}`,
+    title: item.fullName,
+    subtitle: "",
+    meta: item.username,
+    username: item.username,
+    stats: [{ label: "Students", value: item.linkedStudentCount }],
+    details: [
+      detailOrDash("Username", item.username ? `@${item.username}` : null),
+      detailOrDash("Linked students", item.linkedStudentCount),
+      detailOrDash(
+        "Student names",
+        linkedNames.length > 0 ? linkedNames.join(", ") : null,
+      ),
+      detailOrDash("Mobile", item.mobileNumber),
+      detailOrDash("CNIC", item.cnic),
+      detailOrDash("Email", item.emailAddress),
+      ...auditDetailFields(item),
+      detailOrDash("Status", directoryAccountStatusLabel(statusCode)),
+    ],
+    approvalHistory: item.approvalHistory ?? [],
+    lastLoginAt: item.lastLoginAt,
+    avatarUrl: item.avatarUrl,
+    statusCode,
+    statusLabel: directoryAccountStatusLabel(statusCode),
+    href: "/admin/directory/tutors",
+  };
+}
+
 function mapTeacher(item: DirectoryTeacher): PreviewItem {
   const statusCode = normalizeDirectoryAccountStatus(
     item.accountStatus,
@@ -384,9 +440,17 @@ function mapTeacher(item: DirectoryTeacher): PreviewItem {
     subtitle: `${item.schoolName || "—"} | ${item.campusName || "—"}`,
     meta: `${item.studentCount} student${item.studentCount === 1 ? "" : "s"}`,
     username: item.username,
+    teacherId: item.teacherId,
+    classSections: item.classSections ?? [],
     stats: [{ label: "Students", value: item.studentCount ?? 0 }],
     details: [
       detailOrDash("Teacher code", item.teacherCode),
+      detailOrDash(
+        "Classes",
+        (item.classSections ?? [])
+          .map((row) => `Grade ${row.grade}${row.section}`)
+          .join(", ") || null,
+      ),
       detailOrDash("Mobile", item.mobileNumber),
       detailOrDash("CNIC", item.cnic),
       detailOrDash("Email", item.emailAddress),
@@ -501,6 +565,7 @@ function mapCampusAdmin(item: DirectoryCampusAdmin): PreviewItem {
 export function DirectoryOverviewPage() {
   const { user } = useAuth();
   const canManageParents = user != null && isAdminRole(user.role);
+  const canManageTeachers = canManageParents;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState("");
@@ -520,6 +585,11 @@ export function DirectoryOverviewPage() {
   const [parentActionError, setParentActionError] = useState<string | null>(
     null,
   );
+  const [addClassTarget, setAddClassTarget] = useState<DirectoryTeacher | null>(
+    null,
+  );
+  const [manageClassTarget, setManageClassTarget] =
+    useState<DirectoryTeacher | null>(null);
   /** Expanded summary cards show status details; collapsed by default. */
   const [expandedCards, setExpandedCards] = useState<
     Partial<Record<DashboardTab, boolean>>
@@ -584,6 +654,10 @@ export function DirectoryOverviewPage() {
     previewFilters,
     activeTab === "parents",
   );
+  const tutorsQuery = useDirectoryTutorsQuery(
+    previewFilters,
+    activeTab === "tutors",
+  );
   const linkStudentMutation = useLinkParentStudentMutation();
   const unlinkStudentMutation = useUnlinkParentStudentMutation();
 
@@ -639,10 +713,61 @@ export function DirectoryOverviewPage() {
     setManageChildrenTarget(parent);
   }
 
+  function resolveTeacherFromPreview(
+    item: PreviewItem,
+  ): DirectoryTeacher | null {
+    if (item.teacherId == null) {
+      return null;
+    }
+    return (
+      (teachersQuery.data?.items ?? []).find(
+        (teacher) => teacher.teacherId === item.teacherId,
+      ) ?? null
+    );
+  }
+
+  function openAddTeacherClass(item: PreviewItem) {
+    const teacher = resolveTeacherFromPreview(item);
+    if (!teacher) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setManageClassTarget(null);
+    setAddClassTarget(teacher);
+  }
+
+  function openManageTeacherClass(item: PreviewItem) {
+    const teacher = resolveTeacherFromPreview(item);
+    if (!teacher) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setAddClassTarget(null);
+    setManageClassTarget(teacher);
+  }
+
+  function teacherUpdateInput(
+    teacher: DirectoryTeacher,
+    classSections: TeacherClassSection[],
+  ) {
+    return {
+      fullName: teacher.fullName,
+      campusId: teacher.campusId,
+      teacherCode: teacher.teacherCode,
+      mobileNumber: teacher.mobileNumber ?? null,
+      classSections,
+    };
+  }
+
   const teachersQuery = useDirectoryTeachersQuery(
     previewFilters,
     activeTab === "teachers",
   );
+  const updateTeacherMutation = useUpdateTeacherMutation();
   const coordinatorsQuery = useDirectoryCoordinatorsQuery(
     previewFilters,
     activeTab === "coordinators",
@@ -664,6 +789,8 @@ export function DirectoryOverviewPage() {
         return studentsQuery;
       case "parents":
         return parentsQuery;
+      case "tutors":
+        return tutorsQuery;
       case "teachers":
         return teachersQuery;
       case "coordinators":
@@ -695,6 +822,9 @@ export function DirectoryOverviewPage() {
       case "parents":
         items = (parentsQuery.data?.items ?? []).map(mapParent);
         break;
+      case "tutors":
+        items = (tutorsQuery.data?.items ?? []).map(mapTutor);
+        break;
       case "teachers":
         items = (teachersQuery.data?.items ?? []).map(mapTeacher);
         break;
@@ -717,6 +847,7 @@ export function DirectoryOverviewPage() {
     campusAdminsQuery.data?.items,
     coordinatorsQuery.data?.items,
     parentsQuery.data?.items,
+    tutorsQuery.data?.items,
     schoolAdminsQuery.data?.items,
     schoolsQuery.data,
     search,
@@ -773,6 +904,12 @@ export function DirectoryOverviewPage() {
         label: "Coordinators",
         kind: "people",
         people: summary.coordinators,
+      },
+      tutors: {
+        key: "tutors",
+        label: "Tutors",
+        kind: "people",
+        people: summary.tutors,
       },
       students: {
         key: "students",
@@ -896,7 +1033,7 @@ export function DirectoryOverviewPage() {
 
       {!summaryLoading && !summaryError && summary ? (
         <>
-          <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+          <section className={DIRECTORY_SUMMARY_GRID_CLASS}>
             {summaryCards.map((card) => {
               const people = card.people;
               const schools = card.schools;
@@ -936,7 +1073,7 @@ export function DirectoryOverviewPage() {
                   >
                     <p
                       className={cn(
-                        "w-full text-sm font-semibold leading-snug",
+                        "w-full truncate whitespace-nowrap text-sm font-semibold leading-snug",
                         isSelected ? "text-primary" : "text-foreground",
                       )}
                     >
@@ -1112,6 +1249,7 @@ export function DirectoryOverviewPage() {
                         <DirectoryPreviewTile
                           item={item}
                           canManageParents={canManageParents}
+                          canManageTeachers={canManageTeachers}
                           onLinkStudent={
                             item.parentId != null
                               ? () => openLinkStudent(item)
@@ -1120,6 +1258,16 @@ export function DirectoryOverviewPage() {
                           onManageChildren={
                             item.parentId != null
                               ? () => openManageChildren(item)
+                              : undefined
+                          }
+                          onAddTeacherClass={
+                            item.teacherId != null
+                              ? () => openAddTeacherClass(item)
+                              : undefined
+                          }
+                          onManageTeacherClasses={
+                            item.teacherId != null
+                              ? () => openManageTeacherClass(item)
                               : undefined
                           }
                           onSelect={() => {
@@ -1150,6 +1298,7 @@ export function DirectoryOverviewPage() {
         <DirectoryDetailSheet
           item={selectedItem}
           canManageParents={canManageParents}
+          canManageTeachers={canManageTeachers}
           onClose={() => setSelectedItem(null)}
           onLinkStudent={
             selectedItem.parentId != null
@@ -1159,6 +1308,16 @@ export function DirectoryOverviewPage() {
           onManageChildren={
             selectedItem.parentId != null
               ? () => openManageChildren(selectedItem)
+              : undefined
+          }
+          onAddTeacherClass={
+            selectedItem.teacherId != null
+              ? () => openAddTeacherClass(selectedItem)
+              : undefined
+          }
+          onManageTeacherClasses={
+            selectedItem.teacherId != null
+              ? () => openManageTeacherClass(selectedItem)
               : undefined
           }
         />
@@ -1221,6 +1380,80 @@ export function DirectoryOverviewPage() {
             setParentActionError(null);
             setLinkStudentTarget(null);
             void parentsQuery.refetch();
+          }}
+        />
+      ) : null}
+
+      {addClassTarget ? (
+        <AddTeacherClassSectionDialog
+          teacherName={addClassTarget.fullName}
+          isSubmitting={updateTeacherMutation.isPending}
+          onClose={() => setAddClassTarget(null)}
+          onSubmit={async (grade, section) => {
+            const current = addClassTarget.classSections ?? [];
+            const alreadyAssigned = current.some(
+              (row) =>
+                row.grade === grade &&
+                row.section.trim().toLowerCase() === section.trim().toLowerCase(),
+            );
+            if (alreadyAssigned) {
+              throw new Error(
+                `Grade ${grade}${section.trim()} is already assigned.`,
+              );
+            }
+            await updateTeacherMutation.mutateAsync({
+              teacherId: addClassTarget.teacherId,
+              input: teacherUpdateInput(addClassTarget, [
+                ...current,
+                { grade, section: section.trim() },
+              ]),
+            });
+            setParentActionMessage(
+              `Added Grade ${grade}${section.trim()} to ${addClassTarget.fullName}.`,
+            );
+            setParentActionError(null);
+            setAddClassTarget(null);
+            void teachersQuery.refetch();
+          }}
+        />
+      ) : null}
+
+      {manageClassTarget ? (
+        <ManageTeacherClassSectionsDialog
+          teacherName={manageClassTarget.fullName}
+          classSections={manageClassTarget.classSections ?? []}
+          isSubmitting={updateTeacherMutation.isPending}
+          onClose={() => setManageClassTarget(null)}
+          onAdd={() => {
+            const teacher = manageClassTarget;
+            setManageClassTarget(null);
+            setAddClassTarget(teacher);
+          }}
+          onRemove={async (grade, section) => {
+            const nextSections = (
+              manageClassTarget.classSections ?? []
+            ).filter(
+              (row) =>
+                !(
+                  row.grade === grade &&
+                  row.section.trim().toLowerCase() ===
+                    section.trim().toLowerCase()
+                ),
+            );
+            await updateTeacherMutation.mutateAsync({
+              teacherId: manageClassTarget.teacherId,
+              input: teacherUpdateInput(manageClassTarget, nextSections),
+            });
+            setParentActionMessage(
+              `Removed Grade ${grade}${section} from ${manageClassTarget.fullName}.`,
+            );
+            setParentActionError(null);
+            setManageClassTarget((current) =>
+              current
+                ? { ...current, classSections: nextSections }
+                : current,
+            );
+            void teachersQuery.refetch();
           }}
         />
       ) : null}
@@ -1294,8 +1527,8 @@ function StatusRow({
 
 function DirectoryLoadingSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
-      {Array.from({ length: 7 }).map((_, index) => (
+    <div className={DIRECTORY_SUMMARY_GRID_CLASS}>
+      {Array.from({ length: 8 }).map((_, index) => (
         <div
           key={index}
           className="h-[9.5rem] animate-pulse rounded-2xl border border-border bg-card"
@@ -1309,14 +1542,20 @@ function DirectoryPreviewTile({
   item,
   onSelect,
   canManageParents = false,
+  canManageTeachers = false,
   onLinkStudent,
   onManageChildren,
+  onAddTeacherClass,
+  onManageTeacherClasses,
 }: {
   item: PreviewItem;
   onSelect: () => void;
   canManageParents?: boolean;
+  canManageTeachers?: boolean;
   onLinkStudent?: () => void;
   onManageChildren?: () => void;
+  onAddTeacherClass?: () => void;
+  onManageTeacherClasses?: () => void;
 }) {
   const initials = initialsFromName(item.title);
   const imageUrl = resolvePublicUrl(item.avatarUrl);
@@ -1325,6 +1564,11 @@ function DirectoryPreviewTile({
     item.parentId != null &&
     onLinkStudent != null &&
     onManageChildren != null;
+  const showTeacherActions =
+    canManageTeachers &&
+    item.teacherId != null &&
+    onAddTeacherClass != null &&
+    onManageTeacherClasses != null;
 
   return (
     <div className="group relative flex h-full w-full items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
@@ -1402,6 +1646,28 @@ function DirectoryPreviewTile({
             />
           </div>
         ) : null}
+        {showTeacherActions ? (
+          <div className="flex items-center gap-1.5">
+            <DirectoryIconAction
+              icon={Plus}
+              label={`Add class and section for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onAddTeacherClass();
+              }}
+            />
+            <DirectoryIconAction
+              icon={MinusCircle}
+              label={`Manage classes and sections for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onManageTeacherClasses();
+              }}
+            />
+          </div>
+        ) : null}
         {item.schoolId == null ? (
           <LastLoginAside value={item.lastLoginAt} />
         ) : null}
@@ -1464,14 +1730,20 @@ function DirectoryDetailSheet({
   item,
   onClose,
   canManageParents = false,
+  canManageTeachers = false,
   onLinkStudent,
   onManageChildren,
+  onAddTeacherClass,
+  onManageTeacherClasses,
 }: {
   item: PreviewItem;
   onClose: () => void;
   canManageParents?: boolean;
+  canManageTeachers?: boolean;
   onLinkStudent?: () => void;
   onManageChildren?: () => void;
+  onAddTeacherClass?: () => void;
+  onManageTeacherClasses?: () => void;
 }) {
   const initials = initialsFromName(item.title);
   const imageUrl = resolvePublicUrl(item.avatarUrl);
@@ -1480,6 +1752,11 @@ function DirectoryDetailSheet({
     item.parentId != null &&
     onLinkStudent != null &&
     onManageChildren != null;
+  const showTeacherActions =
+    canManageTeachers &&
+    item.teacherId != null &&
+    onAddTeacherClass != null &&
+    onManageTeacherClasses != null;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1603,6 +1880,29 @@ function DirectoryDetailSheet({
             </div>
           ) : null}
 
+          {showTeacherActions ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onAddTeacherClass}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add class
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onManageTeacherClasses}
+              >
+                <MinusCircle className="mr-1.5 h-4 w-4" />
+                Manage classes
+              </Button>
+            </div>
+          ) : null}
+
           <div className="mt-5">
             <DetailRows details={item.details} />
           </div>
@@ -1693,52 +1993,73 @@ function ApprovalHistorySection({
 }: {
   history: DirectoryApprovalHistoryItem[];
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
     <section className="mt-5">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Approval history
-      </h3>
-      {history.length === 0 ? (
-        <p className="rounded-xl bg-slate-50 px-3.5 py-3 text-sm text-slate-500">
-          No approval history recorded (common for admin-provisioned accounts).
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {history.map((entry, index) => {
-            const decisionClass =
-              entry.decision === "Approved"
-                ? APPROVAL_STATUS_CHIP.approved
-                : entry.decision === "Rejected"
-                  ? APPROVAL_STATUS_CHIP.rejected
-                  : APPROVAL_STATUS_CHIP.pending;
-            return (
-              <li
-                key={`${entry.approverUserId}-${entry.decision}-${entry.decidedAt ?? index}`}
-                className="rounded-xl border border-slate-200 bg-white px-3.5 py-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900">
-                      {entry.approverName}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {entry.approverRole}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {formatDateTime(entry.decidedAt) ?? "Awaiting decision"}
-                    </p>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between gap-2 rounded-xl px-1 py-1 text-left transition hover:bg-slate-50"
+      >
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Approval history
+        </h3>
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400">
+          {isOpen ? "Hide" : "Show"}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform duration-200",
+              isOpen && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </span>
+      </button>
+      {isOpen ? (
+        history.length === 0 ? (
+          <p className="mt-2 rounded-xl bg-slate-50 px-3.5 py-3 text-sm text-slate-500">
+            No approval history recorded (common for admin-provisioned accounts).
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {history.map((entry, index) => {
+              const decisionClass =
+                entry.decision === "Approved"
+                  ? APPROVAL_STATUS_CHIP.approved
+                  : entry.decision === "Rejected"
+                    ? APPROVAL_STATUS_CHIP.rejected
+                    : APPROVAL_STATUS_CHIP.pending;
+              return (
+                <li
+                  key={`${entry.approverUserId}-${entry.decision}-${entry.decidedAt ?? index}`}
+                  className="rounded-xl border border-slate-200 bg-white px-3.5 py-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {entry.approverName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {entry.approverRole}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {formatDateTime(entry.decidedAt) ?? "Awaiting decision"}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${decisionClass}`}
+                    >
+                      {entry.decision}
+                    </span>
                   </div>
-                  <span
-                    className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold ${decisionClass}`}
-                  >
-                    {entry.decision}
-                  </span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                </li>
+              );
+            })}
+          </ul>
+        )
+      ) : null}
     </section>
   );
 }

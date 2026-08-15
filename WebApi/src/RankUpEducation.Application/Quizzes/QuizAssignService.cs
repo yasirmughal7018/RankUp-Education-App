@@ -402,6 +402,17 @@ public sealed class QuizAssignService : IQuizAssignService
             };
         }
 
+        if (scope.Role == UserRole.Tutor)
+        {
+            return mode switch
+            {
+                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
+                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
+                "alllinked" => await _studentScope.GetTutorLinkedStudentIdsAsync(scope.ProfileId, cancellationToken),
+                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported."])
+            };
+        }
+
         if (scope.Role == UserRole.SchoolAdmin)
         {
             return mode switch
@@ -451,12 +462,19 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["Section is required for allInSection assignment."]);
         }
 
-        return await _studentScope.GetStudentIdsInCampusByGradeAndSectionAsync(
+        var studentIds = await _studentScope.GetStudentIdsInCampusByGradeAndSectionAsync(
             scope.SchoolId!.Value,
             scope.CampusId!.Value,
             request.GradeId.Value,
             request.Section,
             cancellationToken);
+
+        if (scope.Role is not (UserRole.Teacher or UserRole.Coordinator))
+        {
+            return studentIds;
+        }
+
+        return await FilterToTeacherRosterAsync(scope, studentIds, cancellationToken);
     }
 
     private async Task<IReadOnlyList<long>> ResolveAllInSchoolStudentsAsync(
@@ -587,11 +605,32 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["Grade id is required for allInGrade assignment."]);
         }
 
-        return await _studentScope.GetStudentIdsInSchoolByGradeAsync(
+        var studentIds = await _studentScope.GetStudentIdsInSchoolByGradeAsync(
             scope.SchoolId!.Value,
             scope.CampusId!.Value,
             request.GradeId.Value,
             cancellationToken);
+
+        if (scope.Role is not (UserRole.Teacher or UserRole.Coordinator))
+        {
+            return studentIds;
+        }
+
+        return await FilterToTeacherRosterAsync(scope, studentIds, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<long>> FilterToTeacherRosterAsync(
+        QuizManageScope scope,
+        IReadOnlyList<long> studentIds,
+        CancellationToken cancellationToken)
+    {
+        var rosterIds = await _studentScope.GetTeacherRosterStudentIdsAsync(
+            scope.ProfileId,
+            scope.SchoolId!.Value,
+            scope.CampusId!.Value,
+            cancellationToken);
+        var rosterSet = rosterIds.ToHashSet();
+        return studentIds.Where(rosterSet.Contains).ToArray();
     }
 
     private static bool IsAssignableLifecycle(string lifecycleName)

@@ -34,7 +34,7 @@ export function QuizCreatePage() {
           initialValues={initialValues}
           submitLabel="Create quiz"
           isSubmitting={isSubmitting}
-          showContextStudentId={user?.role === "Parent"}
+          showContextStudentId={user?.role === "Parent" || user?.role === "Tutor"}
           showSchoolCampusFields={isPortalAdmin || isSchoolAdmin}
           requireSchoolId={false}
           requireCampusId={false}

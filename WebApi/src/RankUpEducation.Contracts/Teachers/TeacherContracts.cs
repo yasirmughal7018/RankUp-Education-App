@@ -41,3 +41,18 @@ public sealed record UpdateTeacherGroupRequest(
     string? Description = null);
 
 public sealed record AddTeacherGroupMemberRequest(long StudentId);
+
+/// <summary>Teacher adds an existing student to a class/section they teach, by CNIC or username.</summary>
+public sealed record AddMyStudentRequest(
+    string Identifier,
+    short Grade,
+    string Section);
+
+public sealed record AddMyStudentResponse(
+    long StudentId,
+    string FullName,
+    string Username,
+    string RollNumber,
+    short Grade,
+    string Section,
+    bool AlreadyOnRoster);

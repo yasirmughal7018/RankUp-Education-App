@@ -30,7 +30,7 @@ public static class QuizScopeResolver
     public static QuizManageScope RequireManageScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (UserRole.Parent or UserRole.Tutor or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("Your role cannot manage quizzes.");
         }
@@ -100,7 +100,7 @@ public static class QuizScopeResolver
     public static QuizManageScope RequireAssignScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (UserRole.Parent or UserRole.Tutor or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("Your role cannot assign quizzes.");
         }
@@ -199,11 +199,17 @@ public static class QuizScopeResolver
         long studentId,
         CancellationToken cancellationToken)
     {
-        if (scope.Role == UserRole.Parent)
+        if (scope.Role is UserRole.Parent or UserRole.Tutor)
         {
-            if (!await studentScope.IsLinkedStudentAsync(scope.ParentId, studentId, cancellationToken))
+            var linked = scope.Role == UserRole.Tutor
+                ? await studentScope.IsTutorLinkedStudentAsync(scope.ProfileId, studentId, cancellationToken)
+                : await studentScope.IsLinkedStudentAsync(scope.ParentId, studentId, cancellationToken);
+            if (!linked)
             {
-                throw new ForbiddenAppException("You can only assign quizzes to linked children.");
+                throw new ForbiddenAppException(
+                    scope.Role == UserRole.Tutor
+                        ? "You can only assign quizzes to linked students."
+                        : "You can only assign quizzes to linked children.");
             }
 
             return;
@@ -211,13 +217,15 @@ public static class QuizScopeResolver
 
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
         {
-            if (!await studentScope.IsStudentInSchoolAsync(
+            if (!await studentScope.IsStudentInTeacherRosterAsync(
+                    scope.ProfileId,
                     studentId,
                     scope.SchoolId!.Value,
                     scope.CampusId!.Value,
                     cancellationToken))
             {
-                throw new ForbiddenAppException("You can only assign quizzes to students in your school campus.");
+                throw new ForbiddenAppException(
+                    "You can only assign quizzes to students in your assigned classes and sections.");
             }
 
             return;

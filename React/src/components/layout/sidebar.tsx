@@ -37,6 +37,7 @@ const DEFAULT_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   "/reports": BarChart3,
   "/parent/children": GraduationCap,
   "/parent/quiz-dashboard": ClipboardList,
+  "/tutor/students": GraduationCap,
   "/student/dashboard": GraduationCap,
   "/student/quizzes": GraduationCap,
 };

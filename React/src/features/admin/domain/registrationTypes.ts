@@ -31,12 +31,17 @@ export interface PendingRegistration {
 
 export type RegistrationActionRole = Extract<
   UserRole,
-  "Student" | "Teacher" | "Parent"
+  "Student" | "Teacher" | "Parent" | "Tutor"
 >;
 
-/** Roles admins can approve (Student/Teacher/Parent). */
+/** Roles admins can approve (Student/Teacher/Parent/Tutor). */
 export function isRegistrationActionRole(
   role: UserRole,
 ): role is RegistrationActionRole {
-  return role === "Student" || role === "Teacher" || role === "Parent";
+  return (
+    role === "Student" ||
+    role === "Teacher" ||
+    role === "Parent" ||
+    role === "Tutor"
+  );
 }

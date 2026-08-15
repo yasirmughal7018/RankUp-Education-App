@@ -4,6 +4,8 @@ import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { formatStudentLabel } from "@/features/parent/domain/parentTypes";
 import { useLinkedStudentsQuery } from "@/features/parent/presentation/hooks/useParentQueries";
+import { formatTutorStudentLabel } from "@/features/tutor/domain/tutorTypes";
+import { useTutorLinkedStudentsQuery } from "@/features/tutor/presentation/hooks/useTutorQueries";
 import {
   displayStudentName,
   formatMonitorStatus,
@@ -24,6 +26,8 @@ export function AssignmentBoardPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const isParent = user?.role === "Parent";
+  const isTutor = user?.role === "Tutor";
+  const isLinkedAssigner = isParent || isTutor;
   const queryStudentId = Number(searchParams.get("studentId"));
   const [studentFilter, setStudentFilter] = useState<number | "">(
     queryStudentId > 0 ? queryStudentId : "",
@@ -35,7 +39,11 @@ export function AssignmentBoardPage() {
     }
   }, [queryStudentId]);
 
-  const { data: linkedStudents = [] } = useLinkedStudentsQuery(isParent);
+  const { data: parentLinkedStudents = [] } = useLinkedStudentsQuery(isParent);
+  const { data: tutorLinkedStudents = [] } = useTutorLinkedStudentsQuery(isTutor);
+  const linkedCount = isTutor
+    ? tutorLinkedStudents.length
+    : parentLinkedStudents.length;
   const studentId = studentFilter === "" ? null : studentFilter;
 
   function updateStudentFilter(value: number | "") {
@@ -74,7 +82,7 @@ export function AssignmentBoardPage() {
         <label className="mb-1 block text-sm font-medium text-slate-700">
           Filter by student ID
         </label>
-        {isParent && linkedStudents.length > 0 ? (
+        {isLinkedAssigner && linkedCount > 0 ? (
           <select
             value={studentFilter === "" ? "" : String(studentFilter)}
             onChange={(event) =>
@@ -85,11 +93,17 @@ export function AssignmentBoardPage() {
             className="w-full max-w-md rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
             <option value="">All linked students</option>
-            {linkedStudents.map((student) => (
-              <option key={student.studentId} value={student.studentId}>
-                {formatStudentLabel(student)}
-              </option>
-            ))}
+            {isTutor
+              ? tutorLinkedStudents.map((student) => (
+                  <option key={student.studentId} value={student.studentId}>
+                    {formatTutorStudentLabel(student)}
+                  </option>
+                ))
+              : parentLinkedStudents.map((student) => (
+                  <option key={student.studentId} value={student.studentId}>
+                    {formatStudentLabel(student)}
+                  </option>
+                ))}
           </select>
         ) : (
           <input

@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { isAdminRole } from "@/core/api/types";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 
@@ -16,14 +16,14 @@ function ForbiddenScreen() {
   );
 }
 
-/** Allows School/Campus/Portal admins, Teachers, and Coordinators to view students. */
+/** Admins use the directory; teachers are sent to their class roster. */
 export function DirectoryStudentsRoute() {
   const { user } = useAuth();
-  const allowed =
-    user != null &&
-    (isAdminRole(user.role) ||
-      user.role === "Teacher" ||
-      user.role === "Coordinator");
+  if (user?.role === "Teacher" || user?.role === "Coordinator") {
+    return <Navigate to="/teacher/students" replace />;
+  }
+
+  const allowed = user != null && isAdminRole(user.role);
 
   if (!allowed) {
     return <ForbiddenScreen />;

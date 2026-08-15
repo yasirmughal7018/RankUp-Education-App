@@ -25,7 +25,8 @@ public interface IReportRepository
     /// <summary>Lists quiz attempts and outcomes for one student.</summary>
     Task<StudentQuizHistoryResponse> GetStudentQuizHistoryAsync(
         long studentId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        long? creatorUserId = null);
 
     /// <summary>Builds a ranked leaderboard for an optional quiz within scope.</summary>
     Task<RankingReportResponse> GetRankingsAsync(

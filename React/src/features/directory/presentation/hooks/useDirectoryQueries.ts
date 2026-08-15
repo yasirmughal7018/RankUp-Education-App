@@ -6,6 +6,7 @@ import type {
   CreateDirectoryCampusAdminInput,
   CreateDirectoryCoordinatorInput,
   CreateDirectoryParentInput,
+  CreateDirectoryTutorInput,
   CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
   CreateDirectoryTeacherInput,
@@ -14,6 +15,7 @@ import type {
   GrantTeacherRoleInput,
   DirectoryCampusAdminFilters,
   DirectoryParentFilters,
+  DirectoryTutorFilters,
   DirectorySchoolAdminFilters,
   DirectoryStudentFilters,
   DirectoryTeacherFilters,
@@ -43,6 +45,11 @@ function invalidateCoordinators(queryClient: ReturnType<typeof useQueryClient>) 
 
 function invalidateParents(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["directory", "parents"] });
+}
+
+function invalidateTutors(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ["directory", "tutors"] });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.directorySummary() });
 }
 
 function invalidateComboRoles(queryClient: ReturnType<typeof useQueryClient>) {
@@ -135,6 +142,17 @@ export function useDirectoryParentsQuery(
   return useQuery({
     queryKey: queryKeys.directoryParents(filters),
     queryFn: () => directoryApi.listParents(filters),
+    enabled,
+  });
+}
+
+export function useDirectoryTutorsQuery(
+  filters: DirectoryTutorFilters = {},
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.directoryTutors(filters),
+    queryFn: () => directoryApi.listTutors(filters),
     enabled,
   });
 }
@@ -609,6 +627,34 @@ export function useBulkDeactivateParentsMutation() {
   return useMutation({
     mutationFn: (ids: number[]) => directoryApi.bulkDeactivateParents({ ids }),
     onSuccess: () => invalidateParents(queryClient),
+  });
+}
+
+export function useCreateTutorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateDirectoryTutorInput) =>
+      directoryApi.createTutor(input),
+    onSuccess: () => invalidateTutors(queryClient),
+  });
+}
+
+export function useActivateTutorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tutorId: number) => directoryApi.activateTutor(tutorId),
+    onSuccess: () => invalidateTutors(queryClient),
+  });
+}
+
+export function useDeactivateTutorMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tutorId: number) => directoryApi.deactivateTutor(tutorId),
+    onSuccess: () => invalidateTutors(queryClient),
   });
 }
 

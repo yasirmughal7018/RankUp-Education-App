@@ -9,6 +9,9 @@ import {
   useDirectorySchoolsQuery,
   useDirectoryStudentsQuery,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
+import { useTeacherRosterQuery } from "@/features/teacher/presentation/hooks/useTeacherQueries";
+import { useTutorLinkedStudentsQuery } from "@/features/tutor/presentation/hooks/useTutorQueries";
+import { useLinkedStudentsQuery } from "@/features/parent/presentation/hooks/useParentQueries";
 import type { AssignQuizInput } from "@/features/quizzes/domain/quizTypes";
 import { assignModesForRole } from "@/features/quizzes/domain/quizTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
@@ -84,6 +87,7 @@ export function AssignQuizDialog({
   const isPortalAdmin = user?.role === "PortalAdmin";
   const isTeacher =
     user?.role === "Teacher" || user?.role === "Coordinator";
+  const isLinkedAssigner = user?.role === "Parent" || user?.role === "Tutor";
   const isAdminAssigner = isSchoolAdmin || isPortalAdmin;
   const surprise = isSurpriseQuizType(quizType);
   const modeOptions = useMemo(
@@ -107,7 +111,7 @@ export function AssignQuizDialog({
     if (user?.role === "SchoolAdmin") {
       return "allinschool";
     }
-    if (user?.role === "Parent") {
+    if (user?.role === "Parent" || user?.role === "Tutor") {
       return "alllinked";
     }
     return "selected";
@@ -150,7 +154,7 @@ export function AssignQuizDialog({
   );
   const [error, setError] = useState<string | null>(null);
 
-  const showAudienceScope = SCOPED_AUDIENCE_MODES.has(mode);
+  const showAudienceScope = SCOPED_AUDIENCE_MODES.has(mode) && !isLinkedAssigner;
   const showStudentPicker = mode === "selected" || mode === "one";
   const canPickSchool = isPortalAdmin;
   const canPickCampus =
@@ -223,10 +227,79 @@ export function AssignQuizDialog({
       pageNumber: 1,
       pageSize: 50,
     },
-    showStudentPicker,
+    showStudentPicker && !isTeacher && !isLinkedAssigner,
+  );
+  const rosterQuery = useTeacherRosterQuery(showStudentPicker && isTeacher);
+  const parentLinkedQuery = useLinkedStudentsQuery(
+    showStudentPicker && user?.role === "Parent",
+  );
+  const tutorLinkedQuery = useTutorLinkedStudentsQuery(
+    showStudentPicker && user?.role === "Tutor",
   );
 
-  const students = studentsQuery.data?.items ?? [];
+  const students = isTeacher
+    ? (rosterQuery.data?.students ?? [])
+        .filter((student) => {
+          if (selectedGradeId && student.grade !== selectedGradeId) {
+            return false;
+          }
+          if (!debouncedSearch.trim()) {
+            return true;
+          }
+          const term = debouncedSearch.trim().toLowerCase();
+          return (
+            student.fullName.toLowerCase().includes(term) ||
+            student.username.toLowerCase().includes(term) ||
+            student.rollNumber.toLowerCase().includes(term)
+          );
+        })
+        .map((student) => ({
+          studentId: student.studentId,
+          fullName: student.fullName,
+          username: student.username,
+          rollNumber: student.rollNumber,
+          grade: student.grade,
+          section: student.section,
+        }))
+    : isLinkedAssigner
+      ? ((user?.role === "Tutor"
+          ? tutorLinkedQuery.data
+          : parentLinkedQuery.data) ?? [])
+          .filter((student) => {
+            if (!debouncedSearch.trim()) {
+              return true;
+            }
+            const term = debouncedSearch.trim().toLowerCase();
+            return (
+              student.fullName.toLowerCase().includes(term) ||
+              student.username.toLowerCase().includes(term) ||
+              student.rollNumber.toLowerCase().includes(term)
+            );
+          })
+          .map((student) => ({
+            studentId: student.studentId,
+            fullName: student.fullName,
+            username: student.username,
+            rollNumber: student.rollNumber,
+            grade: student.grade,
+            section: student.section,
+          }))
+      : (studentsQuery.data?.items ?? []);
+
+  const studentsLoading = isTeacher
+    ? rosterQuery.isLoading
+    : isLinkedAssigner
+      ? user?.role === "Tutor"
+        ? tutorLinkedQuery.isLoading
+        : parentLinkedQuery.isLoading
+      : studentsQuery.isLoading;
+  const studentsError = isTeacher
+    ? rosterQuery.error
+    : isLinkedAssigner
+      ? user?.role === "Tutor"
+        ? tutorLinkedQuery.error
+        : parentLinkedQuery.error
+      : studentsQuery.error;
 
   const selectedSet = useMemo(
     () => new Set(selectedStudentIds),
@@ -558,13 +631,13 @@ export function AssignQuizDialog({
                   <p className="px-3 py-4 text-sm text-muted-foreground">
                     Select a school to load students.
                   </p>
-                ) : studentsQuery.isLoading ? (
+                ) : studentsLoading ? (
                   <p className="px-3 py-4 text-sm text-muted-foreground">
                     Loading students...
                   </p>
-                ) : studentsQuery.error ? (
+                ) : studentsError ? (
                   <p className="px-3 py-4 text-sm text-[var(--status-rejected-text)]">
-                    {studentsQuery.error.message}
+                    {studentsError.message}
                   </p>
                 ) : students.length === 0 ? (
                   <p className="px-3 py-4 text-sm text-muted-foreground">

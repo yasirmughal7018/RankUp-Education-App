@@ -3,6 +3,7 @@ using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
+using RankUpEducation.Domain.Tutors;
 
 namespace RankUpEducation.Application.Directory;
 
@@ -57,7 +58,7 @@ public interface IDirectoryRepository
     /// <summary>Returns whether a non-deleted school exists.</summary>
     Task<bool> SchoolExistsAsync(long schoolId, CancellationToken cancellationToken);
 
-    /// <summary>Page of students with optional school, campus, grade, and search filters.</summary>
+    /// <summary>Page of students with optional school, campus, grade, search, and id filters.</summary>
     Task<(IReadOnlyList<DirectoryStudentResponse> Items, int TotalCount)> ListStudentsAsync(
         int? schoolId,
         int? campusId,
@@ -65,7 +66,8 @@ public interface IDirectoryRepository
         string? search,
         int pageNumber,
         int pageSize,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        IReadOnlyList<long>? allowedStudentIds = null);
 
     /// <summary>Page of teachers with optional school, campus, search, and students filters.</summary>
     /// <param name="hasStudents">
@@ -100,6 +102,12 @@ public interface IDirectoryRepository
         int pageSize,
         CancellationToken cancellationToken);
 
+    Task<(IReadOnlyList<DirectoryTutorResponse> Items, int TotalCount)> ListTutorsAsync(
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Returns whether the parent has an active link to a student in the given school/campus.
     /// When schoolId is null, any linked student counts (Portal Admin).
@@ -119,6 +127,8 @@ public interface IDirectoryRepository
     /// <summary>Loads the parent profile entity for updates and activation checks.</summary>
     Task<Parent?> GetParentEntityAsync(long parentId, CancellationToken cancellationToken);
 
+    Task<Tutor?> GetTutorEntityAsync(long tutorId, CancellationToken cancellationToken);
+
     /// <summary>Sets the underlying user active flag for a directory member.</summary>
     Task SetUserActiveAsync(long userId, bool isActive, CancellationToken cancellationToken);
 
@@ -132,14 +142,21 @@ public interface IDirectoryRepository
     /// <summary>Removes a parent-student link when present.</summary>
     Task UnlinkParentStudentAsync(long parentId, long studentId, CancellationToken cancellationToken);
 
-    /// <summary>Returns whether a parent profile exists.</summary>
+    Task LinkTutorStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken);
+
+    Task UnlinkTutorStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken);
+
     Task<bool> ParentExistsAsync(long parentId, CancellationToken cancellationToken);
+
+    Task<bool> TutorExistsAsync(long tutorId, CancellationToken cancellationToken);
 
     /// <summary>Returns whether a student profile exists.</summary>
     Task<bool> StudentExistsAsync(long studentId, CancellationToken cancellationToken);
 
     /// <summary>Counts active parent-student links for display on parent rows.</summary>
     Task<int> CountParentStudentLinksAsync(long parentId, CancellationToken cancellationToken);
+
+    Task<int> CountTutorStudentLinksAsync(long tutorId, CancellationToken cancellationToken);
 
     /// <summary>Page of school admins with optional school and search filters.</summary>
     Task<(IReadOnlyList<DirectorySchoolAdminResponse> Items, int TotalCount)> ListSchoolAdminsAsync(

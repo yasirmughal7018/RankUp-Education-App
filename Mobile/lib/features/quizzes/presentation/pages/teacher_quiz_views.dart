@@ -4,6 +4,7 @@ import 'package:rankup_education/core/lookups/lookup_item.dart';
 import 'package:rankup_education/core/lookups/lookup_providers.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
+import 'package:rankup_education/features/parent/presentation/providers/parent_providers.dart';
 import 'package:rankup_education/features/questions/data/models/question_summary_model.dart';
 import 'package:rankup_education/features/questions/presentation/providers/question_providers.dart';
 import 'package:rankup_education/features/quizzes/data/models/quiz_manage_models.dart';
@@ -12,6 +13,7 @@ import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.d
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/teacher_quiz_manage_controller.dart';
 import 'package:rankup_education/features/quizzes/presentation/providers/quiz_providers.dart';
+import 'package:rankup_education/features/tutor/presentation/providers/tutor_providers.dart';
 
 /// Teacher-facing quiz list with search, create, and pending reviews.
 class TeacherQuizListView extends StatelessWidget {
@@ -868,10 +870,12 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
     _startAt = now.add(const Duration(hours: 1));
     _endAt = now.add(const Duration(hours: 25));
     _allowedAttempts = widget.defaultAllowedAttempts;
-    Future.microtask(
-      () =>
-          ref.read(teacherQuizManageControllerProvider.notifier).loadStudents(),
-    );
+    Future.microtask(() {
+      if (widget.role == UserRole.parent || widget.role == UserRole.tutor) {
+        return;
+      }
+      ref.read(teacherQuizManageControllerProvider.notifier).loadStudents();
+    });
   }
 
   @override
@@ -952,6 +956,51 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
     final state = ref.watch(teacherQuizManageControllerProvider);
     final manage = ref.read(teacherQuizManageControllerProvider.notifier);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final usesLinkedStudents =
+        widget.role == UserRole.parent || widget.role == UserRole.tutor;
+    final search = _searchController.text.trim().toLowerCase();
+    final List<DirectoryStudentOption> linkedStudents;
+    if (widget.role == UserRole.tutor) {
+      final items =
+          ref.watch(tutorLinkedStudentsProvider).valueOrNull ?? const [];
+      linkedStudents = items
+          .where(
+            (student) =>
+                search.isEmpty ||
+                student.fullName.toLowerCase().contains(search) ||
+                student.username.toLowerCase().contains(search),
+          )
+          .map(
+            (student) => DirectoryStudentOption(
+              studentId: '${student.studentId}',
+              fullName: student.fullName,
+              grade: student.grade,
+              section: student.section,
+            ),
+          )
+          .toList();
+    } else if (widget.role == UserRole.parent) {
+      final items = ref.watch(linkedStudentsProvider).valueOrNull ?? const [];
+      linkedStudents = items
+          .where(
+            (student) =>
+                search.isEmpty ||
+                student.fullName.toLowerCase().contains(search) ||
+                student.username.toLowerCase().contains(search),
+          )
+          .map(
+            (student) => DirectoryStudentOption(
+              studentId: '${student.studentId}',
+              fullName: student.fullName,
+              grade: student.grade,
+              section: student.section,
+            ),
+          )
+          .toList();
+    } else {
+      linkedStudents = const [];
+    }
+    final students = usesLinkedStudents ? linkedStudents : state.students;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
@@ -987,9 +1036,15 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
               TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  labelText: 'Search students',
+                  labelText: usesLinkedStudents
+                      ? 'Filter linked students'
+                      : 'Search students',
                   suffixIcon: IconButton(
                     onPressed: () {
+                      if (usesLinkedStudents) {
+                        setState(() {});
+                        return;
+                      }
                       manage.loadStudents(
                         search: _searchController.text.trim(),
                       );
@@ -997,19 +1052,32 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                     icon: const Icon(Icons.search),
                   ),
                 ),
+                onChanged: usesLinkedStudents
+                    ? (_) => setState(() {})
+                    : null,
                 onSubmitted: (value) {
+                  if (usesLinkedStudents) {
+                    setState(() {});
+                    return;
+                  }
                   manage.loadStudents(search: value.trim());
                 },
               ),
               const SizedBox(height: 8),
               SizedBox(
                 height: 220,
-                child: state.students.isEmpty
-                    ? const Center(child: Text('No students found.'))
+                child: students.isEmpty
+                    ? Center(
+                        child: Text(
+                          usesLinkedStudents
+                              ? 'No linked students found.'
+                              : 'No students found.',
+                        ),
+                      )
                     : ListView.builder(
-                        itemCount: state.students.length,
+                        itemCount: students.length,
                         itemBuilder: (context, index) {
-                          final student = state.students[index];
+                          final student = students[index];
                           final selected =
                               _selectedIds.contains(student.studentId);
                           return CheckboxListTile(
@@ -1067,8 +1135,9 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                   'allinschool' =>
                     'Assigns to all active students in your school.',
                   'public' => 'Publishes this quiz to the public catalog.',
-                  'alllinked' =>
-                    'Assigns to all children linked to your account.',
+                  'alllinked' => widget.role == UserRole.tutor
+                      ? 'Assigns to all students linked to your account.'
+                      : 'Assigns to all children linked to your account.',
                   _ => 'The selected audience will receive this quiz.',
                 },
               ),

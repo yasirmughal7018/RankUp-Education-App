@@ -186,6 +186,20 @@ public interface IDirectoryService
     /// <summary>Removes a parent-student link.</summary>
     Task UnlinkParentStudentAsync(long parentId, long studentId, CancellationToken cancellationToken);
 
+    Task<DirectoryTutorListResponse> ListTutorsAsync(
+        string? search,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    Task<DirectoryTutorResponse> CreateTutorAsync(
+        CreateDirectoryTutorRequest request,
+        CancellationToken cancellationToken);
+
+    Task ActivateTutorAsync(long tutorId, CancellationToken cancellationToken);
+
+    Task DeactivateTutorAsync(long tutorId, CancellationToken cancellationToken);
+
     /// <summary>Page of school admins (portal admin only).</summary>
     Task<DirectorySchoolAdminListResponse> ListSchoolAdminsAsync(
         int? schoolId,

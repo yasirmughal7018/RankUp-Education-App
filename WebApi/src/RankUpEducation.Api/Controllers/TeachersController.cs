@@ -82,4 +82,17 @@ public sealed class TeachersController : ControllerBase
         await _teacherService.RemoveGroupMemberAsync(groupId, studentId, cancellationToken);
         return Ok(ApiResponse<object?>.Ok(null, "Student removed from group."));
     }
+
+    /// <summary>Adds an existing student to one of the teacher's assigned class/section pairs by CNIC or username.</summary>
+    [HttpPost("me/students")]
+    public async Task<ActionResult<ApiResponse<AddMyStudentResponse>>> AddMyStudentAsync(
+        [FromBody] AddMyStudentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _teacherService.AddMyStudentAsync(request, cancellationToken);
+        var message = response.AlreadyOnRoster
+            ? "This student was already in that class and section."
+            : "Student added to your class.";
+        return Ok(ApiResponse<AddMyStudentResponse>.Ok(response, message));
+    }
 }

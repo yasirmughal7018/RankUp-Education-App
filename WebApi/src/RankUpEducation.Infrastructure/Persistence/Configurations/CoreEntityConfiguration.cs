@@ -7,6 +7,7 @@ using RankUpEducation.Domain.Quizzes;
 using RankUpEducation.Domain.Schools;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
+using RankUpEducation.Domain.Tutors;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
 
@@ -133,6 +134,25 @@ public sealed class TeacherConfiguration : IEntityTypeConfiguration<Teacher>
     }
 }
 
+public sealed class TutorConfiguration : IEntityTypeConfiguration<Tutor>
+{
+    public void Configure(EntityTypeBuilder<Tutor> builder)
+    {
+        builder.ToTable("app_user_tutors");
+        builder.HasKey(tutor => tutor.Id);
+        builder.Property(tutor => tutor.Id).HasColumnName("tutor_id").ValueGeneratedNever();
+        builder.Property(tutor => tutor.MobileNumber).HasColumnName("mobile_number").HasMaxLength(40);
+        builder.Property(tutor => tutor.ModifiedDate).HasColumnName("modified_date");
+        builder.Ignore(tutor => tutor.CreatedAt);
+        builder.Ignore(tutor => tutor.CreatedBy);
+        builder.Ignore(tutor => tutor.UpdatedAt);
+        builder.Ignore(tutor => tutor.UpdatedBy);
+        builder.Ignore(tutor => tutor.IsDeleted);
+        builder.Ignore(tutor => tutor.DeletedAt);
+        builder.Ignore(tutor => tutor.DeletedBy);
+    }
+}
+
 public sealed class ParentStudentRelationConfiguration : IEntityTypeConfiguration<ParentStudentRelation>
 {
     public void Configure(EntityTypeBuilder<ParentStudentRelation> builder)
@@ -146,6 +166,21 @@ public sealed class ParentStudentRelationConfiguration : IEntityTypeConfiguratio
         builder.Property(relation => relation.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(relation => relation.CreatedDate).HasColumnName("created_date");
         builder.HasIndex(relation => new { relation.ParentId, relation.StudentId }).IsUnique();
+    }
+}
+
+public sealed class TutorStudentRelationConfiguration : IEntityTypeConfiguration<TutorStudentRelation>
+{
+    public void Configure(EntityTypeBuilder<TutorStudentRelation> builder)
+    {
+        builder.ToTable("tutor_student_relations");
+        builder.HasKey(relation => relation.Id);
+        builder.Property(relation => relation.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(relation => relation.TutorId).HasColumnName("tutor_id");
+        builder.Property(relation => relation.StudentId).HasColumnName("student_id");
+        builder.Property(relation => relation.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        builder.Property(relation => relation.CreatedDate).HasColumnName("created_date");
+        builder.HasIndex(relation => new { relation.TutorId, relation.StudentId }).IsUnique();
     }
 }
 

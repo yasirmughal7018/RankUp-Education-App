@@ -6,6 +6,8 @@ describe("canViewReports", () => {
     expect(canViewReports("PortalAdmin")).toBe(true);
     expect(canViewReports("SchoolAdmin")).toBe(true);
     expect(canViewReports("Teacher")).toBe(true);
+    expect(canViewReports("Coordinator")).toBe(true);
+    expect(canViewReports("Tutor")).toBe(true);
   });
 
   it("denies student, parent, and unknown roles", () => {

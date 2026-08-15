@@ -77,16 +77,18 @@ export type ReportViewerRole =
   | "PortalAdmin"
   | "SchoolAdmin"
   | "Teacher"
-  | "Coordinator";
+  | "Coordinator"
+  | "Tutor";
 
 export const REPORT_VIEWER_ROLES: ReportViewerRole[] = [
   "PortalAdmin",
   "SchoolAdmin",
   "Teacher",
   "Coordinator",
+  "Tutor",
 ];
 
-/** True for PortalAdmin, SchoolAdmin, Teacher, and Coordinator. */
+/** True for PortalAdmin, SchoolAdmin, Teacher, Coordinator, and Tutor. */
 export function canViewReports(role: string): boolean {
   return REPORT_VIEWER_ROLES.includes(role as ReportViewerRole);
 }

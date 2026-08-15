@@ -284,7 +284,9 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if ((role == UserRole.teacher || role == UserRole.parent) &&
+                  if ((role == UserRole.teacher ||
+                          role == UserRole.parent ||
+                          role == UserRole.tutor) &&
                       question.status.toLowerCase() == 'rejected')
                     FilledButton(
                       onPressed: () {

@@ -44,6 +44,13 @@ class AuthSessionModel extends AuthSession {
           'attendance.mark',
           'message.send',
         ],
+      UserRole.tutor => [
+          'dashboard.view',
+          'quiz.create',
+          'quiz.assign',
+          'quiz.review',
+          'message.send',
+        ],
       UserRole.schoolAdmin ||
       UserRole.campusAdmin ||
       UserRole.portalAdmin => [

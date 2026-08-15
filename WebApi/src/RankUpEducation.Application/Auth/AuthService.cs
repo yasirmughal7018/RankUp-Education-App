@@ -12,6 +12,7 @@ using RankUpEducation.Domain.Common;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
+using RankUpEducation.Domain.Tutors;
 
 namespace RankUpEducation.Application.Auth;
 
@@ -22,7 +23,7 @@ namespace RankUpEducation.Application.Auth;
 public sealed class AuthService : IAuthService
 {
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(30);
-    private static readonly string[] AllowedRegistrationRoles = ["Student", "Parent", "Teacher"];
+    private static readonly string[] AllowedRegistrationRoles = ["Student", "Parent", "Teacher", "Tutor"];
     private const string RegistrationRequestCategory = "RegistrationRequest";
     private const string SchoolChangeRequestCategory = "SchoolChangeRequest";
     private const string RoleRequestCategory = "RoleRequest";
@@ -387,16 +388,16 @@ public sealed class AuthService : IAuthService
             throw new ValidationAppException(["An account or request already exists for this mobile number."]);
         }
 
-        // Parent: never school/campus.
+        // Parent/Tutor: never school/campus.
         // Student/Teacher: school and campus are optional; they drive the approval queue.
-        var schoolId = role == UserRole.Parent ? null : request.SchoolId;
-        var campusId = role == UserRole.Parent || !schoolId.HasValue
+        var schoolId = IsSchoolLessRole(role) ? null : request.SchoolId;
+        var campusId = IsSchoolLessRole(role) || !schoolId.HasValue
             ? null
             : request.CampusId;
         // Reject unknown / inactive destinations before queuing reviewers.
         await EnsureActiveSchoolCampusDestinationAsync(schoolId, campusId, cancellationToken);
-        // Student roll number only when a school is selected; Parent never uses it.
-        var rollNumberTeacherCode = role == UserRole.Parent
+        // Student roll number only when a school is selected; Parent/Tutor never uses it.
+        var rollNumberTeacherCode = IsSchoolLessRole(role)
             || (role == UserRole.Student && !schoolId.HasValue)
             ? null
             : request.RollNumberTeacherCode;
@@ -976,7 +977,7 @@ public sealed class AuthService : IAuthService
                 }
             }
         }
-        else if (role == UserRole.Parent)
+        else if (role is UserRole.Parent or UserRole.Tutor)
         {
             var candidates = await _users.ListPendingApproverCandidatesAsync(
                 schoolId: null,
@@ -1190,10 +1191,10 @@ public sealed class AuthService : IAuthService
         }
 
         if (!Enum.TryParse<UserRole>(request.Role.AsTrimmedString(), true, out var requestedRole)
-            || requestedRole is not (UserRole.Teacher or UserRole.Parent or UserRole.Coordinator))
+            || requestedRole is not (UserRole.Teacher or UserRole.Parent or UserRole.Coordinator or UserRole.Tutor))
         {
             throw new ValidationAppException(
-                ["Requested role must be Parent, Teacher, or Coordinator."]);
+                ["Requested role must be Parent, Teacher, Coordinator, or Tutor."]);
         }
 
         try
@@ -1389,6 +1390,15 @@ public sealed class AuthService : IAuthService
             {
                 await _users.AddParentProfileAsync(
                     new Parent(user.Id, user.MobileNumber),
+                    cancellationToken);
+            }
+        }
+        else if (request.RequestedRole == UserRole.Tutor)
+        {
+            if (!await _users.HasTutorProfileAsync(user.Id, cancellationToken))
+            {
+                await _users.AddTutorProfileAsync(
+                    new Tutor(user.Id, user.MobileNumber),
                     cancellationToken);
             }
         }
@@ -1880,8 +1890,20 @@ public sealed class AuthService : IAuthService
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
                 break;
 
+            case UserRole.Tutor:
+                if (await _users.HasTutorProfileAsync(user.Id, cancellationToken))
+                {
+                    throw new BusinessRuleException("Tutor profile already exists.");
+                }
+
+                await _users.AddTutorProfileAsync(
+                    new Tutor(user.Id, mobileNumber),
+                    cancellationToken);
+                user.AttachProfileContext(user.Id, null, null);
+                break;
+
             default:
-                throw new BusinessRuleException("Only student, parent, and teacher registrations can be approved.");
+                throw new BusinessRuleException("Only student, parent, teacher, and tutor registrations can be approved.");
         }
     }
 
@@ -1976,6 +1998,9 @@ public sealed class AuthService : IAuthService
     private static bool IsPortalOnlyRegistration(User user)
         => !user.SchoolId.HasValue;
 
+    private static bool IsSchoolLessRole(UserRole role)
+        => role is UserRole.Parent or UserRole.Tutor;
+
     /// <summary>
     /// Who can activate a pending registration after recording approval:
     /// PortalAdmin — any request;
@@ -1990,7 +2015,7 @@ public sealed class AuthService : IAuthService
             return true;
         }
 
-        if (user.Role == UserRole.Parent || IsPortalOnlyRegistration(user))
+        if (user.Role is UserRole.Parent or UserRole.Tutor || IsPortalOnlyRegistration(user))
         {
             return false;
         }
@@ -2154,7 +2179,8 @@ public sealed class AuthService : IAuthService
         // Parent accounts are not school-scoped (registration never assigns school/campus).
         if (activeRole is UserRole.PortalAdmin
             or UserRole.SchoolAdmin
-            or UserRole.Parent)
+            or UserRole.Parent
+            or UserRole.Tutor)
         {
             throw new ForbiddenAppException("Your role cannot request a school or campus change.");
         }
@@ -2406,6 +2432,15 @@ public sealed class AuthService : IAuthService
             request.CampusId,
             cancellationToken);
 
+        if (request.RequestedRole is UserRole.Parent or UserRole.Tutor)
+        {
+            return candidates
+                .Where(candidate => candidate.Role == UserRole.PortalAdmin)
+                .Select(candidate => candidate.UserId)
+                .Distinct()
+                .ToArray();
+        }
+
         return candidates
             .Where(candidate =>
                 candidate.Role is UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin)
@@ -2545,7 +2580,7 @@ public sealed class AuthService : IAuthService
         if (!Enum.TryParse<UserRole>(userType.AsTrimmedString(), true, out var role)
             || !AllowedRegistrationRoles.Contains(role.ToString(), StringComparer.OrdinalIgnoreCase))
         {
-            throw new ValidationAppException(["User type must be Student, Parent, or Teacher."]);
+            throw new ValidationAppException(["User type must be Student, Parent, Teacher, or Tutor."]);
         }
 
         return role;
@@ -2665,7 +2700,7 @@ public sealed class AuthService : IAuthService
         else if (!Enum.TryParse<UserRole>(request.UserType.AsTrimmedString(), true, out var parsedRole)
             || !AllowedRegistrationRoles.Contains(parsedRole.ToString(), StringComparer.OrdinalIgnoreCase))
         {
-            errors.Add("User type must be Student, Parent, or Teacher.");
+            errors.Add("User type must be Student, Parent, Teacher, or Tutor.");
         }
         else
         {
@@ -2678,16 +2713,16 @@ public sealed class AuthService : IAuthService
             errors.Add("Email address is required (it is the username).");
         }
 
-        if (role == UserRole.Parent)
+        if (role is UserRole.Parent or UserRole.Tutor)
         {
             if (request.SchoolId.HasValue || request.CampusId.HasValue)
             {
-                errors.Add("School and campus are not used for Parent account requests.");
+                errors.Add("School and campus are not used for Parent or Tutor account requests.");
             }
 
             if (request.RollNumberTeacherCode.HasTrimmedText())
             {
-                errors.Add("Roll number / teacher code is not used for Parent account requests.");
+                errors.Add("Roll number / teacher code is not used for Parent or Tutor account requests.");
             }
 
             if (request.Grade.HasValue || request.Section.HasTrimmedText())

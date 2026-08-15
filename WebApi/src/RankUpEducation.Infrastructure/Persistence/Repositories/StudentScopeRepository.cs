@@ -191,4 +191,102 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             .Select(member => member.StudentId)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<long>> GetTeacherRosterStudentIdsAsync(
+        long teacherId,
+        int schoolId,
+        int campusId,
+        CancellationToken cancellationToken)
+    {
+        var assignments = await _dbContext.TeacherClassSections.AsNoTracking()
+            .Where(item => item.TeacherId == teacherId && item.IsActive)
+            .Select(item => new { item.Grade, item.Section })
+            .ToListAsync(cancellationToken);
+
+        if (assignments.Count == 0)
+        {
+            return Array.Empty<long>();
+        }
+
+        var allowed = assignments
+            .Select(item => (item.Grade, Section: item.Section.ToLowerInvariant()))
+            .ToHashSet();
+        var grades = allowed.Select(item => item.Grade).Distinct().ToArray();
+        var sections = allowed.Select(item => item.Section).Distinct().ToArray();
+
+        var candidates = await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where user.SchoolId == schoolId
+                && user.CampusId == campusId
+                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+                && grades.Contains(student.Grade)
+                && sections.Contains(student.Section.ToLower())
+            select new { student.Id, student.Grade, student.Section })
+            .ToListAsync(cancellationToken);
+
+        return candidates
+            .Where(row => allowed.Contains((row.Grade, row.Section.ToLowerInvariant())))
+            .Select(row => row.Id)
+            .Distinct()
+            .ToArray();
+    }
+
+    public async Task<bool> IsStudentInTeacherRosterAsync(
+        long teacherId,
+        long studentId,
+        int schoolId,
+        int campusId,
+        CancellationToken cancellationToken)
+    {
+        var roster = await GetTeacherRosterStudentIdsAsync(
+            teacherId,
+            schoolId,
+            campusId,
+            cancellationToken);
+        return roster.Contains(studentId);
+    }
+
+    public async Task<IReadOnlyList<long>> GetTutorLinkedStudentIdsAsync(
+        long tutorId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.TutorStudentRelations.AsNoTracking()
+            .Where(relation => relation.TutorId == tutorId && relation.IsActive)
+            .Select(relation => relation.StudentId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TutorLinkedStudentInfo>> GetTutorLinkedStudentsAsync(
+        long tutorId,
+        CancellationToken cancellationToken)
+    {
+        return await (
+            from relation in _dbContext.TutorStudentRelations.AsNoTracking()
+            join student in _dbContext.Students.AsNoTracking() on relation.StudentId equals student.Id
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            join school in _dbContext.Schools.AsNoTracking() on (long?)user.SchoolId equals school.Id into schools
+            from school in schools.DefaultIfEmpty()
+            where relation.TutorId == tutorId && relation.IsActive
+            orderby user.FullName
+            select new TutorLinkedStudentInfo(
+                student.Id,
+                user.FullName,
+                user.Username,
+                user.RollNumberTeacherCode ?? string.Empty,
+                student.Grade,
+                student.Section,
+                school != null ? school.Name : null))
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<bool> IsTutorLinkedStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken)
+    {
+        return _dbContext.TutorStudentRelations.AsNoTracking()
+            .AnyAsync(
+                relation => relation.TutorId == tutorId
+                    && relation.StudentId == studentId
+                    && relation.IsActive,
+                cancellationToken);
+    }
 }

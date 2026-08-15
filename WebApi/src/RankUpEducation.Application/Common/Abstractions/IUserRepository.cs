@@ -88,6 +88,10 @@ public interface IUserRepository
 
     Task AddParentProfileAsync(Domain.Parents.Parent parent, CancellationToken cancellationToken);
 
+    Task AddTutorProfileAsync(Domain.Tutors.Tutor tutor, CancellationToken cancellationToken);
+
+    Task<bool> HasTutorProfileAsync(long userId, CancellationToken cancellationToken);
+
     /// <summary>
     /// True when student groups still reference this user+role (blocks role removal via FK).
     /// </summary>
