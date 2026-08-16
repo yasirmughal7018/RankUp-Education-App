@@ -159,6 +159,11 @@ public interface IDirectoryRepository
     /// <summary>Returns whether a student profile exists.</summary>
     Task<bool> StudentExistsAsync(long studentId, CancellationToken cancellationToken);
 
+    /// <summary>Resolves assigned parent, coordinator, teacher, and tutor details for one student.</summary>
+    Task<StudentAssignedPeople> GetAssignedPeopleForStudentAsync(
+        long studentId,
+        CancellationToken cancellationToken);
+
     /// <summary>Counts active parent-student links for display on parent rows.</summary>
     Task<int> CountParentStudentLinksAsync(long parentId, CancellationToken cancellationToken);
 

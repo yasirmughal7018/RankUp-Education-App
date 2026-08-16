@@ -943,6 +943,120 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .AnyAsync(student => student.Id == studentId, cancellationToken);
     }
 
+    public async Task<StudentAssignedPeople> GetAssignedPeopleForStudentAsync(
+        long studentId,
+        CancellationToken cancellationToken)
+    {
+        var student = await (
+            from row in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on row.Id equals user.Id
+            where row.Id == studentId
+            select new
+            {
+                row.Id,
+                user.SchoolId,
+                user.CampusId,
+                row.Grade,
+                row.Section,
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (student is null)
+        {
+            return new StudentAssignedPeople([], [], [], []);
+        }
+
+        var parents = await (
+            from relation in _dbContext.ParentStudentRelations.AsNoTracking()
+            join parentUser in _dbContext.Users.AsNoTracking() on relation.ParentId equals parentUser.Id
+            where relation.StudentId == studentId && relation.IsActive
+            orderby parentUser.FullName
+            select new StudentAssignedPerson(
+                parentUser.FullName,
+                string.IsNullOrWhiteSpace(relation.Relationship) ? "Guardian" : relation.Relationship))
+            .ToListAsync(cancellationToken);
+
+        var tutors = await (
+            from relation in _dbContext.TutorStudentRelations.AsNoTracking()
+            join tutorUser in _dbContext.Users.AsNoTracking() on relation.TutorId equals tutorUser.Id
+            where relation.StudentId == studentId && relation.IsActive
+            orderby tutorUser.FullName
+            select new StudentAssignedPerson(tutorUser.FullName, "Linked tutor"))
+            .ToListAsync(cancellationToken);
+
+        if (student.SchoolId is null || student.CampusId is null)
+        {
+            return new StudentAssignedPeople(parents, [], [], tutors);
+        }
+
+        var teachers = await (
+            from assignment in _dbContext.TeacherClassSections.AsNoTracking()
+            join teacherUser in _dbContext.Users.AsNoTracking() on assignment.TeacherId equals teacherUser.Id
+            where assignment.IsActive
+                && teacherUser.SchoolId == student.SchoolId
+                && teacherUser.CampusId == student.CampusId
+                && assignment.Grade == student.Grade
+                && teacherUser.RoleAssignments.Any(role => role.Role == UserRole.Teacher)
+            select new
+            {
+                teacherUser.FullName,
+                assignment.Section,
+            })
+            .ToListAsync(cancellationToken);
+
+        var teacherPeople = teachers
+            .Where(teacher =>
+                string.Equals(teacher.Section, student.Section, StringComparison.OrdinalIgnoreCase)
+                && teacher.FullName.HasTrimmedText())
+            .GroupBy(teacher => teacher.FullName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group.Key)
+            .Select(group => new StudentAssignedPerson(
+                group.Key,
+                $"Grade {student.Grade} · {student.Section}"))
+            .ToArray();
+
+        var coordinators = await (
+            from assignment in _dbContext.CoordinatorClassSections.AsNoTracking()
+            join coordinatorUser in _dbContext.Users.AsNoTracking()
+                on assignment.CoordinatorUserId equals coordinatorUser.Id
+            where assignment.IsActive
+                && coordinatorUser.SchoolId == student.SchoolId
+                && coordinatorUser.CampusId == student.CampusId
+                && assignment.Grade == student.Grade
+                && coordinatorUser.RoleAssignments.Any(role => role.Role == UserRole.Coordinator)
+            select new
+            {
+                coordinatorUser.FullName,
+                assignment.Section,
+            })
+            .ToListAsync(cancellationToken);
+
+        var coordinatorPeople = coordinators
+            .Where(coordinator =>
+                coordinator.FullName.HasTrimmedText()
+                && (CoordinatorClassSection.IsFullClassSection(coordinator.Section)
+                    || string.IsNullOrWhiteSpace(coordinator.Section)
+                    || string.Equals(
+                        coordinator.Section,
+                        student.Section,
+                        StringComparison.OrdinalIgnoreCase)))
+            .GroupBy(coordinator => coordinator.FullName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var coversFullGrade = group.Any(item =>
+                    CoordinatorClassSection.IsFullClassSection(item.Section)
+                    || string.IsNullOrWhiteSpace(item.Section));
+                var detail = coversFullGrade
+                    ? $"Grade {student.Grade} · All sections"
+                    : $"Grade {student.Grade} · {student.Section}";
+                return new StudentAssignedPerson(group.Key, detail);
+            })
+            .ToArray();
+
+        return new StudentAssignedPeople(parents, coordinatorPeople, teacherPeople, tutors);
+    }
+
     public Task<int> CountParentStudentLinksAsync(long parentId, CancellationToken cancellationToken)
     {
         return _dbContext.ParentStudentRelations.AsNoTracking()

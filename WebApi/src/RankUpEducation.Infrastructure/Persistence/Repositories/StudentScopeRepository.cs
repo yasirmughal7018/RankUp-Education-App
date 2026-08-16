@@ -53,6 +53,29 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<StudentMeClassInfo?> GetStudentMeClassAsync(
+        long studentId,
+        CancellationToken cancellationToken)
+    {
+        return await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            join school in _dbContext.Schools.AsNoTracking() on (long?)user.SchoolId equals school.Id into schools
+            from school in schools.DefaultIfEmpty()
+            join campus in _dbContext.Campuses.AsNoTracking() on (long?)user.CampusId equals campus.Id into campuses
+            from campus in campuses.DefaultIfEmpty()
+            where student.Id == studentId
+            select new StudentMeClassInfo(
+                user.FullName,
+                user.Username,
+                user.RollNumberTeacherCode ?? string.Empty,
+                student.Grade,
+                student.Section,
+                school != null ? school.Name : null,
+                campus != null ? campus.Name : null))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<long>> GetLinkedParentIdsAsync(
         long studentId,
         CancellationToken cancellationToken)

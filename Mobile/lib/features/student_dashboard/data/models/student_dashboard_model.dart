@@ -336,6 +336,10 @@ class StudentSummaryModel {
     required this.grade,
     required this.section,
     required this.avatarInitials,
+    this.parentNames = const [],
+    this.coordinatorNames = const [],
+    this.teacherNames = const [],
+    this.tutorNames = const [],
   });
 
   final String name;
@@ -343,6 +347,10 @@ class StudentSummaryModel {
   final String grade;
   final String section;
   final String avatarInitials;
+  final List<String> parentNames;
+  final List<String> coordinatorNames;
+  final List<String> teacherNames;
+  final List<String> tutorNames;
 }
 
 /// XP level and progress ring for the dashboard hero.

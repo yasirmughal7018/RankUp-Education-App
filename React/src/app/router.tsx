@@ -60,6 +60,7 @@ import { ReportsRoute } from "@/features/reports/presentation/components/Reports
 import { ReportsPage } from "@/features/reports/presentation/pages/ReportsPage";
 import { StudentRoute } from "@/features/student/presentation/components/StudentRoute";
 import { StudentDashboardPage } from "@/features/student/presentation/pages/StudentDashboardPage";
+import { StudentMyClassPage } from "@/features/student/presentation/pages/StudentMyClassPage";
 import { StudentQuizAttemptPage } from "@/features/student/presentation/pages/StudentQuizAttemptPage";
 import { StudentQuizDetailPage } from "@/features/student/presentation/pages/StudentQuizDetailPage";
 import { StudentQuizHistoryPage } from "@/features/student/presentation/pages/StudentQuizHistoryPage";
@@ -217,6 +218,7 @@ export function AppRouter() {
 
             <Route element={<StudentRoute />}>
               <Route path="student/dashboard" element={<StudentDashboardPage />} />
+              <Route path="student/my-class" element={<StudentMyClassPage />} />
               <Route path="student/quizzes" element={<StudentQuizzesPage />} />
               <Route path="student/history" element={<StudentQuizHistoryPage />} />
               <Route path="student/rankings" element={<StudentRankingsPage />} />

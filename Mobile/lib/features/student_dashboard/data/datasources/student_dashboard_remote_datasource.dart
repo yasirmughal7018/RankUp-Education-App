@@ -6,8 +6,9 @@ import 'package:rankup_education/features/authentication/data/models/app_user_mo
 import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model.dart';
 import 'package:rankup_education/features/student_dashboard/data/mappers/student_dashboard_mapper.dart';
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
+import 'package:rankup_education/features/student_dashboard/data/models/student_me_overview_model.dart';
 
-/// REST client for `/student/dashboard` aggregate endpoint.
+/// REST client for student home data (profile + quizzes + class overview).
 class StudentDashboardRemoteDataSource {
   const StudentDashboardRemoteDataSource(this._dio);
 
@@ -17,11 +18,23 @@ class StudentDashboardRemoteDataSource {
     try {
       final meResponse = await _dio.get<Map<String, dynamic>>('/auth/me');
       final quizzesResponse = await _dio.get<Map<String, dynamic>>('/quizzes');
+      StudentMeOverviewModel? overview;
+      try {
+        final overviewResponse =
+            await _dio.get<Map<String, dynamic>>('/students/me/overview');
+        overview = _readOverview(overviewResponse.data);
+      } on DioException {
+        overview = null;
+      }
 
       final user = _readUser(meResponse.data);
       final quizzes = _readQuizzes(quizzesResponse.data);
 
-      return StudentDashboardMapper.fromApi(user: user, quizzes: quizzes);
+      return StudentDashboardMapper.fromApi(
+        user: user,
+        quizzes: quizzes,
+        overview: overview,
+      );
     } on DioException catch (error) {
       throw mapDioException(error);
     }
@@ -42,6 +55,23 @@ class StudentDashboardRemoteDataSource {
     }
 
     return AppUserModel.fromJson(response.data);
+  }
+
+  StudentMeOverviewModel? _readOverview(Map<String, dynamic>? json) {
+    if (json == null) {
+      return null;
+    }
+
+    final response = ApiResponse<Map<String, dynamic>>.fromJson(
+      json,
+      (data) => data is Map<String, dynamic> ? data : <String, dynamic>{},
+    );
+
+    if (!response.success || response.data.isEmpty) {
+      return null;
+    }
+
+    return StudentMeOverviewModel.fromJson(response.data);
   }
 
   List<QuizSummaryModel> _readQuizzes(Map<String, dynamic>? json) {

@@ -15,6 +15,9 @@ public interface IStudentScopeRepository
     /// <summary>Returns the school and campus context for a student, if any.</summary>
     Task<StudentSchoolContext?> GetStudentSchoolContextAsync(long studentId, CancellationToken cancellationToken);
 
+    /// <summary>Returns class placement with school/campus names for the student self-view.</summary>
+    Task<StudentMeClassInfo?> GetStudentMeClassAsync(long studentId, CancellationToken cancellationToken);
+
     /// <summary>Returns parent user ids linked to the student (active links only).</summary>
     Task<IReadOnlyList<long>> GetLinkedParentIdsAsync(long studentId, CancellationToken cancellationToken);
 

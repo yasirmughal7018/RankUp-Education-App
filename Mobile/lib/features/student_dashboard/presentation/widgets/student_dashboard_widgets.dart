@@ -1087,3 +1087,72 @@ String _formatNumber(int value) {
 
   return buffer.toString();
 }
+
+/// Parents, coordinators, teachers, and tutors for the signed-in student.
+class StudentPeopleCard extends StatelessWidget {
+  const StudentPeopleCard({required this.student, super.key});
+
+  final StudentSummaryModel student;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'My people',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 12),
+          _PeopleGroup(title: 'Parents', names: student.parentNames),
+          _PeopleGroup(title: 'Coordinators', names: student.coordinatorNames),
+          _PeopleGroup(title: 'Teachers', names: student.teacherNames),
+          _PeopleGroup(title: 'Tutors', names: student.tutorNames),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeopleGroup extends StatelessWidget {
+  const _PeopleGroup({required this.title, required this.names});
+
+  final String title;
+  final List<String> names;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (names.isEmpty)
+            Text(
+              'None assigned',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            for (final name in names)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(name, style: theme.textTheme.bodyMedium),
+              ),
+        ],
+      ),
+    );
+  }
+}

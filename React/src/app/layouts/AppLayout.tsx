@@ -67,6 +67,7 @@ export function AppLayout() {
     if (user && canTakeStudentQuizzes(user.role)) {
       items.push(
         { to: "/student/dashboard", label: "Learning" },
+        { to: "/student/my-class", label: "My class" },
         { to: "/student/quizzes", label: "My quizzes" },
         { to: "/student/history", label: "History" },
         { to: "/student/rankings", label: "Rankings" },
@@ -107,6 +108,7 @@ export function AppLayout() {
     if (canTakeStudentQuizzes(user.role)) {
       items.push(
         { to: "/student/dashboard", label: "Learn" },
+        { to: "/student/my-class", label: "Class" },
         { to: "/student/quizzes", label: "Quizzes" },
         { to: "/student/rankings", label: "Ranks" },
       );

@@ -93,6 +93,8 @@ class _StudentDashboardContent extends StatelessWidget {
           greeting: _greetingFor(DateTime.now()),
         ),
         const SizedBox(height: 14),
+        StudentPeopleCard(student: dashboard.student),
+        const SizedBox(height: 14),
         _StudentDashboardTiles(dashboard: dashboard),
         const SizedBox(height: 18),
         const DashboardSectionHeader(title: 'Quiz statistics'),

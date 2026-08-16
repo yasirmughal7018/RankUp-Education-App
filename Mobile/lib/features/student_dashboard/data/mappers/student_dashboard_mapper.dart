@@ -3,6 +3,7 @@ import 'package:rankup_education/features/authentication/data/models/app_user_mo
 import 'package:rankup_education/features/quizzes/data/models/quiz_summary_model.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 import 'package:rankup_education/features/student_dashboard/data/models/student_dashboard_model.dart';
+import 'package:rankup_education/features/student_dashboard/data/models/student_me_overview_model.dart';
 
 /// Maps API JSON into [StudentDashboardModel] domain shapes.
 class StudentDashboardMapper {
@@ -11,6 +12,7 @@ class StudentDashboardMapper {
   static StudentDashboardModel fromApi({
     required AppUserModel user,
     required List<QuizSummaryModel> quizzes,
+    StudentMeOverviewModel? overview,
   }) {
     final now = DateTime.now();
     final completed = quizzes
@@ -31,13 +33,24 @@ class StudentDashboardMapper {
         ? 0
         : (averageScore.reduce((a, b) => a + b) / averageScore.length).round();
 
+    final displayName = (overview?.fullName.isNotEmpty ?? false)
+        ? overview!.fullName
+        : (user.name.isEmpty ? user.id : user.name);
+
     return StudentDashboardModel(
       student: StudentSummaryModel(
-        name: user.name.isEmpty ? user.id : user.name,
-        schoolName: user.schoolId.isEmpty ? 'Your School' : 'School #${user.schoolId}',
-        grade: 'Student',
-        section: user.campusId.isEmpty ? 'Campus' : 'Campus #${user.campusId}',
-        avatarInitials: _initials(user.name),
+        name: displayName,
+        schoolName: overview?.schoolCampusLabel ??
+            (user.schoolId.isEmpty ? 'Your School' : 'School #${user.schoolId}'),
+        grade: overview?.classLabel ?? 'Student',
+        section: overview != null && overview.rollNumber.isNotEmpty
+            ? 'Roll ${overview.rollNumber}'
+            : (user.campusId.isEmpty ? 'Campus' : 'Campus #${user.campusId}'),
+        avatarInitials: _initials(displayName),
+        parentNames: overview?.parentNames ?? const [],
+        coordinatorNames: overview?.coordinatorNames ?? const [],
+        teacherNames: overview?.teacherNames ?? const [],
+        tutorNames: overview?.tutorNames ?? const [],
       ),
       level: StudentLevelModel(
         currentLevel: 'Learner',

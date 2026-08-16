@@ -25,6 +25,7 @@ export const queryKeys = {
   studentQuizResult: (quizId: number, attemptId: number) =>
     ["student", "quizzes", quizId, "attempts", attemptId, "result"] as const,
   linkedStudents: () => ["parents", "me", "students"] as const,
+  studentMeOverview: () => ["students", "me", "overview"] as const,
   tutorLinkedStudents: () => ["tutors", "me", "students"] as const,
   teacherRoster: (activeRole?: string | null) =>
     ["teachers", "me", "roster", activeRole ?? null] as const,
