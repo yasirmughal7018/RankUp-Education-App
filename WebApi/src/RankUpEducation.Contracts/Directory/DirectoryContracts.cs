@@ -222,7 +222,7 @@ public sealed record DirectoryParentListResponse(
     int PageSize,
     int TotalCount);
 
-/// <summary>Linked child summary on a directory parent row.</summary>
+/// <summary>Linked child / roster student summary on a directory parent, tutor, teacher, or coordinator row.</summary>
 public sealed record DirectoryLinkedStudentSummary(
     long StudentId,
     string FullName,
@@ -231,7 +231,10 @@ public sealed record DirectoryLinkedStudentSummary(
     string? SchoolName = null,
     string? CampusName = null,
     short? Grade = null,
-    string? Section = null);
+    string? Section = null,
+    bool IsActive = true,
+    /// <summary>Active | ApprovedInactive | PendingApproval | Locked | Deactivated | Rejected</summary>
+    string AccountStatus = "Active");
 
 public sealed record DirectoryParentResponse(
     long ParentId,

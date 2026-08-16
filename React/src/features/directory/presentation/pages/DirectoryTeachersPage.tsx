@@ -56,6 +56,7 @@ import {
   type DirectoryAccountStatusFilter,
 } from "@/features/directory/presentation/utils/accountStatus";
 import {
+  formatDirectoryListDisplayRoles,
   getRemovableDirectoryRoles,
   type DirectoryCombinableRole,
 } from "@/features/directory/presentation/utils/directoryRoles";
@@ -74,6 +75,8 @@ export function DirectoryTeachersPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
   const isPortalAdmin = user?.role === "PortalAdmin";
+  const canGrantParentRole = isPortalAdmin;
+  const canGrantTutorRole = isPortalAdmin;
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isCampusAdmin = user?.role === "CampusAdmin";
   const lockedSchoolId =
@@ -341,7 +344,10 @@ export function DirectoryTeachersPage() {
     const hasParentRole = roles.includes("Parent");
     const hasCoordinatorRole = roles.includes("Coordinator");
     const hasTutorRole = roles.includes("Tutor");
-    const removableRoles = getRemovableDirectoryRoles(roles, "Teacher");
+    const removableRoles = getRemovableDirectoryRoles(roles, "Teacher", {
+      includeParent: canGrantParentRole,
+      includeTutor: canGrantTutorRole,
+    });
     const overflowItems = [
       {
         id: "toggle-active",
@@ -350,7 +356,7 @@ export function DirectoryTeachersPage() {
         disabled: busy,
         tone: teacher.isActive ? ("danger" as const) : ("default" as const),
       },
-      ...(!hasParentRole
+      ...(canGrantParentRole && !hasParentRole
         ? [
             {
               id: "add-parent",
@@ -376,7 +382,7 @@ export function DirectoryTeachersPage() {
             },
           ]
         : []),
-      ...(!hasTutorRole
+      ...(canGrantTutorRole && !hasTutorRole
         ? [
             {
               id: "add-tutor",
@@ -582,11 +588,15 @@ export function DirectoryTeachersPage() {
                 canManage ? () => toggleSelect(teacher.teacherId) : undefined
               }
               title={teacher.fullName}
-              subtitle={
-                (teacher.roles?.length ?? 0) > 1
-                  ? `${teacher.username} · ${teacher.roles?.join(", ")}`
-                  : teacher.username
-              }
+              subtitle={(() => {
+                const rolesLabel = formatDirectoryListDisplayRoles(
+                  teacher.roles,
+                  "Teacher",
+                );
+                return rolesLabel
+                  ? `${teacher.username} · ${rolesLabel}`
+                  : teacher.username;
+              })()}
               badge={
                 <AccountStatusBadge
                   accountStatus={teacher.accountStatus}
@@ -634,7 +644,12 @@ export function DirectoryTeachersPage() {
             <DirectoryTh align="right">Actions</DirectoryTh>
           </DirectoryTableHead>
           <tbody className="divide-y divide-border">
-            {visibleTeachers.map((teacher) => (
+            {visibleTeachers.map((teacher) => {
+              const rolesLabel = formatDirectoryListDisplayRoles(
+                teacher.roles,
+                "Teacher",
+              );
+              return (
               <tr
                 key={teacher.teacherId}
                 className="transition hover:bg-muted/40"
@@ -655,9 +670,9 @@ export function DirectoryTeachersPage() {
                   <p className="text-xs text-muted-foreground">
                     {teacher.username}
                   </p>
-                  {(teacher.roles?.length ?? 0) > 1 ? (
+                  {rolesLabel ? (
                     <p className="mt-0.5 text-xs font-medium text-primary">
-                      Roles: {teacher.roles?.join(", ")}
+                      Roles: {rolesLabel}
                     </p>
                   ) : null}
                 </DirectoryTd>
@@ -683,7 +698,8 @@ export function DirectoryTeachersPage() {
                   </div>
                 </DirectoryTd>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </DirectoryTable>
       </DirectoryListPanel>

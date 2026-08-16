@@ -54,6 +54,7 @@ import {
   type DirectoryAccountStatusFilter,
 } from "@/features/directory/presentation/utils/accountStatus";
 import {
+  formatDirectoryListDisplayRoles,
   getRemovableDirectoryRoles,
   type DirectoryCombinableRole,
 } from "@/features/directory/presentation/utils/directoryRoles";
@@ -407,11 +408,15 @@ export function DirectoryTutorsPage() {
             <DirectoryEntityCard
               key={tutor.tutorId}
               title={tutor.fullName}
-              subtitle={
-                (tutor.roles?.length ?? 0) > 1
-                  ? `${tutor.username} · ${tutor.roles?.join(", ")}`
-                  : tutor.username
-              }
+              subtitle={(() => {
+                const rolesLabel = formatDirectoryListDisplayRoles(
+                  tutor.roles,
+                  "Tutor",
+                );
+                return rolesLabel
+                  ? `${tutor.username} · ${rolesLabel}`
+                  : tutor.username;
+              })()}
               badge={
                 <AccountStatusBadge
                   accountStatus={tutor.accountStatus}
@@ -432,7 +437,12 @@ export function DirectoryTutorsPage() {
             <DirectoryTh align="right">Actions</DirectoryTh>
           </DirectoryTableHead>
           <tbody className="divide-y divide-border">
-            {visibleTutors.map((tutor) => (
+            {visibleTutors.map((tutor) => {
+              const rolesLabel = formatDirectoryListDisplayRoles(
+                tutor.roles,
+                "Tutor",
+              );
+              return (
               <tr
                 key={tutor.tutorId}
                 className="transition hover:bg-muted/40"
@@ -442,9 +452,9 @@ export function DirectoryTutorsPage() {
                   <p className="text-xs text-muted-foreground">
                     {tutor.username}
                   </p>
-                  {(tutor.roles?.length ?? 0) > 1 ? (
+                  {rolesLabel ? (
                     <p className="mt-0.5 text-xs font-medium text-primary">
-                      Roles: {tutor.roles?.join(", ")}
+                      Roles: {rolesLabel}
                     </p>
                   ) : null}
                 </DirectoryTd>
@@ -463,7 +473,8 @@ export function DirectoryTutorsPage() {
                   </div>
                 </DirectoryTd>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </DirectoryTable>
       </DirectoryListPanel>

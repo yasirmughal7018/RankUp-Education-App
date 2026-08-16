@@ -35,6 +35,7 @@ import { LinkDirectoryTutorStudentDialog } from "@/features/directory/presentati
 import { ManageLinkedStudentsDialog } from "@/features/directory/presentation/components/ManageLinkedStudentsDialog";
 import { ManageTeacherClassSectionsDialog } from "@/features/directory/presentation/components/ManageTeacherClassSectionsDialog";
 import { StudentAssignedPeopleDialog } from "@/features/directory/presentation/components/StudentAssignedPeopleDialog";
+import { formatDirectoryListDisplayRoles } from "@/features/directory/presentation/utils/directoryRoles";
 import {
   useDirectoryCampusAdminsQuery,
   useDirectoryCampusesQuery,
@@ -386,10 +387,11 @@ function mapParent(item: DirectoryParent): PreviewItem {
     item.accountStatus,
     item.isActive,
   );
+  const rolesLabel = formatDirectoryListDisplayRoles(item.roles, "Parent");
   return {
     id: `parent-${item.parentId}`,
     title: item.fullName,
-    subtitle: "",
+    subtitle: rolesLabel ?? "",
     meta: item.username,
     parentId: item.parentId,
     linkedStudents: item.linkedStudents ?? [],
@@ -397,6 +399,7 @@ function mapParent(item: DirectoryParent): PreviewItem {
     stats: [{ label: "Children", value: item.linkedStudentCount }],
     details: [
       detailOrDash("Username", item.username || null),
+      ...(rolesLabel ? [{ label: "Roles", value: rolesLabel }] : []),
       detailOrDash("Children", item.linkedStudentCount),
       detailOrDash("Mobile", item.mobileNumber),
       detailOrDash("CNIC", item.cnic),
@@ -420,10 +423,11 @@ function mapTutor(item: DirectoryTutor): PreviewItem {
   );
   const linkedNames =
     item.linkedStudentNames?.filter((name) => name.trim().length > 0) ?? [];
+  const rolesLabel = formatDirectoryListDisplayRoles(item.roles, "Tutor");
   return {
     id: `tutor-${item.tutorId}`,
     title: item.fullName,
-    subtitle: "",
+    subtitle: rolesLabel ?? "",
     meta: item.username,
     username: item.username,
     tutorId: item.tutorId,
@@ -431,6 +435,7 @@ function mapTutor(item: DirectoryTutor): PreviewItem {
     stats: [{ label: "Students", value: item.linkedStudentCount }],
     details: [
       detailOrDash("Username", item.username || null),
+      ...(rolesLabel ? [{ label: "Roles", value: rolesLabel }] : []),
       detailOrDash("Linked students", item.linkedStudentCount),
       detailOrDash(
         "Student names",
@@ -1535,7 +1540,9 @@ export function DirectoryOverviewPage() {
           studentName={assignedPeopleTarget.title}
           teachers={assignedPeopleTarget.teacherNames ?? []}
           parents={assignedPeopleTarget.parentNames ?? []}
-          tutors={assignedPeopleTarget.tutorNames ?? []}
+          tutors={
+            canManageTutors ? (assignedPeopleTarget.tutorNames ?? []) : null
+          }
           onClose={() => setAssignedPeopleTarget(null)}
         />
       ) : null}

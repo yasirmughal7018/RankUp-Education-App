@@ -233,6 +233,8 @@ export interface DirectoryLinkedStudentSummary {
   campusName?: string | null;
   grade?: number | null;
   section?: string | null;
+  isActive?: boolean;
+  accountStatus?: DirectoryAccountStatus | string | null;
 }
 
 export interface DirectoryParent extends DirectoryAccountAuditFields {

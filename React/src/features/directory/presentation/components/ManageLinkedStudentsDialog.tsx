@@ -3,6 +3,7 @@ import { Unlink } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import type { DirectoryLinkedStudentSummary } from "@/features/directory/domain/directoryTypes";
 import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
+import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
 import { AppSearchInput } from "@/components/ui/app-search-input";
 import { Button } from "@/components/ui/button";
 
@@ -66,6 +67,7 @@ function studentMatchesQuery(
     student.campusName,
     student.section,
     student.grade != null ? String(student.grade) : null,
+    student.accountStatus,
     formatClass(student),
     formatPlacement(student),
   ]
@@ -206,9 +208,16 @@ export function ManageLinkedStudentsDialog({
                       )}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium leading-tight text-slate-900">
-                        {student.fullName}
-                      </p>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className="truncate text-sm font-medium leading-tight text-slate-900">
+                          {student.fullName}
+                        </p>
+                        <AccountStatusBadge
+                          accountStatus={student.accountStatus}
+                          isActive={student.isActive ?? true}
+                          size="sm"
+                        />
+                      </div>
                       <p className="truncate text-[11px] leading-tight text-slate-500">
                         {student.username}
                       </p>

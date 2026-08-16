@@ -700,7 +700,9 @@ public sealed class DirectoryService : IDirectoryService
                 "—",
                 "—",
                 row.Grade,
-                row.Section))
+                row.Section,
+                row.IsActive,
+                row.AccountStatus))
             .ToArray();
 
         return new DirectoryTeacherResponse(
@@ -1843,7 +1845,7 @@ public sealed class DirectoryService : IDirectoryService
         long userId,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsurePortalAdmin();
 
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundAppException("Coordinator was not found.");
@@ -2834,7 +2836,7 @@ public sealed class DirectoryService : IDirectoryService
         long teacherId,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsurePortalAdmin();
 
         var user = await _users.GetByIdAsync(teacherId, cancellationToken)
             ?? throw new NotFoundAppException("Teacher was not found.");
@@ -2982,6 +2984,12 @@ public sealed class DirectoryService : IDirectoryService
             EnsureCampusAccess(user.CampusId);
         }
 
+        // Parent / Tutor companion roles are PortalAdmin-only (same as granting them).
+        if (roleToRemove is UserRole.Parent or UserRole.Tutor)
+        {
+            EnsurePortalAdmin();
+        }
+
         if (!user.HasRole(contextRole))
         {
             throw new NotFoundAppException($"{contextRole} was not found.");
@@ -3084,7 +3092,7 @@ public sealed class DirectoryService : IDirectoryService
         long teacherId,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsurePortalAdmin();
 
         var user = await _users.GetByIdAsync(teacherId, cancellationToken)
             ?? throw new NotFoundAppException("Teacher was not found.");
@@ -3119,7 +3127,7 @@ public sealed class DirectoryService : IDirectoryService
         long userId,
         CancellationToken cancellationToken)
     {
-        EnsureAdmin();
+        EnsurePortalAdmin();
 
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundAppException("Coordinator was not found.");
@@ -3303,6 +3311,8 @@ public sealed class DirectoryService : IDirectoryService
 
         if (alsoParent && !user.HasRole(UserRole.Parent))
         {
+            EnsurePortalAdmin();
+
             try
             {
                 user.AddRole(UserRole.Parent, DateTimeOffset.UtcNow);

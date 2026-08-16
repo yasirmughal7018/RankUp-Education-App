@@ -564,6 +564,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 studentUser.CampusId,
                 student.Grade,
                 student.Section,
+                studentUser.IsActive,
+                HasPassword = studentUser.PasswordHash != null && studentUser.PasswordHash != "",
+                IsRejected = studentUser.RejectedAt != null,
             };
 
         if (schoolId is not null)
@@ -589,6 +592,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .ToArray();
         var linkedSchoolNames = await GetSchoolNamesAsync(linkedSchoolIds, cancellationToken);
         var linkedCampusNames = await GetCampusNamesAsync(linkedCampusIds, cancellationToken);
+        var linkedStudentLockedSet = await GetLockedUserIdsAsync(
+            linkedStudents.Select(row => row.StudentId).Distinct().ToArray(),
+            cancellationToken);
 
         var linkedByParent = linkedStudents
             .GroupBy(item => item.ParentId)
@@ -607,7 +613,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
                             ? linkedCampusNames.GetValueOrDefault(campusKey, "—")
                             : "—",
                         item.Grade,
-                        item.Section))
+                        item.Section,
+                        item.IsActive,
+                        DirectoryAccountStatuses.Resolve(
+                            item.IsActive,
+                            item.HasPassword,
+                            item.IsRejected,
+                            linkedStudentLockedSet.Contains(item.StudentId))))
                     .ToArray());
 
         var lockedSet = await GetLockedUserIdsAsync(parentIds, cancellationToken);
@@ -699,6 +711,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 studentUser.CampusId,
                 student.Grade,
                 student.Section,
+                studentUser.IsActive,
+                HasPassword = studentUser.PasswordHash != null && studentUser.PasswordHash != "",
+                IsRejected = studentUser.RejectedAt != null,
             })
             .ToListAsync(cancellationToken);
 
@@ -714,6 +729,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .ToArray();
         var linkedSchoolNames = await GetSchoolNamesAsync(linkedSchoolIds, cancellationToken);
         var linkedCampusNames = await GetCampusNamesAsync(linkedCampusIds, cancellationToken);
+        var linkedStudentLockedSet = await GetLockedUserIdsAsync(
+            linkedStudents.Select(row => row.StudentId).Distinct().ToArray(),
+            cancellationToken);
 
         var linkedByTutor = linkedStudents
             .GroupBy(item => item.TutorId)
@@ -732,7 +750,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
                             ? linkedCampusNames.GetValueOrDefault(campusKey, "—")
                             : "—",
                         item.Grade,
-                        item.Section))
+                        item.Section,
+                        item.IsActive,
+                        DirectoryAccountStatuses.Resolve(
+                            item.IsActive,
+                            item.HasPassword,
+                            item.IsRejected,
+                            linkedStudentLockedSet.Contains(item.StudentId))))
                     .ToArray());
 
         var lockedSet = await GetLockedUserIdsAsync(tutorIds, cancellationToken);
@@ -1409,6 +1433,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     user.AvatarUrl,
                     student.Grade,
                     student.Section,
+                    user.IsActive,
+                    HasPassword = user.PasswordHash != null && user.PasswordHash != "",
                 })
                 .ToListAsync(cancellationToken);
 
@@ -1425,7 +1451,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     schoolName,
                     campusName,
                     row.Grade,
-                    row.Section))
+                    row.Section,
+                    row.IsActive,
+                    DirectoryAccountStatuses.Resolve(
+                        row.IsActive,
+                        row.HasPassword,
+                        isRejected: false,
+                        isLockedPendingSchoolChange: false)))
                 .ToArray();
         }
 
@@ -1484,6 +1516,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     user.AvatarUrl,
                     student.Grade,
                     student.Section,
+                    user.IsActive,
+                    HasPassword = user.PasswordHash != null && user.PasswordHash != "",
                 })
                 .ToListAsync(cancellationToken);
 
@@ -1499,7 +1533,13 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     schoolName,
                     campusName,
                     row.Grade,
-                    row.Section))
+                    row.Section,
+                    row.IsActive,
+                    DirectoryAccountStatuses.Resolve(
+                        row.IsActive,
+                        row.HasPassword,
+                        isRejected: false,
+                        isLockedPendingSchoolChange: false)))
                 .ToArray();
         }
 

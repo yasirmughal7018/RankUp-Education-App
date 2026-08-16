@@ -55,6 +55,7 @@ import {
   type DirectoryAccountStatusFilter,
 } from "@/features/directory/presentation/utils/accountStatus";
 import {
+  formatDirectoryListDisplayRoles,
   getRemovableDirectoryRoles,
   type DirectoryCombinableRole,
 } from "@/features/directory/presentation/utils/directoryRoles";
@@ -93,6 +94,8 @@ export function DirectoryCoordinatorsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
   const isPortalAdmin = user?.role === "PortalAdmin";
+  const canGrantParentRole = isPortalAdmin;
+  const canGrantTutorRole = isPortalAdmin;
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isCampusAdmin = user?.role === "CampusAdmin";
   const lockedSchoolId =
@@ -350,7 +353,10 @@ export function DirectoryCoordinatorsPage() {
     const hasParentRole = roles.includes("Parent");
     const hasTeacherRole = roles.includes("Teacher");
     const hasTutorRole = roles.includes("Tutor");
-    const removableRoles = getRemovableDirectoryRoles(roles, "Coordinator");
+    const removableRoles = getRemovableDirectoryRoles(roles, "Coordinator", {
+      includeParent: canGrantParentRole,
+      includeTutor: canGrantTutorRole,
+    });
     const overflowItems = [
       {
         id: "toggle-active",
@@ -372,7 +378,7 @@ export function DirectoryCoordinatorsPage() {
             },
           ]
         : []),
-      ...(!hasParentRole
+      ...(canGrantParentRole && !hasParentRole
         ? [
             {
               id: "add-parent",
@@ -385,7 +391,7 @@ export function DirectoryCoordinatorsPage() {
             },
           ]
         : []),
-      ...(!hasTutorRole
+      ...(canGrantTutorRole && !hasTutorRole
         ? [
             {
               id: "add-tutor",
@@ -592,7 +598,15 @@ export function DirectoryCoordinatorsPage() {
                 canManage ? () => toggleSelect(coordinator.userId) : undefined
               }
               title={coordinator.fullName}
-              subtitle={coordinator.username}
+              subtitle={(() => {
+                const rolesLabel = formatDirectoryListDisplayRoles(
+                  coordinator.roles,
+                  "Coordinator",
+                );
+                return rolesLabel
+                  ? `${coordinator.username} · ${rolesLabel}`
+                  : coordinator.username;
+              })()}
               badge={
                 <AccountStatusBadge
                   accountStatus={coordinator.accountStatus}
@@ -635,7 +649,12 @@ export function DirectoryCoordinatorsPage() {
             <DirectoryTh align="right">Actions</DirectoryTh>
           </DirectoryTableHead>
           <tbody className="divide-y divide-border">
-            {visibleCoordinators.map((coordinator) => (
+            {visibleCoordinators.map((coordinator) => {
+              const rolesLabel = formatDirectoryListDisplayRoles(
+                coordinator.roles,
+                "Coordinator",
+              );
+              return (
               <tr
                 key={coordinator.userId}
                 className="transition hover:bg-muted/40"
@@ -656,6 +675,11 @@ export function DirectoryCoordinatorsPage() {
                   <p className="text-xs text-muted-foreground">
                     {coordinator.username}
                   </p>
+                  {rolesLabel ? (
+                    <p className="mt-0.5 text-xs font-medium text-primary">
+                      Roles: {rolesLabel}
+                    </p>
+                  ) : null}
                 </DirectoryTd>
                 <DirectoryTd>{coordinator.teacherCode || "—"}</DirectoryTd>
                 <DirectoryTd className="text-muted-foreground">
@@ -681,7 +705,8 @@ export function DirectoryCoordinatorsPage() {
                   </div>
                 </DirectoryTd>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </DirectoryTable>
       </DirectoryListPanel>

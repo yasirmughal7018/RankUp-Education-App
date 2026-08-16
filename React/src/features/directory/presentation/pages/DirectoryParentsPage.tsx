@@ -59,6 +59,7 @@ import {
   type DirectoryAccountStatusFilter,
 } from "@/features/directory/presentation/utils/accountStatus";
 import {
+  formatDirectoryListDisplayRoles,
   getRemovableDirectoryRoles,
   type DirectoryCombinableRole,
 } from "@/features/directory/presentation/utils/directoryRoles";
@@ -598,11 +599,15 @@ export function DirectoryParentsPage() {
                 canManage ? () => toggleSelect(parent.parentId) : undefined
               }
               title={parent.fullName}
-              subtitle={
-                (parent.roles?.length ?? 0) > 1
-                  ? `${parent.username} · ${parent.roles?.join(", ")}`
-                  : parent.username
-              }
+              subtitle={(() => {
+                const rolesLabel = formatDirectoryListDisplayRoles(
+                  parent.roles,
+                  "Parent",
+                );
+                return rolesLabel
+                  ? `${parent.username} · ${rolesLabel}`
+                  : parent.username;
+              })()}
               badge={
                 <AccountStatusBadge
                   accountStatus={parent.accountStatus}
@@ -635,7 +640,12 @@ export function DirectoryParentsPage() {
             {canView ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
           </DirectoryTableHead>
           <tbody className="divide-y divide-border">
-            {visibleParents.map((parent) => (
+            {visibleParents.map((parent) => {
+              const rolesLabel = formatDirectoryListDisplayRoles(
+                parent.roles,
+                "Parent",
+              );
+              return (
               <tr
                 key={parent.parentId}
                 className="transition hover:bg-muted/40"
@@ -656,9 +666,9 @@ export function DirectoryParentsPage() {
                   <p className="text-xs text-muted-foreground">
                     {parent.username}
                   </p>
-                  {(parent.roles?.length ?? 0) > 1 ? (
+                  {rolesLabel ? (
                     <p className="mt-0.5 text-xs font-medium text-primary">
-                      Roles: {parent.roles?.join(", ")}
+                      Roles: {rolesLabel}
                     </p>
                   ) : null}
                 </DirectoryTd>
@@ -685,7 +695,8 @@ export function DirectoryParentsPage() {
                   </DirectoryTd>
                 ) : null}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </DirectoryTable>
       </DirectoryListPanel>

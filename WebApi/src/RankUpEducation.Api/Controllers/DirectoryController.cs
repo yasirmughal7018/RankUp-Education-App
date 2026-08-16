@@ -364,7 +364,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Adds the Parent role to an existing Teacher account.</summary>
     [HttpPost("teachers/{teacherId:long}/roles/parent")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> GrantParentRoleToTeacherAsync(
         long teacherId,
         CancellationToken cancellationToken)
@@ -607,7 +607,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Adds the Tutor role to an existing Teacher account.</summary>
     [HttpPost("teachers/{teacherId:long}/roles/tutor")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTutorResponse>>> GrantTutorRoleToTeacherAsync(
         long teacherId,
         CancellationToken cancellationToken)
@@ -618,7 +618,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Adds the Tutor role to an existing Coordinator account.</summary>
     [HttpPost("coordinators/{userId:long}/roles/tutor")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTutorResponse>>> GrantTutorRoleToCoordinatorAsync(
         long userId,
         CancellationToken cancellationToken)
@@ -905,7 +905,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Adds the Parent role to an existing Coordinator account.</summary>
     [HttpPost("coordinators/{userId:long}/roles/parent")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> GrantParentRoleToCoordinatorAsync(
         long userId,
         CancellationToken cancellationToken)

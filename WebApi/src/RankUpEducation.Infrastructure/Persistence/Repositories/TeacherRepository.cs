@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RankUpEducation.Application.Directory;
 using RankUpEducation.Application.Teachers;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Teachers;
@@ -140,6 +141,8 @@ public sealed class TeacherRepository : ITeacherRepository
                 RollNumber = user.RollNumberTeacherCode ?? string.Empty,
                 student.Grade,
                 student.Section,
+                user.IsActive,
+                HasPassword = user.PasswordHash != null && user.PasswordHash != "",
             })
             .ToListAsync(cancellationToken);
 
@@ -155,7 +158,13 @@ public sealed class TeacherRepository : ITeacherRepository
                 row.Username,
                 row.RollNumber,
                 row.Grade,
-                row.Section))
+                row.Section,
+                row.IsActive,
+                DirectoryAccountStatuses.Resolve(
+                    row.IsActive,
+                    row.HasPassword,
+                    isRejected: false,
+                    isLockedPendingSchoolChange: false)))
             .ToArray();
     }
 

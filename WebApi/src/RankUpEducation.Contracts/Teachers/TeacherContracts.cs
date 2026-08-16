@@ -8,7 +8,9 @@ public sealed record TeacherRosterStudentResponse(
     string Username,
     string RollNumber,
     short Grade,
-    string Section);
+    string Section,
+    bool IsActive = true,
+    string AccountStatus = "Active");
 
 public sealed record TeacherRosterListResponse(
     IReadOnlyList<TeacherClassSectionItem> ClassSections,
