@@ -541,8 +541,9 @@ export function DirectoryStudentsPage() {
       {assignedPeopleTarget ? (
         <StudentAssignedPeopleDialog
           studentName={assignedPeopleTarget.fullName}
-          teachers={assignedPeopleTarget.teacherNames ?? []}
           parents={assignedPeopleTarget.parentNames ?? []}
+          coordinators={assignedPeopleTarget.coordinatorNames ?? []}
+          teachers={assignedPeopleTarget.teacherNames ?? []}
           tutors={
             canViewTutors ? (assignedPeopleTarget.tutorNames ?? []) : null
           }

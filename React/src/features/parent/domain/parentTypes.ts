@@ -36,5 +36,9 @@ export interface ChildQuizHistory {
 }
 
 export function formatStudentLabel(student: LinkedStudent): string {
-  return `${student.fullName} (Grade ${student.grade}${student.section})`;
+  const section = student.section?.trim();
+  const classPart = section
+    ? `Grade ${student.grade} · ${section}`
+    : `Grade ${student.grade}`;
+  return `${student.fullName} (${classPart})`;
 }

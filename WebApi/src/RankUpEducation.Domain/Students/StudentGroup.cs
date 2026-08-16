@@ -27,7 +27,7 @@ public sealed class StudentGroup : BaseEntity
     public bool IsActive { get; private set; } = true;
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly UpdatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
-    /// <summary>Lookup id for UserRole (Teacher/Parent) of the group owner.</summary>
+    /// <summary>Lookup id for UserRole (Teacher/Parent/Coordinator/Tutor) of the group owner.</summary>
     public UserRole? CreatorRole { get; private set; }
 
     public void Update(string groupName, string description)

@@ -1,4 +1,5 @@
 using RankUpEducation.Contracts.Teachers;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
 
@@ -25,6 +26,13 @@ public interface ITeacherRepository
         int campusId,
         CancellationToken cancellationToken);
 
+    /// <summary>Students in the given grades at school/campus (coordinator whole-class scope).</summary>
+    Task<IReadOnlyList<TeacherRosterStudentResponse>> GetRosterStudentsByGradesAsync(
+        int schoolId,
+        int campusId,
+        IReadOnlyList<short> grades,
+        CancellationToken cancellationToken);
+
     Task<bool> IsStudentInRosterAsync(
         long teacherId,
         long studentId,
@@ -33,12 +41,14 @@ public interface ITeacherRepository
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<StudentGroup>> ListGroupsAsync(
-        long teacherId,
+        long ownerUserId,
+        UserRole creatorRole,
         CancellationToken cancellationToken);
 
     Task<StudentGroup?> GetGroupAsync(
         long groupId,
-        long teacherId,
+        long ownerUserId,
+        UserRole creatorRole,
         CancellationToken cancellationToken);
 
     Task AddGroupAsync(StudentGroup group, CancellationToken cancellationToken);

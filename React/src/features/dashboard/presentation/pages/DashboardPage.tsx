@@ -21,6 +21,7 @@ import {
 import { canManageQuestions } from "@/features/questions/domain/questionTypes";
 import { canManageQuizzes } from "@/features/quizzes/domain/quizTypes";
 import { canTakeStudentQuizzes } from "@/features/student/domain/studentQuizTypes";
+import { TeacherAssignedClassesCard } from "@/features/teacher/presentation/components/TeacherAssignedClassesCard";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { AppStatCard } from "@/components/ui/app-stat-card";
 import { AppCard } from "@/components/ui/app-card";
@@ -46,6 +47,7 @@ const roleModules: Record<UserRole, string[]> = {
     "Approve teacher quizzes",
   ],
   Teacher: [
+    "See your assigned classes and sections",
     "Create and assign quizzes",
     "Monitor live quiz attempts",
     "Review student submissions",
@@ -63,6 +65,7 @@ const roleModules: Record<UserRole, string[]> = {
     "Monitor child assignments",
   ],
   Coordinator: [
+    "See your assigned classes and sections",
     "Create and assign quizzes",
     "Monitor live quiz attempts",
     "Review student submissions",
@@ -96,6 +99,7 @@ function quickLinksForRole(
   }
   if (role === "Teacher" || role === "Coordinator") {
     return [
+      { label: "My students", href: "/teacher/students", icon: GraduationCap, hint: "Classes & roster" },
       { label: "Quizzes", href: "/quizzes", icon: ClipboardList, hint: "Create & assign" },
       { label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Build items" },
       { label: "Assignments", href: "/quizzes/assignments", icon: Users, hint: "Class board" },
@@ -159,6 +163,8 @@ export function DashboardPage() {
   const quickLinks = quickLinksForRole(user.role);
   const action = primaryAction(user.role);
   const firstName = (user.fullName || user.name || user.username).split(" ")[0];
+  const showTeacherClasses =
+    user.role === "Teacher" || user.role === "Coordinator";
 
   return (
     <div className="space-y-7">
@@ -206,6 +212,8 @@ export function DashboardPage() {
           colorVariant="neutral"
         />
       </div>
+
+      {showTeacherClasses ? <TeacherAssignedClassesCard /> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <AppCard>

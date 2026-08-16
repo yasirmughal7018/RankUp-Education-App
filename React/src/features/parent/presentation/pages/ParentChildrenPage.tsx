@@ -86,13 +86,21 @@ export function ParentChildrenPage() {
                 key={student.studentId}
                 className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
               >
-                <div>
-                  <p className="font-medium text-slate-900">
-                    {formatStudentLabel(student)}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-slate-900">
+                      {formatStudentLabel(student)}
+                    </p>
+                    <span className="inline-flex max-w-full truncate rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-800">
+                      {student.relationship?.trim() || "Guardian"}
+                    </span>
+                  </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    @{student.username} · ID {student.studentId} · Roll{" "}
-                    {student.rollNumber} · {student.relationship}
+                    {student.username}
+                    <span className="mx-1.5 text-slate-300" aria-hidden>
+                      ·
+                    </span>
+                    Roll {student.rollNumber?.trim() || "—"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

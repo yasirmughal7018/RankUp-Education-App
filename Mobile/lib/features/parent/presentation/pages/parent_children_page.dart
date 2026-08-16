@@ -113,6 +113,7 @@ class _ParentChildrenPageState extends ConsumerState<ParentChildrenPage> {
 
                 final student =
                     students[_successMessage != null ? index - 1 : index];
+                final theme = Theme.of(context);
                 return Card(
                   child: ListTile(
                     leading: CircleAvatar(
@@ -122,9 +123,39 @@ class _ParentChildrenPageState extends ConsumerState<ParentChildrenPage> {
                             : '?',
                       ),
                     ),
-                    title: Text(student.label),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            student.label,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Chip(
+                          label: Text(
+                            student.relationship.trim().isEmpty
+                                ? 'Guardian'
+                                : student.relationship.trim(),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          padding: EdgeInsets.zero,
+                          labelPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          side: BorderSide.none,
+                        ),
+                      ],
+                    ),
                     subtitle: Text(
-                      '@${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber} · ${student.relationship}',
+                      '${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push(

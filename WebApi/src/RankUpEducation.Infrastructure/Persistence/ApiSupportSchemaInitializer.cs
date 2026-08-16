@@ -1214,7 +1214,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                     ADD CONSTRAINT chk_app_users_role
                     CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]));
 
-                -- student_groups.creator_role: text -> lookup id (Parent=2013, Teacher=2014)
+                -- student_groups.creator_role: text -> lookup id (Parent=2013, Teacher=2014, Coordinator=2016, Tutor=2017)
                 IF EXISTS (
                     SELECT 1
                     FROM information_schema.columns
@@ -1230,6 +1230,8 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                     SET creator_role_id = CASE lower(creator_role)
                         WHEN 'parent' THEN 2013
                         WHEN 'teacher' THEN 2014
+                        WHEN 'coordinator' THEN 2016
+                        WHEN 'tutor' THEN 2017
                         ELSE NULL
                     END
                     WHERE creator_role_id IS NULL;
@@ -1243,7 +1245,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
                 ALTER TABLE public.student_groups
                     ADD CONSTRAINT chk_creator_role_type
-                    CHECK (creator_role IS NULL OR creator_role = ANY (ARRAY[2013, 2014]::int2[]));
+                    CHECK (creator_role IS NULL OR creator_role = ANY (ARRAY[2013, 2014, 2016, 2017]::int2[]));
 
                 ALTER TABLE public.student_groups
                     ADD CONSTRAINT student_groups_refral_id_and_role_fkey
@@ -1343,6 +1345,12 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_user_roles
             ADD CONSTRAINT chk_app_user_roles_role
             CHECK (role = ANY (ARRAY[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]::int2[]));
+
+        -- Allow Coordinator/Tutor as student_groups.creator_role (was Parent/Teacher only).
+        ALTER TABLE public.student_groups DROP CONSTRAINT IF EXISTS chk_creator_role_type;
+        ALTER TABLE public.student_groups
+            ADD CONSTRAINT chk_creator_role_type
+            CHECK (creator_role IS NULL OR creator_role = ANY (ARRAY[2013, 2014, 2016, 2017]::int2[]));
         """;
 
     private const string DropAppUsersRoleAndAdminTargetSql = """

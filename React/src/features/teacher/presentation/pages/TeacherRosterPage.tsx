@@ -545,7 +545,7 @@ function SearchResultsList({
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   Grade {student.grade}
-                  {student.section} · @{student.username} · Roll{" "}
+                  {student.section} · {student.username} · Roll{" "}
                   {student.rollNumber || "—"}
                 </p>
               </div>
@@ -603,7 +603,7 @@ function StudentListPanel({
                 {student.fullName}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                @{student.username} · Roll {student.rollNumber || "—"}
+                {student.username} · Roll {student.rollNumber || "—"}
               </p>
             </div>
           </li>
@@ -837,7 +837,7 @@ function GroupsPanel({
                         {formatRosterStudent(member as TeacherRosterStudent)}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
-                        @{member.username}
+                        {member.username}
                       </p>
                     </div>
                     <Button

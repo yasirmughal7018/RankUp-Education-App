@@ -94,6 +94,7 @@ public sealed record DirectoryStudentResponse(
     string SchoolName,
     string CampusName,
     IReadOnlyList<string> TeacherNames,
+    IReadOnlyList<string> CoordinatorNames,
     IReadOnlyList<string> ParentNames,
     IReadOnlyList<string> TutorNames,
     string? MobileNumber,

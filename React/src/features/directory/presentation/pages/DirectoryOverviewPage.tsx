@@ -90,6 +90,7 @@ type PreviewItem = {
   /** Present only for student tiles — assigned people popup. */
   studentId?: number;
   teacherNames?: string[];
+  coordinatorNames?: string[];
   parentNames?: string[];
   tutorNames?: string[];
   /** Present only for parent tiles — child link actions. */
@@ -362,6 +363,7 @@ function mapStudent(item: DirectoryStudent): PreviewItem {
     username: item.username,
     studentId: item.studentId,
     teacherNames: item.teacherNames ?? [],
+    coordinatorNames: item.coordinatorNames ?? [],
     parentNames: item.parentNames ?? [],
     tutorNames: item.tutorNames ?? [],
     details: [
@@ -1538,8 +1540,9 @@ export function DirectoryOverviewPage() {
       {assignedPeopleTarget ? (
         <StudentAssignedPeopleDialog
           studentName={assignedPeopleTarget.title}
-          teachers={assignedPeopleTarget.teacherNames ?? []}
           parents={assignedPeopleTarget.parentNames ?? []}
+          coordinators={assignedPeopleTarget.coordinatorNames ?? []}
+          teachers={assignedPeopleTarget.teacherNames ?? []}
           tutors={
             canManageTutors ? (assignedPeopleTarget.tutorNames ?? []) : null
           }

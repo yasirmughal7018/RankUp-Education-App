@@ -308,7 +308,7 @@ class _SearchResults extends StatelessWidget {
               onTap: () => onOpen(student),
               title: Text(student.fullName),
               subtitle: Text(
-                'Grade ${student.grade}${student.section} · @${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}',
+                'Grade ${student.grade}${student.section} · ${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}',
               ),
             ),
           ),
@@ -328,7 +328,7 @@ class _StudentTile extends StatelessWidget {
       child: ListTile(
         title: Text(student.fullName),
         subtitle: Text(
-          '@${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}',
+          '${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}',
         ),
       ),
     );

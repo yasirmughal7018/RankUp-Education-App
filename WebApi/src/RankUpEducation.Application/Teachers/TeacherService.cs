@@ -1,7 +1,9 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
+using RankUpEducation.Application.Coordinators;
 using RankUpEducation.Application.Directory;
 using RankUpEducation.Common.Utilities;
+using RankUpEducation.Contracts.Directory;
 using RankUpEducation.Contracts.Teachers;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Students;
@@ -46,6 +48,7 @@ public sealed class TeacherService : ITeacherService
     private readonly ICurrentUserService _currentUser;
     private readonly IUserRepository _users;
     private readonly ITeacherRepository _teachers;
+    private readonly ICoordinatorRepository _coordinators;
     private readonly IDirectoryRepository _directory;
     private readonly IUnitOfWork _unitOfWork;
 
@@ -53,28 +56,49 @@ public sealed class TeacherService : ITeacherService
         ICurrentUserService currentUser,
         IUserRepository users,
         ITeacherRepository teachers,
+        ICoordinatorRepository coordinators,
         IDirectoryRepository directory,
         IUnitOfWork unitOfWork)
     {
         _currentUser = currentUser;
         _users = users;
         _teachers = teachers;
+        _coordinators = coordinators;
         _directory = directory;
         _unitOfWork = unitOfWork;
     }
 
     public async Task<TeacherRosterListResponse> GetMyRosterAsync(CancellationToken cancellationToken)
     {
-        var (teacherId, schoolId, campusId) = await EnsureTeacherContextAsync(cancellationToken);
-        var classSections = await _teachers.GetClassSectionsAsync(teacherId, cancellationToken);
-        var students = await _teachers.GetRosterStudentsAsync(teacherId, schoolId, campusId, cancellationToken);
-        return new TeacherRosterListResponse(classSections, students);
+        var (userId, schoolId, campusId) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
+
+        if (IsActingAsCoordinator())
+        {
+            var coordinatorGrades = await _coordinators.GetClassSectionsAsync(userId, cancellationToken);
+            var grades = coordinatorGrades.Select(item => item.Grade).Distinct().ToArray();
+            var students = await _teachers.GetRosterStudentsByGradesAsync(
+                schoolId,
+                campusId,
+                grades,
+                cancellationToken);
+            var classSections = BuildCoordinatorClassSectionItems(coordinatorGrades, students);
+            return new TeacherRosterListResponse(classSections, students);
+        }
+
+        var teacherSections = await _teachers.GetClassSectionsAsync(userId, cancellationToken);
+        var teacherStudents = await _teachers.GetRosterStudentsAsync(
+            userId,
+            schoolId,
+            campusId,
+            cancellationToken);
+        return new TeacherRosterListResponse(teacherSections, teacherStudents);
     }
 
     public async Task<TeacherGroupListResponse> ListMyGroupsAsync(CancellationToken cancellationToken)
     {
-        var (teacherId, _, _) = await EnsureTeacherContextAsync(cancellationToken);
-        var groups = await _teachers.ListGroupsAsync(teacherId, cancellationToken);
+        var (userId, _, _) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
+        var creatorRole = ActiveCreatorRole();
+        var groups = await _teachers.ListGroupsAsync(userId, creatorRole, cancellationToken);
         var items = new List<TeacherGroupResponse>();
         foreach (var group in groups)
         {
@@ -88,7 +112,7 @@ public sealed class TeacherService : ITeacherService
         CreateTeacherGroupRequest request,
         CancellationToken cancellationToken)
     {
-        var (teacherId, _, _) = await EnsureTeacherContextAsync(cancellationToken);
+        var (userId, _, _) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
         var name = request.GroupName.AsTrimmedOrNull()
             ?? throw new ValidationAppException(["Group name is required."]);
         if (name.Length > 50)
@@ -102,7 +126,8 @@ public sealed class TeacherService : ITeacherService
             throw new ValidationAppException(["Description must be 200 characters or fewer."]);
         }
 
-        var group = new StudentGroup(teacherId, name, description, UserRole.Teacher);
+        var creatorRole = ActiveCreatorRole();
+        var group = new StudentGroup(userId, name, description, creatorRole);
         await _teachers.AddGroupAsync(group, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await MapGroupAsync(group, cancellationToken);
@@ -113,8 +138,8 @@ public sealed class TeacherService : ITeacherService
         UpdateTeacherGroupRequest request,
         CancellationToken cancellationToken)
     {
-        var (teacherId, _, _) = await EnsureTeacherContextAsync(cancellationToken);
-        var group = await _teachers.GetGroupAsync(groupId, teacherId, cancellationToken)
+        var (userId, _, _) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
+        var group = await _teachers.GetGroupAsync(groupId, userId, ActiveCreatorRole(), cancellationToken)
             ?? throw new NotFoundAppException("Student group was not found.");
 
         var name = request.GroupName.AsTrimmedOrNull()
@@ -142,8 +167,8 @@ public sealed class TeacherService : ITeacherService
 
     public async Task DeactivateGroupAsync(long groupId, CancellationToken cancellationToken)
     {
-        var (teacherId, _, _) = await EnsureTeacherContextAsync(cancellationToken);
-        var group = await _teachers.GetGroupAsync(groupId, teacherId, cancellationToken)
+        var (userId, _, _) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
+        var group = await _teachers.GetGroupAsync(groupId, userId, ActiveCreatorRole(), cancellationToken)
             ?? throw new NotFoundAppException("Student group was not found.");
         group.Deactivate();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -154,8 +179,8 @@ public sealed class TeacherService : ITeacherService
         AddTeacherGroupMemberRequest request,
         CancellationToken cancellationToken)
     {
-        var (teacherId, schoolId, campusId) = await EnsureTeacherContextAsync(cancellationToken);
-        var group = await _teachers.GetGroupAsync(groupId, teacherId, cancellationToken)
+        var (userId, schoolId, campusId) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
+        var group = await _teachers.GetGroupAsync(groupId, userId, ActiveCreatorRole(), cancellationToken)
             ?? throw new NotFoundAppException("Student group was not found.");
         if (!group.IsActive)
         {
@@ -167,15 +192,15 @@ public sealed class TeacherService : ITeacherService
             throw new ValidationAppException(["Select a student to add."]);
         }
 
-        if (!await _teachers.IsStudentInRosterAsync(
-                teacherId,
+        if (!await IsStudentInActiveRosterAsync(
+                userId,
                 request.StudentId,
                 schoolId,
                 campusId,
                 cancellationToken))
         {
             throw new ValidationAppException([
-                "You can only add students from your assigned classes and sections."]);
+                "You can only add students from your current role’s class roster."]);
         }
 
         if (await _teachers.IsGroupMemberAsync(groupId, request.StudentId, cancellationToken))
@@ -195,8 +220,8 @@ public sealed class TeacherService : ITeacherService
         long studentId,
         CancellationToken cancellationToken)
     {
-        var (teacherId, _, _) = await EnsureTeacherContextAsync(cancellationToken);
-        _ = await _teachers.GetGroupAsync(groupId, teacherId, cancellationToken)
+        var (userId, _, _) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
+        _ = await _teachers.GetGroupAsync(groupId, userId, ActiveCreatorRole(), cancellationToken)
             ?? throw new NotFoundAppException("Student group was not found.");
         await _teachers.RemoveGroupMemberAsync(groupId, studentId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -206,16 +231,9 @@ public sealed class TeacherService : ITeacherService
         AddMyStudentRequest request,
         CancellationToken cancellationToken)
     {
-        var (teacherId, schoolId, campusId) = await EnsureTeacherContextAsync(cancellationToken);
+        var (userId, schoolId, campusId) = await EnsureTeacherOrCoordinatorContextAsync(cancellationToken);
         var identifier = request.Identifier.AsTrimmedOrNull()
             ?? throw new ValidationAppException(["Enter the student’s CNIC or username."]);
-
-        var classSections = await _teachers.GetClassSectionsAsync(teacherId, cancellationToken);
-        if (classSections.Count == 0)
-        {
-            throw new ValidationAppException([
-                "Ask an admin to assign your classes and sections before adding students."]);
-        }
 
         var section = request.Section.AsTrimmedOrNull()
             ?? throw new ValidationAppException(["Select a class and section."]);
@@ -224,20 +242,54 @@ public sealed class TeacherService : ITeacherService
             throw new ValidationAppException(["Select a class and section."]);
         }
 
-        var target = classSections.FirstOrDefault(item =>
-            item.Grade == request.Grade
-            && string.Equals(item.Section, section, StringComparison.OrdinalIgnoreCase));
-        if (target is null)
+        short targetGrade;
+        string targetSection;
+
+        if (IsActingAsCoordinator())
         {
-            throw new ValidationAppException([
-                "You can only add students to classes and sections assigned to you."]);
+            var coordinatorGrades = await _coordinators.GetClassSectionsAsync(userId, cancellationToken);
+            if (coordinatorGrades.Count == 0)
+            {
+                throw new ValidationAppException([
+                    "Ask an admin to assign your coordinator grades before adding students."]);
+            }
+
+            if (!coordinatorGrades.Any(item => item.Grade == request.Grade))
+            {
+                throw new ValidationAppException([
+                    "That grade is not one of your assigned coordinator grades."]);
+            }
+
+            targetGrade = request.Grade;
+            targetSection = section;
+        }
+        else
+        {
+            var classSections = await _teachers.GetClassSectionsAsync(userId, cancellationToken);
+            if (classSections.Count == 0)
+            {
+                throw new ValidationAppException([
+                    "Ask an admin to assign your classes and sections before adding students."]);
+            }
+
+            var target = classSections.FirstOrDefault(item =>
+                item.Grade == request.Grade
+                && string.Equals(item.Section, section, StringComparison.OrdinalIgnoreCase));
+            if (target is null)
+            {
+                throw new ValidationAppException([
+                    "You can only add students to classes and sections assigned to you."]);
+            }
+
+            targetGrade = target.Grade;
+            targetSection = target.Section;
         }
 
         var studentUser = await _users.GetByCnicAsync(identifier, cancellationToken)
             ?? await _users.GetByUsernameAsync(identifier, cancellationToken)
             ?? throw new NotFoundAppException("No student was found with that CNIC or username.");
 
-        if (studentUser.Id == teacherId)
+        if (studentUser.Id == userId)
         {
             throw new ValidationAppException(["You cannot add your own account as a student."]);
         }
@@ -268,14 +320,14 @@ public sealed class TeacherService : ITeacherService
             ?? throw new NotFoundAppException("No student was found with that CNIC or username.");
 
         var alreadyOnRoster =
-            student.Grade == target.Grade
-            && string.Equals(student.Section, target.Section, StringComparison.OrdinalIgnoreCase)
+            student.Grade == targetGrade
+            && string.Equals(student.Section, targetSection, StringComparison.OrdinalIgnoreCase)
             && studentUser.SchoolId == schoolId
             && studentUser.CampusId == campusId;
 
         if (!alreadyOnRoster)
         {
-            student.Update(target.Grade, target.Section, student.MobileNumber ?? studentUser.MobileNumber);
+            student.Update(targetGrade, targetSection, student.MobileNumber ?? studentUser.MobileNumber);
             if (studentUser.SchoolId != schoolId || studentUser.CampusId != campusId)
             {
                 studentUser.AssignSchoolCampus(schoolId, campusId);
@@ -289,26 +341,94 @@ public sealed class TeacherService : ITeacherService
             studentUser.FullName,
             studentUser.Username,
             studentUser.RollNumberTeacherCode ?? string.Empty,
-            target.Grade,
-            target.Section,
+            targetGrade,
+            targetSection,
             alreadyOnRoster);
     }
 
-    private async Task<(long TeacherId, int SchoolId, int CampusId)> EnsureTeacherContextAsync(
+    private async Task<bool> IsStudentInActiveRosterAsync(
+        long userId,
+        long studentId,
+        int schoolId,
+        int campusId,
+        CancellationToken cancellationToken)
+    {
+        if (IsActingAsCoordinator())
+        {
+            var grades = (await _coordinators.GetClassSectionsAsync(userId, cancellationToken))
+                .Select(item => item.Grade)
+                .Distinct()
+                .ToArray();
+            var roster = await _teachers.GetRosterStudentsByGradesAsync(
+                schoolId,
+                campusId,
+                grades,
+                cancellationToken);
+            return roster.Any(student => student.StudentId == studentId);
+        }
+
+        return await _teachers.IsStudentInRosterAsync(
+            userId,
+            studentId,
+            schoolId,
+            campusId,
+            cancellationToken);
+    }
+
+    private static IReadOnlyList<TeacherClassSectionItem> BuildCoordinatorClassSectionItems(
+        IReadOnlyList<CoordinatorClassSectionItem> grades,
+        IReadOnlyList<TeacherRosterStudentResponse> students)
+    {
+        var result = new List<TeacherClassSectionItem>();
+        foreach (var gradeItem in grades.OrderBy(item => item.Grade))
+        {
+            var sections = students
+                .Where(student => student.Grade == gradeItem.Grade)
+                .Select(student => student.Section.Trim())
+                .Where(section => section.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(section => section, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (sections.Length == 0)
+            {
+                result.Add(new TeacherClassSectionItem(gradeItem.Grade, string.Empty));
+            }
+            else
+            {
+                result.AddRange(
+                    sections.Select(section => new TeacherClassSectionItem(gradeItem.Grade, section)));
+            }
+        }
+
+        return result;
+    }
+
+    private bool IsActingAsCoordinator()
+        => string.Equals(
+            _currentUser.Role,
+            nameof(UserRole.Coordinator),
+            StringComparison.OrdinalIgnoreCase);
+
+    private UserRole ActiveCreatorRole()
+        => IsActingAsCoordinator() ? UserRole.Coordinator : UserRole.Teacher;
+
+    private async Task<(long UserId, int SchoolId, int CampusId)> EnsureTeacherOrCoordinatorContextAsync(
         CancellationToken cancellationToken)
     {
         if (!string.Equals(_currentUser.Role, nameof(UserRole.Teacher), StringComparison.OrdinalIgnoreCase)
             && !string.Equals(_currentUser.Role, nameof(UserRole.Coordinator), StringComparison.OrdinalIgnoreCase))
         {
-            throw new ForbiddenAppException("Only teachers can manage their class roster and groups.");
+            throw new ForbiddenAppException(
+                "Only teachers or coordinators can manage their class roster and groups.");
         }
 
-        var teacherId = _currentUser.ProfileId
+        var userId = _currentUser.ProfileId
             ?? _currentUser.UserId
-            ?? throw new ForbiddenAppException("Teacher profile was not found.");
+            ?? throw new ForbiddenAppException("Profile was not found.");
 
-        var user = await _users.GetByIdAsync(teacherId, cancellationToken)
-            ?? throw new ForbiddenAppException("Teacher profile was not found.");
+        var user = await _users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new ForbiddenAppException("Profile was not found.");
 
         if (user.SchoolId is null || user.CampusId is null)
         {
@@ -316,7 +436,7 @@ public sealed class TeacherService : ITeacherService
                 "Your account needs a school and campus before managing students."]);
         }
 
-        return (teacherId, user.SchoolId.Value, user.CampusId.Value);
+        return (userId, user.SchoolId.Value, user.CampusId.Value);
     }
 
     private async Task<TeacherGroupResponse> MapGroupAsync(

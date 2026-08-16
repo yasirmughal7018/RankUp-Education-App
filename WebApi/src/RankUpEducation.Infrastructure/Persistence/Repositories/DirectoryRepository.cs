@@ -305,6 +305,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var schoolNames = await GetSchoolNamesAsync(schoolIds, cancellationToken);
         var campusNames = await GetCampusNamesAsync(campusIds, cancellationToken);
         var teacherNamesByStudent = await GetTeacherNamesByStudentAsync(studentIds, cancellationToken);
+        var coordinatorNamesByStudent = await GetCoordinatorNamesByStudentAsync(studentIds, cancellationToken);
         var parentNamesByStudent = await GetParentNamesByStudentAsync(studentIds, cancellationToken);
         var tutorNamesByStudent = await GetTutorNamesByStudentAsync(studentIds, cancellationToken);
         var approvalHistory = await GetApprovalHistoryByUserIdsAsync(studentIds, cancellationToken);
@@ -324,6 +325,7 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 schoolNames.GetValueOrDefault(row.SchoolId, "—"),
                 campusNames.GetValueOrDefault(row.CampusId, "—"),
                 teacherNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
+                coordinatorNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
                 parentNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
                 tutorNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
                 row.MobileNumber,
@@ -1639,6 +1641,81 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     && teacher.Grade == student.Grade
                     && string.Equals(teacher.Section, student.Section, StringComparison.OrdinalIgnoreCase))
                 .Select(teacher => teacher.FullName)
+                .Where(name => name.HasTrimmedText())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name)
+                .ToArray();
+        }
+
+        return result;
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<string>>> GetCoordinatorNamesByStudentAsync(
+        IReadOnlyList<long> studentIds,
+        CancellationToken cancellationToken)
+    {
+        if (studentIds.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<string>>();
+        }
+
+        var students = await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where studentIds.Contains(student.Id)
+            select new
+            {
+                student.Id,
+                user.SchoolId,
+                user.CampusId,
+                student.Grade,
+            })
+            .ToListAsync(cancellationToken);
+
+        if (students.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<string>>();
+        }
+
+        var schoolIds = students.Where(s => s.SchoolId is not null).Select(s => s.SchoolId!.Value).Distinct().ToArray();
+        var campusIds = students.Where(s => s.CampusId is not null).Select(s => s.CampusId!.Value).Distinct().ToArray();
+        var grades = students.Select(s => s.Grade).Distinct().ToArray();
+
+        var coordinators = await (
+            from assignment in _dbContext.CoordinatorClassSections.AsNoTracking()
+            join coordinatorUser in _dbContext.Users.AsNoTracking()
+                on assignment.CoordinatorUserId equals coordinatorUser.Id
+            where assignment.IsActive
+                && coordinatorUser.SchoolId != null
+                && coordinatorUser.CampusId != null
+                && schoolIds.Contains(coordinatorUser.SchoolId.Value)
+                && campusIds.Contains(coordinatorUser.CampusId.Value)
+                && grades.Contains(assignment.Grade)
+                && coordinatorUser.RoleAssignments.Any(role => role.Role == UserRole.Coordinator)
+            select new
+            {
+                coordinatorUser.FullName,
+                coordinatorUser.SchoolId,
+                coordinatorUser.CampusId,
+                assignment.Grade,
+            })
+            .ToListAsync(cancellationToken);
+
+        var result = new Dictionary<long, IReadOnlyList<string>>();
+        foreach (var student in students)
+        {
+            if (student.SchoolId is null || student.CampusId is null)
+            {
+                result[student.Id] = Array.Empty<string>();
+                continue;
+            }
+
+            result[student.Id] = coordinators
+                .Where(coordinator =>
+                    coordinator.SchoolId == student.SchoolId
+                    && coordinator.CampusId == student.CampusId
+                    && coordinator.Grade == student.Grade)
+                .Select(coordinator => coordinator.FullName)
                 .Where(name => name.HasTrimmedText())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(name => name)

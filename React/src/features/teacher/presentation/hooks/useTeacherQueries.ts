@@ -1,28 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/core/api/queryKeys";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import * as teacherApi from "@/features/teacher/data/teacherApi";
 
 export function useTeacherRosterQuery(enabled = true) {
+  const { user } = useAuth();
+  const activeRole = user?.role ?? null;
   return useQuery({
-    queryKey: queryKeys.teacherRoster(),
+    queryKey: queryKeys.teacherRoster(activeRole),
     queryFn: () => teacherApi.getMyRoster(),
-    enabled,
+    enabled: enabled && activeRole != null,
   });
 }
 
 export function useTeacherGroupsQuery(enabled = true) {
+  const { user } = useAuth();
+  const activeRole = user?.role ?? null;
   return useQuery({
-    queryKey: queryKeys.teacherGroups(),
+    queryKey: queryKeys.teacherGroups(activeRole),
     queryFn: () => teacherApi.listMyGroups(),
-    enabled,
+    enabled: enabled && activeRole != null,
   });
 }
 
 function invalidateTeacherStudentData(
   queryClient: ReturnType<typeof useQueryClient>,
 ) {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.teacherRoster() });
-  void queryClient.invalidateQueries({ queryKey: queryKeys.teacherGroups() });
+  void queryClient.invalidateQueries({ queryKey: ["teachers", "me", "roster"] });
+  void queryClient.invalidateQueries({ queryKey: ["teachers", "me", "groups"] });
 }
 
 export function useAddMyStudentMutation() {

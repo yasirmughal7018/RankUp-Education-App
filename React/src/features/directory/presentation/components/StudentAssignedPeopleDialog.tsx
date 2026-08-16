@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 
 interface StudentAssignedPeopleDialogProps {
   studentName: string;
-  teachers: string[];
   parents: string[];
+  coordinators: string[];
+  teachers: string[];
   /** When omitted/null, Tutors section is hidden (SchoolAdmin / CampusAdmin). PortalAdmin passes the list. */
   tutors?: string[] | null;
   onClose: () => void;
@@ -40,11 +41,12 @@ function PeopleSection({
   );
 }
 
-/** View teachers, parents, and (PortalAdmin only) tutors assigned to a student. */
+/** View people assigned to a student (role sections vary by admin portal). */
 export function StudentAssignedPeopleDialog({
   studentName,
-  teachers,
   parents,
+  coordinators,
+  teachers,
   tutors = null,
   onClose,
 }: StudentAssignedPeopleDialogProps) {
@@ -76,13 +78,14 @@ export function StudentAssignedPeopleDialog({
         </h2>
         <p className="mt-1 text-sm text-slate-600">
           {showTutors
-            ? `Teachers, parents, and tutors linked to ${studentName}.`
-            : `Teachers and parents linked to ${studentName}.`}
+            ? `Parents, coordinators, teachers, and tutors linked to ${studentName}.`
+            : `Parents, coordinators, and teachers linked to ${studentName}.`}
         </p>
 
         <div className="mt-5 space-y-5">
-          <PeopleSection title="Teachers" names={teachers} />
           <PeopleSection title="Parents" names={parents} />
+          <PeopleSection title="Coordinators" names={coordinators} />
+          <PeopleSection title="Teachers" names={teachers} />
           {showTutors ? (
             <PeopleSection title="Tutors" names={tutors} />
           ) : null}

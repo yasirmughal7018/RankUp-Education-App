@@ -32,7 +32,7 @@ class LinkedStudent {
 
   String get label {
     final gradeSection = [
-      if (grade > 0) 'G$grade',
+      if (grade > 0) 'Grade $grade',
       if (section.isNotEmpty) section,
     ].join(' · ');
     if (gradeSection.isEmpty) {

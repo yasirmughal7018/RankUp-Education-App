@@ -145,7 +145,7 @@ export function dashboardPathForRole(role: UserRole): string {
     return "/student/quizzes";
   }
   if (role === "Teacher" || role === "Coordinator") {
-    return "/quizzes";
+    return "/dashboard";
   }
   return "/dashboard";
 }

@@ -131,6 +131,7 @@ export interface DirectoryStudent extends DirectoryAccountAuditFields {
   schoolName: string;
   campusName: string;
   teacherNames: string[];
+  coordinatorNames?: string[];
   parentNames?: string[];
   tutorNames?: string[];
   mobileNumber?: string | null;

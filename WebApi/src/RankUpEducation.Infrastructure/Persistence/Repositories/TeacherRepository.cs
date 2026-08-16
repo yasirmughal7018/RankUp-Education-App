@@ -168,6 +168,63 @@ public sealed class TeacherRepository : ITeacherRepository
             .ToArray();
     }
 
+    public async Task<IReadOnlyList<TeacherRosterStudentResponse>> GetRosterStudentsByGradesAsync(
+        int schoolId,
+        int campusId,
+        IReadOnlyList<short> grades,
+        CancellationToken cancellationToken)
+    {
+        if (schoolId <= 0 || campusId <= 0 || grades.Count == 0)
+        {
+            return Array.Empty<TeacherRosterStudentResponse>();
+        }
+
+        var gradeSet = grades.Where(grade => grade > 0).Distinct().ToArray();
+        if (gradeSet.Length == 0)
+        {
+            return Array.Empty<TeacherRosterStudentResponse>();
+        }
+
+        var rows = await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where user.SchoolId == schoolId
+                && user.CampusId == campusId
+                && user.IsActive
+                && user.RejectedAt == null
+                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+                && gradeSet.Contains(student.Grade)
+            orderby student.Grade, student.Section, user.FullName
+            select new
+            {
+                student.Id,
+                user.FullName,
+                user.Username,
+                RollNumber = user.RollNumberTeacherCode ?? string.Empty,
+                student.Grade,
+                student.Section,
+                user.IsActive,
+                HasPassword = user.PasswordHash != null && user.PasswordHash != "",
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(row => new TeacherRosterStudentResponse(
+                row.Id,
+                row.FullName,
+                row.Username,
+                row.RollNumber,
+                row.Grade,
+                row.Section,
+                row.IsActive,
+                DirectoryAccountStatuses.Resolve(
+                    row.IsActive,
+                    row.HasPassword,
+                    isRejected: false,
+                    isLockedPendingSchoolChange: false)))
+            .ToArray();
+    }
+
     public async Task<bool> IsStudentInRosterAsync(
         long teacherId,
         long studentId,
@@ -202,28 +259,33 @@ public sealed class TeacherRepository : ITeacherRepository
     }
 
     public async Task<IReadOnlyList<StudentGroup>> ListGroupsAsync(
-        long teacherId,
+        long ownerUserId,
+        UserRole creatorRole,
         CancellationToken cancellationToken)
     {
+        // Legacy rows may have null creator_role; treat those as Teacher-owned.
         return await _dbContext.StudentGroups
             .Where(group =>
-                group.ReferralId == teacherId
-                && group.CreatorRole == UserRole.Teacher
-                && group.IsActive)
+                group.ReferralId == ownerUserId
+                && group.IsActive
+                && (group.CreatorRole == creatorRole
+                    || (creatorRole == UserRole.Teacher && group.CreatorRole == null)))
             .OrderBy(group => group.GroupName)
             .ToListAsync(cancellationToken);
     }
 
     public Task<StudentGroup?> GetGroupAsync(
         long groupId,
-        long teacherId,
+        long ownerUserId,
+        UserRole creatorRole,
         CancellationToken cancellationToken)
     {
         return _dbContext.StudentGroups
             .FirstOrDefaultAsync(
                 group => group.Id == groupId
-                    && group.ReferralId == teacherId
-                    && group.CreatorRole == UserRole.Teacher,
+                    && group.ReferralId == ownerUserId
+                    && (group.CreatorRole == creatorRole
+                        || (creatorRole == UserRole.Teacher && group.CreatorRole == null)),
                 cancellationToken);
     }
 
