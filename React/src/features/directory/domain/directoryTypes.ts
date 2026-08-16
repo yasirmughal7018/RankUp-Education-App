@@ -131,6 +131,8 @@ export interface DirectoryStudent extends DirectoryAccountAuditFields {
   schoolName: string;
   campusName: string;
   teacherNames: string[];
+  parentNames?: string[];
+  tutorNames?: string[];
   mobileNumber?: string | null;
   cnic?: string | null;
   emailAddress?: string | null;
@@ -157,6 +159,8 @@ export interface DirectoryTeacher extends DirectoryAccountAuditFields {
   roles?: string[];
   /** Class (grade) + section combinations this teacher teaches. */
   classSections?: TeacherClassSection[];
+  /** Students in assigned class/sections (view-only roster). */
+  students?: DirectoryLinkedStudentSummary[];
 }
 
 export interface TeacherClassSection {
@@ -188,6 +192,9 @@ export interface DirectoryCoordinator extends DirectoryAccountAuditFields {
   accountStatus: DirectoryAccountStatus;
   roles: string[];
   classSections?: CoordinatorClassSection[];
+  /** Students in grades this coordinator oversees. */
+  studentCount?: number;
+  students?: DirectoryLinkedStudentSummary[];
 }
 
 export interface CreateDirectoryCoordinatorInput {
@@ -221,6 +228,11 @@ export interface DirectoryLinkedStudentSummary {
   studentId: number;
   fullName: string;
   username: string;
+  avatarUrl?: string | null;
+  schoolName?: string | null;
+  campusName?: string | null;
+  grade?: number | null;
+  section?: string | null;
 }
 
 export interface DirectoryParent extends DirectoryAccountAuditFields {
@@ -262,6 +274,7 @@ export interface CreateDirectoryStudentInput {
 
 export interface UpdateDirectoryStudentInput {
   fullName: string;
+  schoolId: number;
   campusId: number;
   rollNumber: string;
   grade: number;
@@ -443,6 +456,19 @@ export interface LinkParentStudentResult {
   parentId: number;
   studentId: number;
   relationship: string;
+  isActive: boolean;
+}
+
+export interface LinkDirectoryTutorStudentInput {
+  identifier: string;
+}
+
+export interface LinkDirectoryTutorStudentResult {
+  tutorId: number;
+  studentId: number;
+  fullName: string;
+  username: string;
+  alreadyLinked: boolean;
   isActive: boolean;
 }
 

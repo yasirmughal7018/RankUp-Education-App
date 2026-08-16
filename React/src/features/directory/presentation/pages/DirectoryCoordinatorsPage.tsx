@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Pencil } from "lucide-react";
+import { Pencil, Users } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
@@ -10,6 +10,7 @@ import { useAuth } from "@/features/authentication/presentation/context/AuthProv
 import type {
   CreateDirectoryCoordinatorInput,
   DirectoryCoordinator,
+  DirectoryLinkedStudentSummary,
   UpdateDirectoryCoordinatorInput,
 } from "@/features/directory/domain/directoryTypes";
 import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
@@ -32,6 +33,7 @@ import {
 } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { GrantTeacherRoleDialog } from "@/features/directory/presentation/components/GrantTeacherRoleDialog";
+import { ManageLinkedStudentsDialog } from "@/features/directory/presentation/components/ManageLinkedStudentsDialog";
 import { RemoveDirectoryRoleDialog } from "@/features/directory/presentation/components/RemoveDirectoryRoleDialog";
 import {
   useActivateCoordinatorMutation,
@@ -43,6 +45,7 @@ import {
   useDirectorySchoolsQuery,
   useGrantParentRoleToCoordinatorMutation,
   useGrantTeacherRoleToCoordinatorMutation,
+  useGrantTutorRoleToCoordinatorMutation,
   useRemoveDirectoryRoleMutation,
   useUpdateCoordinatorMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
@@ -124,6 +127,8 @@ export function DirectoryCoordinatorsPage() {
     useState<DirectoryCoordinator | null>(null);
   const [grantTeacherTarget, setGrantTeacherTarget] =
     useState<DirectoryCoordinator | null>(null);
+  const [grantTutorTarget, setGrantTutorTarget] =
+    useState<DirectoryCoordinator | null>(null);
   const [deactivateTarget, setDeactivateTarget] =
     useState<DirectoryCoordinator | null>(null);
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
@@ -131,6 +136,10 @@ export function DirectoryCoordinatorsPage() {
     userId: number;
     fullName: string;
     role: DirectoryCombinableRole;
+  } | null>(null);
+  const [viewStudentsTarget, setViewStudentsTarget] = useState<{
+    name: string;
+    students: DirectoryLinkedStudentSummary[];
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -165,6 +174,7 @@ export function DirectoryCoordinatorsPage() {
   const bulkDeactivateMutation = useBulkDeactivateCoordinatorsMutation();
   const grantParentMutation = useGrantParentRoleToCoordinatorMutation();
   const grantTeacherMutation = useGrantTeacherRoleToCoordinatorMutation();
+  const grantTutorMutation = useGrantTutorRoleToCoordinatorMutation();
   const removeRoleMutation = useRemoveDirectoryRoleMutation();
 
   const totalCount = data?.totalCount ?? 0;
@@ -201,6 +211,7 @@ export function DirectoryCoordinatorsPage() {
     bulkDeactivateMutation.isPending ||
     grantParentMutation.isPending ||
     grantTeacherMutation.isPending ||
+    grantTutorMutation.isPending ||
     removeRoleMutation.isPending;
 
   const allVisibleSelected =
@@ -319,12 +330,26 @@ export function DirectoryCoordinatorsPage() {
   }
 
   function rowActions(coordinator: DirectoryCoordinator) {
+    const viewStudentsButton = (
+      <DirectoryIconAction
+        icon={Users}
+        label={`View students for ${coordinator.fullName}`}
+        onClick={() => {
+          setViewStudentsTarget({
+            name: coordinator.fullName,
+            students: coordinator.students ?? [],
+          });
+        }}
+      />
+    );
+
     if (!canManage) {
-      return null;
+      return viewStudentsButton;
     }
     const roles = coordinator.roles ?? [];
     const hasParentRole = roles.includes("Parent");
     const hasTeacherRole = roles.includes("Teacher");
+    const hasTutorRole = roles.includes("Tutor");
     const removableRoles = getRemovableDirectoryRoles(roles, "Coordinator");
     const overflowItems = [
       {
@@ -360,6 +385,19 @@ export function DirectoryCoordinatorsPage() {
             },
           ]
         : []),
+      ...(!hasTutorRole
+        ? [
+            {
+              id: "add-tutor",
+              label: "Add Tutor role",
+              onSelect: () => {
+                clearMessages();
+                setGrantTutorTarget(coordinator);
+              },
+              disabled: busy,
+            },
+          ]
+        : []),
       ...removableRoles.map((role) => ({
         id: `remove-${role.toLowerCase()}`,
         label: `Remove ${role} role`,
@@ -378,6 +416,7 @@ export function DirectoryCoordinatorsPage() {
 
     return (
       <>
+        {viewStudentsButton}
         <DirectoryIconAction
           icon={Pencil}
           label={`Edit ${coordinator.fullName}`}
@@ -593,7 +632,7 @@ export function DirectoryCoordinatorsPage() {
             <DirectoryTh>School / Campus</DirectoryTh>
             <DirectoryTh>Classes</DirectoryTh>
             <DirectoryTh>Status</DirectoryTh>
-            {canManage ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
+            <DirectoryTh align="right">Actions</DirectoryTh>
           </DirectoryTableHead>
           <tbody className="divide-y divide-border">
             {visibleCoordinators.map((coordinator) => (
@@ -636,18 +675,29 @@ export function DirectoryCoordinatorsPage() {
                     isActive={coordinator.isActive}
                   />
                 </DirectoryTd>
-                {canManage ? (
-                  <DirectoryTd align="right">
-                    <div className="flex justify-end gap-1.5">
-                      {rowActions(coordinator)}
-                    </div>
-                  </DirectoryTd>
-                ) : null}
+                <DirectoryTd align="right">
+                  <div className="flex justify-end gap-1.5">
+                    {rowActions(coordinator)}
+                  </div>
+                </DirectoryTd>
               </tr>
             ))}
           </tbody>
         </DirectoryTable>
       </DirectoryListPanel>
+
+      {viewStudentsTarget ? (
+        <ManageLinkedStudentsDialog
+          parentName={viewStudentsTarget.name}
+          title="Students"
+          description={`Students in classes coordinated by ${viewStudentsTarget.name}.`}
+          emptyMessage="No students assigned yet."
+          linkedStudents={viewStudentsTarget.students}
+          isSubmitting={false}
+          readOnly
+          onClose={() => setViewStudentsTarget(null)}
+        />
+      ) : null}
 
       {coordinatorDialog ? (
         <CoordinatorFormDialog
@@ -727,6 +777,40 @@ export function DirectoryCoordinatorsPage() {
               setActionError(
                 apiError.message ?? "Unable to add Parent role.",
               );
+            }
+          })();
+        }}
+      />
+
+      <AppConfirmDialog
+        open={grantTutorTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !grantTutorMutation.isPending) {
+            setGrantTutorTarget(null);
+          }
+        }}
+        title="Add Tutor role"
+        description={
+          grantTutorTarget
+            ? `Add the Tutor role to ${grantTutorTarget.fullName}? They keep Coordinator access and can switch to Tutor after login.`
+            : ""
+        }
+        confirmLabel="Add Tutor"
+        loading={grantTutorMutation.isPending}
+        onConfirm={() => {
+          void (async () => {
+            if (!grantTutorTarget) {
+              return;
+            }
+            try {
+              await grantTutorMutation.mutateAsync(grantTutorTarget.userId);
+              setSuccessMessage(
+                `Tutor role added to ${grantTutorTarget.fullName}.`,
+              );
+              setGrantTutorTarget(null);
+            } catch (err) {
+              const apiError = err as ApiError;
+              setActionError(apiError.message ?? "Unable to add Tutor role.");
             }
           })();
         }}

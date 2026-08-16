@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Unlink } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import type { TeacherClassSection } from "@/features/directory/domain/directoryTypes";
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,11 @@ interface ManageTeacherClassSectionsDialogProps {
 }
 
 function defaultFormatClassSection(item: TeacherClassSection): string {
-  return `Grade ${item.grade}${item.section}`;
+  const section = item.section?.trim();
+  return section ? `Grade ${item.grade} - ${section}` : `Grade ${item.grade}`;
 }
 
-/** View and remove assigned class/section pairs. */
+/** View and remove assigned class/section pairs (matches linked-children popup layout). */
 export function ManageTeacherClassSectionsDialog({
   teacherName,
   classSections,
@@ -68,13 +70,7 @@ export function ManageTeacherClassSectionsDialog({
           {description ?? `Classes assigned to ${teacherName}.`}
         </p>
 
-        {error ? (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+        <div className="mt-4 max-h-80 space-y-2 overflow-y-auto">
           {classSections.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
               No classes or sections assigned yet.
@@ -85,35 +81,61 @@ export function ManageTeacherClassSectionsDialog({
               return (
                 <div
                   key={key}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5"
+                  className="relative rounded-xl border border-slate-200 px-3 py-2 pr-9"
                 >
-                  <p className="truncate text-sm font-medium text-slate-900">
-                    {formatItem(item)}
-                  </p>
-                  <Button
+                  <button
                     type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={isSubmitting}
+                    aria-label={`Remove ${formatItem(item)}`}
+                    title="Remove"
+                    disabled={isSubmitting || removingKey === key}
                     onClick={() => void handleRemove(item.grade, item.section)}
+                    className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
                   >
-                    {removingKey === key ? "Removing…" : "Remove"}
-                  </Button>
+                    {removingKey === key ? (
+                      <span className="text-[10px] font-semibold">…</span>
+                    ) : (
+                      <Unlink className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xs font-bold tabular-nums text-brand-800">
+                      {item.grade}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium leading-tight text-slate-900">
+                        {formatItem(item)}
+                      </p>
+                      <p className="truncate text-[11px] leading-tight text-slate-500">
+                        Assigned class
+                      </p>
+                    </div>
+                  </div>
                 </div>
               );
             })
           )}
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
+        {error ? (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
+            Close
+          </Button>
           {onAdd ? (
-            <Button type="button" variant="outline" onClick={onAdd}>
+            <Button type="button" onClick={onAdd} disabled={isSubmitting}>
               Add class
             </Button>
           ) : null}
-          <Button type="button" variant="outline" onClick={onClose}>
-            Close
-          </Button>
         </div>
       </div>
     </div>

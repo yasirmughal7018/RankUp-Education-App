@@ -94,6 +94,8 @@ public sealed record DirectoryStudentResponse(
     string SchoolName,
     string CampusName,
     IReadOnlyList<string> TeacherNames,
+    IReadOnlyList<string> ParentNames,
+    IReadOnlyList<string> TutorNames,
     string? MobileNumber,
     string? Cnic,
     string? EmailAddress,
@@ -122,6 +124,7 @@ public sealed record CreateDirectoryStudentRequest(
 /// <summary>Update an existing student from the directory UI.</summary>
 public sealed record UpdateDirectoryStudentRequest(
     string FullName,
+    int SchoolId,
     int CampusId,
     string RollNumber,
     short Grade,
@@ -163,7 +166,9 @@ public sealed record DirectoryTeacherResponse(
     /// <summary>All roles on this account (e.g. Teacher, Parent).</summary>
     IReadOnlyList<string> Roles,
     /// <summary>Class (grade) + section combinations this teacher teaches.</summary>
-    IReadOnlyList<TeacherClassSectionItem> ClassSections);
+    IReadOnlyList<TeacherClassSectionItem> ClassSections,
+    /// <summary>Students in this teacher's assigned class/sections (same school/campus).</summary>
+    IReadOnlyList<DirectoryLinkedStudentSummary> Students);
 
 public sealed record CreateDirectoryTeacherRequest(
     string FullName,
@@ -218,7 +223,15 @@ public sealed record DirectoryParentListResponse(
     int TotalCount);
 
 /// <summary>Linked child summary on a directory parent row.</summary>
-public sealed record DirectoryLinkedStudentSummary(long StudentId, string FullName, string Username);
+public sealed record DirectoryLinkedStudentSummary(
+    long StudentId,
+    string FullName,
+    string Username,
+    string? AvatarUrl = null,
+    string? SchoolName = null,
+    string? CampusName = null,
+    short? Grade = null,
+    string? Section = null);
 
 public sealed record DirectoryParentResponse(
     long ParentId,
@@ -334,7 +347,10 @@ public sealed record DirectoryCoordinatorResponse(
     string AccountStatus,
     IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
     IReadOnlyList<string> Roles,
-    IReadOnlyList<CoordinatorClassSectionItem> ClassSections);
+    IReadOnlyList<CoordinatorClassSectionItem> ClassSections,
+    /// <summary>Students in grades this coordinator oversees (same school/campus).</summary>
+    int StudentCount,
+    IReadOnlyList<DirectoryLinkedStudentSummary> Students);
 
 /// <summary>Create a Coordinator account (optionally also Teacher and/or Parent).</summary>
 public sealed record CreateDirectoryCoordinatorRequest(
@@ -370,6 +386,17 @@ public sealed record LinkParentStudentResponse(
     long ParentId,
     long StudentId,
     string Relationship,
+    bool IsActive);
+
+/// <summary>Admin link of a tutor to a student by CNIC or username.</summary>
+public sealed record LinkDirectoryTutorStudentRequest(string Identifier);
+
+public sealed record LinkDirectoryTutorStudentResponse(
+    long TutorId,
+    long StudentId,
+    string FullName,
+    string Username,
+    bool AlreadyLinked,
     bool IsActive);
 
 /// <summary>Bulk deactivate request listing entity ids.</summary>

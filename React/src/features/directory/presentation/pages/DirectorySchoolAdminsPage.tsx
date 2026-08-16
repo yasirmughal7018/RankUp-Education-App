@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Pencil, UserCheck, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { AppSearchInput } from "@/components/ui/app-search-input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -76,6 +77,8 @@ export function DirectorySchoolAdminsPage() {
   const [adminDialog, setAdminDialog] = useState<
     "create" | DirectorySchoolAdmin | null
   >(null);
+  const [deactivateTarget, setDeactivateTarget] =
+    useState<DirectorySchoolAdmin | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -158,17 +161,30 @@ export function DirectorySchoolAdminsPage() {
 
   async function toggleActive(admin: DirectorySchoolAdmin) {
     clearMessages();
+    if (admin.isActive) {
+      setDeactivateTarget(admin);
+      return;
+    }
     try {
-      if (admin.isActive) {
-        if (!window.confirm(`Deactivate ${admin.fullName}?`)) {
-          return;
-        }
-        await deactivateMutation.mutateAsync(admin.userId);
-        setSuccessMessage(`Deactivated ${admin.fullName}.`);
-      } else {
-        await activateMutation.mutateAsync(admin.userId);
-        setSuccessMessage(`Activated ${admin.fullName}.`);
-      }
+      await activateMutation.mutateAsync(admin.userId);
+      setSuccessMessage(`Activated ${admin.fullName}.`);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setActionError(
+        apiError.message ?? "Unable to update school admin status.",
+      );
+    }
+  }
+
+  async function confirmDeactivate() {
+    if (!deactivateTarget) {
+      return;
+    }
+    clearMessages();
+    try {
+      await deactivateMutation.mutateAsync(deactivateTarget.userId);
+      setSuccessMessage(`Deactivated ${deactivateTarget.fullName}.`);
+      setDeactivateTarget(null);
     } catch (err) {
       const apiError = err as ApiError;
       setActionError(
@@ -306,7 +322,7 @@ export function DirectorySchoolAdminsPage() {
             <DirectoryEntityCard
               key={admin.userId}
               title={admin.fullName}
-              subtitle={`@${admin.username}`}
+              subtitle={admin.username}
               badge={
                 <AccountStatusBadge
                   accountStatus={admin.accountStatus}
@@ -335,7 +351,7 @@ export function DirectorySchoolAdminsPage() {
                 <DirectoryTd>
                   <p className="font-medium">{admin.fullName}</p>
                   <p className="text-xs text-muted-foreground">
-                    @{admin.username}
+                    {admin.username}
                   </p>
                 </DirectoryTd>
                 <DirectoryTd className="text-muted-foreground">
@@ -367,6 +383,25 @@ export function DirectorySchoolAdminsPage() {
           onSubmit={handleFormSubmit}
         />
       ) : null}
+
+      <AppConfirmDialog
+        open={deactivateTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !deactivateMutation.isPending) {
+            setDeactivateTarget(null);
+          }
+        }}
+        title="Deactivate school admin"
+        description={
+          deactivateTarget
+            ? `Deactivate ${deactivateTarget.fullName}? They will not be able to sign in until activated again.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        destructive
+        loading={deactivateMutation.isPending}
+        onConfirm={() => void confirmDeactivate()}
+      />
     </DirectoryPageShell>
   );
 }

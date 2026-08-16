@@ -262,7 +262,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Adds the Teacher role to an existing Parent account.</summary>
     [HttpPost("parents/{parentId:long}/roles/teacher")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> GrantTeacherRoleToParentAsync(
         long parentId,
         [FromBody] GrantTeacherRoleRequest request,
@@ -350,7 +350,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Provisions a new parent in the directory.</summary>
     [HttpPost("parents")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> CreateParentAsync(
         [FromBody] CreateDirectoryParentRequest request,
         CancellationToken cancellationToken)
@@ -415,7 +415,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Adds the Coordinator role to an existing Parent account.</summary>
     [HttpPost("parents/{parentId:long}/roles/coordinator")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> GrantCoordinatorRoleToParentAsync(
         long parentId,
         [FromBody] GrantCoordinatorRoleRequest request,
@@ -432,7 +432,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Removes a Parent/Teacher/Coordinator role from a Parent multi-role account.</summary>
     [HttpDelete("parents/{parentId:long}/roles/{role}")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> RemoveRoleFromParentAsync(
         long parentId,
         string role,
@@ -451,7 +451,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Updates an existing parent.</summary>
     [HttpPut("parents/{parentId:long}")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> UpdateParentAsync(
         long parentId,
         [FromBody] UpdateDirectoryParentRequest request,
@@ -463,7 +463,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Activates a parent account.</summary>
     [HttpPost("parents/{parentId:long}/activate")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> ActivateParentAsync(
         long parentId,
         CancellationToken cancellationToken)
@@ -474,7 +474,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Deactivates a parent account.</summary>
     [HttpPost("parents/{parentId:long}/deactivate")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> DeactivateParentAsync(
         long parentId,
         CancellationToken cancellationToken)
@@ -485,7 +485,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Deactivates multiple parents in one request.</summary>
     [HttpPost("parents/bulk-deactivate")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<BulkActionResponse>>> BulkDeactivateParentsAsync(
         [FromBody] BulkDeactivateRequest request,
         CancellationToken cancellationToken)
@@ -496,7 +496,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Links a parent to a student.</summary>
     [HttpPost("parents/{parentId:long}/students")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<LinkParentStudentResponse>>> LinkParentStudentAsync(
         long parentId,
         [FromBody] LinkParentStudentRequest request,
@@ -508,7 +508,7 @@ public sealed class DirectoryController : ControllerBase
 
     /// <summary>Removes a parent-student link.</summary>
     [HttpDelete("parents/{parentId:long}/students/{studentId:long}")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    [Authorize(Roles = "PortalAdmin")]
     public async Task<ActionResult<ApiResponse<object?>>> UnlinkParentStudentAsync(
         long parentId,
         long studentId,
@@ -565,6 +565,128 @@ public sealed class DirectoryController : ControllerBase
     {
         await _directoryService.DeactivateTutorAsync(tutorId, cancellationToken);
         return Ok(ApiResponse<object?>.Ok(null, "Tutor deactivated."));
+    }
+
+    /// <summary>Links a tutor to a student by CNIC or username.</summary>
+    [HttpPost("tutors/{tutorId:long}/students")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<LinkDirectoryTutorStudentResponse>>> LinkTutorStudentAsync(
+        long tutorId,
+        [FromBody] LinkDirectoryTutorStudentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.LinkTutorStudentAsync(tutorId, request, cancellationToken);
+        var message = response.AlreadyLinked
+            ? "Student was already linked to this tutor."
+            : "Tutor linked to student.";
+        return Ok(ApiResponse<LinkDirectoryTutorStudentResponse>.Ok(response, message));
+    }
+
+    /// <summary>Removes a tutor-student link.</summary>
+    [HttpDelete("tutors/{tutorId:long}/students/{studentId:long}")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<object?>>> UnlinkTutorStudentAsync(
+        long tutorId,
+        long studentId,
+        CancellationToken cancellationToken)
+    {
+        await _directoryService.UnlinkTutorStudentAsync(tutorId, studentId, cancellationToken);
+        return Ok(ApiResponse<object?>.Ok(null, "Tutor-student link removed."));
+    }
+
+    /// <summary>Adds the Tutor role to an existing Parent account.</summary>
+    [HttpPost("parents/{parentId:long}/roles/tutor")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTutorResponse>>> GrantTutorRoleToParentAsync(
+        long parentId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantTutorRoleToParentAsync(parentId, cancellationToken);
+        return Ok(ApiResponse<DirectoryTutorResponse>.Ok(response, "Tutor role added to parent account."));
+    }
+
+    /// <summary>Adds the Tutor role to an existing Teacher account.</summary>
+    [HttpPost("teachers/{teacherId:long}/roles/tutor")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTutorResponse>>> GrantTutorRoleToTeacherAsync(
+        long teacherId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantTutorRoleToTeacherAsync(teacherId, cancellationToken);
+        return Ok(ApiResponse<DirectoryTutorResponse>.Ok(response, "Tutor role added to teacher account."));
+    }
+
+    /// <summary>Adds the Tutor role to an existing Coordinator account.</summary>
+    [HttpPost("coordinators/{userId:long}/roles/tutor")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTutorResponse>>> GrantTutorRoleToCoordinatorAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantTutorRoleToCoordinatorAsync(userId, cancellationToken);
+        return Ok(ApiResponse<DirectoryTutorResponse>.Ok(response, "Tutor role added to coordinator account."));
+    }
+
+    /// <summary>Adds the Parent role to an existing Tutor account.</summary>
+    [HttpPost("tutors/{tutorId:long}/roles/parent")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryParentResponse>>> GrantParentRoleToTutorAsync(
+        long tutorId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantParentRoleToTutorAsync(tutorId, cancellationToken);
+        return Ok(ApiResponse<DirectoryParentResponse>.Ok(response, "Parent role added to tutor account."));
+    }
+
+    /// <summary>Adds the Teacher role to an existing Tutor account.</summary>
+    [HttpPost("tutors/{tutorId:long}/roles/teacher")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<DirectoryTeacherResponse>>> GrantTeacherRoleToTutorAsync(
+        long tutorId,
+        [FromBody] GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantTeacherRoleToTutorAsync(
+            tutorId,
+            request,
+            cancellationToken);
+        return Ok(ApiResponse<DirectoryTeacherResponse>.Ok(response, "Teacher role added to tutor account."));
+    }
+
+    /// <summary>Adds the Coordinator role to an existing Tutor account.</summary>
+    [HttpPost("tutors/{tutorId:long}/roles/coordinator")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> GrantCoordinatorRoleToTutorAsync(
+        long tutorId,
+        [FromBody] GrantCoordinatorRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _directoryService.GrantCoordinatorRoleToTutorAsync(
+            tutorId,
+            request,
+            cancellationToken);
+        return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
+            response,
+            "Coordinator role added to tutor account."));
+    }
+
+    /// <summary>Removes a companion role from a Tutor multi-role account.</summary>
+    [HttpDelete("tutors/{tutorId:long}/roles/{role}")]
+    [Authorize(Roles = "PortalAdmin")]
+    public async Task<ActionResult<ApiResponse<GrantCoordinatorRoleResponse>>> RemoveRoleFromTutorAsync(
+        long tutorId,
+        string role,
+        CancellationToken cancellationToken)
+    {
+        var roleToRemove = ParseCombinableDirectoryRole(role);
+        var response = await _directoryService.RemoveDirectoryRoleAsync(
+            tutorId,
+            UserRole.Tutor,
+            roleToRemove,
+            cancellationToken);
+        return Ok(ApiResponse<GrantCoordinatorRoleResponse>.Ok(
+            response,
+            $"{roleToRemove} role removed."));
     }
 
     /// <summary>Lists school admins (portal admin only).</summary>
@@ -829,10 +951,10 @@ public sealed class DirectoryController : ControllerBase
     private static UserRole ParseCombinableDirectoryRole(string role)
     {
         if (!Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsed)
-            || parsed is not (UserRole.Parent or UserRole.Teacher or UserRole.Coordinator))
+            || parsed is not (UserRole.Parent or UserRole.Teacher or UserRole.Coordinator or UserRole.Tutor))
         {
             throw new ValidationAppException([
-                "Role must be Parent, Teacher, or Coordinator.",
+                "Role must be Parent, Teacher, Coordinator, or Tutor.",
             ]);
         }
 

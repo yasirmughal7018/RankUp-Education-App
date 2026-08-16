@@ -3,7 +3,6 @@ import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import type {
   CreateDirectoryStudentInput,
-  DirectoryCampus,
   DirectorySchool,
   DirectoryStudent,
   UpdateDirectoryStudentInput,
@@ -63,12 +62,6 @@ export function StudentFormDialog({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isSubmitting, onClose]);
 
-  useEffect(() => {
-    if (!isEdit) {
-      setCampusId("");
-    }
-  }, [schoolId, isEdit]);
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -76,11 +69,16 @@ export function StudentFormDialog({
     const trimmedName = fullName.trim();
     const trimmedRoll = rollNumber.trim();
     const trimmedSection = section.trim();
+    const parsedSchoolId = Number(schoolId);
     const parsedCampusId = Number(campusId);
     const parsedGrade = Number(grade);
 
     if (!trimmedName || !trimmedRoll || !trimmedSection) {
       setError("Name, roll number, and section are required.");
+      return;
+    }
+    if (!parsedSchoolId || parsedSchoolId < 1) {
+      setError("Select a school.");
       return;
     }
     if (!parsedCampusId || parsedCampusId < 1) {
@@ -100,6 +98,7 @@ export function StudentFormDialog({
           mode: "edit",
           input: {
             fullName: trimmedName,
+            schoolId: parsedSchoolId,
             campusId: parsedCampusId,
             rollNumber: trimmedRoll,
             grade: parsedGrade,
@@ -109,13 +108,8 @@ export function StudentFormDialog({
         });
       } else {
         const trimmedEmail = username.trim();
-        const parsedSchoolId = Number(schoolId);
         if (!trimmedEmail) {
           setError("Email address is required (it is the username).");
-          return;
-        }
-        if (!parsedSchoolId || parsedSchoolId < 1) {
-          setError("Select a school.");
           return;
         }
         await onSubmit({
@@ -184,48 +178,48 @@ export function StudentFormDialog({
           </div>
 
           {!isEdit ? (
-            <>
-              <div>
-                <FieldLabel htmlFor="student-username" required>
-                  Email (username)
-                </FieldLabel>
-                <input
-                  id="student-username"
-                  type="email"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  className={inputClassName}
-                  required
-                  disabled={isSubmitting}
-                  placeholder="you@example.com"
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="student-school" required>
-                  School
-                </FieldLabel>
-                <select
-                  id="student-school"
-                  value={schoolId}
-                  onChange={(event) => setSchoolId(event.target.value)}
-                  className={inputClassName}
-                  required
-                  disabled={isSubmitting}
-                >
-                  <option value="">Select school</option>
-                  {schools.map((school) => (
-                    <option key={school.id} value={school.id}>
-                      {school.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
+            <div>
+              <FieldLabel htmlFor="student-username" required>
+                Email (username)
+              </FieldLabel>
+              <input
+                id="student-username"
+                type="email"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                className={inputClassName}
+                required
+                disabled={isSubmitting}
+                placeholder="you@example.com"
+              />
+            </div>
           ) : (
-            <p className="text-sm text-slate-500">
-              Username {student.username} · {student.schoolName || "—"}
-            </p>
+            <p className="text-sm text-slate-500">Username {student.username}</p>
           )}
+
+          <div>
+            <FieldLabel htmlFor="student-school" required>
+              School
+            </FieldLabel>
+            <select
+              id="student-school"
+              value={schoolId}
+              onChange={(event) => {
+                setSchoolId(event.target.value);
+                setCampusId("");
+              }}
+              className={inputClassName}
+              required
+              disabled={isSubmitting}
+            >
+              <option value="">Select school</option>
+              {schools.map((school) => (
+                <option key={school.id} value={school.id}>
+                  {school.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <FieldLabel htmlFor="student-campus" required>
@@ -237,26 +231,12 @@ export function StudentFormDialog({
               onChange={(event) => setCampusId(event.target.value)}
               className={inputClassName}
               required
-              disabled={
-                isSubmitting ||
-                (!isEdit && !selectedSchoolId) ||
-                campusesLoading
-              }
+              disabled={isSubmitting || !selectedSchoolId || campusesLoading}
             >
               <option value="">
                 {campusesLoading ? "Loading campuses..." : "Select campus"}
               </option>
-              {(isEdit
-                ? campuses.length > 0
-                  ? campuses
-                  : ([
-                      {
-                        id: student.campusId,
-                        name: student.campusName || "Current campus",
-                      },
-                    ] as Pick<DirectoryCampus, "id" | "name">[])
-                : campuses
-              ).map((campus) => (
+              {campuses.map((campus) => (
                 <option key={campus.id} value={campus.id}>
                   {campus.name}
                 </option>

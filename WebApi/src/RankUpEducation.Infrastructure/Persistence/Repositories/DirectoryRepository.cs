@@ -305,6 +305,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var schoolNames = await GetSchoolNamesAsync(schoolIds, cancellationToken);
         var campusNames = await GetCampusNamesAsync(campusIds, cancellationToken);
         var teacherNamesByStudent = await GetTeacherNamesByStudentAsync(studentIds, cancellationToken);
+        var parentNamesByStudent = await GetParentNamesByStudentAsync(studentIds, cancellationToken);
+        var tutorNamesByStudent = await GetTutorNamesByStudentAsync(studentIds, cancellationToken);
         var approvalHistory = await GetApprovalHistoryByUserIdsAsync(studentIds, cancellationToken);
 
         var items = rows
@@ -322,6 +324,8 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 schoolNames.GetValueOrDefault(row.SchoolId, "—"),
                 campusNames.GetValueOrDefault(row.CampusId, "—"),
                 teacherNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
+                parentNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
+                tutorNamesByStudent.GetValueOrDefault(row.Id, Array.Empty<string>()),
                 row.MobileNumber,
                 row.Cnic,
                 row.EmailAddress,
@@ -431,41 +435,51 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         var schoolNames = await GetSchoolNamesAsync(schoolIds, cancellationToken);
         var campusNames = await GetCampusNamesAsync(campusIds, cancellationToken);
-        var studentCounts = await GetTeacherStudentCountsAsync(teacherIds, cancellationToken);
+        var studentsByTeacher = await GetTeacherStudentsAsync(
+            rows.Select(row => (row.Id, row.SchoolId, row.CampusId)).ToArray(),
+            schoolNames,
+            campusNames,
+            cancellationToken);
         var approvalHistory = await GetApprovalHistoryByUserIdsAsync(teacherIds, cancellationToken);
         var rolesByUser = await GetRoleNamesByUserIdsAsync(teacherIds, cancellationToken);
         var classSectionsByTeacher = await GetTeacherClassSectionsAsync(teacherIds, cancellationToken);
 
         var items = rows
-            .Select(row => new DirectoryTeacherResponse(
-                row.Id,
-                row.FullName,
-                row.Username,
-                row.TeacherCode,
-                row.SchoolId,
-                row.CampusId,
-                row.IsActive,
-                row.AvatarUrl,
-                schoolNames.GetValueOrDefault(row.SchoolId, "—"),
-                campusNames.GetValueOrDefault(row.CampusId, "—"),
-                studentCounts.GetValueOrDefault(row.Id),
-                row.MobileNumber,
-                row.Cnic,
-                row.EmailAddress,
-                row.CreatedDate,
-                row.RequestedAt,
-                row.RejectedAt,
-                row.LastLoginAt,
-                row.ReasonMessage,
-                row.IsActive && string.IsNullOrWhiteSpace(row.PasswordHash),
-                approvalHistory.GetValueOrDefault(row.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
-                DirectoryAccountStatuses.Resolve(
+            .Select(row =>
+            {
+                var students = (IReadOnlyList<DirectoryLinkedStudentSummary>)studentsByTeacher
+                    .GetValueOrDefault(row.Id, Array.Empty<DirectoryLinkedStudentSummary>());
+                return new DirectoryTeacherResponse(
+                    row.Id,
+                    row.FullName,
+                    row.Username,
+                    row.TeacherCode,
+                    row.SchoolId,
+                    row.CampusId,
                     row.IsActive,
-                    !string.IsNullOrWhiteSpace(row.PasswordHash),
-                    row.RejectedAt is not null,
-                    lockedSet.Contains(row.Id)),
-                rolesByUser.GetValueOrDefault(row.Id, Array.Empty<string>()),
-                classSectionsByTeacher.GetValueOrDefault(row.Id, Array.Empty<TeacherClassSectionItem>())))
+                    row.AvatarUrl,
+                    schoolNames.GetValueOrDefault(row.SchoolId, "—"),
+                    campusNames.GetValueOrDefault(row.CampusId, "—"),
+                    students.Count,
+                    row.MobileNumber,
+                    row.Cnic,
+                    row.EmailAddress,
+                    row.CreatedDate,
+                    row.RequestedAt,
+                    row.RejectedAt,
+                    row.LastLoginAt,
+                    row.ReasonMessage,
+                    row.IsActive && string.IsNullOrWhiteSpace(row.PasswordHash),
+                    approvalHistory.GetValueOrDefault(row.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
+                    DirectoryAccountStatuses.Resolve(
+                        row.IsActive,
+                        !string.IsNullOrWhiteSpace(row.PasswordHash),
+                        row.RejectedAt is not null,
+                        lockedSet.Contains(row.Id)),
+                    rolesByUser.GetValueOrDefault(row.Id, Array.Empty<string>()),
+                    classSectionsByTeacher.GetValueOrDefault(row.Id, Array.Empty<TeacherClassSectionItem>()),
+                    students);
+            })
             .ToArray();
 
         return (items, totalCount);
@@ -537,8 +551,20 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var linkedStudentsQuery =
             from relation in _dbContext.ParentStudentRelations.AsNoTracking()
             join studentUser in _dbContext.Users.AsNoTracking() on relation.StudentId equals studentUser.Id
+            join student in _dbContext.Students.AsNoTracking() on relation.StudentId equals student.Id
             where parentIds.Contains(relation.ParentId) && relation.IsActive
-            select new { relation.ParentId, relation.StudentId, studentUser.FullName, studentUser.Username, studentUser.SchoolId, studentUser.CampusId };
+            select new
+            {
+                relation.ParentId,
+                relation.StudentId,
+                studentUser.FullName,
+                studentUser.Username,
+                studentUser.AvatarUrl,
+                studentUser.SchoolId,
+                studentUser.CampusId,
+                student.Grade,
+                student.Section,
+            };
 
         if (schoolId is not null)
         {
@@ -549,15 +575,39 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         var linkedStudents = await linkedStudentsQuery
             .OrderBy(row => row.FullName)
-            .Select(row => new { row.ParentId, row.StudentId, row.FullName, row.Username })
             .ToListAsync(cancellationToken);
+
+        var linkedSchoolIds = linkedStudents
+            .Select(row => row.SchoolId ?? 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+        var linkedCampusIds = linkedStudents
+            .Select(row => row.CampusId ?? 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+        var linkedSchoolNames = await GetSchoolNamesAsync(linkedSchoolIds, cancellationToken);
+        var linkedCampusNames = await GetCampusNamesAsync(linkedCampusIds, cancellationToken);
 
         var linkedByParent = linkedStudents
             .GroupBy(item => item.ParentId)
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .Select(item => new DirectoryLinkedStudentSummary(item.StudentId, item.FullName, item.Username))
+                    .Select(item => new DirectoryLinkedStudentSummary(
+                        item.StudentId,
+                        item.FullName,
+                        item.Username,
+                        item.AvatarUrl,
+                        item.SchoolId is int schoolKey
+                            ? linkedSchoolNames.GetValueOrDefault(schoolKey, "—")
+                            : "—",
+                        item.CampusId is int campusKey
+                            ? linkedCampusNames.GetValueOrDefault(campusKey, "—")
+                            : "—",
+                        item.Grade,
+                        item.Section))
                     .ToArray());
 
         var lockedSet = await GetLockedUserIdsAsync(parentIds, cancellationToken);
@@ -635,17 +685,54 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var linkedStudents = await (
             from relation in _dbContext.TutorStudentRelations.AsNoTracking()
             join studentUser in _dbContext.Users.AsNoTracking() on relation.StudentId equals studentUser.Id
+            join student in _dbContext.Students.AsNoTracking() on relation.StudentId equals student.Id
             where tutorIds.Contains(relation.TutorId) && relation.IsActive
             orderby studentUser.FullName
-            select new { relation.TutorId, relation.StudentId, studentUser.FullName, studentUser.Username })
+            select new
+            {
+                relation.TutorId,
+                relation.StudentId,
+                studentUser.FullName,
+                studentUser.Username,
+                studentUser.AvatarUrl,
+                studentUser.SchoolId,
+                studentUser.CampusId,
+                student.Grade,
+                student.Section,
+            })
             .ToListAsync(cancellationToken);
+
+        var linkedSchoolIds = linkedStudents
+            .Select(row => row.SchoolId ?? 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+        var linkedCampusIds = linkedStudents
+            .Select(row => row.CampusId ?? 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+        var linkedSchoolNames = await GetSchoolNamesAsync(linkedSchoolIds, cancellationToken);
+        var linkedCampusNames = await GetCampusNamesAsync(linkedCampusIds, cancellationToken);
 
         var linkedByTutor = linkedStudents
             .GroupBy(item => item.TutorId)
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .Select(item => new DirectoryLinkedStudentSummary(item.StudentId, item.FullName, item.Username))
+                    .Select(item => new DirectoryLinkedStudentSummary(
+                        item.StudentId,
+                        item.FullName,
+                        item.Username,
+                        item.AvatarUrl,
+                        item.SchoolId is int schoolKey
+                            ? linkedSchoolNames.GetValueOrDefault(schoolKey, "—")
+                            : "—",
+                        item.CampusId is int campusKey
+                            ? linkedCampusNames.GetValueOrDefault(campusKey, "—")
+                            : "—",
+                        item.Grade,
+                        item.Section))
                     .ToArray());
 
         var lockedSet = await GetLockedUserIdsAsync(tutorIds, cancellationToken);
@@ -796,6 +883,20 @@ public sealed class DirectoryRepository : IDirectoryRepository
                 cancellationToken);
 
         existing?.Deactivate();
+    }
+
+    public Task<bool> IsTutorStudentLinkedAsync(
+        long tutorId,
+        long studentId,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.TutorStudentRelations.AsNoTracking()
+            .AnyAsync(
+                relation =>
+                    relation.TutorId == tutorId
+                    && relation.StudentId == studentId
+                    && relation.IsActive,
+                cancellationToken);
     }
 
     public Task<bool> ParentExistsAsync(long parentId, CancellationToken cancellationToken)
@@ -1083,12 +1184,20 @@ public sealed class DirectoryRepository : IDirectoryRepository
         var approvalHistory = await GetApprovalHistoryByUserIdsAsync(userIds, cancellationToken);
         var rolesByUser = await GetRoleNamesByUserIdsAsync(userIds, cancellationToken);
         var classSectionsByUser = await GetCoordinatorClassSectionsAsync(userIds, cancellationToken);
+        var studentsByCoordinator = await GetCoordinatorStudentsAsync(
+            users.Select(user => (user.Id, user.SchoolId ?? 0, user.CampusId ?? 0)).ToArray(),
+            classSectionsByUser,
+            schoolNames,
+            campusNames,
+            cancellationToken);
 
         var items = users
             .Select(user =>
             {
                 var sid = user.SchoolId ?? 0;
                 var cid = user.CampusId ?? 0;
+                var students = (IReadOnlyList<DirectoryLinkedStudentSummary>)studentsByCoordinator
+                    .GetValueOrDefault(user.Id, Array.Empty<DirectoryLinkedStudentSummary>());
                 return new DirectoryCoordinatorResponse(
                     user.Id,
                     user.FullName,
@@ -1112,7 +1221,9 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     DirectoryAccountStatuses.FromUser(user, lockedSet.Contains(user.Id)),
                     approvalHistory.GetValueOrDefault(user.Id, Array.Empty<DirectoryApprovalHistoryItem>()),
                     rolesByUser.GetValueOrDefault(user.Id, Array.Empty<string>()),
-                    classSectionsByUser.GetValueOrDefault(user.Id, Array.Empty<CoordinatorClassSectionItem>()));
+                    classSectionsByUser.GetValueOrDefault(user.Id, Array.Empty<CoordinatorClassSectionItem>()),
+                    students.Count,
+                    students);
             })
             .ToArray();
 
@@ -1239,35 +1350,36 @@ public sealed class DirectoryRepository : IDirectoryRepository
             .ToDictionaryAsync(item => item.CampusId, item => item.Count, cancellationToken);
     }
 
-    private async Task<Dictionary<long, int>> GetTeacherStudentCountsAsync(
-        IReadOnlyList<long> teacherIds,
+    private async Task<Dictionary<long, IReadOnlyList<DirectoryLinkedStudentSummary>>> GetTeacherStudentsAsync(
+        IReadOnlyList<(long TeacherId, int SchoolId, int CampusId)> teachers,
+        IReadOnlyDictionary<int, string> schoolNames,
+        IReadOnlyDictionary<int, string> campusNames,
         CancellationToken cancellationToken)
     {
-        if (teacherIds.Count == 0)
+        var result = teachers.ToDictionary(
+            item => item.TeacherId,
+            _ => (IReadOnlyList<DirectoryLinkedStudentSummary>)Array.Empty<DirectoryLinkedStudentSummary>());
+
+        if (teachers.Count == 0)
         {
-            return new Dictionary<long, int>();
+            return result;
         }
 
+        var teacherIds = teachers.Select(item => item.TeacherId).ToArray();
         var assignments = await _dbContext.TeacherClassSections.AsNoTracking()
             .Where(item => teacherIds.Contains(item.TeacherId) && item.IsActive)
             .Select(item => new { item.TeacherId, item.Grade, item.Section })
             .ToListAsync(cancellationToken);
 
-        var teachers = await _dbContext.Users.AsNoTracking()
-            .Where(user => teacherIds.Contains(user.Id))
-            .Select(user => new { user.Id, user.SchoolId, user.CampusId })
-            .ToListAsync(cancellationToken);
-
-        var counts = teacherIds.ToDictionary(id => id, _ => 0);
         foreach (var teacher in teachers)
         {
-            if (teacher.SchoolId is null || teacher.CampusId is null)
+            if (teacher.SchoolId <= 0 || teacher.CampusId <= 0)
             {
                 continue;
             }
 
             var sections = assignments
-                .Where(item => item.TeacherId == teacher.Id)
+                .Where(item => item.TeacherId == teacher.TeacherId)
                 .Select(item => (item.Grade, Section: item.Section.ToLowerInvariant()))
                 .ToHashSet();
             if (sections.Count == 0)
@@ -1288,14 +1400,110 @@ public sealed class DirectoryRepository : IDirectoryRepository
                     && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
                     && grades.Contains(student.Grade)
                     && sectionNames.Contains(student.Section.ToLower())
-                select new { student.Grade, student.Section })
+                orderby student.Grade, student.Section, user.FullName
+                select new
+                {
+                    student.Id,
+                    user.FullName,
+                    user.Username,
+                    user.AvatarUrl,
+                    student.Grade,
+                    student.Section,
+                })
                 .ToListAsync(cancellationToken);
 
-            counts[teacher.Id] = candidates.Count(row =>
-                sections.Contains((row.Grade, row.Section.ToLowerInvariant())));
+            var schoolName = schoolNames.GetValueOrDefault(teacher.SchoolId, "—");
+            var campusName = campusNames.GetValueOrDefault(teacher.CampusId, "—");
+
+            result[teacher.TeacherId] = candidates
+                .Where(row => sections.Contains((row.Grade, row.Section.ToLowerInvariant())))
+                .Select(row => new DirectoryLinkedStudentSummary(
+                    row.Id,
+                    row.FullName,
+                    row.Username,
+                    row.AvatarUrl,
+                    schoolName,
+                    campusName,
+                    row.Grade,
+                    row.Section))
+                .ToArray();
         }
 
-        return counts;
+        return result;
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<DirectoryLinkedStudentSummary>>> GetCoordinatorStudentsAsync(
+        IReadOnlyList<(long UserId, int SchoolId, int CampusId)> coordinators,
+        IReadOnlyDictionary<long, IReadOnlyList<CoordinatorClassSectionItem>> classSectionsByUser,
+        IReadOnlyDictionary<int, string> schoolNames,
+        IReadOnlyDictionary<int, string> campusNames,
+        CancellationToken cancellationToken)
+    {
+        var result = coordinators.ToDictionary(
+            item => item.UserId,
+            _ => (IReadOnlyList<DirectoryLinkedStudentSummary>)Array.Empty<DirectoryLinkedStudentSummary>());
+
+        if (coordinators.Count == 0)
+        {
+            return result;
+        }
+
+        foreach (var coordinator in coordinators)
+        {
+            if (coordinator.SchoolId <= 0 || coordinator.CampusId <= 0)
+            {
+                continue;
+            }
+
+            var grades = (classSectionsByUser.GetValueOrDefault(
+                    coordinator.UserId,
+                    Array.Empty<CoordinatorClassSectionItem>()) ?? Array.Empty<CoordinatorClassSectionItem>())
+                .Select(item => item.Grade)
+                .Distinct()
+                .ToArray();
+            if (grades.Length == 0)
+            {
+                continue;
+            }
+
+            var rows = await (
+                from student in _dbContext.Students.AsNoTracking()
+                join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+                where user.SchoolId == coordinator.SchoolId
+                    && user.CampusId == coordinator.CampusId
+                    && user.IsActive
+                    && user.RejectedAt == null
+                    && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+                    && grades.Contains(student.Grade)
+                orderby student.Grade, student.Section, user.FullName
+                select new
+                {
+                    student.Id,
+                    user.FullName,
+                    user.Username,
+                    user.AvatarUrl,
+                    student.Grade,
+                    student.Section,
+                })
+                .ToListAsync(cancellationToken);
+
+            var schoolName = schoolNames.GetValueOrDefault(coordinator.SchoolId, "—");
+            var campusName = campusNames.GetValueOrDefault(coordinator.CampusId, "—");
+
+            result[coordinator.UserId] = rows
+                .Select(row => new DirectoryLinkedStudentSummary(
+                    row.Id,
+                    row.FullName,
+                    row.Username,
+                    row.AvatarUrl,
+                    schoolName,
+                    campusName,
+                    row.Grade,
+                    row.Section))
+                .ToArray();
+        }
+
+        return result;
     }
 
     private async Task<Dictionary<long, IReadOnlyList<TeacherClassSectionItem>>> GetTeacherClassSectionsAsync(
@@ -1398,6 +1606,62 @@ public sealed class DirectoryRepository : IDirectoryRepository
         }
 
         return result;
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<string>>> GetParentNamesByStudentAsync(
+        IReadOnlyList<long> studentIds,
+        CancellationToken cancellationToken)
+    {
+        if (studentIds.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<string>>();
+        }
+
+        var rows = await (
+            from relation in _dbContext.ParentStudentRelations.AsNoTracking()
+            join parentUser in _dbContext.Users.AsNoTracking() on relation.ParentId equals parentUser.Id
+            where studentIds.Contains(relation.StudentId) && relation.IsActive
+            select new { relation.StudentId, parentUser.FullName })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.StudentId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(row => row.FullName)
+                    .Where(name => name.HasTrimmedText())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name)
+                    .ToArray());
+    }
+
+    private async Task<Dictionary<long, IReadOnlyList<string>>> GetTutorNamesByStudentAsync(
+        IReadOnlyList<long> studentIds,
+        CancellationToken cancellationToken)
+    {
+        if (studentIds.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<string>>();
+        }
+
+        var rows = await (
+            from relation in _dbContext.TutorStudentRelations.AsNoTracking()
+            join tutorUser in _dbContext.Users.AsNoTracking() on relation.TutorId equals tutorUser.Id
+            where studentIds.Contains(relation.StudentId) && relation.IsActive
+            select new { relation.StudentId, tutorUser.FullName })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.StudentId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(row => row.FullName)
+                    .Where(name => name.HasTrimmedText())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name)
+                    .ToArray());
     }
 
     private async Task<HashSet<long>> GetLockedUserIdsAsync(

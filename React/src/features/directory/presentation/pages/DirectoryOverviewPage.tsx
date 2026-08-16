@@ -31,8 +31,10 @@ import { AddCoordinatorClassSectionDialog } from "@/features/directory/presentat
 import { AddTeacherClassSectionDialog } from "@/features/directory/presentation/components/AddTeacherClassSectionDialog";
 import { DirectoryIconAction } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { LinkStudentDialog } from "@/features/directory/presentation/components/LinkStudentDialog";
+import { LinkDirectoryTutorStudentDialog } from "@/features/directory/presentation/components/LinkDirectoryTutorStudentDialog";
 import { ManageLinkedStudentsDialog } from "@/features/directory/presentation/components/ManageLinkedStudentsDialog";
 import { ManageTeacherClassSectionsDialog } from "@/features/directory/presentation/components/ManageTeacherClassSectionsDialog";
+import { StudentAssignedPeopleDialog } from "@/features/directory/presentation/components/StudentAssignedPeopleDialog";
 import {
   useDirectoryCampusAdminsQuery,
   useDirectoryCampusesQuery,
@@ -44,7 +46,9 @@ import {
   useDirectorySummaryQuery,
   useDirectoryTeachersQuery,
   useDirectoryTutorsQuery,
+  useLinkDirectoryTutorStudentMutation,
   useLinkParentStudentMutation,
+  useUnlinkDirectoryTutorStudentMutation,
   useUnlinkParentStudentMutation,
   useUpdateCoordinatorMutation,
   useUpdateTeacherMutation,
@@ -82,13 +86,22 @@ type PreviewItem = {
   meta: string;
   /** Present only for school tiles — drives campus inspect flow. */
   schoolId?: number;
+  /** Present only for student tiles — assigned people popup. */
+  studentId?: number;
+  teacherNames?: string[];
+  parentNames?: string[];
+  tutorNames?: string[];
   /** Present only for parent tiles — child link actions. */
   parentId?: number;
   linkedStudents?: DirectoryLinkedStudentSummary[];
+  /** Present only for tutor tiles — student link actions. */
+  tutorId?: number;
   /** Present only for teacher tiles — class/section actions. */
   teacherId?: number;
   /** Present only for coordinator tiles — class/section actions. */
   coordinatorUserId?: number;
+  /** Roster students for teacher/coordinator view popup. */
+  students?: DirectoryLinkedStudentSummary[];
   classSections?: Array<{
     grade: number;
     section?: string;
@@ -336,21 +349,23 @@ function mapStudent(item: DirectoryStudent): PreviewItem {
     item.accountStatus,
     item.isActive,
   );
-  const teachers =
-    item.teacherNames?.filter((name) => name.trim().length > 0) ?? [];
-  const teacherLabel =
-    teachers.length === 0 ? "—" : teachers.join(", ");
+  const gradeSection =
+    item.grade != null
+      ? `${item.grade}${item.section?.trim() ? ` - ${item.section.trim()}` : ""}`
+      : item.section?.trim() || null;
   return {
     id: `student-${item.studentId}`,
     title: item.fullName,
     subtitle: `${item.schoolName || "—"} | ${item.campusName || "—"}`,
-    meta: teacherLabel === "—" ? "No teacher linked" : teacherLabel,
+    meta: "",
     username: item.username,
-    stats: [{ label: "Teacher", value: teacherLabel }],
+    studentId: item.studentId,
+    teacherNames: item.teacherNames ?? [],
+    parentNames: item.parentNames ?? [],
+    tutorNames: item.tutorNames ?? [],
     details: [
       detailOrDash("Roll number", item.rollNumber),
-      detailOrDash("Grade", item.grade),
-      detailOrDash("Section", item.section),
+      detailOrDash("Grade - Section", gradeSection),
       detailOrDash("Mobile", item.mobileNumber),
       detailOrDash("CNIC", item.cnic),
       detailOrDash("Email", item.emailAddress),
@@ -411,6 +426,8 @@ function mapTutor(item: DirectoryTutor): PreviewItem {
     subtitle: "",
     meta: item.username,
     username: item.username,
+    tutorId: item.tutorId,
+    linkedStudents: item.linkedStudents ?? [],
     stats: [{ label: "Students", value: item.linkedStudentCount }],
     details: [
       detailOrDash("Username", item.username || null),
@@ -439,15 +456,18 @@ function mapTeacher(item: DirectoryTeacher): PreviewItem {
     item.accountStatus,
     item.isActive,
   );
+  const students = item.students ?? [];
+  const studentCount = item.studentCount ?? students.length;
   return {
     id: `teacher-${item.teacherId}`,
     title: item.fullName,
     subtitle: `${item.schoolName || "—"} | ${item.campusName || "—"}`,
-    meta: `${item.studentCount} student${item.studentCount === 1 ? "" : "s"}`,
+    meta: `${studentCount} student${studentCount === 1 ? "" : "s"}`,
     username: item.username,
     teacherId: item.teacherId,
     classSections: item.classSections ?? [],
-    stats: [{ label: "Students", value: item.studentCount ?? 0 }],
+    students,
+    stats: [{ label: "Students", value: studentCount }],
     details: [
       detailOrDash("Teacher code", item.teacherCode),
       detailOrDash("Mobile", item.mobileNumber),
@@ -471,6 +491,8 @@ function mapCoordinator(item: DirectoryCoordinator): PreviewItem {
     item.isActive,
   );
   const classSections = item.classSections ?? [];
+  const students = item.students ?? [];
+  const studentCount = item.studentCount ?? students.length;
   return {
     id: `coordinator-${item.userId}`,
     title: item.fullName,
@@ -479,10 +501,13 @@ function mapCoordinator(item: DirectoryCoordinator): PreviewItem {
     username: item.username,
     coordinatorUserId: item.userId,
     classSections,
-    stats:
-      classSections.length > 0
+    students,
+    stats: [
+      ...(classSections.length > 0
         ? [{ label: "Classes", value: classSections.length }]
-        : undefined,
+        : []),
+      { label: "Students", value: studentCount },
+    ],
     details: [
       detailOrDash("Teacher code", item.teacherCode),
       detailOrDash("Mobile", item.mobileNumber),
@@ -566,9 +591,12 @@ function mapCampusAdmin(item: DirectoryCampusAdmin): PreviewItem {
 /** Directory dashboard: summary cards, searchable tabs, and record preview drawer. */
 export function DirectoryOverviewPage() {
   const { user } = useAuth();
-  const canManageParents = user != null && isAdminRole(user.role);
-  const canManageTeachers = canManageParents;
-  const canManageCoordinators = canManageParents;
+  const canManageParents = user?.role === "PortalAdmin";
+  const canViewParentChildren = user != null && isAdminRole(user.role);
+  const canManageTeachers = user != null && isAdminRole(user.role);
+  const canManageCoordinators = canManageTeachers;
+  const canManageTutors = user?.role === "PortalAdmin";
+  const canViewStudentAssignments = user != null && isAdminRole(user.role);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState("");
@@ -582,6 +610,12 @@ export function DirectoryOverviewPage() {
     useState<DirectoryParent | null>(null);
   const [manageChildrenTarget, setManageChildrenTarget] =
     useState<DirectoryParent | null>(null);
+  const [linkTutorStudentTarget, setLinkTutorStudentTarget] =
+    useState<DirectoryTutor | null>(null);
+  const [manageTutorStudentsTarget, setManageTutorStudentsTarget] =
+    useState<DirectoryTutor | null>(null);
+  const [assignedPeopleTarget, setAssignedPeopleTarget] =
+    useState<PreviewItem | null>(null);
   const [parentActionMessage, setParentActionMessage] = useState<string | null>(
     null,
   );
@@ -597,6 +631,12 @@ export function DirectoryOverviewPage() {
     useState<DirectoryCoordinator | null>(null);
   const [manageCoordinatorClassTarget, setManageCoordinatorClassTarget] =
     useState<DirectoryCoordinator | null>(null);
+  const [viewRosterTarget, setViewRosterTarget] = useState<{
+    name: string;
+    title: string;
+    description: string;
+    students: DirectoryLinkedStudentSummary[];
+  } | null>(null);
   /** Expanded summary cards show status details; collapsed by default. */
   const [expandedCards, setExpandedCards] = useState<
     Partial<Record<DashboardTab, boolean>>
@@ -667,6 +707,8 @@ export function DirectoryOverviewPage() {
   );
   const linkStudentMutation = useLinkParentStudentMutation();
   const unlinkStudentMutation = useUnlinkParentStudentMutation();
+  const linkTutorStudentMutation = useLinkDirectoryTutorStudentMutation();
+  const unlinkTutorStudentMutation = useUnlinkDirectoryTutorStudentMutation();
 
   function resolveParentFromPreview(
     item: PreviewItem,
@@ -696,6 +738,32 @@ export function DirectoryOverviewPage() {
     };
   }
 
+  function resolveTutorFromPreview(item: PreviewItem): DirectoryTutor | null {
+    if (item.tutorId == null) {
+      return null;
+    }
+    const fromQuery = (tutorsQuery.data?.items ?? []).find(
+      (tutor) => tutor.tutorId === item.tutorId,
+    );
+    if (fromQuery) {
+      return fromQuery;
+    }
+    return {
+      tutorId: item.tutorId,
+      fullName: item.title,
+      username: item.username ?? item.meta,
+      linkedStudentCount: item.linkedStudents?.length ?? 0,
+      linkedStudents: item.linkedStudents ?? [],
+      linkedStudentNames: (item.linkedStudents ?? []).map(
+        (student) => student.fullName,
+      ),
+      isActive: item.statusCode === "Active",
+      accountStatus: "Active",
+      avatarUrl: item.avatarUrl,
+      lastLoginAt: item.lastLoginAt,
+    };
+  }
+
   function openLinkStudent(item: PreviewItem) {
     const parent = resolveParentFromPreview(item);
     if (!parent) {
@@ -705,6 +773,8 @@ export function DirectoryOverviewPage() {
     setParentActionMessage(null);
     setSelectedItem(null);
     setManageChildrenTarget(null);
+    setLinkTutorStudentTarget(null);
+    setManageTutorStudentsTarget(null);
     setLinkStudentTarget(parent);
   }
 
@@ -717,7 +787,37 @@ export function DirectoryOverviewPage() {
     setParentActionMessage(null);
     setSelectedItem(null);
     setLinkStudentTarget(null);
+    setLinkTutorStudentTarget(null);
+    setManageTutorStudentsTarget(null);
     setManageChildrenTarget(parent);
+  }
+
+  function openLinkTutorStudent(item: PreviewItem) {
+    const tutor = resolveTutorFromPreview(item);
+    if (!tutor) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setLinkStudentTarget(null);
+    setManageChildrenTarget(null);
+    setManageTutorStudentsTarget(null);
+    setLinkTutorStudentTarget(tutor);
+  }
+
+  function openManageTutorStudents(item: PreviewItem) {
+    const tutor = resolveTutorFromPreview(item);
+    if (!tutor) {
+      return;
+    }
+    setParentActionError(null);
+    setParentActionMessage(null);
+    setSelectedItem(null);
+    setLinkStudentTarget(null);
+    setManageChildrenTarget(null);
+    setLinkTutorStudentTarget(null);
+    setManageTutorStudentsTarget(tutor);
   }
 
   function resolveTeacherFromPreview(
@@ -805,6 +905,30 @@ export function DirectoryOverviewPage() {
     setSelectedItem(null);
     setAddCoordinatorClassTarget(null);
     setManageCoordinatorClassTarget(coordinator);
+  }
+
+  function openViewTeacherStudents(item: PreviewItem) {
+    const teacher = resolveTeacherFromPreview(item);
+    const students = teacher?.students ?? item.students ?? [];
+    setSelectedItem(null);
+    setViewRosterTarget({
+      name: item.title,
+      title: "Students",
+      description: `Students studying under ${item.title}.`,
+      students,
+    });
+  }
+
+  function openViewCoordinatorStudents(item: PreviewItem) {
+    const coordinator = resolveCoordinatorFromPreview(item);
+    const students = coordinator?.students ?? item.students ?? [];
+    setSelectedItem(null);
+    setViewRosterTarget({
+      name: item.title,
+      title: "Students",
+      description: `Students in classes coordinated by ${item.title}.`,
+      students,
+    });
   }
 
   function coordinatorUpdateInput(
@@ -1310,8 +1434,24 @@ export function DirectoryOverviewPage() {
                         <DirectoryPreviewTile
                           item={item}
                           canManageParents={canManageParents}
+                          canViewParentChildren={canViewParentChildren}
                           canManageTeachers={canManageTeachers}
                           canManageCoordinators={canManageCoordinators}
+                          canManageTutors={canManageTutors}
+                          canViewStudentAssignments={canViewStudentAssignments}
+                          onViewStudentAssignments={
+                            item.studentId != null
+                              ? () => {
+                                  setSelectedItem(null);
+                                  setAssignedPeopleTarget(item);
+                                }
+                              : undefined
+                          }
+                          onViewParentChildren={
+                            item.parentId != null
+                              ? () => openManageChildren(item)
+                              : undefined
+                          }
                           onLinkStudent={
                             item.parentId != null
                               ? () => openLinkStudent(item)
@@ -1320,6 +1460,16 @@ export function DirectoryOverviewPage() {
                           onManageChildren={
                             item.parentId != null
                               ? () => openManageChildren(item)
+                              : undefined
+                          }
+                          onLinkTutorStudent={
+                            item.tutorId != null
+                              ? () => openLinkTutorStudent(item)
+                              : undefined
+                          }
+                          onManageTutorStudents={
+                            item.tutorId != null
+                              ? () => openManageTutorStudents(item)
                               : undefined
                           }
                           onAddTeacherClass={
@@ -1341,6 +1491,13 @@ export function DirectoryOverviewPage() {
                             item.coordinatorUserId != null
                               ? () => openManageCoordinatorClass(item)
                               : undefined
+                          }
+                          onViewRosterStudents={
+                            item.teacherId != null
+                              ? () => openViewTeacherStudents(item)
+                              : item.coordinatorUserId != null
+                                ? () => openViewCoordinatorStudents(item)
+                                : undefined
                           }
                           onSelect={() => {
                             if (item.schoolId != null) {
@@ -1373,44 +1530,69 @@ export function DirectoryOverviewPage() {
         />
       ) : null}
 
+      {assignedPeopleTarget ? (
+        <StudentAssignedPeopleDialog
+          studentName={assignedPeopleTarget.title}
+          teachers={assignedPeopleTarget.teacherNames ?? []}
+          parents={assignedPeopleTarget.parentNames ?? []}
+          tutors={assignedPeopleTarget.tutorNames ?? []}
+          onClose={() => setAssignedPeopleTarget(null)}
+        />
+      ) : null}
+
       {manageChildrenTarget ? (
         <ManageLinkedStudentsDialog
           parentName={manageChildrenTarget.fullName}
+          title="Linked students"
+          description={
+            canManageParents
+              ? `Students linked to ${manageChildrenTarget.fullName}.`
+              : `Students at your school linked to ${manageChildrenTarget.fullName}.`
+          }
           linkedStudents={manageChildrenTarget.linkedStudents ?? []}
-          isSubmitting={unlinkStudentMutation.isPending}
+          isSubmitting={canManageParents && unlinkStudentMutation.isPending}
+          readOnly={!canManageParents}
           onClose={() => setManageChildrenTarget(null)}
-          onUnlink={async (studentId, studentName) => {
-            await unlinkStudentMutation.mutateAsync({
-              parentId: manageChildrenTarget.parentId,
-              studentId,
-            });
-            setParentActionMessage(
-              `Unlinked ${studentName} from ${manageChildrenTarget.fullName}.`,
-            );
-            setManageChildrenTarget((current) =>
-              current
-                ? {
-                    ...current,
-                    linkedStudents: (current.linkedStudents ?? []).filter(
-                      (student) => student.studentId !== studentId,
-                    ),
-                    linkedStudentCount: Math.max(
-                      0,
-                      current.linkedStudentCount - 1,
-                    ),
-                    linkedStudentNames: (
-                      current.linkedStudentNames ?? []
-                    ).filter((name) => name !== studentName),
-                  }
-                : current,
-            );
-            void parentsQuery.refetch();
-          }}
-          onAddLink={() => {
-            const parent = manageChildrenTarget;
-            setManageChildrenTarget(null);
-            setLinkStudentTarget(parent);
-          }}
+          onUnlink={
+            canManageParents
+              ? async (studentId, studentName) => {
+                  await unlinkStudentMutation.mutateAsync({
+                    parentId: manageChildrenTarget.parentId,
+                    studentId,
+                  });
+                  setParentActionMessage(
+                    `Unlinked ${studentName} from ${manageChildrenTarget.fullName}.`,
+                  );
+                  setManageChildrenTarget((current) =>
+                    current
+                      ? {
+                          ...current,
+                          linkedStudents: (current.linkedStudents ?? []).filter(
+                            (student) => student.studentId !== studentId,
+                          ),
+                          linkedStudentCount: Math.max(
+                            0,
+                            current.linkedStudentCount - 1,
+                          ),
+                          linkedStudentNames: (
+                            current.linkedStudentNames ?? []
+                          ).filter((name) => name !== studentName),
+                        }
+                      : current,
+                  );
+                  void parentsQuery.refetch();
+                }
+              : undefined
+          }
+          onAddLink={
+            canManageParents
+              ? () => {
+                  const parent = manageChildrenTarget;
+                  setManageChildrenTarget(null);
+                  setLinkStudentTarget(parent);
+                }
+              : undefined
+          }
         />
       ) : null}
 
@@ -1430,6 +1612,71 @@ export function DirectoryOverviewPage() {
             setParentActionError(null);
             setLinkStudentTarget(null);
             void parentsQuery.refetch();
+          }}
+        />
+      ) : null}
+
+      {manageTutorStudentsTarget ? (
+        <ManageLinkedStudentsDialog
+          parentName={manageTutorStudentsTarget.fullName}
+          title="Linked students"
+          description={`Students linked to ${manageTutorStudentsTarget.fullName}.`}
+          linkedStudents={manageTutorStudentsTarget.linkedStudents ?? []}
+          isSubmitting={unlinkTutorStudentMutation.isPending}
+          onClose={() => setManageTutorStudentsTarget(null)}
+          onUnlink={async (studentId, studentName) => {
+            await unlinkTutorStudentMutation.mutateAsync({
+              tutorId: manageTutorStudentsTarget.tutorId,
+              studentId,
+            });
+            setParentActionMessage(
+              `Unlinked ${studentName} from ${manageTutorStudentsTarget.fullName}.`,
+            );
+            setManageTutorStudentsTarget((current) =>
+              current
+                ? {
+                    ...current,
+                    linkedStudents: (current.linkedStudents ?? []).filter(
+                      (student) => student.studentId !== studentId,
+                    ),
+                    linkedStudentCount: Math.max(
+                      0,
+                      current.linkedStudentCount - 1,
+                    ),
+                    linkedStudentNames: (
+                      current.linkedStudentNames ?? []
+                    ).filter((name) => name !== studentName),
+                  }
+                : current,
+            );
+            void tutorsQuery.refetch();
+          }}
+          onAddLink={() => {
+            const tutor = manageTutorStudentsTarget;
+            setManageTutorStudentsTarget(null);
+            setLinkTutorStudentTarget(tutor);
+          }}
+        />
+      ) : null}
+
+      {linkTutorStudentTarget ? (
+        <LinkDirectoryTutorStudentDialog
+          tutorName={linkTutorStudentTarget.fullName}
+          isSubmitting={linkTutorStudentMutation.isPending}
+          onClose={() => setLinkTutorStudentTarget(null)}
+          onSubmit={async (identifier) => {
+            const result = await linkTutorStudentMutation.mutateAsync({
+              tutorId: linkTutorStudentTarget.tutorId,
+              input: { identifier },
+            });
+            setParentActionMessage(
+              result.alreadyLinked
+                ? `${result.fullName} was already linked to ${linkTutorStudentTarget.fullName}.`
+                : `Linked ${result.fullName} to ${linkTutorStudentTarget.fullName}.`,
+            );
+            setParentActionError(null);
+            setLinkTutorStudentTarget(null);
+            void tutorsQuery.refetch();
           }}
         />
       ) : null}
@@ -1584,6 +1831,19 @@ export function DirectoryOverviewPage() {
         />
       ) : null}
 
+      {viewRosterTarget ? (
+        <ManageLinkedStudentsDialog
+          parentName={viewRosterTarget.name}
+          title={viewRosterTarget.title}
+          description={viewRosterTarget.description}
+          emptyMessage="No students assigned yet."
+          linkedStudents={viewRosterTarget.students}
+          isSubmitting={false}
+          readOnly
+          onClose={() => setViewRosterTarget(null)}
+        />
+      ) : null}
+
       {schoolInspect ? (
         <SchoolInspectSheet
           school={schoolInspect.school}
@@ -1668,34 +1928,65 @@ function DirectoryPreviewTile({
   item,
   onSelect,
   canManageParents = false,
+  canViewParentChildren = false,
   canManageTeachers = false,
   canManageCoordinators = false,
+  canManageTutors = false,
+  canViewStudentAssignments = false,
+  onViewStudentAssignments,
+  onViewParentChildren,
   onLinkStudent,
   onManageChildren,
+  onLinkTutorStudent,
+  onManageTutorStudents,
   onAddTeacherClass,
   onManageTeacherClasses,
   onAddCoordinatorClass,
   onManageCoordinatorClasses,
+  onViewRosterStudents,
 }: {
   item: PreviewItem;
   onSelect: () => void;
   canManageParents?: boolean;
+  canViewParentChildren?: boolean;
   canManageTeachers?: boolean;
   canManageCoordinators?: boolean;
+  canManageTutors?: boolean;
+  canViewStudentAssignments?: boolean;
+  onViewStudentAssignments?: () => void;
+  onViewParentChildren?: () => void;
   onLinkStudent?: () => void;
   onManageChildren?: () => void;
+  onLinkTutorStudent?: () => void;
+  onManageTutorStudents?: () => void;
   onAddTeacherClass?: () => void;
   onManageTeacherClasses?: () => void;
   onAddCoordinatorClass?: () => void;
   onManageCoordinatorClasses?: () => void;
+  /** Opens view-only roster when the Students stat is clicked. */
+  onViewRosterStudents?: () => void;
 }) {
   const initials = initialsFromName(item.title);
   const imageUrl = resolvePublicUrl(item.avatarUrl);
+  const showStudentAssignmentActions =
+    canViewStudentAssignments &&
+    item.studentId != null &&
+    onViewStudentAssignments != null;
   const showParentActions =
     canManageParents &&
     item.parentId != null &&
     onLinkStudent != null &&
     onManageChildren != null;
+  const showViewParentChildren =
+    !showParentActions &&
+    canViewParentChildren &&
+    item.parentId != null &&
+    onViewParentChildren != null;
+  const showTutorActions =
+    canManageTutors &&
+    item.tutorId != null &&
+    onLinkTutorStudent != null &&
+    onManageTutorStudents != null;
   const showTeacherActions =
     canManageTeachers &&
     item.teacherId != null &&
@@ -1706,6 +1997,9 @@ function DirectoryPreviewTile({
     item.coordinatorUserId != null &&
     onAddCoordinatorClass != null &&
     onManageCoordinatorClasses != null;
+  const canOpenRoster =
+    onViewRosterStudents != null &&
+    (item.teacherId != null || item.coordinatorUserId != null);
 
   return (
     <div className="group relative flex h-full w-full items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
@@ -1743,24 +2037,75 @@ function DirectoryPreviewTile({
           <p className="mt-0.5 truncate text-sm text-slate-500">{item.subtitle}</p>
         ) : null}
         {item.stats && item.stats.length > 0 ? (
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-            {item.stats.map((stat) => (
-              <p
-                key={stat.label}
-                className="text-xs text-slate-500"
-                title={`${stat.label}: ${stat.value}`}
-              >
-                <span className="font-medium text-slate-700">{stat.value}</span>{" "}
-                <span className="text-slate-400">{stat.label}</span>
-              </p>
-            ))}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pointer-events-auto">
+            {item.stats.map((stat) => {
+              const isStudentsStat =
+                canOpenRoster &&
+                stat.label.toLowerCase() === "students" &&
+                onViewRosterStudents != null;
+              if (isStudentsStat) {
+                return (
+                  <button
+                    key={stat.label}
+                    type="button"
+                    title={`View students for ${item.title}`}
+                    className="relative z-10 text-xs text-slate-500 underline-offset-2 transition hover:text-brand-700 hover:underline"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onViewRosterStudents();
+                    }}
+                  >
+                    <span className="font-medium text-slate-700">
+                      {stat.value}
+                    </span>{" "}
+                    <span className="text-slate-400">{stat.label}</span>
+                  </button>
+                );
+              }
+              return (
+                <p
+                  key={stat.label}
+                  className="text-xs text-slate-500"
+                  title={`${stat.label}: ${stat.value}`}
+                >
+                  <span className="font-medium text-slate-700">{stat.value}</span>{" "}
+                  <span className="text-slate-400">{stat.label}</span>
+                </p>
+              );
+            })}
           </div>
-        ) : item.meta ? (
+        ) : item.meta && item.meta !== item.username ? (
           <p className="mt-1.5 truncate text-xs text-slate-400">{item.meta}</p>
         ) : null}
       </div>
 
       <div className="relative z-10 flex shrink-0 flex-col items-end gap-2">
+        {showStudentAssignmentActions ? (
+          <div className="flex items-center gap-1.5">
+            <DirectoryIconAction
+              icon={Users}
+              label={`View assigned people for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onViewStudentAssignments();
+              }}
+            />
+          </div>
+        ) : null}
+        {showViewParentChildren ? (
+          <div className="flex items-center gap-1.5">
+            <DirectoryIconAction
+              icon={Users}
+              label={`View linked students for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onViewParentChildren();
+              }}
+            />
+          </div>
+        ) : null}
         {showParentActions ? (
           <div className="flex items-center gap-1.5">
             <DirectoryIconAction
@@ -1779,6 +2124,28 @@ function DirectoryPreviewTile({
               onClick={(event) => {
                 event.stopPropagation();
                 onManageChildren();
+              }}
+            />
+          </div>
+        ) : null}
+        {showTutorActions ? (
+          <div className="flex items-center gap-1.5">
+            <DirectoryIconAction
+              icon={Link2}
+              label={`Link student to ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onLinkTutorStudent();
+              }}
+            />
+            <DirectoryIconAction
+              icon={Users}
+              label={`Manage linked students for ${item.title}`}
+              className="h-8 w-8"
+              onClick={(event) => {
+                event.stopPropagation();
+                onManageTutorStudents();
               }}
             />
           </div>
@@ -2004,7 +2371,7 @@ function DirectoryDetailSheet({
                     </p>
                   ))}
                 </div>
-              ) : item.meta ? (
+              ) : item.meta && item.meta !== item.username ? (
                 <p className="mt-1.5 truncate text-xs text-slate-400">
                   {item.meta}
                 </p>

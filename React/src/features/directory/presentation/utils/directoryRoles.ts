@@ -1,20 +1,26 @@
 /** Combinable directory roles that can be granted or removed together. */
-export type DirectoryCombinableRole = "Parent" | "Teacher" | "Coordinator";
+export type DirectoryCombinableRole =
+  | "Parent"
+  | "Teacher"
+  | "Coordinator"
+  | "Tutor";
 
 export const DIRECTORY_COMBINABLE_ROLES: DirectoryCombinableRole[] = [
   "Parent",
   "Teacher",
   "Coordinator",
+  "Tutor",
 ];
 
-export type DirectoryRoleContext = "teachers" | "parents" | "coordinators";
+export type DirectoryRoleContext =
+  | "teachers"
+  | "parents"
+  | "coordinators"
+  | "tutors";
 
 /**
  * Companion roles that can be removed from the current directory view.
- * - Single-role accounts: nothing removable
- * - Teachers page: Parent / Coordinator only (not Teacher)
- * - Parents page: Teacher / Coordinator only (not Parent)
- * - Coordinators page: Teacher / Parent only (not Coordinator)
+ * The primary role for that page is never removable here.
  */
 export function getRemovableDirectoryRoles(
   roles: string[] | null | undefined,

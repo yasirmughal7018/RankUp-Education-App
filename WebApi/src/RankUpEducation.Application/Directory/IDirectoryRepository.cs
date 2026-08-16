@@ -146,6 +146,12 @@ public interface IDirectoryRepository
 
     Task UnlinkTutorStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken);
 
+    /// <summary>Whether an active tutor-student link exists.</summary>
+    Task<bool> IsTutorStudentLinkedAsync(
+        long tutorId,
+        long studentId,
+        CancellationToken cancellationToken);
+
     Task<bool> ParentExistsAsync(long parentId, CancellationToken cancellationToken);
 
     Task<bool> TutorExistsAsync(long tutorId, CancellationToken cancellationToken);

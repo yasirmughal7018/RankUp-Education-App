@@ -47,6 +47,7 @@ import {
   useDirectorySchoolsQuery,
   useGrantCoordinatorRoleToParentMutation,
   useGrantTeacherRoleToParentMutation,
+  useGrantTutorRoleToParentMutation,
   useLinkParentStudentMutation,
   useRemoveDirectoryRoleMutation,
   useUnlinkParentStudentMutation,
@@ -78,7 +79,8 @@ function formatChildren(parent: DirectoryParent): string {
 /** Paginated parent directory with account and child link management. */
 export function DirectoryParentsPage() {
   const { user } = useAuth();
-  const canManage = user != null && isAdminRole(user.role);
+  const canManage = user?.role === "PortalAdmin";
+  const canView = user != null && isAdminRole(user.role);
   const isPortalAdmin = user?.role === "PortalAdmin";
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const lockedSchoolId =
@@ -108,6 +110,8 @@ export function DirectoryParentsPage() {
     useState<DirectoryParent | null>(null);
   const [grantCoordinatorTarget, setGrantCoordinatorTarget] =
     useState<DirectoryParent | null>(null);
+  const [grantTutorTarget, setGrantTutorTarget] =
+    useState<DirectoryParent | null>(null);
   const [deactivateTarget, setDeactivateTarget] =
     useState<DirectoryParent | null>(null);
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
@@ -127,10 +131,10 @@ export function DirectoryParentsPage() {
     lockedSchoolId ?? (Number(schoolId) || null);
   const selectedCampusId = Number(campusId) || null;
 
-  const { data: schools = [] } = useDirectorySchoolsQuery(canManage);
+  const { data: schools = [] } = useDirectorySchoolsQuery(canView);
   const { data: campuses = [] } = useDirectoryCampusesQuery(
     selectedSchoolId ?? 0,
-    canManage && showCampusFilter && selectedSchoolId != null,
+    canView && showCampusFilter && selectedSchoolId != null,
   );
 
   const filters = useMemo(
@@ -164,6 +168,7 @@ export function DirectoryParentsPage() {
   const bulkDeactivateMutation = useBulkDeactivateParentsMutation();
   const grantTeacherMutation = useGrantTeacherRoleToParentMutation();
   const grantCoordinatorMutation = useGrantCoordinatorRoleToParentMutation();
+  const grantTutorMutation = useGrantTutorRoleToParentMutation();
   const removeRoleMutation = useRemoveDirectoryRoleMutation();
   const linkStudentMutation = useLinkParentStudentMutation();
   const unlinkStudentMutation = useUnlinkParentStudentMutation();
@@ -201,6 +206,7 @@ export function DirectoryParentsPage() {
     bulkDeactivateMutation.isPending ||
     grantTeacherMutation.isPending ||
     grantCoordinatorMutation.isPending ||
+    grantTutorMutation.isPending ||
     removeRoleMutation.isPending ||
     linkStudentMutation.isPending ||
     unlinkStudentMutation.isPending;
@@ -313,98 +319,126 @@ export function DirectoryParentsPage() {
   }
 
   function rowActions(parent: DirectoryParent) {
-    if (!canManage) {
+    if (canManage) {
+      const roles = parent.roles ?? [];
+      const hasTeacherRole = roles.includes("Teacher");
+      const hasCoordinatorRole = roles.includes("Coordinator");
+      const hasTutorRole = roles.includes("Tutor");
+      const removableRoles = getRemovableDirectoryRoles(roles, "Parent");
+      const overflowItems = [
+        {
+          id: "toggle-active",
+          label: parent.isActive ? "Deactivate" : "Activate",
+          onSelect: () => void toggleActive(parent),
+          disabled: busy,
+          tone: parent.isActive ? ("danger" as const) : ("default" as const),
+        },
+        ...(!hasTeacherRole
+          ? [
+              {
+                id: "add-teacher",
+                label: "Add Teacher role",
+                onSelect: () => {
+                  clearMessages();
+                  setGrantTeacherTarget(parent);
+                },
+                disabled: busy,
+              },
+            ]
+          : []),
+        ...(!hasCoordinatorRole
+          ? [
+              {
+                id: "add-coordinator",
+                label: "Add Coordinator role",
+                onSelect: () => {
+                  clearMessages();
+                  setGrantCoordinatorTarget(parent);
+                },
+                disabled: busy,
+              },
+            ]
+          : []),
+        ...(!hasTutorRole
+          ? [
+              {
+                id: "add-tutor",
+                label: "Add Tutor role",
+                onSelect: () => {
+                  clearMessages();
+                  setGrantTutorTarget(parent);
+                },
+                disabled: busy,
+              },
+            ]
+          : []),
+        ...removableRoles.map((role) => ({
+          id: `remove-${role.toLowerCase()}`,
+          label: `Remove ${role} role`,
+          onSelect: () => {
+            clearMessages();
+            setRemoveRoleTarget({
+              parentId: parent.parentId,
+              fullName: parent.fullName,
+              role,
+            });
+          },
+          disabled: busy,
+          tone: "danger" as const,
+        })),
+      ];
+
+      return (
+        <>
+          <DirectoryIconAction
+            icon={Link2}
+            label={`Link student to ${parent.fullName}`}
+            disabled={busy}
+            onClick={() => {
+              clearMessages();
+              setLinkStudentTarget(parent);
+            }}
+          />
+          <DirectoryIconAction
+            icon={Users}
+            label={`Manage children for ${parent.fullName}`}
+            disabled={busy}
+            onClick={() => {
+              clearMessages();
+              setManageChildrenTarget(parent);
+            }}
+          />
+          <DirectoryIconAction
+            icon={Pencil}
+            label={`Edit ${parent.fullName}`}
+            disabled={busy}
+            onClick={() => {
+              clearMessages();
+              setParentDialog(parent);
+            }}
+          />
+          <DirectoryRowOverflowMenu
+            label={`More actions for ${parent.fullName}`}
+            disabled={busy}
+            items={overflowItems}
+          />
+        </>
+      );
+    }
+
+    if (!canView) {
       return null;
     }
-    const roles = parent.roles ?? [];
-    const hasTeacherRole = roles.includes("Teacher");
-    const hasCoordinatorRole = roles.includes("Coordinator");
-    const removableRoles = getRemovableDirectoryRoles(roles, "Parent");
-    const overflowItems = [
-      {
-        id: "toggle-active",
-        label: parent.isActive ? "Deactivate" : "Activate",
-        onSelect: () => void toggleActive(parent),
-        disabled: busy,
-        tone: parent.isActive ? ("danger" as const) : ("default" as const),
-      },
-      ...(!hasTeacherRole
-        ? [
-            {
-              id: "add-teacher",
-              label: "Add Teacher role",
-              onSelect: () => {
-                clearMessages();
-                setGrantTeacherTarget(parent);
-              },
-              disabled: busy,
-            },
-          ]
-        : []),
-      ...(!hasCoordinatorRole
-        ? [
-            {
-              id: "add-coordinator",
-              label: "Add Coordinator role",
-              onSelect: () => {
-                clearMessages();
-                setGrantCoordinatorTarget(parent);
-              },
-              disabled: busy,
-            },
-          ]
-        : []),
-      ...removableRoles.map((role) => ({
-        id: `remove-${role.toLowerCase()}`,
-        label: `Remove ${role} role`,
-        onSelect: () => {
-          clearMessages();
-          setRemoveRoleTarget({
-            parentId: parent.parentId,
-            fullName: parent.fullName,
-            role,
-          });
-        },
-        disabled: busy,
-        tone: "danger" as const,
-      })),
-    ];
 
     return (
-      <>
-        <DirectoryIconAction
-          icon={Link2}
-          label={`Link student to ${parent.fullName}`}
-          disabled={busy}
-          onClick={() => {
-            clearMessages();
-            setLinkStudentTarget(parent);
-          }}
-        />
-        <DirectoryIconAction
-          icon={Users}
-          label={`Manage children for ${parent.fullName}`}
-          disabled={busy}
-          onClick={() => {
-            clearMessages();
-            setManageChildrenTarget(parent);
-          }}
-        />
-        <DirectoryIconAction
-          icon={Pencil}
-          label={`Edit ${parent.fullName}`}
-          disabled={busy}
-          onClick={() => {
-            clearMessages();
-            setParentDialog(parent);
-          }}
-        />
-        <DirectoryRowOverflowMenu
-          label={`More actions for ${parent.fullName}`}
-          disabled={busy}
-          items={overflowItems}
-        />
-      </>
+      <DirectoryIconAction
+        icon={Users}
+        label={`View linked students for ${parent.fullName}`}
+        onClick={() => {
+          clearMessages();
+          setManageChildrenTarget(parent);
+        }}
+      />
     );
   }
 
@@ -598,7 +632,7 @@ export function DirectoryParentsPage() {
             <DirectoryTh>Contact</DirectoryTh>
             <DirectoryTh>Children</DirectoryTh>
             <DirectoryTh>Status</DirectoryTh>
-            {canManage ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
+            {canView ? <DirectoryTh align="right">Actions</DirectoryTh> : null}
           </DirectoryTableHead>
           <tbody className="divide-y divide-border">
             {visibleParents.map((parent) => (
@@ -643,7 +677,7 @@ export function DirectoryParentsPage() {
                     isActive={parent.isActive}
                   />
                 </DirectoryTd>
-                {canManage ? (
+                {canView ? (
                   <DirectoryTd align="right">
                     <div className="flex justify-end gap-1.5">
                       {rowActions(parent)}
@@ -716,6 +750,40 @@ export function DirectoryParentsPage() {
       ) : null}
 
       <AppConfirmDialog
+        open={grantTutorTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !grantTutorMutation.isPending) {
+            setGrantTutorTarget(null);
+          }
+        }}
+        title="Add Tutor role"
+        description={
+          grantTutorTarget
+            ? `Add the Tutor role to ${grantTutorTarget.fullName}? They keep Parent access and can switch to Tutor after login.`
+            : ""
+        }
+        confirmLabel="Add Tutor"
+        loading={grantTutorMutation.isPending}
+        onConfirm={() => {
+          void (async () => {
+            if (!grantTutorTarget) {
+              return;
+            }
+            try {
+              await grantTutorMutation.mutateAsync(grantTutorTarget.parentId);
+              setSuccessMessage(
+                `Tutor role added to ${grantTutorTarget.fullName}.`,
+              );
+              setGrantTutorTarget(null);
+            } catch (err) {
+              const apiError = err as ApiError;
+              setActionError(apiError.message ?? "Unable to add Tutor role.");
+            }
+          })();
+        }}
+      />
+
+      <AppConfirmDialog
         open={deactivateTarget != null}
         onOpenChange={(open) => {
           if (!open && !deactivateMutation.isPending) {
@@ -783,41 +851,56 @@ export function DirectoryParentsPage() {
       {manageChildrenTarget ? (
         <ManageLinkedStudentsDialog
           parentName={manageChildrenTarget.fullName}
+          title="Linked students"
+          description={
+            canManage
+              ? `Students linked to ${manageChildrenTarget.fullName}.`
+              : `Students at your school linked to ${manageChildrenTarget.fullName}.`
+          }
           linkedStudents={manageChildrenTarget.linkedStudents ?? []}
-          isSubmitting={unlinkStudentMutation.isPending}
+          isSubmitting={canManage && unlinkStudentMutation.isPending}
+          readOnly={!canManage}
           onClose={() => setManageChildrenTarget(null)}
-          onUnlink={async (studentId, studentName) => {
-            await unlinkStudentMutation.mutateAsync({
-              parentId: manageChildrenTarget.parentId,
-              studentId,
-            });
-            setSuccessMessage(
-              `Unlinked ${studentName} from ${manageChildrenTarget.fullName}.`,
-            );
-            setManageChildrenTarget((current) =>
-              current
-                ? {
-                    ...current,
-                    linkedStudents: (current.linkedStudents ?? []).filter(
-                      (student) => student.studentId !== studentId,
-                    ),
-                    linkedStudentCount: Math.max(
-                      0,
-                      current.linkedStudentCount - 1,
-                    ),
-                    linkedStudentNames: (current.linkedStudentNames ?? []).filter(
-                      (name) => name !== studentName,
-                    ),
-                  }
-                : current,
-            );
-            void refetch();
-          }}
-          onAddLink={() => {
-            const parent = manageChildrenTarget;
-            setManageChildrenTarget(null);
-            setLinkStudentTarget(parent);
-          }}
+          onUnlink={
+            canManage
+              ? async (studentId, studentName) => {
+                  await unlinkStudentMutation.mutateAsync({
+                    parentId: manageChildrenTarget.parentId,
+                    studentId,
+                  });
+                  setSuccessMessage(
+                    `Unlinked ${studentName} from ${manageChildrenTarget.fullName}.`,
+                  );
+                  setManageChildrenTarget((current) =>
+                    current
+                      ? {
+                          ...current,
+                          linkedStudents: (current.linkedStudents ?? []).filter(
+                            (student) => student.studentId !== studentId,
+                          ),
+                          linkedStudentCount: Math.max(
+                            0,
+                            current.linkedStudentCount - 1,
+                          ),
+                          linkedStudentNames: (
+                            current.linkedStudentNames ?? []
+                          ).filter((name) => name !== studentName),
+                        }
+                      : current,
+                  );
+                  void refetch();
+                }
+              : undefined
+          }
+          onAddLink={
+            canManage
+              ? () => {
+                  const parent = manageChildrenTarget;
+                  setManageChildrenTarget(null);
+                  setLinkStudentTarget(parent);
+                }
+              : undefined
+          }
         />
       ) : null}
 

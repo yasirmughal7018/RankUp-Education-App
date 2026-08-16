@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pencil, Power, PowerOff } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { AppCard } from "@/components/ui/app-card";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { AppEmptyState } from "@/components/ui/app-empty-state";
 import { AppErrorState } from "@/components/ui/app-error-state";
 import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
@@ -51,6 +52,10 @@ export function DirectorySchoolsPage() {
   const [campusDialog, setCampusDialog] = useState<
     "create" | DirectoryCampus | null
   >(null);
+  const [deactivateSchoolTarget, setDeactivateSchoolTarget] =
+    useState<DirectorySchool | null>(null);
+  const [deactivateCampusTarget, setDeactivateCampusTarget] =
+    useState<DirectoryCampus | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -152,17 +157,28 @@ export function DirectorySchoolsPage() {
 
   async function toggleSchoolActive(school: DirectorySchool) {
     clearMessages();
+    if (school.isActive) {
+      setDeactivateSchoolTarget(school);
+      return;
+    }
     try {
-      if (school.isActive) {
-        if (!window.confirm(`Deactivate ${school.name}?`)) {
-          return;
-        }
-        await deactivateSchoolMutation.mutateAsync(school.id);
-        setSuccessMessage(`Deactivated ${school.name}.`);
-      } else {
-        await activateSchoolMutation.mutateAsync(school.id);
-        setSuccessMessage(`Activated ${school.name}.`);
-      }
+      await activateSchoolMutation.mutateAsync(school.id);
+      setSuccessMessage(`Activated ${school.name}.`);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setActionError(apiError.message ?? "Unable to update school status.");
+    }
+  }
+
+  async function confirmDeactivateSchool() {
+    if (!deactivateSchoolTarget) {
+      return;
+    }
+    clearMessages();
+    try {
+      await deactivateSchoolMutation.mutateAsync(deactivateSchoolTarget.id);
+      setSuccessMessage(`Deactivated ${deactivateSchoolTarget.name}.`);
+      setDeactivateSchoolTarget(null);
     } catch (err) {
       const apiError = err as ApiError;
       setActionError(apiError.message ?? "Unable to update school status.");
@@ -175,23 +191,34 @@ export function DirectorySchoolsPage() {
     }
 
     clearMessages();
+    if (campus.isActive) {
+      setDeactivateCampusTarget(campus);
+      return;
+    }
     try {
-      if (campus.isActive) {
-        if (!window.confirm(`Deactivate ${campus.name}?`)) {
-          return;
-        }
-        await deactivateCampusMutation.mutateAsync({
-          campusId: campus.id,
-          schoolId: selectedSchoolId,
-        });
-        setSuccessMessage(`Deactivated ${campus.name}.`);
-      } else {
-        await activateCampusMutation.mutateAsync({
-          campusId: campus.id,
-          schoolId: selectedSchoolId,
-        });
-        setSuccessMessage(`Activated ${campus.name}.`);
-      }
+      await activateCampusMutation.mutateAsync({
+        campusId: campus.id,
+        schoolId: selectedSchoolId,
+      });
+      setSuccessMessage(`Activated ${campus.name}.`);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setActionError(apiError.message ?? "Unable to update campus status.");
+    }
+  }
+
+  async function confirmDeactivateCampus() {
+    if (!deactivateCampusTarget || !selectedSchoolId) {
+      return;
+    }
+    clearMessages();
+    try {
+      await deactivateCampusMutation.mutateAsync({
+        campusId: deactivateCampusTarget.id,
+        schoolId: selectedSchoolId,
+      });
+      setSuccessMessage(`Deactivated ${deactivateCampusTarget.name}.`);
+      setDeactivateCampusTarget(null);
     } catch (err) {
       const apiError = err as ApiError;
       setActionError(apiError.message ?? "Unable to update campus status.");
@@ -458,6 +485,44 @@ export function DirectorySchoolsPage() {
           onSubmit={handleCampusSubmit}
         />
       ) : null}
+
+      <AppConfirmDialog
+        open={deactivateSchoolTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !deactivateSchoolMutation.isPending) {
+            setDeactivateSchoolTarget(null);
+          }
+        }}
+        title="Deactivate school"
+        description={
+          deactivateSchoolTarget
+            ? `Deactivate ${deactivateSchoolTarget.name}? Related campuses and accounts stay, but the school is marked inactive.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        destructive
+        loading={deactivateSchoolMutation.isPending}
+        onConfirm={() => void confirmDeactivateSchool()}
+      />
+
+      <AppConfirmDialog
+        open={deactivateCampusTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !deactivateCampusMutation.isPending) {
+            setDeactivateCampusTarget(null);
+          }
+        }}
+        title="Deactivate campus"
+        description={
+          deactivateCampusTarget
+            ? `Deactivate ${deactivateCampusTarget.name}? It will no longer be available for new assignments until activated again.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        destructive
+        loading={deactivateCampusMutation.isPending}
+        onConfirm={() => void confirmDeactivateCampus()}
+      />
     </DirectoryPageShell>
   );
 }

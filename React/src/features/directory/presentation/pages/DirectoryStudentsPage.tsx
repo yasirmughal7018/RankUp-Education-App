@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Pencil, UserCheck, UserX } from "lucide-react";
+import { Pencil, UserCheck, Users, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { AppSearchInput } from "@/components/ui/app-search-input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
@@ -28,6 +29,7 @@ import {
   directorySelectClassName,
 } from "@/features/directory/presentation/components/DirectoryListChrome";
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
+import { StudentAssignedPeopleDialog } from "@/features/directory/presentation/components/StudentAssignedPeopleDialog";
 import { StudentFormDialog } from "@/features/directory/presentation/components/StudentFormDialog";
 import {
   useActivateStudentMutation,
@@ -68,6 +70,11 @@ export function DirectoryStudentsPage() {
   const [studentDialog, setStudentDialog] = useState<
     "create" | DirectoryStudent | null
   >(null);
+  const [assignedPeopleTarget, setAssignedPeopleTarget] =
+    useState<DirectoryStudent | null>(null);
+  const [deactivateTarget, setDeactivateTarget] =
+    useState<DirectoryStudent | null>(null);
+  const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -189,41 +196,46 @@ export function DirectoryStudentsPage() {
 
   async function toggleActive(student: DirectoryStudent) {
     clearMessages();
+    if (student.isActive) {
+      setDeactivateTarget(student);
+      return;
+    }
     try {
-      if (student.isActive) {
-        if (!window.confirm(`Deactivate ${student.fullName}?`)) {
-          return;
-        }
-        await deactivateMutation.mutateAsync(student.studentId);
-        setSuccessMessage(`Deactivated ${student.fullName}.`);
-      } else {
-        await activateMutation.mutateAsync(student.studentId);
-        setSuccessMessage(`Activated ${student.fullName}.`);
-      }
+      await activateMutation.mutateAsync(student.studentId);
+      setSuccessMessage(`Activated ${student.fullName}.`);
     } catch (err) {
       const apiError = err as ApiError;
       setActionError(apiError.message ?? "Unable to update student status.");
     }
   }
 
-  async function handleBulkDeactivate() {
+  async function confirmDeactivate() {
+    if (!deactivateTarget) {
+      return;
+    }
+    clearMessages();
+    try {
+      await deactivateMutation.mutateAsync(deactivateTarget.studentId);
+      setSuccessMessage(`Deactivated ${deactivateTarget.fullName}.`);
+      setDeactivateTarget(null);
+    } catch (err) {
+      const apiError = err as ApiError;
+      setActionError(apiError.message ?? "Unable to update student status.");
+    }
+  }
+
+  async function confirmBulkDeactivate() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) {
+      setBulkDeactivateOpen(false);
       return;
     }
-    if (
-      !window.confirm(
-        `Deactivate ${ids.length} selected student${ids.length === 1 ? "" : "s"}?`,
-      )
-    ) {
-      return;
-    }
-
     clearMessages();
     try {
       const result = await bulkDeactivateMutation.mutateAsync(ids);
       setSuccessMessage(`Deactivated ${result.affectedCount} student(s).`);
       setSelectedIds(new Set());
+      setBulkDeactivateOpen(false);
     } catch (err) {
       const apiError = err as ApiError;
       setActionError(apiError.message ?? "Unable to bulk deactivate students.");
@@ -236,6 +248,15 @@ export function DirectoryStudentsPage() {
     }
     return (
       <>
+        <DirectoryIconAction
+          icon={Users}
+          label={`View assigned people for ${student.fullName}`}
+          disabled={busy}
+          onClick={() => {
+            clearMessages();
+            setAssignedPeopleTarget(student);
+          }}
+        />
         <DirectoryIconAction
           icon={Pencil}
           label={`Edit ${student.fullName}`}
@@ -371,7 +392,10 @@ export function DirectoryStudentsPage() {
           variant="destructive"
           size="sm"
           disabled={busy}
-          onClick={() => void handleBulkDeactivate()}
+          onClick={() => {
+            clearMessages();
+            setBulkDeactivateOpen(true);
+          }}
         >
           Bulk deactivate
         </Button>
@@ -410,7 +434,7 @@ export function DirectoryStudentsPage() {
                 canManage ? () => toggleSelect(student.studentId) : undefined
               }
               title={student.fullName}
-              subtitle={`@${student.username}`}
+              subtitle={student.username}
               badge={
                 <AccountStatusBadge
                   accountStatus={student.accountStatus}
@@ -423,9 +447,8 @@ export function DirectoryStudentsPage() {
                     Roll {student.rollNumber} · Grade {student.grade}
                     {student.section}
                   </p>
-                  <p>
-                    {student.schoolName} · {student.campusName}
-                  </p>
+                  <p>{student.schoolName || "—"}</p>
+                  <p>{student.campusName || "—"}</p>
                 </>
               }
               actions={rowActions(student)}
@@ -473,7 +496,7 @@ export function DirectoryStudentsPage() {
                 <DirectoryTd>
                   <p className="font-medium">{student.fullName}</p>
                   <p className="text-xs text-muted-foreground">
-                    @{student.username}
+                    {student.username}
                   </p>
                 </DirectoryTd>
                 <DirectoryTd>{student.rollNumber}</DirectoryTd>
@@ -482,7 +505,8 @@ export function DirectoryStudentsPage() {
                   {student.section}
                 </DirectoryTd>
                 <DirectoryTd className="text-muted-foreground">
-                  {student.schoolName} / {student.campusName}
+                  <p>{student.schoolName || "—"}</p>
+                  <p className="text-xs">{student.campusName || "—"}</p>
                 </DirectoryTd>
                 <DirectoryTd>
                   <AccountStatusBadge
@@ -512,6 +536,50 @@ export function DirectoryStudentsPage() {
           onSubmit={handleFormSubmit}
         />
       ) : null}
+
+      {assignedPeopleTarget ? (
+        <StudentAssignedPeopleDialog
+          studentName={assignedPeopleTarget.fullName}
+          teachers={assignedPeopleTarget.teacherNames ?? []}
+          parents={assignedPeopleTarget.parentNames ?? []}
+          tutors={assignedPeopleTarget.tutorNames ?? []}
+          onClose={() => setAssignedPeopleTarget(null)}
+        />
+      ) : null}
+
+      <AppConfirmDialog
+        open={deactivateTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !deactivateMutation.isPending) {
+            setDeactivateTarget(null);
+          }
+        }}
+        title="Deactivate student"
+        description={
+          deactivateTarget
+            ? `Deactivate ${deactivateTarget.fullName}? They will not be able to sign in until activated again.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        destructive
+        loading={deactivateMutation.isPending}
+        onConfirm={() => void confirmDeactivate()}
+      />
+
+      <AppConfirmDialog
+        open={bulkDeactivateOpen}
+        onOpenChange={(open) => {
+          if (!open && !bulkDeactivateMutation.isPending) {
+            setBulkDeactivateOpen(false);
+          }
+        }}
+        title="Bulk deactivate students"
+        description={`Deactivate ${selectedIds.size} selected student${selectedIds.size === 1 ? "" : "s"}? They will not be able to sign in until activated again.`}
+        confirmLabel="Deactivate"
+        destructive
+        loading={bulkDeactivateMutation.isPending}
+        onConfirm={() => void confirmBulkDeactivate()}
+      />
     </DirectoryPageShell>
   );
 }

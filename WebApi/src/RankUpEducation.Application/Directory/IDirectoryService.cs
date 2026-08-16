@@ -200,6 +200,47 @@ public interface IDirectoryService
 
     Task DeactivateTutorAsync(long tutorId, CancellationToken cancellationToken);
 
+    /// <summary>Links a tutor to a student by CNIC or username (PortalAdmin).</summary>
+    Task<LinkDirectoryTutorStudentResponse> LinkTutorStudentAsync(
+        long tutorId,
+        LinkDirectoryTutorStudentRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Removes a tutor-student link (PortalAdmin).</summary>
+    Task UnlinkTutorStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken);
+
+    /// <summary>Adds Tutor onto an existing Parent account.</summary>
+    Task<DirectoryTutorResponse> GrantTutorRoleToParentAsync(
+        long parentId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds Tutor onto an existing Teacher account.</summary>
+    Task<DirectoryTutorResponse> GrantTutorRoleToTeacherAsync(
+        long teacherId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds Tutor onto an existing Coordinator account.</summary>
+    Task<DirectoryTutorResponse> GrantTutorRoleToCoordinatorAsync(
+        long userId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds Parent onto an existing Tutor account.</summary>
+    Task<DirectoryParentResponse> GrantParentRoleToTutorAsync(
+        long tutorId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds Teacher onto an existing Tutor account.</summary>
+    Task<DirectoryTeacherResponse> GrantTeacherRoleToTutorAsync(
+        long tutorId,
+        GrantTeacherRoleRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Adds Coordinator onto an existing Tutor account.</summary>
+    Task<GrantCoordinatorRoleResponse> GrantCoordinatorRoleToTutorAsync(
+        long tutorId,
+        GrantCoordinatorRoleRequest request,
+        CancellationToken cancellationToken);
+
     /// <summary>Page of school admins (portal admin only).</summary>
     Task<DirectorySchoolAdminListResponse> ListSchoolAdminsAsync(
         int? schoolId,
@@ -277,7 +318,7 @@ public interface IDirectoryService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Removes a Parent/Teacher/Coordinator role from a multi-role account in the given directory context.
+    /// Removes a Parent/Teacher/Coordinator/Tutor role from a multi-role account in the given directory context.
     /// </summary>
     Task<GrantCoordinatorRoleResponse> RemoveDirectoryRoleAsync(
         long userId,
