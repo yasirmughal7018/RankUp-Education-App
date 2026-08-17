@@ -18,6 +18,7 @@ export const queryKeys = {
     ["quizzes", quizId, "attempts", attemptId, "review"] as const,
   questions: (filters: Record<string, unknown>) =>
     ["questions", filters] as const,
+  pendingQuestionApprovals: () => ["questions", "pending-approval"] as const,
   question: (questionId: number) => ["questions", questionId] as const,
   pendingRegistrations: () => ["admin", "registrations", "pending"] as const,
   notifications: () => ["notifications"] as const,

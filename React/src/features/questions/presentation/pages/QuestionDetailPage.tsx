@@ -16,7 +16,7 @@ import {
   approvalPublishes,
   approvalVisibilityForRole,
   canActivateQuestion,
-  canApproveQuestions,
+  canApproveOrRejectQuestion,
   canArchiveQuestion,
   canDeactivateQuestion,
   canMutateQuestion,
@@ -152,7 +152,14 @@ export function QuestionDetailPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [approvalHistoryExpanded, setApprovalHistoryExpanded] = useState(false);
 
-  const canApprove = user ? canApproveQuestions(user.role) : false;
+  const canApprove =
+    user != null &&
+    question != null &&
+    canApproveOrRejectQuestion({
+      role: user.role,
+      userId: user.id,
+      createdBy: question.createdBy,
+    });
   const isOwner =
     user != null &&
     question != null &&

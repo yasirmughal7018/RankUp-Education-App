@@ -58,7 +58,10 @@ export function QuestionImportPanel({
         <h2 className="text-base font-semibold text-foreground">Excel import</h2>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
           Imports create PendingReview questions only. Class, Subject, and Topic
-          accept name or ID. Use IsCorrectN or CorrectOption (1-based).
+          accept name or ID. Use IsCorrectN or CorrectOption (1-based). Offered
+          types: Single Choice, Multiple Choice, True/False, Fill in the Blanks,
+          Descriptive, Matching, Ordering. File Upload and Media are hidden for
+          now.
         </p>
       </div>
 

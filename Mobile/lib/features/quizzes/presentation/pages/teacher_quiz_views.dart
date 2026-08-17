@@ -1391,20 +1391,12 @@ class _AddInlineQuestionDialogState extends State<_AddInlineQuestionDialog> {
                     child: Text('Descriptive'),
                   ),
                   DropdownMenuItem(
-                    value: 'File Upload',
-                    child: Text('File Upload'),
-                  ),
-                  DropdownMenuItem(
                     value: 'Matching',
                     child: Text('Matching'),
                   ),
                   DropdownMenuItem(
                     value: 'Ordering',
                     child: Text('Ordering'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Media',
-                    child: Text('Media'),
                   ),
                 ],
                 onChanged: (value) {

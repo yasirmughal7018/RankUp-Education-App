@@ -55,7 +55,8 @@ public sealed record QuestionAcceptedAnswerResponse(
 
 /// <summary>
 
-/// Create payload. Always enters PendingReview with creator SchoolId/CampusId stamped server-side.
+/// Create payload. Always enters PendingReview (PortalAdmin: auto-published).
+/// Use POST /questions/{id}/submit to move Rejected back to PendingReview.
 
 /// </summary>
 
@@ -83,15 +84,11 @@ public sealed record CreateQuestionRequest(
 
     IReadOnlyList<QuestionOptionRequest> Options,
 
-    IReadOnlyList<QuestionAcceptedAnswerRequest>? AcceptedAnswers = null,
-
-    /// <summary>Ignored for create — always PendingReview. Kept for API compatibility.</summary>
-
-    bool SubmitForReview = true);
+    IReadOnlyList<QuestionAcceptedAnswerRequest>? AcceptedAnswers = null);
 
 
 
-/// <summary>Update content/answers only; status transitions require SubmitForReview / Approve / Reject.</summary>
+/// <summary>Update content/answers only; status transitions require POST submit / approve / reject.</summary>
 
 public sealed record UpdateQuestionRequest(
 
@@ -157,7 +154,7 @@ public sealed record QuestionSummaryResponse(
     /// <summary>Approver display name, or null.</summary>
     string? ApprovedByName,
 
-    /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
+    /// <summary>Legacy compatibility flag (not an AI gate). Prefer ApprovedBy + Approved status + Visibility for quiz eligibility.</summary>
 
     bool IsAiApproved,
 
@@ -228,7 +225,7 @@ public sealed record QuestionDetailResponse(
     /// <summary>Approver display name, or null.</summary>
     string? ApprovedByName,
 
-    /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
+    /// <summary>Legacy compatibility flag (not an AI gate). Prefer ApprovedBy + Approved status + Visibility for quiz eligibility.</summary>
 
     bool IsAiApproved,
 
@@ -301,7 +298,7 @@ public sealed record QuestionApprovalResponse(
     /// <summary>Approver display name, or null.</summary>
     string? ApprovedByName,
 
-    /// <summary>Legacy field kept for API compatibility. Prefer ApprovedBy + Approved status for quiz eligibility.</summary>
+    /// <summary>Legacy compatibility flag (not an AI gate). Prefer ApprovedBy + Approved status + Visibility for quiz eligibility.</summary>
 
     bool IsAiApproved,
 

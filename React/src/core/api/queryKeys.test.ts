@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { queryKeys } from "@/core/api/queryKeys";
 
 describe("queryKeys", () => {
+  it("builds pending question approval keys", () => {
+    expect(queryKeys.pendingQuestionApprovals()).toEqual([
+      "questions",
+      "pending-approval",
+    ]);
+  });
+
   it("builds stable assignment board keys", () => {
     expect(queryKeys.assignmentBoard()).toEqual([
       "quizzes",

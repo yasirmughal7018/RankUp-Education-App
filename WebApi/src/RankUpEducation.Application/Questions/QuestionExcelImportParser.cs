@@ -106,7 +106,6 @@ public static class QuestionExcelImportParser
                 EstimatedTimeSeconds: GetShort(row, headers, "EstimatedTimeSeconds", defaultValue: 60),
                 Hint: GetNullableString(row, headers, "Hint"),
                 Explanation: GetNullableString(row, headers, "Explanation"),
-                SubmitForReview: true, // Always PendingReview — Draft removed from product.
                 Options: options,
                 AcceptedAnswers: acceptedAnswers));
         }
@@ -159,33 +158,24 @@ public static class QuestionExcelImportParser
         sheet.Cell(3, 22).Value = false;
         sheet.Cell(3, 23).Value = "H₂O";
 
+        var notes = workbook.AddWorksheet("Notes");
+        notes.Cell(1, 1).Value = "Offered QuestionType values (now)";
+        notes.Cell(1, 1).Style.Font.Bold = true;
+        notes.Cell(2, 1).Value = "Single Choice";
+        notes.Cell(3, 1).Value = "Multiple Choice";
+        notes.Cell(4, 1).Value = "True/False";
+        notes.Cell(5, 1).Value = "Fill in the Blanks";
+        notes.Cell(6, 1).Value = "Descriptive";
+        notes.Cell(7, 1).Value = "Matching";
+        notes.Cell(8, 1).Value = "Ordering";
+        notes.Cell(10, 1).Value = "Hidden for now (do not import; existing bank rows still work)";
+        notes.Cell(10, 1).Style.Font.Bold = true;
+        notes.Cell(11, 1).Value = "File Upload";
+        notes.Cell(12, 1).Value = "Media";
+
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();
-    }
-
-    /// <summary>
-    /// Status column is deprecated (Draft removed). Blank or any value → PendingReview.
-    /// Rejects Approved/Rejected/Archived so import never skips the approval queue.
-    /// </summary>
-    internal static bool? ParseSubmitForReview(string? status)
-    {
-        if (string.IsNullOrWhiteSpace(status))
-        {
-            return true;
-        }
-
-        var normalized = status.Trim();
-        if (normalized.Equals("Draft", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("PendingReview", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("Pending", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("Under Review", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        throw new InvalidOperationException(
-            $"Status '{status}' is not allowed on import. Imports always create PendingReview (Draft is no longer used).");
     }
 
     private static void RequireHeader(IReadOnlyDictionary<string, int> headers, string name)

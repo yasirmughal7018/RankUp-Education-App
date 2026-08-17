@@ -56,6 +56,21 @@ bool canApproveQuestions(UserRole role) {
       role == UserRole.campusAdmin;
 }
 
+/// Endorse / reject this question. Matches API: no self-approve except PortalAdmin.
+bool canApproveOrRejectQuestion({
+  required UserRole role,
+  required String userId,
+  required String createdBy,
+}) {
+  if (!canApproveQuestions(role)) {
+    return false;
+  }
+  if (role == UserRole.portalAdmin) {
+    return true;
+  }
+  return userId != createdBy;
+}
+
 /// PortalAdmin alone publishes (Public + Active) and runs bank lifecycle.
 bool canPublishQuestions(UserRole role) {
   return role == UserRole.portalAdmin;

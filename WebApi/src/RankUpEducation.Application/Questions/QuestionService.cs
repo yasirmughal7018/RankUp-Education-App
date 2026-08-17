@@ -589,8 +589,7 @@ public sealed class QuestionService : IQuestionService
                     draft.Hint,
                     draft.Explanation,
                     draft.Options,
-                    draft.AcceptedAnswers,
-                    SubmitForReview: true);
+                    draft.AcceptedAnswers);
 
                 QuestionBankGuard.ValidateCreateRequest(request);
                 await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);

@@ -54,6 +54,7 @@ export interface QuestionSummary {
   approvedBy: string | null;
   /** Display name for approver (from app_users). */
   approvedByName?: string | null;
+  /** Legacy compatibility flag (not an AI gate). Prefer approvedBy + Approved + Public. */
   isAiApproved: boolean;
   schoolId?: number | null;
   campusId?: number | null;
@@ -84,6 +85,7 @@ export interface QuestionDetail {
   approvedBy: string | null;
   /** Display name for approver (from app_users). */
   approvedByName?: string | null;
+  /** Legacy compatibility flag (not an AI gate). Prefer approvedBy + Approved + Public. */
   isAiApproved: boolean;
   schoolId?: number | null;
   campusId?: number | null;
@@ -143,8 +145,8 @@ export interface QuestionScopeValues {
 }
 
 /**
- * Types shown on create (`/questions/new`) and quiz inline add.
- * File Upload and Media stay in the bank for later; they are not offered in the picker.
+ * Types offered on create: web (`/questions/new`), quiz inline, Mobile, and Excel import.
+ * File Upload and Media stay in the bank for existing rows; they are not offered on create.
  */
 export const QUESTION_TYPES_NOW = [
   "Single Choice",
@@ -251,6 +253,26 @@ export function canApproveQuestions(role: UserRole): boolean {
     role === "SchoolAdmin" ||
     role === "CampusAdmin"
   );
+}
+
+/**
+ * Endorse / reject / publish this question. Matches API: no self-approve except
+ * PortalAdmin. Same-tier still 403s if the creator is a peer admin.
+ */
+export function canApproveOrRejectQuestion(args: {
+  role: UserRole;
+  userId: number | string;
+  createdBy: string;
+}): boolean {
+  if (!canApproveQuestions(args.role)) {
+    return false;
+  }
+
+  if (args.role === "PortalAdmin") {
+    return true;
+  }
+
+  return String(args.userId) !== String(args.createdBy);
 }
 
 /**

@@ -66,8 +66,8 @@ class QuestionSummaryModel {
   /// [visibility] accordingly — prefer combining these fields when present.
   final String? approvedBy;
 
-  /// Legacy flag kept for API compatibility. Prefer [approvedBy] + Approved
-  /// [status] for quiz eligibility; historically true for PortalAdmin AI approve.
+  /// Legacy compatibility flag (not an AI gate). Set on any endorse/publish.
+  /// Prefer [approvedBy] + Approved [status] + Public [visibility] for quiz eligibility.
   final bool isAiApproved;
 
   /// Owning school when the question is school/campus-scoped; null if absent.

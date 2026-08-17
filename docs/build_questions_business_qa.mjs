@@ -211,7 +211,7 @@ const questionTypes = [
     "105",
     "File Upload",
     "Hidden for now",
-    "Not offered on web create (`/questions/new`) or the quiz inline type picker. API, Excel import, and Mobile create still accept it. Student pastes a file URL/path into SubmittedText — no binary blob upload/storage yet. No options required. Re-enable later.",
+    "Not offered on web create, Mobile create, quiz inline, Excel import, or API create. Existing rows remain valid (update/attempt). Student pastes a file URL/path into SubmittedText — no binary blob upload/storage yet. No options required. Re-enable later.",
   ],
   [
     "106",
@@ -229,16 +229,16 @@ const questionTypes = [
     "108",
     "Media",
     "Hidden for now",
-    "Not offered on web create (`/questions/new`) or the quiz inline type picker. API, Excel import, and Mobile create still accept it. At least 2 options; each needs an image URL; exactly 1 correct. Re-enable later.",
+    "Not offered on web create, Mobile create, quiz inline, Excel import, or API create. Existing rows remain valid (update/attempt). At least 2 options; each needs an image URL; exactly 1 correct. Re-enable later.",
   ],
 ];
 
 const apiTransitions = [
   ["GET /api/questions", "Bank list. Query: isActive, subjectId, classId, pendingApprovalOnly, eligibleForQuizOnly. PortalAdmin: all. Others: own + Public + restricted non-Public for Campus/School admins (same creator-role lists as CanView). eligibleForQuizOnly = Public + Active + ApprovedBy."],
-  ["GET /api/questions/pending-approval", "Approver queue: PendingReview, not own, org + creator-tier (CampusAdmin campus; SchoolAdmin school; PortalAdmin all). Same creator-role lists as list/GetById. Web list currently loads GET /questions and filters client-side; Mobile calls this endpoint."],
+  ["GET /api/questions/pending-approval", "Approver queue: PendingReview, not own, org + creator-tier (CampusAdmin campus; SchoolAdmin school; PortalAdmin all). Same creator-role lists as list/GetById. Web Pending tile (Campus/School/Portal Admin) and Mobile both call this endpoint; Teachers still see own pending from GET /questions."],
   ["GET /api/questions/import-template", "Downloads rankup-questions-import-template.xlsx (no auth role beyond question-manage)."],
   ["GET /api/questions/{id}", "Detail with options/answers, creator/approver names, and ApprovalHistory trail. Forbidden if CanView is false."],
-  ["POST /api/questions", "Create as PendingReview (PortalAdmin: auto-published); trail: Created + Submitted/Published"],
+  ["POST /api/questions", "Create as PendingReview (PortalAdmin: auto-published). No submitForReview flag — create cannot save Draft. Trail: Created + Submitted/Published. Rejected items use POST /api/questions/{id}/submit."],
   ["POST /api/questions/import", "Same create path as POST /api/questions (max 200 rows, 10 MB): PendingReview for non–PortalAdmin; PortalAdmin auto-publishes each valid row; dryRun=true validates only; trail per created row"],
   ["PUT /api/questions/{id}", "Update content; trail: Modified; Rejected remains Rejected"],
   ["POST /api/questions/{id}/submit", "Rejected → PendingReview; trail: SubmittedForReview"],
@@ -302,7 +302,7 @@ const scenarios = [
     "Q-05",
     "Approver hierarchy / no self-approval",
     "CampusAdmin tries to approve their own or a peer campus's question; SchoolAdmin tries to approve their own question.",
-    "Forbidden. A CampusAdmin question needs SchoolAdmin or PortalAdmin; a SchoolAdmin question needs PortalAdmin. Approver must be a higher tier than the creator; no self or same-tier approval.",
+    "Forbidden. Web and Mobile hide Endorse/Reject on the creator's own item (CampusAdmin/SchoolAdmin). API 403s if called anyway. A CampusAdmin question needs SchoolAdmin or PortalAdmin; a SchoolAdmin question needs PortalAdmin. Approver must be a higher tier than the creator; no self or same-tier approval.",
   ],
   [
     "Q-06",
@@ -398,7 +398,7 @@ const checklist = [
   "A PendingReview or endorsed (Campus/School) question is visible ONLY to its creator plus that creator's CampusAdmin, SchoolAdmin, and PortalAdmin — never peers or other orgs.",
   "Only PortalAdmin approval publishes a question (Approved + Public + Active + quiz-usable).",
   "CampusAdmin/SchoolAdmin approval is an endorsement: Status=Approved but IsActive=false, audience stays restricted, and it is NOT quiz-usable until PortalAdmin publishes it.",
-  "Approver must be a higher tier than the creator; no self or same-tier approval (Teacher/Coordinator/Tutor/Parent→Campus/School/Portal; CampusAdmin→School/Portal; SchoolAdmin→Portal only).",
+  "Approver must be a higher tier than the creator; no self or same-tier approval (Teacher/Coordinator/Tutor/Parent→Campus/School/Portal; CampusAdmin→School/Portal; SchoolAdmin→Portal only). Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions.",
   "Only a Published (Public) Approved bank question can be toggled Active/Inactive by PortalAdmin. Bank endorse leaves IsActive=false. Exception: inline quiz create sets Campus + IsActive=true without Public.",
   "PortalAdmin may deactivate a Published question; UI shows Status=Approved and Activity=Inactive.",
   "Reject requires a reason and clears active/endorsement/visibility state.",
@@ -411,7 +411,7 @@ const checklist = [
   "Coordinator and Tutor have the same bank-create rights as Teacher/Parent: own + Public visibility, no endorse/publish.",
   "CampusAdmin list, pending-approval, and GetById include Teacher/Coordinator/Tutor/Parent in the same campus (not own). SchoolAdmin includes those plus CampusAdmin in the same school. Those three paths use the same creator-role lists.",
   "CampusAdmin can manage the question bank and endorse, but cannot manage quizzes: no quiz create, no inline question, no attach-from-bank. Quiz-managing roles are Teacher, Coordinator, Tutor, Parent, SchoolAdmin, and PortalAdmin. CampusAdmin may still school-approve campus quizzes.",
-  "Single/Multi/True-False/Fill/Descriptive/Matching/Ordering validation is enforced on web create. File Upload and Media stay in QuestionBankGuard for API/import/mobile until the web picker is re-enabled.",
+  "Single/Multi/True-False/Fill/Descriptive/Matching/Ordering are offered on web, Mobile, Excel import, quiz inline, and API create. File Upload and Media are rejected on those create paths; existing rows stay valid for update/attempt until re-enabled.",
   "File Upload is a link/path MVP (SubmittedText) — hidden on web create; binary blob upload, storage, and review download are not built yet.",
   "Accepted answers are hidden from students before attempt submission.",
   "Deleting a quiz-linked question is blocked.",
@@ -517,7 +517,7 @@ const html = `<!doctype html>
     ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Coordinator", "Tutor", "Parent", "Student"],
     permissions,
   )}
-  <div class="note"><strong>Approval hierarchy:</strong> the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Tutor/Parent → CampusAdmin, SchoolAdmin, or PortalAdmin; CampusAdmin → SchoolAdmin or PortalAdmin; SchoolAdmin → PortalAdmin only. No self-approval and no same-tier approval. Any eligible higher tier may act independently (no forced sequential chain). PortalAdmin-created questions are auto-published. Coordinator and Tutor are bank creators like Teacher/Parent: they cannot endorse or publish.</div>
+  <div class="note"><strong>Approval hierarchy:</strong> the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Tutor/Parent → CampusAdmin, SchoolAdmin, or PortalAdmin; CampusAdmin → SchoolAdmin or PortalAdmin; SchoolAdmin → PortalAdmin only. No self-approval and no same-tier approval. Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions. Any eligible higher tier may act independently (no forced sequential chain). PortalAdmin-created questions are auto-published. Coordinator and Tutor are bank creators like Teacher/Parent: they cannot endorse or publish.</div>
   <div class="note"><strong>CampusAdmin vs quizzes:</strong> CampusAdmin can browse/create/endorse in the question bank. CampusAdmin cannot manage quizzes (<code>QuizScopeResolver.RequireManageScope</code> excludes them), so they cannot attach a published bank question or create an inline quiz question. A Teacher, Coordinator, Tutor, Parent, SchoolAdmin, or PortalAdmin must put the question on a quiz. CampusAdmin may still school-approve quizzes in their campus (see Quizzes QA).</div>
 
   <h2>5. Visibility rules</h2>
@@ -545,7 +545,7 @@ const html = `<!doctype html>
   <p><strong>Inline exception:</strong> <code>POST /api/quizzes/{quizId}/questions</code> creates a question with <code>MarkFullyApproved</code> (Visibility=Campus, IsActive=true). It skips bank PendingReview and is used on that quiz immediately. It is not Public, so it does not appear in the bank picker. Removing it from the quiz deactivates the row when the caller created it.</p>
 
   <h2>7. Question types</h2>
-  <p>Authoring is validated by <code>QuestionBankGuard</code> for bank create/update/import and quiz-inline questions. Types marked <strong>Now</strong> appear on web create (<code>/questions/new</code>) and the quiz inline picker. File Upload and Media are <strong>hidden for now</strong> on those pickers; they remain valid in the API, Excel import, and Mobile until re-enabled.</p>
+  <p>Authoring is validated by <code>QuestionBankGuard</code> for bank create/update/import and quiz-inline questions. Types marked <strong>Now</strong> are offered on web create, Mobile create, quiz inline, Excel import, and API create. File Upload and Media are <strong>hidden for now</strong> on every create path; existing rows remain valid for update and quiz attempts.</p>
   ${htmlTable(["ID", "Type", "Availability", "Validation"], questionTypes)}
 
   <h2>8. Excel import</h2>
@@ -556,7 +556,8 @@ const html = `<!doctype html>
     "Confirm import uses the same create path: non–PortalAdmin rows are PendingReview only; PortalAdmin rows are auto-published (Approved + Public + Active).",
     "A Status column cannot choose Draft or override PortalAdmin auto-publish.",
     "Class, Subject, Topic, Type, and Difficulty accept supported names or canonical IDs.",
-    "Choice types accept IsCorrectN and/or CorrectOption; Fill uses accepted-answer fields; Descriptive/File need no options; Media needs OptionImageUrl per option.",
+    "Offered types: Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive, Matching, Ordering. File Upload and Media rows are rejected.",
+    "Choice types accept IsCorrectN and/or CorrectOption; Fill uses accepted-answer fields; Descriptive needs no options.",
   ])}
 
   <h2>9. API transition map</h2>
@@ -601,11 +602,11 @@ const html = `<!doctype html>
   <h2>14. Known compatibility and optional work</h2>
   ${htmlList([
     "Legacy status names Pending, UnderReview, Active, Published, and Declined remain readable for migrated data; new writes use canonical names/IDs. Draft (110) is not remapped on read — leftover rows stay Draft until edited or deleted.",
-    "IsAiApproved is a legacy compatibility field, not a second approval gate.",
+    "IsAiApproved is a legacy compatibility field, not a second approval gate. There is no /approve-ai route; QuestionAiApprovalValidator was unused and removed. Endorse/publish still set the flag for old clients.",
     "created_by / approved_by are bigint FKs to app_users; the API returns CreatedByName / ApprovedByName for display.",
     "Delete remains blocked while a question is linked to a quiz; guided unlink-then-delete is optional.",
-    "File Upload binary blob upload/storage/download remains optional future work; current MVP is paste link/path into SubmittedText. File Upload and Media are hidden on web create and quiz inline pickers; API/import/Mobile still accept them until re-enabled.",
-    "Mobile Question Bank supports create, import, endorse/reject, activate/deactivate/archive, and Public+Active quiz-ready filtering; richer pair-row Matching editors remain web-first. Mobile create still lists File Upload and Media.",
+    "File Upload binary blob upload/storage/download remains optional future work; current MVP is paste link/path into SubmittedText. File Upload and Media are hidden on every create path (web, Mobile, Excel import, API create, quiz inline); existing rows still work until re-enabled.",
+    "Mobile Question Bank supports create, import, endorse/reject, activate/deactivate/archive, and Public+Active quiz-ready filtering; richer pair-row Matching editors remain web-first. Mobile create matches web: File Upload and Media are hidden.",
     "Coordinator and Tutor are bank creators like Teacher/Parent. CampusAdmin list/pending/GetById include Teacher/Coordinator/Tutor/Parent in the same campus; SchoolAdmin also includes CampusAdmin in the same school. CampusAdmin cannot manage quizzes or attach bank questions.",
     "External AI grading for Fill is future work; current AllowAiReview behavior is OpenAI when configured, else heuristic.",
   ])}
@@ -721,7 +722,7 @@ const docChildren = [
     permissions,
   ),
   docParagraph(
-    "Approval hierarchy: the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Tutor/Parent → CampusAdmin/SchoolAdmin/PortalAdmin; CampusAdmin → SchoolAdmin/PortalAdmin; SchoolAdmin → PortalAdmin only. No self or same-tier approval. Any eligible higher tier may act independently. PortalAdmin-created questions are auto-published. Coordinator and Tutor are bank creators like Teacher/Parent: they cannot endorse or publish.",
+    "Approval hierarchy: the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Tutor/Parent → CampusAdmin/SchoolAdmin/PortalAdmin; CampusAdmin → SchoolAdmin/PortalAdmin; SchoolAdmin → PortalAdmin only. No self or same-tier approval. Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions. Any eligible higher tier may act independently. PortalAdmin-created questions are auto-published. Coordinator and Tutor are bank creators like Teacher/Parent: they cannot endorse or publish.",
     { run: { bold: true, color: "92400E" } },
   ),
   docParagraph(
@@ -750,7 +751,7 @@ const docChildren = [
 
   docHeading("7. Question types"),
   docParagraph(
-    "Authoring is validated by QuestionBankGuard for bank create/update/import and quiz-inline questions. Types marked Now appear on web create (/questions/new) and the quiz inline picker. File Upload and Media are hidden for now on those pickers; they remain valid in the API, Excel import, and Mobile until re-enabled.",
+    "Authoring is validated by QuestionBankGuard for bank create/update/import and quiz-inline questions. Types marked Now are offered on web create, Mobile create, quiz inline, Excel import, and API create. File Upload and Media are hidden for now on every create path; existing rows remain valid for update and quiz attempts.",
   ),
   docTable(["ID", "Type", "Availability", "Validation"], questionTypes),
 
@@ -762,7 +763,8 @@ const docChildren = [
     "Confirm uses the same create path: non–PortalAdmin rows are PendingReview; PortalAdmin rows auto-publish.",
     "A Status column cannot choose Draft or override PortalAdmin auto-publish.",
     "Lookup names or canonical IDs are accepted where documented.",
-    "Choice types use IsCorrectN/CorrectOption; Fill uses accepted answers; Descriptive/File need no options; Media needs OptionImageUrl.",
+    "Offered types: Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive, Matching, Ordering. File Upload and Media rows are rejected.",
+    "Choice types use IsCorrectN/CorrectOption; Fill uses accepted answers; Descriptive needs no options.",
   ].map(docBullet),
 
   docHeading("9. API transition map"),
@@ -810,11 +812,11 @@ const docChildren = [
   docHeading("14. Known compatibility and optional work"),
   ...[
     "Legacy status aliases remain readable; new writes use canonical names/IDs. Draft (110) is not remapped on read — leftover rows stay Draft until edited or deleted.",
-    "IsAiApproved is a legacy field, not a second gate.",
+    "IsAiApproved is a legacy field, not a second gate. There is no /approve-ai route; the unused QuestionAiApprovalValidator was removed.",
     "created_by / approved_by are bigint FKs to app_users; the API returns display names.",
     "Delete is blocked while quiz-linked; guided unlink is optional.",
-    "File Upload binary blob upload/storage/download remains optional; MVP is paste link/path into SubmittedText. File Upload and Media are hidden on web create and quiz inline pickers; API/import/Mobile still accept them until re-enabled.",
-    "Mobile Question Bank supports create/import/endorse/publish lifecycle and Public+Active quiz-ready filtering; richer Matching pair-row editors remain web-first. Mobile create still lists File Upload and Media.",
+    "File Upload binary blob upload/storage/download remains optional; MVP is paste link/path into SubmittedText. File Upload and Media are hidden on every create path (web, Mobile, Excel import, API create, quiz inline); existing rows still work until re-enabled.",
+    "Mobile Question Bank supports create/import/endorse/publish lifecycle and Public+Active quiz-ready filtering; richer Matching pair-row editors remain web-first. Mobile create matches web: File Upload and Media are hidden.",
     "Coordinator and Tutor are bank creators like Teacher/Parent. CampusAdmin list/pending/GetById include Teacher/Coordinator/Tutor/Parent in the same campus; SchoolAdmin also includes CampusAdmin in the same school. CampusAdmin cannot manage quizzes or attach bank questions.",
     "External AI grading for Fill is future work; AllowAiReview uses OpenAI when configured, else heuristic.",
   ].map(docBullet),

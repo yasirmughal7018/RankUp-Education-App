@@ -246,6 +246,24 @@ internal sealed class QuizManageGuard
     }
 
     public static void ValidateQuestionRequest(AddQuizQuestionRequest request)
+        => ValidateQuestionPayload(request, offeredForCreate: true);
+
+    public static void ValidateQuestionRequest(UpdateQuizQuestionRequest request)
+        => ValidateQuestionPayload(
+            new AddQuizQuestionRequest(
+                request.QuestionText,
+                request.QuestionType,
+                request.Marks,
+                request.EstimatedTimeSeconds,
+                request.Hint,
+                request.Explanation,
+                request.Options,
+                request.AcceptedAnswers),
+            offeredForCreate: false);
+
+    private static void ValidateQuestionPayload(
+        AddQuizQuestionRequest request,
+        bool offeredForCreate)
     {
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(request.QuestionText))
@@ -264,16 +282,26 @@ internal sealed class QuizManageGuard
         }
         else
         {
-            var optionRequests = request.Options
-                .Select(option => new QuestionOptionRequest(
-                    option.OptionText,
-                    option.IsCorrect,
-                    option.OptionImageUrl))
-                .ToArray();
-            errors.AddRange(QuestionBankGuard.ValidateTypeAndAnswersPublic(
-                request.QuestionType,
-                optionRequests,
-                request.AcceptedAnswers));
+            var hidden = offeredForCreate
+                ? QuestionBankGuard.HiddenCreateTypeError(request.QuestionType)
+                : null;
+            if (hidden is not null)
+            {
+                errors.Add(hidden);
+            }
+            else
+            {
+                var optionRequests = request.Options
+                    .Select(option => new QuestionOptionRequest(
+                        option.OptionText,
+                        option.IsCorrect,
+                        option.OptionImageUrl))
+                    .ToArray();
+                errors.AddRange(QuestionBankGuard.ValidateTypeAndAnswersPublic(
+                    request.QuestionType,
+                    optionRequests,
+                    request.AcceptedAnswers));
+            }
         }
 
         if (errors.Count > 0)
@@ -281,17 +309,6 @@ internal sealed class QuizManageGuard
             throw new ValidationAppException(errors);
         }
     }
-
-    public static void ValidateQuestionRequest(UpdateQuizQuestionRequest request)
-        => ValidateQuestionRequest(new AddQuizQuestionRequest(
-            request.QuestionText,
-            request.QuestionType,
-            request.Marks,
-            request.EstimatedTimeSeconds,
-            request.Hint,
-            request.Explanation,
-            request.Options,
-            request.AcceptedAnswers));
 
     private async Task EnsureEditableLifecycleAsync(Quiz quiz, CancellationToken cancellationToken)
     {

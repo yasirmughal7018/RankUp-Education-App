@@ -132,26 +132,30 @@ import, and Public+Active-only bank attachment to quizzes.
 
 | Action | Method | Route |
 |--------|--------|-------|
-| List questions | `GET` | `/api/questions?isActive=&subjectId=&classId=&pendingApprovalOnly=` |
+| List questions | `GET` | `/api/questions?isActive=&subjectId=&classId=&pendingApprovalOnly=&eligibleForQuizOnly=` |
 | Pending approval queue | `GET` | `/api/questions/pending-approval` |
 | Get question | `GET` | `/api/questions/{questionId}` |
 | Create question | `POST` | `/api/questions` |
 | Update question | `PUT` | `/api/questions/{questionId}` |
-| Approve | `POST` | `/api/questions/{questionId}/approve` |
-| AI approve (PortalAdmin) | `POST` | `/api/questions/{questionId}/approve-ai` |
+| Submit for review | `POST` | `/api/questions/{questionId}/submit` |
+| Endorse / publish | `POST` | `/api/questions/{questionId}/approve` |
 | Reject | `POST` | `/api/questions/{questionId}/reject` |
 | Activate | `POST` | `/api/questions/{questionId}/activate` |
 | Deactivate | `POST` | `/api/questions/{questionId}/deactivate` |
+| Archive | `POST` | `/api/questions/{questionId}/archive` |
+| Unarchive | `POST` | `/api/questions/{questionId}/unarchive` |
 | Delete | `DELETE` | `/api/questions/{questionId}` |
+
+There is **no** `POST /api/questions/{questionId}/approve-ai` route. `isAiApproved` is a leftover compatibility flag set on any endorse/publish; it is **not** an AI gate. Quiz-ready is Approved + Public + Active + `approvedBy`.
 
 Workflow:
 
-1. Teacher/parent creates a question → status **Pending**, `isActive = true`.
-2. School admin approves → status **Approved**, sets `approvedBy`, `isAiApproved = false`.
-3. Super admin AI-approves → status **Approved**, sets `approvedBy`, `isAiApproved = true`.
-4. School admin rejects → status **Rejected**, `isActive = false`, `isAiApproved = false`.
-5. Teacher edits an approved question → returns to **Pending**, clears approval and `isAiApproved`.
-6. **Deactivate** hides a question from quizzes without deleting the row.
+1. Teacher / Coordinator / Tutor / Parent / CampusAdmin / SchoolAdmin creates a question → status **PendingReview**, `isActive = false`, Visibility **None**. PortalAdmin create auto-publishes (Approved + Public + Active).
+2. CampusAdmin endorses (not own; Teacher/Coordinator/Tutor/Parent in campus) → **Approved**, Visibility **Campus**, `isActive = false`.
+3. SchoolAdmin endorses (not own; including CampusAdmin in school) → **Approved**, Visibility **School**, `isActive = false`.
+4. PortalAdmin publishes pending or endorsed → **Approved**, Visibility **Public**, `isActive = true` (quiz-usable).
+5. Eligible higher-tier admin rejects with a reason → **Rejected**, `isActive = false`. Owner edit does not auto-submit; `POST .../submit` returns it to PendingReview.
+6. **Deactivate** / **Activate** apply only to PortalAdmin-published (Public) questions.
 7. **Delete** permanently removes a question only when it is not linked to any quiz.
 
 ## Mobile Quiz Management

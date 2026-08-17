@@ -149,7 +149,7 @@ const questionRules = [
   ["Attach from bank", "Requires Active + Approved status + ApprovedBy + Visibility=Public + class/subject match + not already linked + marks > 0."],
   ["Edit question on quiz", "Caller must own the quiz AND be the question CreatedBy. Recalculates totals."],
   ["Remove from quiz", "Deletes QuizQuestion link; if caller created the question, deactivates it. Recalculates totals."],
-  ["Allowed types", "Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103), Descriptive (104), File Upload (105), Matching (106), Ordering (107), Media (108). File Upload MVP stores a pasted link/path in SubmittedText (no binary blob upload yet)."],
+  ["Allowed types", "Create (web, mobile, Excel import, quiz inline, API): Single Choice (100), Multiple Choice (101), True/False (102), Fill in the Blanks (103), Descriptive (104), Matching (106), Ordering (107). File Upload (105) and Media (108) are hidden on create; existing rows still work on attempts. File Upload MVP stores a pasted link/path in SubmittedText (no binary blob upload yet)."],
   ["Shuffle", "Quiz-level ShuffleQuestions / ShuffleOptions. At attempt start, options shuffle when quiz.ShuffleOptions AND link.ShuffleOptions are both true (per-question can opt out)."],
 ];
 
@@ -548,7 +548,7 @@ const checklist = [
   "Draft visibility: owner + PortalAdmin only. SchoolAdmin sees school Published/Assigned/Archived (+ Public); CampusAdmin sees campus (+ Public).",
   "Bank attach requires Public + Active + Approved + ApprovedBy + class/subject match.",
   "Inline questions are Approved+Campus+Active and usable on that quiz only for bank eligibility rules.",
-  "Descriptive (104), File Upload (105, link/path MVP), Matching (106), Ordering (107), and Media (108) authoring enabled on web and mobile (bank + quiz inline).",
+  "Descriptive (104), Matching (106), and Ordering (107) authoring enabled on web and mobile (bank + quiz inline). File Upload (105) and Media (108) are hidden on every create path; existing rows still work on attempts.",
   "Student attempts require assignment (or Public window), active quiz, window, DeviceId, attempt quota, and instructions ack when set.",
   "InProgress resumes; TimeLimitMinutes enforced client + server; AutoSubmitted on IsAutoSubmit.",
   "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time banner (≤5m) + modal/audio at ≤60s (web + mobile).",
@@ -574,7 +574,7 @@ const checklist = [
 
 const knownGaps = [
   "Matching MVP: pair-row authoring UI (web); mobile uses labeled L/R option slots. Storage is even option counts (lefts first, then rights). Option shuffle is disabled for Matching/Ordering.",
-  "File Upload (105) is link/path MVP via SubmittedText — binary blob upload, storage, and review download are not built yet.",
+  "File Upload (105) is link/path MVP via SubmittedText — binary blob upload, storage, and review download are not built yet. File Upload and Media are hidden on every create path; existing attempt rows still work.",
   "Practice post-submit teaching UX remains soft (type defaults only; no Practice-specific post-submit flow).",
   "Surprise PortalAdmin/AI-only authorship is future policy — teachers may still create Surprise quizzes today.",
   "Random question subset selection is not built (ShuffleQuestions/options exist; per-student N-of-M pools do not).",
@@ -791,7 +791,7 @@ const html = `<!doctype html>
     "/student/history — student self quiz history (Reports API; History self only — not full analytics).",
     "/parent/quiz-dashboard, children history/result — parent flows.",
     "/reports — Teacher / SchoolAdmin / PortalAdmin analytics.",
-    "Mobile /quizzes (Teacher/Parent) — create, manage (inline types including Multi/File/Matching/Ordering/Media + Public+Active bank attach), publish, assign (role modes: section/grade/group/school/multi/public), duplicate/archive/cancel/allow-retry, pending reviews, mark + finalize.",
+    "Mobile /quizzes (Teacher/Parent) — create, manage (inline types matching web Now list + Public+Active bank attach), publish, assign (role modes: section/grade/group/school/multi/public), duplicate/archive/cancel/allow-retry, pending reviews, mark + finalize.",
     "Mobile /quizzes/approvals — SchoolAdmin/PortalAdmin pending quiz approvals.",
     "Mobile /quizzes/monitoring/:quizId — assignment progress board.",
     "Mobile /reports (Student) + Quizzes history — GET /reports/students/{id}/quiz-history (History self).",
@@ -1045,7 +1045,7 @@ const docChildren = [
     "/student/history for student self quiz history (History self).",
     "/parent/quiz-dashboard and child history/result.",
     "/reports for Teacher/SchoolAdmin/PortalAdmin analytics.",
-    "Mobile /quizzes (Teacher/Parent): create, manage (full inline types + Public+Active bank attach), publish, role-scoped assign modes, duplicate/archive/cancel/allow-retry, pending reviews, mark + finalize.",
+    "Mobile /quizzes (Teacher/Parent): create, manage (inline types matching web Now list + Public+Active bank attach), publish, role-scoped assign modes, duplicate/archive/cancel/allow-retry, pending reviews, mark + finalize.",
     "Mobile /quizzes/approvals and /quizzes/monitoring/:quizId for admin approval and monitoring.",
     "Mobile /reports (Student) + Quizzes history: student self quiz history.",
   ].map(docBullet),

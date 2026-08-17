@@ -1,6 +1,8 @@
 /**
  * Question bank dashboard: workflow status and activity filters (kept separate),
  * category overview, and navigate-only list. Excel import: /questions/import.
+ * Approvers load GET /questions/pending-approval for the Pending tile; others
+ * filter the bank list in the browser.
  */
 import {
   startTransition,
@@ -17,7 +19,9 @@ import {
 } from "lucide-react";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useLookups } from "@/core/hooks/useLookups";
+import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import {
+  canApproveQuestions,
   displayQuestionListStatusLabel,
   isApprovedQuestionStatus,
   isArchivedQuestionStatus,
@@ -32,7 +36,10 @@ import {
 } from "@/features/questions/presentation/components/StatusBadge";
 import { QuestionBankStatTile } from "@/features/questions/presentation/components/QuestionBankStatTile";
 import { QuestionCategoryColumn } from "@/features/questions/presentation/components/QuestionCategoryColumn";
-import { useQuestionsQuery } from "@/features/questions/presentation/hooks/useQuestionQueries";
+import {
+  usePendingApprovalQuestionsQuery,
+  useQuestionsQuery,
+} from "@/features/questions/presentation/hooks/useQuestionQueries";
 import { AppCard } from "@/components/ui/app-card";
 import { AppEmptyState } from "@/components/ui/app-empty-state";
 import { AppErrorState } from "@/components/ui/app-error-state";
@@ -122,6 +129,8 @@ function countById(
 
 export function QuestionsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canApprove = user ? canApproveQuestions(user.role) : false;
 
   const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [subjectId, setSubjectId] = useState<number | "">("");
@@ -131,13 +140,37 @@ export function QuestionsPage() {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
-  const { data: questions = [], isLoading, error, refetch, isFetching } =
-    useQuestionsQuery({
-      pendingOnly: false,
-      activeFilter: "",
-      subjectId: "",
-      classId: "",
-    });
+  const {
+    data: questions = [],
+    isLoading: bankLoading,
+    error: bankError,
+    refetch: refetchBank,
+    isFetching: bankFetching,
+  } = useQuestionsQuery({
+    pendingOnly: false,
+    activeFilter: "",
+    subjectId: "",
+    classId: "",
+  });
+
+  const {
+    data: pendingApprovals = [],
+    isLoading: pendingLoading,
+    error: pendingError,
+    refetch: refetchPending,
+    isFetching: pendingFetching,
+  } = usePendingApprovalQuestionsQuery({ enabled: canApprove });
+
+  const isLoading = bankLoading || (canApprove && pendingLoading);
+  const error = bankError ?? (canApprove ? pendingError : undefined);
+  const isFetching = bankFetching || (canApprove && pendingFetching);
+
+  function refetch() {
+    void refetchBank();
+    if (canApprove) {
+      void refetchPending();
+    }
+  }
 
   const subjectsQuery = useLookups(LOOKUP_TYPES.SUBJECT);
   const classesQuery = useLookups(LOOKUP_TYPES.CLASS);
@@ -186,18 +219,23 @@ export function QuestionsPage() {
     return {
       total: questions.length,
       active,
-      pending,
+      pending: canApprove ? pendingApprovals.length : pending,
       approved,
       rejected,
       archived,
     };
-  }, [questions]);
+  }, [questions, canApprove, pendingApprovals.length]);
 
-  /** Questions in the current list filter — category counts follow. */
-  const lensQuestions = useMemo(
-    () => questions.filter((q) => matchesListFilter(q, listFilter)),
-    [questions, listFilter],
-  );
+  /**
+   * Approvers: Pending tile is GET /questions/pending-approval (not own, creator-tier).
+   * Others: client-filter the bank list (own pending / leftover Draft).
+   */
+  const lensQuestions = useMemo(() => {
+    if (listFilter === "pending" && canApprove) {
+      return pendingApprovals;
+    }
+    return questions.filter((q) => matchesListFilter(q, listFilter));
+  }, [questions, listFilter, canApprove, pendingApprovals]);
 
   const categoryColumns = useMemo(() => {
     const subjectCounts = countById(lensQuestions, (q) => q.subjectId);

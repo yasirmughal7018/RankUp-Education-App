@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
+import 'package:rankup_education/features/authentication/domain/entities/app_user.dart';
 import 'package:rankup_education/features/authentication/domain/entities/user_role.dart';
 import 'package:rankup_education/features/authentication/presentation/providers/auth_providers.dart';
 import 'package:rankup_education/features/questions/data/models/question_summary_model.dart';
@@ -14,10 +15,8 @@ const _questionTypes = [
   'True/False',
   'Fill in the Blanks',
   'Descriptive',
-  'File Upload',
   'Matching',
   'Ordering',
-  'Media',
 ];
 
 class QuestionsPage extends ConsumerStatefulWidget {
@@ -185,13 +184,14 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(authControllerProvider).user?.role;
-    if (role == null || !canManageQuestions(role)) {
+    final user = ref.watch(authControllerProvider).user;
+    final role = user?.role;
+    if (user == null || role == null || !canManageQuestions(role)) {
       return Scaffold(
         appBar: AppBar(title: const Text('Question Bank')),
         body: Center(
           child: FilledButton(
-            onPressed: () => context.go(role == null ? '/login' : '/'),
+            onPressed: () => context.go(user == null ? '/login' : '/'),
             child: const Text('Access restricted'),
           ),
         ),
@@ -248,7 +248,7 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
                         '${items[index].isQuizReady ? ' · Quiz ready' : ''}',
                       ),
                       trailing: Chip(label: Text(items[index].status)),
-                      onTap: () => _showDetail(items[index], role),
+                      onTap: () => _showDetail(items[index], user),
                     ),
                   ),
                 ),
@@ -257,8 +257,18 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
     );
   }
 
-  void _showDetail(QuestionSummaryModel question, UserRole role) {
+  void _showDetail(QuestionSummaryModel question, AppUser user) {
+    final role = user.role;
     final source = ref.read(questionRemoteDataSourceProvider);
+    final canAct = canApproveOrRejectQuestion(
+      role: role,
+      userId: user.id,
+      createdBy: question.createdBy,
+    );
+    final pending = _isPendingQuestionStatus(question.status);
+    final endorsed = _isEndorsedNotPublished(question);
+    final showApprove = canAct &&
+        (pending || (role == UserRole.portalAdmin && endorsed));
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -295,7 +305,7 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
                       },
                       child: const Text('Submit for review'),
                     ),
-                  if (canApproveQuestions(role)) ...[
+                  if (showApprove) ...[
                     FilledButton(
                       onPressed: () {
                         Navigator.pop(sheetContext);
@@ -303,21 +313,22 @@ class _QuestionsPageState extends ConsumerState<QuestionsPage> {
                       },
                       child: const Text('Approve'),
                     ),
-                    OutlinedButton(
-                      onPressed: () async {
-                        Navigator.pop(sheetContext);
-                        final reason = await _askReason();
-                        if (reason != null) {
-                          await _mutate(
-                            () => source.rejectQuestion(
-                              question.id,
-                              reason: reason,
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Reject'),
-                    ),
+                    if (pending)
+                      OutlinedButton(
+                        onPressed: () async {
+                          Navigator.pop(sheetContext);
+                          final reason = await _askReason();
+                          if (reason != null) {
+                            await _mutate(
+                              () => source.rejectQuestion(
+                                question.id,
+                                reason: reason,
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Reject'),
+                      ),
                   ],
                   if (canPublishQuestions(role)) ...[
                     OutlinedButton(
@@ -531,7 +542,6 @@ class _CreateQuestionDialogState extends State<_CreateQuestionDialog> {
       'explanation': null,
       'options': options,
       'acceptedAnswers': accepted,
-      'submitForReview': true,
     });
   }
 
@@ -691,4 +701,20 @@ class _CreateQuestionDialogState extends State<_CreateQuestionDialog> {
       decoration: InputDecoration(labelText: label),
     );
   }
+}
+
+bool _isPendingQuestionStatus(String status) {
+  final normalized = status.toLowerCase().replaceAll(' ', '');
+  return normalized == 'pendingreview' ||
+      normalized == 'pending' ||
+      normalized == 'underreview';
+}
+
+bool _isEndorsedNotPublished(QuestionSummaryModel question) {
+  final status = question.status.toLowerCase();
+  if (status != 'approved' && status != 'active' && status != 'published') {
+    return false;
+  }
+  final visibility = (question.visibility ?? '').trim().toLowerCase();
+  return visibility == 'campus' || visibility == 'school';
 }

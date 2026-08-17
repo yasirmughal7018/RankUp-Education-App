@@ -64,19 +64,13 @@ export async function getQuestion(questionId: number): Promise<QuestionDetail> {
   return apiRequest<QuestionDetail>(`/questions/${questionId}`);
 }
 
-/**
- * Create a question. Non–PortalAdmin → PendingReview; PortalAdmin → auto-published Public.
- */
+/** Create a question. Non–PortalAdmin → PendingReview; PortalAdmin → auto-published Public. */
 export async function createQuestion(
   values: QuestionFormValues,
-  submitForReview = true,
 ): Promise<QuestionDetail> {
   return apiRequest<QuestionDetail>("/questions", {
     method: "POST",
-    body: {
-      ...buildQuestionPayload(values),
-      submitForReview,
-    },
+    body: buildQuestionPayload(values),
   });
 }
 

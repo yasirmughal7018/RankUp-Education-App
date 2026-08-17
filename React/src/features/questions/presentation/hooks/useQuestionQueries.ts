@@ -52,6 +52,18 @@ export function useQuestionsQuery(
   });
 }
 
+/** Approver queue: GET /questions/pending-approval (Campus/School/Portal Admin). */
+export function usePendingApprovalQuestionsQuery(options?: {
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: queryKeys.pendingQuestionApprovals(),
+    queryFn: () => questionApi.listPendingApprovalQuestions(),
+    staleTime: 30_000,
+    enabled: options?.enabled ?? true,
+  });
+}
+
 /** Single question detail by id. */
 export function useQuestionQuery(questionId: number) {
   return useQuery({

@@ -69,7 +69,8 @@ public sealed class Question : BaseEntity
     public DateOnly CreatedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly ModifiedDate { get; private set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     /// <summary>
-    /// Legacy quiz-eligibility marker. Prefer <see cref="IsEligibleForQuiz"/>.
+    /// Legacy compatibility flag, not an AI gate. Set true on endorse/publish and
+    /// cleared on submit/reject. Quiz eligibility uses <see cref="IsEligibleForQuiz"/>.
     /// </summary>
     public bool IsAiApproved { get; private set; }
     public string? RejectionReason { get; private set; }

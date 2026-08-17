@@ -106,7 +106,7 @@ export function QuestionCreatePage() {
     setIsSubmitting(true);
     setSuccessMessage(null);
     try {
-      const created = await questionApi.createQuestion(values, true);
+      const created = await questionApi.createQuestion(values);
       setSavedQuestions((current) => {
         const next = [...current, created];
         setReviewIndex(next.length - 1);

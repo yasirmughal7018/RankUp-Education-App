@@ -6,8 +6,9 @@ namespace RankUpEducation.Application.Questions;
 
 /// <summary>
 /// Validates question-bank payloads by type.
-/// Supported: Single Choice, Multiple Choice, True/False, Fill in the Blanks,
-/// Descriptive, File Upload (link/path MVP), Matching, Ordering, Media.
+/// Create (web, mobile, Excel import, quiz inline) offers: Single Choice, Multiple Choice,
+/// True/False, Fill in the Blanks, Descriptive, Matching, Ordering.
+/// File Upload and Media remain valid for existing rows until re-enabled.
 /// Fill answers use <see cref="QuestionAcceptedAnswerRequest"/>; choice types use options.
 /// </summary>
 internal static class QuestionBankGuard
@@ -20,7 +21,8 @@ internal static class QuestionBankGuard
             request.QuestionType,
             request.Marks,
             request.Options,
-            request.AcceptedAnswers);
+            request.AcceptedAnswers,
+            offeredForCreate: true);
     }
 
     /// <summary>Validates update request text, marks, type, and answers/options.</summary>
@@ -31,7 +33,28 @@ internal static class QuestionBankGuard
             request.QuestionType,
             request.Marks,
             request.Options,
-            request.AcceptedAnswers);
+            request.AcceptedAnswers,
+            offeredForCreate: false);
+    }
+
+    /// <summary>
+    /// File Upload / Media are hidden on create. Existing rows can still be updated.
+    /// </summary>
+    public static string? HiddenCreateTypeError(string questionType)
+    {
+        if (string.IsNullOrWhiteSpace(questionType))
+        {
+            return null;
+        }
+
+        if (!QuizQuestionHelper.IsFileUploadType(questionType)
+            && !QuizQuestionHelper.IsMediaType(questionType))
+        {
+            return null;
+        }
+
+        var name = QuizQuestionHelper.IsFileUploadType(questionType) ? "File Upload" : "Media";
+        return $"{name} is hidden for now. Create with Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive, Matching, or Ordering.";
     }
 
     /// <summary>Shared create/update validation (does not check org or status).</summary>
@@ -40,7 +63,8 @@ internal static class QuestionBankGuard
         string questionType,
         short marks,
         IReadOnlyList<QuestionOptionRequest> options,
-        IReadOnlyList<QuestionAcceptedAnswerRequest>? acceptedAnswers)
+        IReadOnlyList<QuestionAcceptedAnswerRequest>? acceptedAnswers,
+        bool offeredForCreate = false)
     {
         var errors = new List<string>();
 
@@ -60,7 +84,15 @@ internal static class QuestionBankGuard
         }
         else
         {
-            errors.AddRange(ValidateTypeAndAnswers(questionType, options, acceptedAnswers));
+            var hidden = offeredForCreate ? HiddenCreateTypeError(questionType) : null;
+            if (hidden is not null)
+            {
+                errors.Add(hidden);
+            }
+            else
+            {
+                errors.AddRange(ValidateTypeAndAnswers(questionType, options, acceptedAnswers));
+            }
         }
 
         if (errors.Count > 0)
