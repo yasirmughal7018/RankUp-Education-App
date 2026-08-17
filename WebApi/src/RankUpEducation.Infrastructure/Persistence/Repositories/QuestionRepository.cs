@@ -98,9 +98,8 @@ public sealed class QuestionRepository : IQuestionRepository
             if (visibilityScope is not null)
             {
                 var viewerUserId = visibilityScope.UserId;
-                var teacherRole = UserRole.Teacher;
-                var parentRole = UserRole.Parent;
-                var campusAdminRole = UserRole.CampusAdmin;
+                var campusCreatorRoles = QuestionScopeResolver.CampusAdminVisibleCreatorRoles;
+                var schoolCreatorRoles = QuestionScopeResolver.SchoolAdminVisibleCreatorRoles;
 
                 if (visibilityScope.Role == UserRole.SchoolAdmin && visibilityScope.SchoolId.HasValue)
                 {
@@ -108,9 +107,7 @@ public sealed class QuestionRepository : IQuestionRepository
                     query = query.Where(question =>
                         question.SchoolId == schoolId
                         && question.CreatedBy != viewerUserId
-                        && (question.CreatedByRole == teacherRole
-                            || question.CreatedByRole == parentRole
-                            || question.CreatedByRole == campusAdminRole));
+                        && schoolCreatorRoles.Contains(question.CreatedByRole));
                 }
                 else if (visibilityScope.Role == UserRole.CampusAdmin && visibilityScope.CampusId.HasValue)
                 {
@@ -118,8 +115,7 @@ public sealed class QuestionRepository : IQuestionRepository
                     query = query.Where(question =>
                         question.CampusId == campusId
                         && question.CreatedBy != viewerUserId
-                        && (question.CreatedByRole == teacherRole
-                            || question.CreatedByRole == parentRole));
+                        && campusCreatorRoles.Contains(question.CreatedByRole));
                 }
                 else
                 {
@@ -136,9 +132,8 @@ public sealed class QuestionRepository : IQuestionRepository
             var schoolId = visibilityScope.SchoolId;
             var campusId = visibilityScope.CampusId;
             var viewerRole = visibilityScope.Role;
-            var teacherRole = UserRole.Teacher;
-            var parentRole = UserRole.Parent;
-            var campusAdminRole = UserRole.CampusAdmin;
+            var campusCreatorRoles = QuestionScopeResolver.CampusAdminVisibleCreatorRoles;
+            var schoolCreatorRoles = QuestionScopeResolver.SchoolAdminVisibleCreatorRoles;
 
             query = query.Where(question =>
                 question.CreatedBy == ownerUserId
@@ -147,15 +142,12 @@ public sealed class QuestionRepository : IQuestionRepository
                     && schoolId.HasValue
                     && question.SchoolId == schoolId
                     && question.VisibilityLevel != QuestionVisibilityLevels.Public
-                    && (question.CreatedByRole == teacherRole
-                        || question.CreatedByRole == parentRole
-                        || question.CreatedByRole == campusAdminRole))
+                    && schoolCreatorRoles.Contains(question.CreatedByRole))
                 || (viewerRole == UserRole.CampusAdmin
                     && campusId.HasValue
                     && question.CampusId == campusId
                     && question.VisibilityLevel != QuestionVisibilityLevels.Public
-                    && (question.CreatedByRole == teacherRole
-                        || question.CreatedByRole == parentRole)));
+                    && campusCreatorRoles.Contains(question.CreatedByRole)));
         }
         else if (createdByUserId.HasValue)
         {
@@ -400,6 +392,16 @@ public sealed class QuestionRepository : IQuestionRepository
     public async Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken)
     {
         await _dbContext.Approvals.AddAsync(approval, cancellationToken);
+    }
+
+    public async Task RemoveQuestionApprovalTrailAsync(long questionId, CancellationToken cancellationToken)
+    {
+        var trail = await _dbContext.Approvals
+            .Where(approval =>
+                approval.EntityType == ApprovalEntityType.Question
+                && approval.RequestId == questionId)
+            .ToListAsync(cancellationToken);
+        _dbContext.Approvals.RemoveRange(trail);
     }
 
     public Task<int> CountQuizLinksAsync(long questionId, CancellationToken cancellationToken)

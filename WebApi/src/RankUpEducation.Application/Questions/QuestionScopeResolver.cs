@@ -114,7 +114,7 @@ public static class QuestionScopeResolver
     /// <summary>
     /// Approval hierarchy + org check.
     /// Approver must be a strictly higher tier than the creator (no self / same-tier).
-    /// Teacher/Parent → CampusAdmin / SchoolAdmin / PortalAdmin;
+    /// Teacher/Coordinator/Tutor/Parent → CampusAdmin / SchoolAdmin / PortalAdmin;
     /// CampusAdmin → SchoolAdmin / PortalAdmin;
     /// SchoolAdmin → PortalAdmin only.
     /// Org: CampusAdmin same campus, SchoolAdmin same school, PortalAdmin any.
@@ -182,7 +182,7 @@ public static class QuestionScopeResolver
     /// <summary>
     /// Restricted audience for non-Public questions:
     /// creator always; PortalAdmin always;
-    /// Teacher/Parent creators → their CampusAdmin (same campus) + SchoolAdmin (same school);
+    /// Teacher/Coordinator/Tutor/Parent creators → their CampusAdmin (same campus) + SchoolAdmin (same school);
     /// CampusAdmin creators → SchoolAdmin (same school) only;
     /// SchoolAdmin creators → PortalAdmin only.
     /// Public questions are visible to every question-managing role.
@@ -230,20 +230,45 @@ public static class QuestionScopeResolver
         return false;
     }
 
+    /// <summary>
+    /// Creator roles a CampusAdmin may see/endorse in their campus
+    /// (Teacher, Coordinator, Tutor, Parent). Used by CanView and list/pending SQL.
+    /// </summary>
+    public static readonly UserRole[] CampusAdminVisibleCreatorRoles =
+    [
+        UserRole.Teacher,
+        UserRole.Coordinator,
+        UserRole.Tutor,
+        UserRole.Parent,
+    ];
+
+    /// <summary>
+    /// Creator roles a SchoolAdmin may see/endorse in their school
+    /// (campus-visible creators plus CampusAdmin).
+    /// </summary>
+    public static readonly UserRole[] SchoolAdminVisibleCreatorRoles =
+    [
+        UserRole.Teacher,
+        UserRole.Coordinator,
+        UserRole.Tutor,
+        UserRole.Parent,
+        UserRole.CampusAdmin,
+    ];
+
     /// <summary>True when approver tier is strictly above creator tier (PortalAdmin always).</summary>
     public static bool CanApproveCreatorTier(UserRole approverRole, UserRole creatorRole)
         => approverRole == UserRole.PortalAdmin
            || ApprovalTier(approverRole) > ApprovalTier(creatorRole);
 
-    /// <summary>Creators CampusAdmin may still see in pending/restricted queues (Teacher/Parent only).</summary>
+    /// <summary>Creators CampusAdmin may see in pending/restricted queues.</summary>
     public static bool IsCreatorVisibleToCampusAdmin(UserRole createdByRole)
-        => createdByRole is UserRole.Teacher or UserRole.Parent or UserRole.Tutor;
+        => CampusAdminVisibleCreatorRoles.Contains(createdByRole);
 
-    /// <summary>Creators SchoolAdmin may still see in pending/restricted queues.</summary>
+    /// <summary>Creators SchoolAdmin may see in pending/restricted queues.</summary>
     public static bool IsCreatorVisibleToSchoolAdmin(UserRole createdByRole)
-        => createdByRole is UserRole.Teacher or UserRole.Parent or UserRole.Tutor or UserRole.CampusAdmin;
+        => SchoolAdminVisibleCreatorRoles.Contains(createdByRole);
 
-    /// <summary>0 Teacher/Parent, 1 CampusAdmin, 2 SchoolAdmin, 3 PortalAdmin.</summary>
+    /// <summary>0 Teacher/Coordinator/Tutor/Parent, 1 CampusAdmin, 2 SchoolAdmin, 3 PortalAdmin.</summary>
     public static int ApprovalTier(UserRole role) => role switch
     {
         UserRole.PortalAdmin => 3,
@@ -257,13 +282,13 @@ public static class QuestionScopeResolver
         if (approverRole == UserRole.CampusAdmin
             && creatorRole is UserRole.CampusAdmin or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
-            return "Campus Admin can only approve questions created by Teachers or Parents in their campus.";
+            return "Campus Admin can only approve questions created by Teachers, Coordinators, Tutors, or Parents in their campus.";
         }
 
         if (approverRole == UserRole.SchoolAdmin
             && creatorRole is UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
-            return "School Admin can only approve questions created by Teachers, Parents, or Campus Admins in their school.";
+            return "School Admin can only approve questions created by Teachers, Coordinators, Tutors, Parents, or Campus Admins in their school.";
         }
 
         return "You do not have permission to approve or reject this question.";

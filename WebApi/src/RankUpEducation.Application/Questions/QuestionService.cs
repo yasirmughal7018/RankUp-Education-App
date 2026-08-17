@@ -525,6 +525,7 @@ public sealed class QuestionService : IQuestionService
 
         await _questions.RemoveQuestionOptionsAsync(questionId, cancellationToken);
         await _questions.RemoveQuestionAcceptedAnswersAsync(questionId, cancellationToken);
+        await _questions.RemoveQuestionApprovalTrailAsync(questionId, cancellationToken);
         await _questions.DeleteQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

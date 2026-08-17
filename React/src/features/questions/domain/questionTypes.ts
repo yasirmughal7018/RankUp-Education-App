@@ -142,22 +142,25 @@ export interface QuestionScopeValues {
   difficultyLevel: number;
 }
 
-/** Types available on the create form today (100–108). File Upload is link/path MVP. */
+/**
+ * Types shown on create (`/questions/new`) and quiz inline add.
+ * File Upload and Media stay in the bank for later; they are not offered in the picker.
+ */
 export const QUESTION_TYPES_NOW = [
   "Single Choice",
   "Multiple Choice",
   "True/False",
   "Fill in the Blanks",
   "Descriptive",
-  "File Upload",
   "Matching",
   "Ordering",
-  "Media",
 ] as const;
 
-/** Includes legacy aliases; Descriptive is also creatable via QUESTION_TYPES_NOW. */
+/** All known types, including File Upload / Media kept for existing rows and later re-enable. */
 export const QUESTION_TYPES = [
   ...QUESTION_TYPES_NOW,
+  "File Upload",
+  "Media",
 ] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];

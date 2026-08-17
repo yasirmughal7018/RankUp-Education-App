@@ -43,6 +43,13 @@ public interface IQuestionRepository
     /// <summary>Appends one workflow event to the question's app_approval trail.</summary>
     Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Removes <c>app_approval</c> trail rows for this question
+    /// (<c>entity_type = Question</c>, <c>request_id = questionId</c>).
+    /// There is no database FK because <c>request_id</c> is polymorphic.
+    /// </summary>
+    Task RemoveQuestionApprovalTrailAsync(long questionId, CancellationToken cancellationToken);
+
     Task<int> CountQuizLinksAsync(long questionId, CancellationToken cancellationToken);
 
     Task RemoveAllQuizLinksForQuestionAsync(long questionId, CancellationToken cancellationToken);
