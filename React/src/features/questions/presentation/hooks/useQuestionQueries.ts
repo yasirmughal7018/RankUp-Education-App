@@ -65,11 +65,14 @@ export function usePendingApprovalQuestionsQuery(options?: {
 }
 
 /** Single question detail by id. */
-export function useQuestionQuery(questionId: number) {
+export function useQuestionQuery(
+  questionId: number,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: queryKeys.question(questionId),
     queryFn: () => questionApi.getQuestion(questionId),
-    enabled: questionId > 0,
+    enabled: (options?.enabled ?? true) && questionId > 0,
   });
 }
 
@@ -109,8 +112,15 @@ export function useDeleteQuestionMutation() {
 
   return useMutation({
     mutationFn: (questionId: number) => questionApi.deleteQuestion(questionId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["questions"] });
+    onSuccess: async (_result, questionId) => {
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.question(questionId),
+      });
+      queryClient.removeQueries({ queryKey: queryKeys.question(questionId) });
+      await queryClient.invalidateQueries({
+        queryKey: ["questions"],
+        predicate: (query) => query.queryKey[1] !== questionId,
+      });
     },
   });
 }

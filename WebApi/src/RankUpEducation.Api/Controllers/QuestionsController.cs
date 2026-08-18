@@ -52,9 +52,9 @@ public sealed class QuestionsController : ControllerBase
     }
 
     [HttpGet("import-template")]
-    public IActionResult DownloadImportTemplate()
+    public async Task<IActionResult> DownloadImportTemplateAsync(CancellationToken cancellationToken)
     {
-        var bytes = QuestionExcelImportParser.BuildTemplate();
+        var bytes = await _questionService.BuildImportTemplateAsync(cancellationToken);
         return File(
             bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

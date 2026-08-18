@@ -140,14 +140,19 @@ export function QuestionDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const numericQuestionId = Number(questionId);
+  const [isDeleted, setIsDeleted] = useState(false);
 
-  const { data: question, isLoading, error } = useQuestionQuery(numericQuestionId);
+  const { data: question, isLoading, error } = useQuestionQuery(numericQuestionId, {
+    enabled: !isDeleted,
+  });
   const [quizzesOpen, setQuizzesOpen] = useState(false);
   const {
     data: quizzes = [],
     isLoading: quizzesLoading,
     error: quizzesError,
-  } = useQuestionQuizzesQuery(numericQuestionId, { enabled: quizzesOpen });
+  } = useQuestionQuizzesQuery(numericQuestionId, {
+    enabled: quizzesOpen && !isDeleted,
+  });
   const { schoolName, campusName } = useScopeNames(
     question?.schoolId,
     question?.campusId,
@@ -941,6 +946,7 @@ export function QuestionDetailPage() {
             setActionError(null);
             try {
               await deleteQuestion.mutateAsync(question.questionId);
+              setIsDeleted(true);
               setDeleteOpen(false);
               navigate("/questions");
             } catch (caught) {

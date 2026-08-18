@@ -573,9 +573,11 @@ const html = `<!doctype html>
     "Dry run validates the workbook and returns all row errors.",
     "Confirm import uses the same create path: non–PortalAdmin rows are PendingReview only; PortalAdmin rows are auto-published (Approved + Public + Active).",
     "A Status column cannot choose Draft or override PortalAdmin auto-publish.",
-    "Class, Subject, Topic, Type, and Difficulty accept supported names or canonical IDs.",
+    "Class, Subject, Topic, Type, and Difficulty use dropdown lists from your lookup catalog (names; legacy numeric IDs still import).",
+    "Select Subject before Topic — the Topic dropdown lists only topics linked to that subject.",
     "Offered types: Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive, Matching, Ordering. File Upload and Media rows are rejected.",
-    "Choice types accept IsCorrectN and/or CorrectOption; Fill uses accepted-answer fields; Descriptive needs no options.",
+    "Choice types use Option1–Option8 and a single IsCorrectOption column (one number for Single/True-False; comma-separated for Multiple Choice). Fill uses AcceptedAnswer columns; Descriptive needs no options.",
+    "Sample rows in the template are ignored on import. Legacy IsCorrect1–4 and CorrectOption columns are still read if present.",
   ])}
 
   <h2>9. API transition map</h2>
@@ -781,9 +783,10 @@ const docChildren = [
     "Dry run returns all row errors.",
     "Confirm uses the same create path: non–PortalAdmin rows are PendingReview; PortalAdmin rows auto-publish.",
     "A Status column cannot choose Draft or override PortalAdmin auto-publish.",
-    "Lookup names or canonical IDs are accepted where documented.",
+    "Lookup dropdowns in the template use your catalog (Class, Subject, Topic, Type, Difficulty). Legacy numeric IDs still import.",
+    "Select Subject before Topic — the Topic dropdown lists only topics linked to that subject.",
     "Offered types: Single Choice, Multiple Choice, True/False, Fill in the Blanks, Descriptive, Matching, Ordering. File Upload and Media rows are rejected.",
-    "Choice types use IsCorrectN/CorrectOption; Fill uses accepted answers; Descriptive needs no options.",
+    "Choice types use Option1–Option8 and IsCorrectOption (single number or comma-separated). Fill uses accepted answers; Descriptive needs no options. Sample rows are skipped.",
   ].map(docBullet),
 
   docHeading("9. API transition map"),

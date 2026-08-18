@@ -97,12 +97,18 @@ public interface IQuestionService
         IReadOnlyList<QuestionExcelImportRow> rows,
         bool dryRun,
         CancellationToken cancellationToken);
+
+    /// <summary>Excel import template with lookup dropdowns from the database.</summary>
+    Task<byte[]> BuildImportTemplateAsync(CancellationToken cancellationToken);
 }
 
 /// <inheritdoc cref="IQuestionService"/>
 public sealed class QuestionService : IQuestionService
 {
     public const int MinRejectionReasonLength = 10;
+
+    private const string SubjectLookupType = "Subject";
+    private const string TopicLookupType = "Topic";
 
     private readonly IQuestionRepository _questions;
     private readonly IQuestionEditRequestRepository _editRequests;
@@ -631,15 +637,15 @@ public sealed class QuestionService : IQuestionService
                     draft.ClassToken,
                     cancellationToken);
                 var subjectId = await ResolveRequiredLookupTokenAsync(
-                    "Subject",
+                    SubjectLookupType,
                     draft.SubjectToken,
                     cancellationToken);
                 short? topicId = null;
                 if (draft.TopicToken.HasTrimmedText())
                 {
-                    topicId = await ResolveRequiredLookupTokenAsync(
-                        "Topic",
+                    topicId = await ResolveTopicImportTokenAsync(
                         draft.TopicToken!,
+                        subjectId,
                         cancellationToken);
                 }
 
@@ -688,6 +694,87 @@ public sealed class QuestionService : IQuestionService
             ErrorCount: errors.Count,
             Created: created,
             Errors: errors);
+    }
+
+    /// <inheritdoc />
+    public async Task<byte[]> BuildImportTemplateAsync(CancellationToken cancellationToken)
+    {
+        QuestionScopeResolver.RequireManageScope(_currentUser);
+
+        var questionTypes = (await _lookups.ListActiveAsync(LookupNames.QuestionType, null, cancellationToken))
+            .Where(type => type.Id is not (
+                LookupNames.QuestionTypeIds.FileUpload or LookupNames.QuestionTypeIds.Media))
+            .Select(type => type.Name)
+            .ToList();
+
+        var classes = (await _lookups.ListActiveAsync(LookupNames.Class, null, cancellationToken))
+            .Select(item => item.Name)
+            .ToList();
+        var subjects = (await _lookups.ListActiveAsync(SubjectLookupType, null, cancellationToken))
+            .ToList();
+        var topicsRaw = (await _lookups.ListActiveAsync(TopicLookupType, null, cancellationToken))
+            .ToList();
+
+        var topicsBySubject = subjects
+            .Select(subject => new QuestionExcelTemplateTopicGroup(
+                subject.Name,
+                subject.Id,
+                topicsRaw
+                    .Where(topic => topic.ParentId == subject.Id)
+                    .Select(topic => topic.Name)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToList()))
+            .OrderBy(group => group.SubjectName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var difficultyLevels = (await _lookups.ListActiveAsync(LookupNames.DifficultyLevel, null, cancellationToken))
+            .Select(item => item.Name)
+            .ToList();
+
+        var lookups = new QuestionExcelTemplateLookups(
+            questionTypes.Count > 0 ? questionTypes : QuestionExcelTemplateLookups.CreateDefault().QuestionTypes,
+            classes,
+            subjects.Select(item => item.Name).ToList(),
+            topicsBySubject,
+            difficultyLevels.Count > 0
+                ? difficultyLevels
+                : QuestionExcelTemplateLookups.CreateDefault().DifficultyLevels);
+
+        return QuestionExcelImportParser.BuildTemplate(lookups);
+    }
+
+    private async Task<short> ResolveTopicImportTokenAsync(
+        string token,
+        short subjectId,
+        CancellationToken cancellationToken)
+    {
+        var trimmed = token.Trim();
+        var id = await _lookups.ResolveLookupIdOrNameAsync(TopicLookupType, trimmed, cancellationToken);
+        if (id == 0)
+        {
+            var normalized = QuestionExcelImportParser.NormalizeTopicToken(trimmed);
+            if (normalized is not null && !normalized.Equals(trimmed, StringComparison.Ordinal))
+            {
+                id = await _lookups.ResolveLookupIdOrNameAsync(TopicLookupType, normalized, cancellationToken);
+            }
+        }
+
+        if (id == 0)
+        {
+            throw new ValidationAppException([
+                $"{TopicLookupType} '{token}' was not found. Use a valid lookup name or ID."
+            ]);
+        }
+
+        var topic = await _lookups.GetByIdAndTypeAsync(id, TopicLookupType, cancellationToken);
+        if (topic?.ParentId is short parentId && parentId != subjectId)
+        {
+            throw new ValidationAppException([
+                $"{TopicLookupType} '{token}' does not belong to the selected subject."
+            ]);
+        }
+
+        return id;
     }
 
     private async Task<short> ResolveRequiredLookupTokenAsync(
