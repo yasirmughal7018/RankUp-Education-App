@@ -61,6 +61,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(TeacherClassSectionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(CoordinatorClassSectionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(TutorSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuestionEditRequestSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
 
@@ -305,12 +306,12 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         UPDATE public.app_approval
         SET user_id = NULL
-        WHERE entity_type IN (2102, 2103, 2104)
+        WHERE entity_type IN (2102, 2103, 2104, 2105)
           AND user_id IS NOT NULL;
 
         -- Drop orphan trail/queue rows that have no target after backfill.
         DELETE FROM public.app_approval
-        WHERE entity_type IN (2102, 2103, 2104)
+        WHERE entity_type IN (2102, 2103, 2104, 2105)
           AND request_id IS NULL;
 
         -- Registration rows must have user_id; drop impossible orphans.
@@ -322,7 +323,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_approval
             ADD CONSTRAINT chk_app_approval_target CHECK (
                 (entity_type = 2101 AND user_id IS NOT NULL AND request_id IS NULL)
-                OR (entity_type IN (2102, 2103, 2104) AND request_id IS NOT NULL AND user_id IS NULL)
+                OR (entity_type IN (2102, 2103, 2104, 2105) AND request_id IS NOT NULL AND user_id IS NULL)
             );
 
         -- Drop legacy typed FKs + columns (request_id is polymorphic — no single FK).
@@ -360,6 +361,64 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         CREATE INDEX IF NOT EXISTS ix_app_approval_school_change_pending
             ON public.app_approval (request_id)
             WHERE entity_type = 2104 AND approved_at IS NULL AND is_approved IS NULL;
+        """;
+
+    /// <summary>
+    /// Active-question edit requests (app_question_edit_request) plus app_approval queue
+    /// rows (entity_type 2105). Must run after ApprovalRequestIdUnificationSupportSql so
+    /// chk_app_approval_target can include 2105.
+    /// </summary>
+    private const string QuestionEditRequestSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_question_edit_request (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            question_id BIGINT NOT NULL
+                REFERENCES public.questions (id) ON DELETE CASCADE,
+            requested_by_user_id BIGINT NOT NULL
+                REFERENCES public.app_users (id),
+            requested_by_role SMALLINT NOT NULL,
+            reason VARCHAR(1000) NOT NULL,
+            status SMALLINT NOT NULL DEFAULT 0,
+            requested_at TIMESTAMPTZ NOT NULL,
+            resolved_at TIMESTAMPTZ NULL,
+            edit_used_at TIMESTAMPTZ NULL,
+            decision_reason VARCHAR(1000) NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_question_edit_request_question
+            ON public.app_question_edit_request (question_id);
+
+        CREATE INDEX IF NOT EXISTS ix_question_edit_request_status
+            ON public.app_question_edit_request (status);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_question_edit_request_pending_user
+            ON public.app_question_edit_request (question_id, requested_by_user_id)
+            WHERE status = 0;
+
+        INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
+        SELECT 2105, 'QuestionEditRequest', 'ApprovalEntityType', 5, TRUE, NULL
+        WHERE NOT EXISTS (SELECT 1 FROM public.lookups existing WHERE existing.id = 2105);
+
+        UPDATE public.lookups
+        SET name = 'QuestionEditRequest',
+            type = 'ApprovalEntityType',
+            order_by = 5,
+            is_active = TRUE
+        WHERE id = 2105;
+
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
+        ALTER TABLE public.app_approval
+            ADD CONSTRAINT chk_app_approval_target CHECK (
+                (entity_type = 2101 AND user_id IS NOT NULL AND request_id IS NULL)
+                OR (entity_type IN (2102, 2103, 2104, 2105) AND request_id IS NOT NULL AND user_id IS NULL)
+            );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_approval_question_edit_approver_role
+            ON public.app_approval (request_id, approved_by_user_id, approved_by_role)
+            WHERE entity_type = 2105;
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_question_edit_pending
+            ON public.app_approval (request_id)
+            WHERE entity_type = 2105 AND approved_at IS NULL AND is_approved IS NULL;
         """;
 
     private const string SchoolSoftDeleteSupportSql = """
@@ -1417,6 +1476,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2102,           'Question',           'ApprovalEntityType',          2),
                 (2103,           'Quiz',               'ApprovalEntityType',          3),
                 (2104,           'SchoolChangeRequest','ApprovalEntityType',          4),
+                (2105,           'QuestionEditRequest','ApprovalEntityType',          5),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),
@@ -1444,6 +1504,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2102,           'Question',           'ApprovalEntityType',          2),
                 (2103,           'Quiz',               'ApprovalEntityType',          3),
                 (2104,           'SchoolChangeRequest','ApprovalEntityType',          4),
+                (2105,           'QuestionEditRequest','ApprovalEntityType',          5),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),

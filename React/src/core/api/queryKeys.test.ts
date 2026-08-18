@@ -7,6 +7,15 @@ describe("queryKeys", () => {
       "questions",
       "pending-approval",
     ]);
+    expect(queryKeys.questionEditRequests()).toEqual([
+      "questions",
+      "edit-requests",
+    ]);
+    expect(queryKeys.questionQuizzes(15)).toEqual([
+      "questions",
+      15,
+      "quizzes",
+    ]);
   });
 
   it("builds stable assignment board keys", () => {

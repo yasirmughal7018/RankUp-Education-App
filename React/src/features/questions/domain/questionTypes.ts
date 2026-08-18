@@ -97,6 +97,47 @@ export interface QuestionDetail {
   rejectionReason?: string | null;
   /** Workflow trail from app_approval, oldest first. */
   approvalHistory?: QuestionApprovalHistoryEntry[];
+  /** Caller's latest edit request for this question. */
+  myEditRequest?: QuestionEditRequestSummary | null;
+  /** True when the caller may PUT this Active question once. */
+  hasApprovedEditGrant?: boolean;
+  /** Pending edit requests on this question (PortalAdmin). */
+  pendingEditRequests?: QuestionEditRequestSummary[] | null;
+}
+
+/** Request to edit an Active question (PortalAdmin decides). */
+export interface QuestionEditRequestSummary {
+  requestId: number;
+  questionId: number;
+  requesterName: string;
+  requesterRole: string;
+  reason: string;
+  status: string;
+  requestedAt: string;
+  resolvedAt?: string | null;
+  hasUnusedEditGrant: boolean;
+  decisionReason?: string | null;
+}
+
+export interface QuestionEditRequestListItem {
+  requestId: number;
+  questionId: number;
+  questionText: string;
+  requesterName: string;
+  requesterRole: string;
+  reason: string;
+  requestedAt: string;
+}
+
+/** A quiz that currently includes this bank question. */
+export interface QuestionQuizUsage {
+  quizId: number;
+  title: string;
+  lifecycleStatus: string;
+  approvalStatus: string;
+  marks: number;
+  displayOrder: number;
+  createdBy: string;
 }
 
 /** One entry in a question's approval trail. */
@@ -352,20 +393,46 @@ export function isOwnerEditableQuestionStatus(status: string): boolean {
 
 /**
  * Edit / delete permission: PortalAdmin any status;
- * otherwise owner + PendingReview / Rejected (or legacy Draft).
+ * unused approved edit grant; otherwise owner + PendingReview / Rejected (or legacy Draft).
  */
 export function canMutateQuestion(args: {
   role: UserRole;
   userId: number | string;
   createdBy: string;
   status: string;
+  hasApprovedEditGrant?: boolean;
 }): boolean {
   if (canLifecycleQuestions(args.role)) {
     return true;
   }
 
+  if (args.hasApprovedEditGrant) {
+    return true;
+  }
+
   const isOwner = String(args.userId) === String(args.createdBy);
   return isOwner && isOwnerEditableQuestionStatus(args.status);
+}
+
+/**
+ * Active questions: non–PortalAdmin may request an edit (not while a request is pending
+ * or an unused grant already exists).
+ */
+export function canRequestQuestionEdit(args: {
+  role: UserRole;
+  isActive: boolean;
+  hasApprovedEditGrant?: boolean;
+  myEditRequestStatus?: string | null;
+}): boolean {
+  if (canLifecycleQuestions(args.role) || !args.isActive) {
+    return false;
+  }
+
+  if (args.hasApprovedEditGrant) {
+    return false;
+  }
+
+  return (args.myEditRequestStatus ?? "").toLowerCase() !== "pending";
 }
 
 /**

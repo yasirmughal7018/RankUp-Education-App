@@ -35,6 +35,11 @@ public interface IQuestionService
     /// <summary>Detail by id; enforces owner / restricted / Public access.</summary>
     Task<QuestionDetailResponse> GetByIdAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>Quizzes that currently include this question (same view rules as GetById).</summary>
+    Task<QuestionQuizUsageListResponse> ListQuizzesUsingAsync(
+        long questionId,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Creates a question. Non–PortalAdmin → PendingReview (inactive). PortalAdmin → auto-published Public + Active.
     /// Stamps SchoolId/CampusId/CreatedByRole from creator.
@@ -42,7 +47,9 @@ public interface IQuestionService
     Task<QuestionDetailResponse> CreateAsync(CreateQuestionRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Updates content/answers. Owners may edit PendingReview/Rejected only; does not auto-resubmit.
+    /// Updates content/answers. Owners may edit PendingReview/Rejected only.
+    /// Active questions: PortalAdmin may edit in place; others need an approved one-time grant,
+    /// which returns the question to PendingReview.
     /// </summary>
     Task<QuestionDetailResponse> UpdateAsync(
         long questionId,
@@ -98,6 +105,8 @@ public sealed class QuestionService : IQuestionService
     public const int MinRejectionReasonLength = 10;
 
     private readonly IQuestionRepository _questions;
+    private readonly IQuestionEditRequestRepository _editRequests;
+    private readonly IUserRepository _users;
     private readonly ILookupRepository _lookups;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
@@ -105,12 +114,16 @@ public sealed class QuestionService : IQuestionService
 
     public QuestionService(
         IQuestionRepository questions,
+        IQuestionEditRequestRepository editRequests,
+        IUserRepository users,
         ILookupRepository lookups,
         IQuizRepository quizzes,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser)
     {
         _questions = questions;
+        _editRequests = editRequests;
+        _users = users;
         _lookups = lookups;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
@@ -201,7 +214,30 @@ public sealed class QuestionService : IQuestionService
         var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
         var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
         EnsureCanView(detail, scope);
-        return QuestionMapping.ToDetailResponse(detail);
+        return await ToDetailWithEditStateAsync(detail, scope, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<QuestionQuizUsageListResponse> ListQuizzesUsingAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var scope = QuestionScopeResolver.RequireManageScope(_currentUser);
+        var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
+        EnsureCanView(detail, scope);
+
+        var rows = await _questions.ListQuizzesUsingQuestionAsync(questionId, cancellationToken);
+        var items = rows
+            .Select(row => new QuestionQuizUsageItem(
+                row.QuizId,
+                row.Title,
+                row.LifecycleStatus,
+                row.ApprovalStatus,
+                row.Marks,
+                row.DisplayOrder,
+                row.CreatedBy))
+            .ToArray();
+        return new QuestionQuizUsageListResponse(items);
     }
 
     /// <inheritdoc />
@@ -289,7 +325,7 @@ public sealed class QuestionService : IQuestionService
             cancellationToken);
 
         var detail = await RequireQuestionDetailAsync(question.Id, cancellationToken);
-        return QuestionMapping.ToDetailResponse(detail);
+        return await ToDetailWithEditStateAsync(detail, scope, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -302,7 +338,14 @@ public sealed class QuestionService : IQuestionService
         QuestionBankGuard.ValidateUpdateRequest(request);
 
         var question = await RequireQuestionEntityAsync(questionId, cancellationToken);
-        await EnsureCanUpdateAsync(question, scope, cancellationToken);
+        var grant = scope.IsPortalAdmin
+            ? null
+            : await _editRequests.GetUnusedGrantAsync(question.Id, scope.UserId, cancellationToken);
+        await EnsureCanUpdateAsync(question, scope, grant, cancellationToken);
+
+        var statusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
+        var unpublishAfterGrant = grant is not null
+            && (question.IsActive || IsApprovedStatus(statusName));
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
         var difficultyLevelId = await _guard.ResolveDifficultyLevelIdAsync(request.DifficultyLevel, cancellationToken);
@@ -318,7 +361,6 @@ public sealed class QuestionService : IQuestionService
             request.Hint,
             request.Explanation);
 
-        // Explicit SubmitForReview is required to move Rejected → PendingReview.
         await ReplaceAnswersAsync(
             questionId,
             request.QuestionType,
@@ -326,10 +368,34 @@ public sealed class QuestionService : IQuestionService
             request.AcceptedAnswers,
             cancellationToken);
         await RecordTrailEventAsync(questionId, scope, ApprovalAction.Modified, cancellationToken);
+
+        if (grant is not null)
+        {
+            var now = DateTimeOffset.UtcNow;
+            grant.MarkEditUsed(now);
+            if (unpublishAfterGrant)
+            {
+                var pendingStatusId = await RequirePendingReviewStatusIdAsync(cancellationToken);
+                question.SubmitForApproval(pendingStatusId);
+                await RecordTrailEventAsync(
+                    questionId,
+                    scope,
+                    ApprovalAction.SubmittedForReview,
+                    cancellationToken);
+            }
+
+            await _editRequests.CancelPendingForQuestionAsync(
+                question.Id,
+                now,
+                grant.Id,
+                "The question is no longer Active.",
+                cancellationToken);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
-        return QuestionMapping.ToDetailResponse(detail);
+        return await ToDetailWithEditStateAsync(detail, scope, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -357,7 +423,7 @@ public sealed class QuestionService : IQuestionService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var detail = await RequireQuestionDetailAsync(questionId, cancellationToken);
-        return QuestionMapping.ToDetailResponse(detail);
+        return await ToDetailWithEditStateAsync(detail, scope, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -525,6 +591,7 @@ public sealed class QuestionService : IQuestionService
 
         await _questions.RemoveQuestionOptionsAsync(questionId, cancellationToken);
         await _questions.RemoveQuestionAcceptedAnswersAsync(questionId, cancellationToken);
+        await _editRequests.RemoveForQuestionAsync(questionId, cancellationToken);
         await _questions.RemoveQuestionApprovalTrailAsync(questionId, cancellationToken);
         await _questions.DeleteQuestionAsync(question, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -644,14 +711,28 @@ public sealed class QuestionService : IQuestionService
         return id;
     }
 
-    /// <summary>PortalAdmin any; owners only while PendingReview or Rejected.</summary>
+    /// <summary>
+    /// PortalAdmin any; unused edit grant for this caller; otherwise owner + PendingReview/Rejected.
+    /// </summary>
     private async Task EnsureCanUpdateAsync(
         Question question,
         QuestionManageScope scope,
+        QuestionEditRequest? grant,
         CancellationToken cancellationToken)
     {
         if (scope.IsPortalAdmin)
         {
+            return;
+        }
+
+        if (grant is not null)
+        {
+            var grantStatusName = await _lookups.GetLookupNameAsync(question.StatusId, cancellationToken);
+            if (IsArchivedStatus(grantStatusName))
+            {
+                throw new BusinessRuleException("Archived questions cannot be edited with an edit grant.");
+            }
+
             return;
         }
 
@@ -660,7 +741,9 @@ public sealed class QuestionService : IQuestionService
         if (!IsOwnerEditableStatus(statusName))
         {
             throw new BusinessRuleException(
-                "You can only update your own questions before admin approval (or after rejection).");
+                question.IsActive
+                    ? "Active questions can only be edited by Portal Admin. Send an edit request with a reason."
+                    : "You can only update your own questions before admin approval (or after rejection).");
         }
     }
 
@@ -843,6 +926,74 @@ public sealed class QuestionService : IQuestionService
             throw new BusinessRuleException(
                 "Only published (Public) questions can be activated or deactivated.");
         }
+    }
+
+    private async Task<QuestionDetailResponse> ToDetailWithEditStateAsync(
+        QuestionDetailItem detail,
+        QuestionManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        var response = QuestionMapping.ToDetailResponse(detail);
+        var mine = await _editRequests.GetLatestForUserAsync(
+            detail.QuestionId,
+            scope.UserId,
+            cancellationToken);
+        var grant = await _editRequests.GetUnusedGrantAsync(
+            detail.QuestionId,
+            scope.UserId,
+            cancellationToken);
+
+        IReadOnlyList<QuestionEditRequestSummary> pending = Array.Empty<QuestionEditRequestSummary>();
+        if (scope.IsPortalAdmin)
+        {
+            var pendingEntities = await _editRequests.ListPendingForQuestionAsync(
+                detail.QuestionId,
+                cancellationToken);
+            pending = await MapEditRequestSummariesAsync(pendingEntities, cancellationToken);
+        }
+
+        return response with
+        {
+            MyEditRequest = mine is null
+                ? null
+                : await MapEditRequestSummaryAsync(mine, cancellationToken),
+            HasApprovedEditGrant = grant is not null,
+            PendingEditRequests = pending
+        };
+    }
+
+    private async Task<IReadOnlyList<QuestionEditRequestSummary>> MapEditRequestSummariesAsync(
+        IReadOnlyList<QuestionEditRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var items = new List<QuestionEditRequestSummary>(requests.Count);
+        foreach (var request in requests)
+        {
+            items.Add(await MapEditRequestSummaryAsync(request, cancellationToken));
+        }
+
+        return items;
+    }
+
+    private async Task<QuestionEditRequestSummary> MapEditRequestSummaryAsync(
+        QuestionEditRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _users.GetByIdAsync(request.RequestedByUserId, cancellationToken);
+        var name = string.IsNullOrWhiteSpace(user?.FullName)
+            ? $"User #{request.RequestedByUserId}"
+            : user.FullName;
+        return new QuestionEditRequestSummary(
+            request.Id,
+            request.QuestionId,
+            name,
+            request.RequestedByRole.ToString(),
+            request.Reason,
+            request.Status.ToString(),
+            request.RequestedAt,
+            request.ResolvedAt,
+            request.HasUnusedEditGrant,
+            request.DecisionReason);
     }
 
     private static QuestionApprovalResponse ToApprovalResponse(

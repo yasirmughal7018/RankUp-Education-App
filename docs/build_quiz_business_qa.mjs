@@ -155,7 +155,7 @@ const questionRules = [
 
 const importantBusinessRules = [
   ["A quiz can contain many questions", "Yes", "Quiz → QuizQuestion → Question."],
-  ["A question can belong to many quizzes", "Yes", "Same bank question may be attached to multiple quizzes via separate QuizQuestion rows."],
+  ["A question can belong to many quizzes", "Yes", "Same bank question may be attached to multiple quizzes via separate QuizQuestion rows. Reverse list: GET /api/questions/{id}/quizzes (question detail Used in quizzes)."],
   ["QuizQuestion manages the many-to-many", "Yes", "Link table owns DisplayOrder, Marks, ShuffleOptions, CreatedAt."],
   ["Question order belongs to QuizQuestion", "Yes", "DisplayOrder is per quiz link, not on the bank question."],
   ["Quiz-specific marks belong to QuizQuestion", "Yes", "Copied from question marks on attach/create; may be overwritten per quiz. Totals recalculate from link marks."],
@@ -393,6 +393,7 @@ const apiMap = [
   ["POST /api/quizzes/{id}/unarchive", "Restore Published or Assigned."],
   ["POST /api/quizzes/{id}/duplicate", "Deep-copy to new Draft + Pending."],
   ["POST .../assignments/{id}/allow-retry", "After review finalized; ExtraAttempts (+1 default)."],
+  ["GET /api/questions/{id}/quizzes", "Question-manage: quizzes currently using this bank question (same CanView as question detail)."],
   ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove; TimeLimitMinutes recalculated from EstimatedTimeSeconds."],
   ["POST .../attempts", "Student start/resume; instructions ack gate when Instructions set."],
   ["PUT .../attempts/{id}/draft", "Student save draft answers (+ mark-for-review / per-question time)."],

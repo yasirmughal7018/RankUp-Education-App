@@ -14,9 +14,14 @@ public sealed class QuestionsController : ControllerBase
 {
     private readonly IQuestionService _questionService;
 
-    public QuestionsController(IQuestionService questionService)
+    private readonly IQuestionEditRequestService _editRequests;
+
+    public QuestionsController(
+        IQuestionService questionService,
+        IQuestionEditRequestService editRequests)
     {
         _questionService = questionService;
+        _editRequests = editRequests;
     }
 
     [HttpGet]
@@ -56,6 +61,33 @@ public sealed class QuestionsController : ControllerBase
             "rankup-questions-import-template.xlsx");
     }
 
+    [HttpGet("edit-requests")]
+    public async Task<ActionResult<ApiResponse<QuestionEditRequestListResponse>>> ListPendingEditRequestsAsync(
+        CancellationToken cancellationToken)
+    {
+        var response = await _editRequests.ListPendingAsync(cancellationToken);
+        return Ok(ApiResponse<QuestionEditRequestListResponse>.Ok(response));
+    }
+
+    [HttpPost("edit-requests/{requestId:long}/approve")]
+    public async Task<ActionResult<ApiResponse<QuestionEditRequestSummary>>> ApproveEditRequestAsync(
+        long requestId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _editRequests.ApproveAsync(requestId, cancellationToken);
+        return Ok(ApiResponse<QuestionEditRequestSummary>.Ok(response, "Edit request approved."));
+    }
+
+    [HttpPost("edit-requests/{requestId:long}/reject")]
+    public async Task<ActionResult<ApiResponse<QuestionEditRequestSummary>>> RejectEditRequestAsync(
+        long requestId,
+        [FromBody] RejectQuestionEditRequestRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _editRequests.RejectAsync(requestId, request, cancellationToken);
+        return Ok(ApiResponse<QuestionEditRequestSummary>.Ok(response, "Edit request rejected."));
+    }
+
     [HttpGet("{questionId:long}")]
     public async Task<ActionResult<ApiResponse<QuestionDetailResponse>>> GetByIdAsync(
         long questionId,
@@ -63,6 +95,15 @@ public sealed class QuestionsController : ControllerBase
     {
         var response = await _questionService.GetByIdAsync(questionId, cancellationToken);
         return Ok(ApiResponse<QuestionDetailResponse>.Ok(response));
+    }
+
+    [HttpGet("{questionId:long}/quizzes")]
+    public async Task<ActionResult<ApiResponse<QuestionQuizUsageListResponse>>> ListQuizzesUsingAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _questionService.ListQuizzesUsingAsync(questionId, cancellationToken);
+        return Ok(ApiResponse<QuestionQuizUsageListResponse>.Ok(response));
     }
 
     [HttpPost]
@@ -112,6 +153,16 @@ public sealed class QuestionsController : ControllerBase
     {
         var response = await _questionService.UpdateAsync(questionId, request, cancellationToken);
         return Ok(ApiResponse<QuestionDetailResponse>.Ok(response, "Question updated."));
+    }
+
+    [HttpPost("{questionId:long}/edit-requests")]
+    public async Task<ActionResult<ApiResponse<QuestionEditRequestSummary>>> RequestEditAsync(
+        long questionId,
+        [FromBody] CreateQuestionEditRequestRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _editRequests.RequestEditAsync(questionId, request, cancellationToken);
+        return Ok(ApiResponse<QuestionEditRequestSummary>.Ok(response, "Edit request sent to Portal Admin."));
     }
 
     [HttpPost("{questionId:long}/submit")]

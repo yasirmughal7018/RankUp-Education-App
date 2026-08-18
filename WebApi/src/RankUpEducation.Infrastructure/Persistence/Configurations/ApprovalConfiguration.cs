@@ -79,6 +79,16 @@ public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
             .IsUnique()
             .HasFilter("entity_type = 2104");
 
+        builder.HasIndex(approval => new
+            {
+                approval.RequestId,
+                approval.ApprovedByUserId,
+                approval.ApprovedByRole
+            })
+            .IsUnique()
+            .HasFilter("entity_type = 2105")
+            .HasDatabaseName("ix_app_approval_question_edit_approver_role");
+
         builder.HasIndex(approval => new { approval.RequestId, approval.CreatedAt })
             .HasDatabaseName("ix_app_approval_question_trail")
             .HasFilter("entity_type = 2102");
@@ -92,7 +102,7 @@ public sealed class ApprovalConfiguration : IEntityTypeConfiguration<Approval>
             .HasForeignKey(approval => approval.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // request_id is polymorphic (question / quiz / school-change request) — no single FK.
+        // request_id is polymorphic (question / quiz / school-change / question-edit request) — no single FK.
 
         builder.HasOne<User>()
             .WithMany()

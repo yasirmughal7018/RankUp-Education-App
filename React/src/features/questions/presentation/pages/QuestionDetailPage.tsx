@@ -10,7 +10,9 @@ import { ChevronDown } from "lucide-react";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useLookups } from "@/core/hooks/useLookups";
 import { PageHeader } from "@/core/components/PageHeader";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { canManageQuizzes } from "@/features/quizzes/domain/quizTypes";
 import { useScopeNames } from "@/features/authentication/presentation/hooks/useScopeNames";
 import {
   approvalPublishes,
@@ -20,6 +22,7 @@ import {
   canArchiveQuestion,
   canDeactivateQuestion,
   canMutateQuestion,
+  canRequestQuestionEdit,
   canUnarchiveQuestion,
   displayQuestionStatusLabel,
   isEligibleForQuizQuestion,
@@ -34,15 +37,29 @@ import {
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
   useActivateQuestionMutation,
+  useApproveQuestionEditRequestMutation,
   useApproveQuestionMutation,
   useArchiveQuestionMutation,
   useDeactivateQuestionMutation,
   useDeleteQuestionMutation,
   useQuestionQuery,
+  useQuestionQuizzesQuery,
+  useRejectQuestionEditRequestMutation,
   useRejectQuestionMutation,
+  useRequestQuestionEditMutation,
   useSubmitQuestionMutation,
   useUnarchiveQuestionMutation,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
+import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 function lookupName(
   items: { id: number; name: string }[] | undefined,
@@ -125,6 +142,12 @@ export function QuestionDetailPage() {
   const numericQuestionId = Number(questionId);
 
   const { data: question, isLoading, error } = useQuestionQuery(numericQuestionId);
+  const [quizzesOpen, setQuizzesOpen] = useState(false);
+  const {
+    data: quizzes = [],
+    isLoading: quizzesLoading,
+    error: quizzesError,
+  } = useQuestionQuizzesQuery(numericQuestionId, { enabled: quizzesOpen });
   const { schoolName, campusName } = useScopeNames(
     question?.schoolId,
     question?.campusId,
@@ -145,12 +168,26 @@ export function QuestionDetailPage() {
   const archiveQuestion = useArchiveQuestionMutation(numericQuestionId);
   const unarchiveQuestion = useUnarchiveQuestionMutation(numericQuestionId);
   const deleteQuestion = useDeleteQuestionMutation();
+  const requestEdit = useRequestQuestionEditMutation(numericQuestionId);
+  const approveEditRequest = useApproveQuestionEditRequestMutation(
+    numericQuestionId,
+  );
+  const rejectEditRequest = useRejectQuestionEditRequestMutation(
+    numericQuestionId,
+  );
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [approvalHistoryExpanded, setApprovalHistoryExpanded] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [requestEditOpen, setRequestEditOpen] = useState(false);
+  const [requestEditReason, setRequestEditReason] = useState("");
+  const [rejectEditRequestId, setRejectEditRequestId] = useState<number | null>(
+    null,
+  );
+  const [rejectEditReason, setRejectEditReason] = useState("");
 
   const canApprove =
     user != null &&
@@ -173,7 +210,10 @@ export function QuestionDetailPage() {
     deactivateQuestion.isPending ||
     archiveQuestion.isPending ||
     unarchiveQuestion.isPending ||
-    deleteQuestion.isPending;
+    deleteQuestion.isPending ||
+    requestEdit.isPending ||
+    approveEditRequest.isPending ||
+    rejectEditRequest.isPending;
 
   async function runAction(action: () => Promise<unknown>, success: string) {
     setActionError(null);
@@ -218,8 +258,24 @@ export function QuestionDetailPage() {
       userId: user.id,
       createdBy: question.createdBy,
       status: question.status,
+      hasApprovedEditGrant: question.hasApprovedEditGrant,
     });
-  const canDelete = canEdit;
+  const canDelete =
+    user != null &&
+    canMutateQuestion({
+      role: user.role,
+      userId: user.id,
+      createdBy: question.createdBy,
+      status: question.status,
+    });
+  const canRequestEdit =
+    user != null &&
+    canRequestQuestionEdit({
+      role: user.role,
+      isActive: question.isActive,
+      hasApprovedEditGrant: question.hasApprovedEditGrant,
+      myEditRequestStatus: question.myEditRequest?.status,
+    });
   // Owner or PortalAdmin may re-queue a Rejected item into PendingReview.
   const canSubmit =
     user != null &&
@@ -294,14 +350,34 @@ export function QuestionDetailPage() {
         backTo="/questions"
         backAriaLabel="Back to question bank"
         action={
-          canEdit ? (
-            <Link
-              to={`/questions/${question.questionId}/edit`}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
               className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+              onClick={() => setQuizzesOpen(true)}
             >
-              Edit
-            </Link>
-          ) : null
+              Used in quizzes
+            </button>
+            {canEdit ? (
+              <Link
+                to={`/questions/${question.questionId}/edit`}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+              >
+                Edit
+              </Link>
+            ) : canRequestEdit ? (
+              <button
+                type="button"
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                onClick={() => {
+                  setRequestEditOpen(true);
+                  setRequestEditReason("");
+                }}
+              >
+                Request edit
+              </button>
+            ) : null}
+          </div>
         }
       />
 
@@ -314,6 +390,30 @@ export function QuestionDetailPage() {
       {actionError ? (
         <div className="mb-4 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
           {actionError}
+        </div>
+      ) : null}
+
+      {question.hasApprovedEditGrant ? (
+        <div className="mb-4 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
+          Portal Admin approved your edit request. Saving changes will send this
+          question back to PendingReview until it is published again.
+        </div>
+      ) : null}
+
+      {question.myEditRequest?.status === "Pending" ? (
+        <div className="mb-4 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
+          Your edit request is waiting for Portal Admin. Reason:{" "}
+          {question.myEditRequest.reason}
+        </div>
+      ) : null}
+
+      {question.myEditRequest?.status === "Rejected" &&
+      !question.hasApprovedEditGrant ? (
+        <div className="mb-4 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
+          Your last edit request was rejected
+          {question.myEditRequest.decisionReason
+            ? `: ${question.myEditRequest.decisionReason}`
+            : "."}
         </div>
       ) : null}
 
@@ -459,7 +559,7 @@ export function QuestionDetailPage() {
         ) : null}
       </section>
 
-      <section className="flex flex-wrap gap-2">
+      <section className="mb-6 flex flex-wrap gap-2">
         {showApproveAction ? (
           <>
             <button
@@ -630,21 +730,9 @@ export function QuestionDetailPage() {
             type="button"
             disabled={isSubmitting}
             onClick={() => {
-              const confirmed = window.confirm("Delete this question?");
-              if (!confirmed) {
-                return;
-              }
-
-              void (async () => {
-                setActionError(null);
-                try {
-                  await deleteQuestion.mutateAsync(question.questionId);
-                  navigate("/questions");
-                } catch (caught) {
-                  const apiError = caught as { message?: string };
-                  setActionError(apiError.message || "Unable to delete question.");
-                }
-              })();
+              setActionError(null);
+              setSuccessMessage(null);
+              setDeleteOpen(true);
             }}
             className="rounded-lg border border-[var(--status-rejected-border)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:bg-[var(--status-rejected-bg)] disabled:opacity-70"
           >
@@ -652,6 +740,112 @@ export function QuestionDetailPage() {
           </button>
         ) : null}
       </section>
+
+      {user?.role === "PortalAdmin" &&
+      (question.pendingEditRequests?.length ?? 0) > 0 ? (
+        <section className="mb-6 space-y-3 rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-foreground">
+            Pending edit requests
+          </h2>
+          <ul className="space-y-3">
+            {question.pendingEditRequests!.map((item) => (
+              <li
+                key={item.requestId}
+                className="rounded-lg border border-border px-4 py-3 text-sm"
+              >
+                <p className="font-medium text-foreground">
+                  {item.requesterName}{" "}
+                  <span className="font-normal text-muted-foreground">
+                    ({item.requesterRole})
+                  </span>
+                </p>
+                <p className="mt-1 text-muted-foreground">{item.reason}</p>
+                {rejectEditRequestId === item.requestId ? (
+                  <div className="mt-3 space-y-2">
+                    <label
+                      htmlFor={`rejectEditReason-${item.requestId}`}
+                      className="text-xs font-medium text-foreground"
+                    >
+                      Rejection reason (min 10 characters)
+                    </label>
+                    <textarea
+                      id={`rejectEditReason-${item.requestId}`}
+                      className={FORM_FIELD_CLASS}
+                      rows={3}
+                      value={rejectEditReason}
+                      onChange={(event) =>
+                        setRejectEditReason(event.target.value)
+                      }
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={
+                          isSubmitting || rejectEditReason.trim().length < 10
+                        }
+                        onClick={() =>
+                          void runAction(async () => {
+                            await rejectEditRequest.mutateAsync({
+                              requestId: item.requestId,
+                              reason: rejectEditReason.trim(),
+                            });
+                            setRejectEditRequestId(null);
+                            setRejectEditReason("");
+                          }, "Edit request rejected.")
+                        }
+                      >
+                        Confirm reject
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setRejectEditRequestId(null);
+                          setRejectEditReason("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isSubmitting}
+                      onClick={() =>
+                        void runAction(
+                          () =>
+                            approveEditRequest.mutateAsync(item.requestId),
+                          "Edit request approved. The requester may edit once.",
+                        )
+                      }
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isSubmitting}
+                      onClick={() => {
+                        setRejectEditRequestId(item.requestId);
+                        setRejectEditReason("");
+                      }}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <button
@@ -729,6 +923,150 @@ export function QuestionDetailPage() {
           </div>
         ) : null}
       </section>
+
+      <AppConfirmDialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !deleteQuestion.isPending) {
+            setDeleteOpen(false);
+          }
+        }}
+        title="Delete question"
+        description="This permanently removes the question and its approval history. This cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={deleteQuestion.isPending}
+        onConfirm={() => {
+          void (async () => {
+            setActionError(null);
+            try {
+              await deleteQuestion.mutateAsync(question.questionId);
+              setDeleteOpen(false);
+              navigate("/questions");
+            } catch (caught) {
+              setDeleteOpen(false);
+              const apiError = caught as { message?: string };
+              setActionError(apiError.message || "Unable to delete question.");
+            }
+          })();
+        }}
+      />
+
+      <Dialog
+        open={requestEditOpen}
+        onOpenChange={(open) => {
+          if (!requestEdit.isPending) {
+            setRequestEditOpen(open);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request to edit this question</DialogTitle>
+            <DialogDescription>
+              Active questions can only be edited by Portal Admin. Explain why
+              this question needs to change (at least 10 characters).
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            className={FORM_FIELD_CLASS}
+            rows={4}
+            value={requestEditReason}
+            onChange={(event) => setRequestEditReason(event.target.value)}
+            placeholder="Why should this question be edited?"
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={requestEdit.isPending}
+              onClick={() => setRequestEditOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                requestEdit.isPending || requestEditReason.trim().length < 10
+              }
+              onClick={() =>
+                void runAction(async () => {
+                  await requestEdit.mutateAsync(requestEditReason.trim());
+                  setRequestEditOpen(false);
+                  setRequestEditReason("");
+                }, "Edit request sent to Portal Admin.")
+              }
+            >
+              {requestEdit.isPending ? "Sending…" : "Send request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={quizzesOpen} onOpenChange={setQuizzesOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Quizzes using this question</DialogTitle>
+            <DialogDescription>
+              Every quiz that currently includes this question (including
+              archived). Soft-deleted quizzes are omitted.
+            </DialogDescription>
+          </DialogHeader>
+          {quizzesLoading ? (
+            <p className="text-sm text-muted-foreground">Loading quizzes…</p>
+          ) : quizzesError ? (
+            <p className="text-sm text-[var(--status-rejected-text)]">
+              {quizzesError.message || "Unable to load quizzes."}
+            </p>
+          ) : quizzes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              This question is not used on any quiz yet.
+            </p>
+          ) : (
+            <ul className="max-h-80 space-y-2 overflow-y-auto">
+              {quizzes.map((quiz) => {
+                const body = (
+                  <>
+                    <p className="font-medium text-foreground">{quiz.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {quiz.lifecycleStatus} · {quiz.approvalStatus} ·{" "}
+                      {quiz.marks} marks · order {quiz.displayOrder}
+                      {quiz.createdBy ? ` · ${quiz.createdBy}` : ""}
+                    </p>
+                  </>
+                );
+
+                return (
+                  <li key={quiz.quizId}>
+                    {user && canManageQuizzes(user.role) ? (
+                      <Link
+                        to={`/quizzes/${quiz.quizId}`}
+                        className="block rounded-lg border border-border px-4 py-3 transition hover:bg-muted"
+                        onClick={() => setQuizzesOpen(false)}
+                      >
+                        {body}
+                      </Link>
+                    ) : (
+                      <div className="rounded-lg border border-border px-4 py-3">
+                        {body}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setQuizzesOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

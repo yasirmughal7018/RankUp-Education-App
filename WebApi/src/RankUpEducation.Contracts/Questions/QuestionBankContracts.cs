@@ -253,7 +253,16 @@ public sealed record QuestionDetailResponse(
 
     /// <summary>Workflow trail from app_approval, oldest first.</summary>
 
-    IReadOnlyList<QuestionApprovalHistoryItem> ApprovalHistory);
+    IReadOnlyList<QuestionApprovalHistoryItem> ApprovalHistory,
+
+    /// <summary>Caller's latest edit request for this question, if any.</summary>
+    QuestionEditRequestSummary? MyEditRequest = null,
+
+    /// <summary>True when the caller has an unused approved grant to edit this Active question.</summary>
+    bool HasApprovedEditGrant = false,
+
+    /// <summary>Pending edit requests on this question (PortalAdmin only).</summary>
+    IReadOnlyList<QuestionEditRequestSummary>? PendingEditRequests = null);
 
 
 

@@ -6,8 +6,11 @@ import { environment } from "@/app/environment";
 import { readStoredSession } from "@/core/auth/tokenStorage";
 import type {
   QuestionDetail,
+  QuestionEditRequestListItem,
+  QuestionEditRequestSummary,
   QuestionFormValues,
   QuestionListFilters,
+  QuestionQuizUsage,
   QuestionSummary,
 } from "@/features/questions/domain/questionTypes";
 import { buildQuestionPayload } from "@/features/questions/domain/questionTypes";
@@ -62,6 +65,15 @@ export async function listPendingApprovalQuestions(): Promise<QuestionSummary[]>
 
 export async function getQuestion(questionId: number): Promise<QuestionDetail> {
   return apiRequest<QuestionDetail>(`/questions/${questionId}`);
+}
+
+export async function listQuestionQuizzes(
+  questionId: number,
+): Promise<QuestionQuizUsage[]> {
+  const response = await apiRequest<{ items: QuestionQuizUsage[] }>(
+    `/questions/${questionId}/quizzes`,
+  );
+  return response.items;
 }
 
 /** Create a question. Non–PortalAdmin → PendingReview; PortalAdmin → auto-published Public. */
@@ -133,6 +145,50 @@ export async function unarchiveQuestion(questionId: number): Promise<void> {
 
 export async function deleteQuestion(questionId: number): Promise<void> {
   await apiRequestVoid(`/questions/${questionId}`, { method: "DELETE" });
+}
+
+export async function requestQuestionEdit(
+  questionId: number,
+  reason: string,
+): Promise<QuestionEditRequestSummary> {
+  return apiRequest<QuestionEditRequestSummary>(
+    `/questions/${questionId}/edit-requests`,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  );
+}
+
+export async function listPendingQuestionEditRequests(): Promise<
+  QuestionEditRequestListItem[]
+> {
+  const response = await apiRequest<{ items: QuestionEditRequestListItem[] }>(
+    "/questions/edit-requests",
+  );
+  return response.items;
+}
+
+export async function approveQuestionEditRequest(
+  requestId: number,
+): Promise<QuestionEditRequestSummary> {
+  return apiRequest<QuestionEditRequestSummary>(
+    `/questions/edit-requests/${requestId}/approve`,
+    { method: "POST" },
+  );
+}
+
+export async function rejectQuestionEditRequest(
+  requestId: number,
+  reason: string,
+): Promise<QuestionEditRequestSummary> {
+  return apiRequest<QuestionEditRequestSummary>(
+    `/questions/edit-requests/${requestId}/reject`,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  );
 }
 
 export interface ImportQuestionsResult {

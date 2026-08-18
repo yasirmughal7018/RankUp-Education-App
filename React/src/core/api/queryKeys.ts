@@ -19,7 +19,10 @@ export const queryKeys = {
   questions: (filters: Record<string, unknown>) =>
     ["questions", filters] as const,
   pendingQuestionApprovals: () => ["questions", "pending-approval"] as const,
+  questionEditRequests: () => ["questions", "edit-requests"] as const,
   question: (questionId: number) => ["questions", questionId] as const,
+  questionQuizzes: (questionId: number) =>
+    ["questions", questionId, "quizzes"] as const,
   pendingRegistrations: () => ["admin", "registrations", "pending"] as const,
   notifications: () => ["notifications"] as const,
   studentQuizDetail: (quizId: number) => ["student", "quizzes", quizId] as const,

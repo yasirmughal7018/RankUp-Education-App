@@ -97,8 +97,8 @@ const lifecycle = [
   ],
   [
     "Owner / PortalAdmin edits content",
-    "Unchanged",
-    "Owners may edit while PendingReview or Rejected; PortalAdmin may edit any. Records a Modified event in the approval trail; Rejected stays Rejected until an explicit resubmit.",
+    "Unchanged, or PendingReview after a granted Active edit",
+    "Owners may edit while PendingReview or Rejected; PortalAdmin may edit any in place. Active questions are PortalAdmin-only to PUT. Other roles who can view send an edit request (reason min 10 chars); after PortalAdmin approves, the requester gets one grant. Using it records Modified + SubmittedForReview and returns the question to PendingReview (inactive) until it is published again.",
   ],
   [
     "PortalAdmin deactivate / activate",
@@ -237,10 +237,15 @@ const apiTransitions = [
   ["GET /api/questions", "Bank list. Query: isActive, subjectId, classId, pendingApprovalOnly, eligibleForQuizOnly. PortalAdmin: all. Others: own + Public + restricted non-Public for Campus/School admins (same creator-role lists as CanView). eligibleForQuizOnly = Public + Active + ApprovedBy."],
   ["GET /api/questions/pending-approval", "Approver queue: PendingReview, not own, org + creator-tier (CampusAdmin campus; SchoolAdmin school; PortalAdmin all). Same creator-role lists as list/GetById. Web Pending tile (Campus/School/Portal Admin) and Mobile both call this endpoint; Teachers still see own pending from GET /questions."],
   ["GET /api/questions/import-template", "Downloads rankup-questions-import-template.xlsx (no auth role beyond question-manage)."],
-  ["GET /api/questions/{id}", "Detail with options/answers, creator/approver names, and ApprovalHistory trail. Forbidden if CanView is false."],
+  ["GET /api/questions/{id}", "Detail with options/answers, creator/approver names, ApprovalHistory trail, and edit-request state (myEditRequest, hasApprovedEditGrant, pendingEditRequests for PortalAdmin). Forbidden if CanView is false."],
+  ["GET /api/questions/{id}/quizzes", "Quizzes currently using this question (title, lifecycle, approval, marks, order). Same CanView as GetById. Soft-deleted quizzes omitted. Web: Used in quizzes on the question detail page."],
   ["POST /api/questions", "Create as PendingReview (PortalAdmin: auto-published). No submitForReview flag — create cannot save Draft. Trail: Created + Submitted/Published. Rejected items use POST /api/questions/{id}/submit."],
   ["POST /api/questions/import", "Same create path as POST /api/questions (max 200 rows, 10 MB): PendingReview for non–PortalAdmin; PortalAdmin auto-publishes each valid row; dryRun=true validates only; trail per created row"],
-  ["PUT /api/questions/{id}", "Update content; trail: Modified; Rejected remains Rejected"],
+  ["PUT /api/questions/{id}", "Update content; trail: Modified. Rejected remains Rejected. Active: PortalAdmin in place; others need an unused grant — consuming it unpublishes to PendingReview (Modified + SubmittedForReview)."],
+  ["POST /api/questions/{id}/edit-requests", "Non–PortalAdmin who can view an Active question sends a reason (min 10 chars). Queues PortalAdmin rows in app_approval (entity_type QuestionEditRequest = 2105)."],
+  ["GET /api/questions/edit-requests", "PortalAdmin pending edit-request queue."],
+  ["POST /api/questions/edit-requests/{id}/approve", "PortalAdmin grants a one-time edit to the requester."],
+  ["POST /api/questions/edit-requests/{id}/reject", "PortalAdmin rejects with reason (min 10 chars)."],
   ["POST /api/questions/{id}/submit", "Rejected → PendingReview; trail: SubmittedForReview"],
   ["POST /api/questions/{id}/approve", "PendingReview → Approved + scoped visibility; PortalAdmin may also publish endorsed non-Public; trail: Endorsed or Published"],
   ["POST /api/questions/{id}/reject", "PendingReview → Rejected + reason (min 10 chars); trail: Rejected + reason"],
@@ -262,7 +267,7 @@ const trailEvents = [
   ["Endorsed", "Approved with Campus/School visibility — recorded, still Inactive", "CampusAdmin / SchoolAdmin"],
   ["Published", "Approved as Public + Active + quiz-usable (incl. PortalAdmin auto-publish on create)", "PortalAdmin"],
   ["Rejected", "Refused with the stored reason shown in the trail", "Eligible higher-tier approver"],
-  ["Modified", "Content/options/answers edited (bank edit or inline quiz edit)", "Owner or PortalAdmin"],
+  ["Modified", "Content/options/answers edited (bank edit, granted Active edit, or inline quiz edit)", "Owner, PortalAdmin, or the user with an unused edit grant"],
   ["Activated / Deactivated", "Published question switched on/off for quiz use", "PortalAdmin"],
   ["Archived / Unarchived", "Retired from the bank / restored to prior state", "PortalAdmin"],
 ];
@@ -337,8 +342,14 @@ const scenarios = [
   [
     "Q-10",
     "Ownership lock",
-    "Non-PortalAdmin owner tries to edit/delete after approval/endorsement.",
-    "Forbidden. PortalAdmin retains lifecycle and mutation control.",
+    "Non-PortalAdmin owner tries to edit/delete after approval/endorsement (not Active, or Active without a grant).",
+    "Forbidden. PortalAdmin retains lifecycle and mutation control. For Active questions, other roles request an edit instead of PUT.",
+  ],
+  [
+    "Q-10b",
+    "Active edit request",
+    "Teacher/Coordinator/Tutor/Parent/CampusAdmin/SchoolAdmin views an Active Public question and sends an edit request with a valid reason. PortalAdmin approves; the requester saves a change.",
+    "Request stored in app_question_edit_request; PortalAdmins queued in app_approval (entity_type 2105). After approve, PUT is allowed once: grant is consumed, question returns to PendingReview (Inactive, Visibility=None), trail Modified + SubmittedForReview.",
   ],
   [
     "Q-11",
@@ -375,6 +386,12 @@ const scenarios = [
     "Inline quiz question skips bank review",
     "A quiz manager adds a question inline on a quiz (POST /api/quizzes/{id}/questions), not from the bank picker.",
     "Status=Approved, Visibility=Campus, IsActive=true immediately (MarkFullyApproved). No PendingReview. Usable on that quiz. Not listed by GET /questions?eligibleForQuizOnly=true because it is not Public.",
+  ],
+  [
+    "Q-15b",
+    "See quizzes using a question",
+    "Open a bank question detail and click Used in quizzes.",
+    "GET /api/questions/{id}/quizzes lists every non-deleted quiz that includes the question. Quiz-managing roles can open the quiz; CampusAdmin sees the list without a quiz-manage link.",
   ],
   [
     "Q-16",
@@ -415,6 +432,7 @@ const checklist = [
   "File Upload is a link/path MVP (SubmittedText) — hidden on web create; binary blob upload, storage, and review download are not built yet.",
   "Accepted answers are hidden from students before attempt submission.",
   "Deleting a quiz-linked question is blocked.",
+  "Question detail Used in quizzes lists those quizzes (GET /api/questions/{id}/quizzes) so you can see why delete is blocked.",
   "Deleting a question also deletes its app_approval trail rows in application code (entity_type=Question, request_id=question id). There is no database FK cascade.",
   "Every workflow action (create, submit, endorse, publish, reject, modify, activate, deactivate, archive, unarchive) appends an Approval history row with actor name + role + timestamp, for every role.",
   "Question detail always shows the Approval history panel; rejection reasons appear inline in the trail.",
@@ -585,6 +603,7 @@ const html = `<!doctype html>
     "The Subjects / Classes / Difficulties filter panel is hidden by default and toggled on demand.",
     "Detail shows metadata (status badges, class/subject/topic, marks, time, creator/approver names, visibility, org) before the question text; Created by / Approved by show display names, not IDs.",
     "Detail shows Endorsed and Quiz ready badges where applicable, and always shows the Approval history panel.",
+    "Detail always has Used in quizzes: a dialog of GET /api/questions/{id}/quizzes. Quiz-managing roles can open each quiz; CampusAdmin sees the list only.",
     "Archived questions show an Unarchive action (PortalAdmin).",
   ])}
 

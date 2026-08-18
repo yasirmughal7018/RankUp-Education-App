@@ -2,8 +2,8 @@ namespace RankUpEducation.Domain.Approvals;
 
 /// <summary>
 /// Target kind for a row in app_approval.
-/// Registration uses <see cref="Approval.UserId"/>; Question, Quiz, and SchoolChangeRequest
-/// use <see cref="Approval.RequestId"/> (question id, quiz id, or school-change request id).
+/// Registration uses <see cref="Approval.UserId"/>; Question, Quiz, SchoolChangeRequest,
+/// and QuestionEditRequest use <see cref="Approval.RequestId"/>.
 /// Numeric values match lookups.id for type = ApprovalEntityType.
 /// </summary>
 public enum ApprovalEntityType : short
@@ -21,4 +21,10 @@ public enum ApprovalEntityType : short
     /// School/campus change review (<see cref="Approval.RequestId"/> = school-change request id).
     /// </summary>
     SchoolChangeRequest = 2104,
+
+    /// <summary>
+    /// Request to edit an Active question (<see cref="Approval.RequestId"/> = edit-request id).
+    /// Queue style: one pending row per PortalAdmin.
+    /// </summary>
+    QuestionEditRequest = 2105,
 }

@@ -6,12 +6,13 @@ namespace RankUpEducation.Domain.Approvals;
 /// Generic approval queue + trail. Table: app_approval.
 /// <para>
 /// <see cref="EntityType"/> selects how the target is identified:
-/// registration uses <see cref="UserId"/>; question, quiz, and school-change rows use
-/// <see cref="RequestId"/> (question id, quiz id, or school-change request id).
+/// registration uses <see cref="UserId"/>; question, quiz, school-change, and question-edit
+/// rows use <see cref="RequestId"/>.
 /// </para>
 /// <para>
-/// User and SchoolChangeRequest rows behave as a <em>queue</em>: one row per eligible
-/// approver, pending until decided (<see cref="IsApproved"/> null and <see cref="ApprovedAt"/> null).
+/// User, SchoolChangeRequest, and QuestionEditRequest rows behave as a <em>queue</em>: one row
+/// per eligible approver, pending until decided (<see cref="IsApproved"/> null and
+/// <see cref="ApprovedAt"/> null).
 /// Question and Quiz rows behave as an append-only <em>trail</em>: one row per workflow event,
 /// always already decided.
 /// </para>
@@ -57,8 +58,8 @@ public sealed class Approval
     public long? UserId { get; private set; }
 
     /// <summary>
-    /// Target id when <see cref="EntityType"/> is Question, Quiz, or SchoolChangeRequest
-    /// (question id, quiz id, or school-change request id respectively).
+    /// Target id when <see cref="EntityType"/> is Question, Quiz, SchoolChangeRequest,
+    /// or QuestionEditRequest (question id, quiz id, school-change request id, or edit-request id).
     /// </summary>
     public long? RequestId { get; private set; }
 
@@ -110,6 +111,23 @@ public sealed class Approval
             ApprovalEntityType.SchoolChangeRequest,
             userId: null,
             requestId: schoolChangeRequestId,
+            approverUserId,
+            approverRole,
+            action: null,
+            reason: null,
+            createdAt: DateTimeOffset.UtcNow,
+            approvedAt: null,
+            isApproved: null);
+
+    /// <summary>Queues a question-edit review row for one PortalAdmin.</summary>
+    public static Approval CreatePendingQuestionEdit(
+        long questionEditRequestId,
+        long approverUserId,
+        UserRole approverRole)
+        => new(
+            ApprovalEntityType.QuestionEditRequest,
+            userId: null,
+            requestId: questionEditRequestId,
             approverUserId,
             approverRole,
             action: null,

@@ -73,6 +73,17 @@ export function useQuestionQuery(questionId: number) {
   });
 }
 
+export function useQuestionQuizzesQuery(
+  questionId: number,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: queryKeys.questionQuizzes(questionId),
+    queryFn: () => questionApi.listQuestionQuizzes(questionId),
+    enabled: (options?.enabled ?? true) && questionId > 0,
+  });
+}
+
 /** Invalidate list (and optional detail) after workflow mutations. */
 function useInvalidateQuestions(questionId?: number) {
   const queryClient = useQueryClient();
@@ -83,7 +94,13 @@ function useInvalidateQuestions(questionId?: number) {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.question(questionId),
       });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.questionQuizzes(questionId),
+      });
     }
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.questionEditRequests(),
+    });
   };
 }
 
@@ -188,6 +205,47 @@ export function useUpdateQuestionMutation(questionId: number) {
   return useMutation({
     mutationFn: (values: QuestionFormValues) =>
       questionApi.updateQuestion(questionId, values),
+    onSuccess: invalidate,
+  });
+}
+
+export function usePendingQuestionEditRequestsQuery(options?: {
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: queryKeys.questionEditRequests(),
+    queryFn: () => questionApi.listPendingQuestionEditRequests(),
+    staleTime: 30_000,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useRequestQuestionEditMutation(questionId: number) {
+  const invalidate = useInvalidateQuestions(questionId);
+
+  return useMutation({
+    mutationFn: (reason: string) =>
+      questionApi.requestQuestionEdit(questionId, reason),
+    onSuccess: invalidate,
+  });
+}
+
+export function useApproveQuestionEditRequestMutation(questionId?: number) {
+  const invalidate = useInvalidateQuestions(questionId);
+
+  return useMutation({
+    mutationFn: (requestId: number) =>
+      questionApi.approveQuestionEditRequest(requestId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectQuestionEditRequestMutation(questionId?: number) {
+  const invalidate = useInvalidateQuestions(questionId);
+
+  return useMutation({
+    mutationFn: ({ requestId, reason }: { requestId: number; reason: string }) =>
+      questionApi.rejectQuestionEditRequest(requestId, reason),
     onSuccess: invalidate,
   });
 }

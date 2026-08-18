@@ -205,3 +205,14 @@ public sealed record QuestionListVisibilityScope(
 
     UserRole Role);
 
+/// <summary>One quiz that currently includes a bank question.</summary>
+public sealed record QuestionQuizUsageRow(
+    long QuizId,
+    string Title,
+    string LifecycleStatus,
+    string ApprovalStatus,
+    short Marks,
+    short DisplayOrder,
+    string CreatedBy);
+
+

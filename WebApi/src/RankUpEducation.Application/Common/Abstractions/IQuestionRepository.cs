@@ -52,6 +52,11 @@ public interface IQuestionRepository
 
     Task<int> CountQuizLinksAsync(long questionId, CancellationToken cancellationToken);
 
+    /// <summary>Non-deleted quizzes that currently include this question.</summary>
+    Task<IReadOnlyList<QuestionQuizUsageRow>> ListQuizzesUsingQuestionAsync(
+        long questionId,
+        CancellationToken cancellationToken);
+
     Task RemoveAllQuizLinksForQuestionAsync(long questionId, CancellationToken cancellationToken);
 
     Task DeleteQuestionAsync(Question question, CancellationToken cancellationToken);

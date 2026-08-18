@@ -24,6 +24,7 @@ const ADMIN_NOTIFICATION_CATEGORIES = new Set([
   "SchoolChangeRequest",
   "RoleRequest",
   "PasswordResetRequest",
+  "QuestionEditRequest",
 ]);
 
 const QUIZ_NOTIFICATION_CATEGORIES = new Set([
@@ -61,6 +62,10 @@ function isVisibleCategory(category: string, role: UserRole | undefined): boolea
     return true;
   }
 
+  if (category === "QuestionEditRequest") {
+    return true;
+  }
+
   // Teachers, Parents, Students: quiz alerts (API already scopes by recipient).
   return isQuiz;
 }
@@ -76,6 +81,10 @@ function hrefForCategory(category: string, role: UserRole | undefined): string {
 
   if (category === "PasswordResetRequest") {
     return role === "Parent" ? "/parent/children" : "/admin/directory";
+  }
+
+  if (category === "QuestionEditRequest") {
+    return role === "PortalAdmin" ? "/questions/edit-requests" : "/questions";
   }
 
   if (category === "QuizAssigned" || category === "QuizReviewed") {

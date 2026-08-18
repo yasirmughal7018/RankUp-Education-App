@@ -410,6 +410,57 @@ public sealed class QuestionRepository : IQuestionRepository
             .CountAsync(link => link.QuestionId == questionId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<QuestionQuizUsageRow>> ListQuizzesUsingQuestionAsync(
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        var links = await _dbContext.QuizQuestions.AsNoTracking()
+            .Where(link => link.QuestionId == questionId)
+            .ToListAsync(cancellationToken);
+
+        if (links.Count == 0)
+        {
+            return Array.Empty<QuestionQuizUsageRow>();
+        }
+
+        var quizIds = links.Select(link => link.QuizId).Distinct().ToArray();
+        var quizzes = await _dbContext.Quizzes.AsNoTracking()
+            .Where(quiz => quizIds.Contains(quiz.Id) && !quiz.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        if (quizzes.Count == 0)
+        {
+            return Array.Empty<QuestionQuizUsageRow>();
+        }
+
+        var lookupIds = quizzes
+            .SelectMany(quiz => new[] { quiz.LifecycleStatusId, quiz.ApprovalStatusId })
+            .Distinct()
+            .ToArray();
+        var lookupNames = await _dbContext.Lookups.AsNoTracking()
+            .Where(lookup => lookupIds.Contains(lookup.Id))
+            .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
+
+        var quizById = quizzes.ToDictionary(quiz => quiz.Id);
+        return links
+            .Where(link => quizById.ContainsKey(link.QuizId))
+            .OrderBy(link => quizById[link.QuizId].QuizTitle)
+            .ThenBy(link => link.DisplayOrder)
+            .Select(link =>
+            {
+                var quiz = quizById[link.QuizId];
+                return new QuestionQuizUsageRow(
+                    quiz.Id,
+                    quiz.QuizTitle,
+                    lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
+                    lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Unknown"),
+                    link.Marks,
+                    link.DisplayOrder,
+                    quiz.CreatedByName);
+            })
+            .ToArray();
+    }
+
     public async Task RemoveAllQuizLinksForQuestionAsync(long questionId, CancellationToken cancellationToken)
     {
         var links = await _dbContext.QuizQuestions

@@ -53,6 +53,7 @@ export function QuestionEditPage() {
       userId: user.id,
       createdBy: question.createdBy,
       status: question.status,
+      hasApprovedEditGrant: question.hasApprovedEditGrant,
     });
 
   if (!canEdit) {
@@ -60,7 +61,7 @@ export function QuestionEditPage() {
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <PageHeader
           title="Editing not allowed"
-          description="You can only edit your own PendingReview or Rejected questions (PortalAdmin may edit any)."
+          description="You can only edit your own PendingReview or Rejected questions. Active questions need Portal Admin, or an approved edit request."
           backTo={`/questions/${question.questionId}`}
           backAriaLabel="Back to question"
         />
@@ -68,11 +69,15 @@ export function QuestionEditPage() {
     );
   }
 
+  const grantWarning = question.hasApprovedEditGrant
+    ? "Portal Admin granted this edit. Saving sends the question back to PendingReview until it is published again."
+    : "Saves content only. Rejected questions stay Rejected until you submit for review.";
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <PageHeader
         title={`Edit question #${questionId}`}
-        description="Saves content only. Rejected questions stay Rejected until you submit for review."
+        description={grantWarning}
         backTo={`/questions/${questionId}`}
         backAriaLabel="Back to question"
       />
