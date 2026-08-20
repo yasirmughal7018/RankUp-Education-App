@@ -405,6 +405,21 @@ export function QuestionDetailPage() {
         </div>
       ) : null}
 
+      {question.isActive &&
+      user?.role !== "PortalAdmin" &&
+      !canEdit &&
+      !question.hasApprovedEditGrant ? (
+        <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          This question is <strong className="text-foreground">Active</strong>.
+          Only Portal Admin can edit it directly. You can view the question here
+          {canRequestEdit
+            ? " and use Request edit to tell Portal Admin why it should change (reason required, at least 10 characters)."
+            : question.myEditRequest?.status === "Pending"
+              ? "; your edit request is already waiting for Portal Admin."
+              : "."}
+        </div>
+      ) : null}
+
       {question.myEditRequest?.status === "Pending" ? (
         <div className="mb-4 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
           Your edit request is waiting for Portal Admin. Reason:{" "}

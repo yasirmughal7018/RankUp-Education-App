@@ -61,7 +61,11 @@ export function QuestionEditPage() {
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <PageHeader
           title="Editing not allowed"
-          description="You can only edit your own PendingReview or Rejected questions. Active questions need Portal Admin, or an approved edit request."
+          description={
+            question.isActive
+              ? "Active questions can only be edited by Portal Admin. Use Request edit on the question page to ask Portal Admin for a one-time edit with a reason (at least 10 characters)."
+              : "You can only edit your own PendingReview or Rejected questions. Active questions need Portal Admin, or an approved edit request."
+          }
           backTo={`/questions/${question.questionId}`}
           backAriaLabel="Back to question"
         />

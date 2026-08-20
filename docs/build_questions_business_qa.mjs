@@ -58,7 +58,7 @@ const lifecycle = [
   [
     "Create / import by Teacher, Coordinator, Tutor, Parent, CampusAdmin, SchoolAdmin",
     "PendingReview",
-    "IsActive=false; Visibility=None; owner and organisation stamped from creator. Audience = creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin.",
+    "IsActive=false; Visibility=None. Teacher/Coordinator/Tutor/CampusAdmin/SchoolAdmin: org stamped from creator; audience = creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. Parent: no school/campus stamp (family-private); audience = creator + PortalAdmin only until published.",
   ],
   [
     "Create / import by PortalAdmin",
@@ -73,12 +73,12 @@ const lifecycle = [
   [
     "Endorse by CampusAdmin",
     "Approved (endorsed, not published)",
-    "A Teacher/Coordinator/Tutor/Parent question in the same campus only. Visibility=Campus; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish.",
+    "A Teacher/Coordinator/Tutor question in the same campus only. Visibility=Campus; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish. (Parent-created questions skip campus/school queues.)",
   ],
   [
     "Endorse by SchoolAdmin",
     "Approved (endorsed, not published)",
-    "A Teacher/Coordinator/Tutor/Parent/CampusAdmin question in the same school. Visibility=School; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish.",
+    "A Teacher/Coordinator/Tutor/CampusAdmin question in the same school. Visibility=School; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish.",
   ],
   [
     "Publish by PortalAdmin",
@@ -412,7 +412,8 @@ const checklist = [
   "PortalAdmin create and import auto-publish (Approved + Public + Active). Import calls the same create path; a Status column cannot override that.",
   "PortalAdmin-created questions are auto-published (Approved + Public + Active).",
   "Draft (110) is leftover only: create/import never write it; GET still returns status Draft for old rows (not remapped to PendingReview); owners may still edit/delete those rows.",
-  "A PendingReview or endorsed (Campus/School) question is visible ONLY to its creator plus that creator's CampusAdmin, SchoolAdmin, and PortalAdmin — never peers or other orgs.",
+  "Parent-created bank questions are family-private: no school/campus org stamp, visible only to the creator and PortalAdmin until published, and reviewed by PortalAdmin only.",
+  "A PendingReview or endorsed (Campus/School) question is visible ONLY to its creator plus that creator's CampusAdmin, SchoolAdmin, and PortalAdmin — never peers or other orgs (Parent excepted: creator + PortalAdmin only).",
   "Only PortalAdmin approval publishes a question (Approved + Public + Active + quiz-usable).",
   "CampusAdmin/SchoolAdmin approval is an endorsement: Status=Approved but IsActive=false, audience stays restricted, and it is NOT quiz-usable until PortalAdmin publishes it.",
   "Approver must be a higher tier than the creator; no self or same-tier approval (Teacher/Coordinator/Tutor/Parent→Campus/School/Portal; CampusAdmin→School/Portal; SchoolAdmin→Portal only). Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions.",
@@ -426,7 +427,7 @@ const checklist = [
   "Bank quiz eligibility (eligibleForQuizOnly / attach from bank) requires Approved + Public + IsActive + ApprovedBy (published by PortalAdmin). Inline-on-quiz questions are Campus + Active and are used on that quiz without being Public.",
   "Question bank excludes Students; students receive questions only through quiz attempts.",
   "Coordinator and Tutor have the same bank-create rights as Teacher/Parent: own + Public visibility, no endorse/publish.",
-  "CampusAdmin list, pending-approval, and GetById include Teacher/Coordinator/Tutor/Parent in the same campus (not own). SchoolAdmin includes those plus CampusAdmin in the same school. Those three paths use the same creator-role lists.",
+  "CampusAdmin list, pending-approval, and GetById include Teacher/Coordinator/Tutor in the same campus (not own). SchoolAdmin includes those plus CampusAdmin in the same school. Parent creators are excluded — PortalAdmin only.",
   "CampusAdmin can manage the question bank and endorse, but cannot manage quizzes: no quiz create, no inline question, no attach-from-bank. Quiz-managing roles are Teacher, Coordinator, Tutor, Parent, SchoolAdmin, and PortalAdmin. CampusAdmin may still school-approve campus quizzes.",
   "Single/Multi/True-False/Fill/Descriptive/Matching/Ordering are offered on web, Mobile, Excel import, quiz inline, and API create. File Upload and Media are rejected on those create paths; existing rows stay valid for update/attempt until re-enabled.",
   "File Upload is a link/path MVP (SubmittedText) — hidden on web create; binary blob upload, storage, and review download are not built yet.",
@@ -606,6 +607,7 @@ const html = `<!doctype html>
     "Detail shows metadata (status badges, class/subject/topic, marks, time, creator/approver names, visibility, org) before the question text; Created by / Approved by show display names, not IDs.",
     "Detail shows Endorsed and Quiz ready badges where applicable, and always shows the Approval history panel.",
     "Detail always has Used in quizzes: a dialog of GET /api/questions/{id}/quizzes. Quiz-managing roles can open each quiz; CampusAdmin sees the list only.",
+    "PortalAdmin sees an Edit requests tile on /questions (GET /api/questions/edit-requests); /questions/edit-requests redirects there. Approve/reject inline; notifications (category QuestionEditRequest) link PortalAdmin to that view and requesters to the question.",
     "Archived questions show an Unarchive action (PortalAdmin).",
   ])}
 
@@ -819,6 +821,7 @@ const docChildren = [
     "Subjects / Classes / Difficulties filter panel is hidden by default.",
     "Detail shows metadata before the question text; Created by / Approved by show display names.",
     "Detail always shows the Approval history panel; Archived questions offer Unarchive (PortalAdmin).",
+    "PortalAdmin: Edit requests tile on /questions (queue from GET /api/questions/edit-requests). Notifications (QuestionEditRequest) open that view; requesters open the question from the notification.",
   ].map(docBullet),
 
   docHeading("12. QA scenarios"),

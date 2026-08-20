@@ -70,7 +70,11 @@ function isVisibleCategory(category: string, role: UserRole | undefined): boolea
   return isQuiz;
 }
 
-function hrefForCategory(category: string, role: UserRole | undefined): string {
+function hrefForCategory(
+  category: string,
+  role: UserRole | undefined,
+  body?: string,
+): string {
   if (category === "SchoolChangeRequest") {
     return "/admin/directory/school-changes";
   }
@@ -84,7 +88,16 @@ function hrefForCategory(category: string, role: UserRole | undefined): string {
   }
 
   if (category === "QuestionEditRequest") {
-    return role === "PortalAdmin" ? "/questions/edit-requests" : "/questions";
+    if (role === "PortalAdmin") {
+      return "/questions?view=edit-requests";
+    }
+
+    const questionMatch = body?.match(/question #(\d+)/i);
+    if (questionMatch) {
+      return `/questions/${questionMatch[1]}`;
+    }
+
+    return "/questions";
   }
 
   if (category === "QuizAssigned" || category === "QuizReviewed") {
@@ -320,7 +333,7 @@ export function NotificationsBell() {
                   return (
                     <li key={item.id}>
                       <Link
-                        to={hrefForCategory(item.category, role)}
+                        to={hrefForCategory(item.category, role, item.body)}
                         onClick={() => {
                           setOpen(false);
                           void markCategoryRead(item.category);
@@ -375,6 +388,18 @@ export function NotificationsBell() {
               >
                 School / campus changes
               </Link>
+              {role === "PortalAdmin" ? (
+                <Link
+                  to="/questions?view=edit-requests"
+                  onClick={() => {
+                    setOpen(false);
+                    void markCategoryRead("QuestionEditRequest");
+                  }}
+                  className="text-xs font-medium text-brand-700 hover:text-brand-800"
+                >
+                  Question edit requests
+                </Link>
+              ) : null}
             </div>
           ) : role === "Student" ? (
             <div className="border-t border-slate-100 px-4 py-2">

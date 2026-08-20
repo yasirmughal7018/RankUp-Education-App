@@ -48,9 +48,6 @@ export function AppLayout() {
     if (user && canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });
     }
-    if (user?.role === "PortalAdmin") {
-      items.push({ to: "/questions/edit-requests", label: "Edit requests" });
-    }
     if (user && canManageQuizzes(user.role)) {
       items.push(
         { to: "/quizzes", label: "Quizzes", end: true },

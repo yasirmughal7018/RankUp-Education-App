@@ -93,6 +93,7 @@ function useInvalidateQuestions(questionId?: number) {
 
   return () => {
     void queryClient.invalidateQueries({ queryKey: ["questions"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
     if (questionId) {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.question(questionId),

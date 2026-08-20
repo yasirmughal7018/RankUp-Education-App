@@ -287,8 +287,16 @@ public sealed class QuestionService : IQuestionService
             request.Hint,
             request.Explanation);
 
-        // Stamp creator org so Campus/School admins can endorse in scope.
-        question.SetOrgScope(scope.SchoolId, scope.CampusId);
+        // Parent bank questions are family-private — do not stamp the creator's school/campus
+        // (Parent accounts may also be enrolled as Students elsewhere).
+        if (scope.Role == UserRole.Parent)
+        {
+            question.SetOrgScope(null, null);
+        }
+        else
+        {
+            question.SetOrgScope(scope.SchoolId, scope.CampusId);
+        }
 
         if (scope.IsPortalAdmin)
         {

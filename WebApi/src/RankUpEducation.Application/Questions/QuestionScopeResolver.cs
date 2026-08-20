@@ -132,6 +132,12 @@ public static class QuestionScopeResolver
                 "Only Portal Admin, School Admin, or Campus Admin can approve or reject questions.");
         }
 
+        if (IsPortalAdminOnlyCreator(question.CreatedByRole) && !scope.IsPortalAdmin)
+        {
+            throw new ForbiddenAppException(
+                "Parent-created questions are reviewed by Portal Admin only.");
+        }
+
         // No self-approval except PortalAdmin (who may publish anything, including own pending).
         if (!scope.IsPortalAdmin && IsOwner(question, scope))
         {
@@ -182,9 +188,10 @@ public static class QuestionScopeResolver
     /// <summary>
     /// Restricted audience for non-Public questions:
     /// creator always; PortalAdmin always;
-    /// Teacher/Coordinator/Tutor/Parent creators → their CampusAdmin (same campus) + SchoolAdmin (same school);
+    /// Teacher/Coordinator/Tutor creators → their CampusAdmin (same campus) + SchoolAdmin (same school);
     /// CampusAdmin creators → SchoolAdmin (same school) only;
-    /// SchoolAdmin creators → PortalAdmin only.
+    /// SchoolAdmin creators → PortalAdmin only;
+    /// Parent creators → creator + PortalAdmin only.
     /// Public questions are visible to every question-managing role.
     /// </summary>
     public static bool CanViewQuestion(
@@ -210,6 +217,11 @@ public static class QuestionScopeResolver
             return true;
         }
 
+        if (IsPortalAdminOnlyCreator(createdByRole))
+        {
+            return false;
+        }
+
         // Non-public: upward admins only, based on creator tier.
         if (scope.IsSchoolAdmin
             && scope.SchoolId.HasValue
@@ -232,28 +244,34 @@ public static class QuestionScopeResolver
 
     /// <summary>
     /// Creator roles a CampusAdmin may see/endorse in their campus
-    /// (Teacher, Coordinator, Tutor, Parent). Used by CanView and list/pending SQL.
+    /// (Teacher, Coordinator, Tutor). Parent bank questions are family-private
+    /// until PortalAdmin publishes — not campus/school queues.
     /// </summary>
     public static readonly UserRole[] CampusAdminVisibleCreatorRoles =
     [
         UserRole.Teacher,
         UserRole.Coordinator,
         UserRole.Tutor,
-        UserRole.Parent,
     ];
 
     /// <summary>
     /// Creator roles a SchoolAdmin may see/endorse in their school
-    /// (campus-visible creators plus CampusAdmin).
+    /// (campus-visible creators plus CampusAdmin). Parent is excluded (PortalAdmin only).
     /// </summary>
     public static readonly UserRole[] SchoolAdminVisibleCreatorRoles =
     [
         UserRole.Teacher,
         UserRole.Coordinator,
         UserRole.Tutor,
-        UserRole.Parent,
         UserRole.CampusAdmin,
     ];
+
+    /// <summary>
+    /// Parent bank questions are for linked children / family use, not the creator's
+    /// school org (a Parent account may also be enrolled as a Student elsewhere).
+    /// </summary>
+    public static bool IsPortalAdminOnlyCreator(UserRole createdByRole)
+        => createdByRole == UserRole.Parent;
 
     /// <summary>True when approver tier is strictly above creator tier (PortalAdmin always).</summary>
     public static bool CanApproveCreatorTier(UserRole approverRole, UserRole creatorRole)
@@ -282,13 +300,23 @@ public static class QuestionScopeResolver
         if (approverRole == UserRole.CampusAdmin
             && creatorRole is UserRole.CampusAdmin or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
-            return "Campus Admin can only approve questions created by Teachers, Coordinators, Tutors, or Parents in their campus.";
+            return "Campus Admin can only approve questions created by Teachers, Coordinators, or Tutors in their campus.";
+        }
+
+        if (approverRole == UserRole.CampusAdmin && creatorRole == UserRole.Parent)
+        {
+            return "Parent-created questions are reviewed by Portal Admin only.";
         }
 
         if (approverRole == UserRole.SchoolAdmin
             && creatorRole is UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
-            return "School Admin can only approve questions created by Teachers, Coordinators, Tutors, Parents, or Campus Admins in their school.";
+            return "School Admin can only approve questions created by Teachers, Coordinators, Tutors, or Campus Admins in their school.";
+        }
+
+        if (approverRole == UserRole.SchoolAdmin && creatorRole == UserRole.Parent)
+        {
+            return "Parent-created questions are reviewed by Portal Admin only.";
         }
 
         return "You do not have permission to approve or reject this question.";

@@ -7,10 +7,11 @@
 import {
   startTransition,
   useDeferredValue,
+  useEffect,
   useMemo,
   useState,
 } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronDown,
   FileSpreadsheet,
@@ -18,6 +19,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
+import { queryKeys } from "@/core/api/queryKeys";
+import { useQueryClient } from "@tanstack/react-query";
+import * as notificationsApi from "@/features/notifications/data/notificationsApi";
 import { useLookups } from "@/core/hooks/useLookups";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import {
@@ -36,8 +40,10 @@ import {
 } from "@/features/questions/presentation/components/StatusBadge";
 import { QuestionBankStatTile } from "@/features/questions/presentation/components/QuestionBankStatTile";
 import { QuestionCategoryColumn } from "@/features/questions/presentation/components/QuestionCategoryColumn";
+import { QuestionEditRequestsPanel } from "@/features/questions/presentation/components/QuestionEditRequestsPanel";
 import {
   usePendingApprovalQuestionsQuery,
+  usePendingQuestionEditRequestsQuery,
   useQuestionsQuery,
 } from "@/features/questions/presentation/hooks/useQuestionQueries";
 import { AppCard } from "@/components/ui/app-card";
@@ -59,7 +65,8 @@ type ListFilter =
   | "approved"
   | "rejected"
   | "archived"
-  | "active";
+  | "active"
+  | "edit-requests";
 
 function matchesListFilter(
   question: QuestionSummary,
@@ -98,6 +105,8 @@ function listFilterLabel(filter: ListFilter): string {
       return "Archived";
     case "active":
       return "Active";
+    case "edit-requests":
+      return "edit requests";
     default:
       return "all";
   }
@@ -129,8 +138,11 @@ function countById(
 
 export function QuestionsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const canApprove = user ? canApproveQuestions(user.role) : false;
+  const isPortalAdmin = user?.role === "PortalAdmin";
 
   const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [subjectId, setSubjectId] = useState<number | "">("");
@@ -161,14 +173,51 @@ export function QuestionsPage() {
     isFetching: pendingFetching,
   } = usePendingApprovalQuestionsQuery({ enabled: canApprove });
 
-  const isLoading = bankLoading || (canApprove && pendingLoading);
-  const error = bankError ?? (canApprove ? pendingError : undefined);
-  const isFetching = bankFetching || (canApprove && pendingFetching);
+  const {
+    data: editRequests = [],
+    isLoading: editRequestsLoading,
+    error: editRequestsError,
+    refetch: refetchEditRequests,
+    isFetching: editRequestsFetching,
+  } = usePendingQuestionEditRequestsQuery({ enabled: isPortalAdmin });
+
+  const isLoading =
+    bankLoading || (canApprove && pendingLoading) || (isPortalAdmin && editRequestsLoading);
+  const error =
+    bankError ?? (canApprove ? pendingError : undefined) ?? (isPortalAdmin ? editRequestsError : undefined);
+  const isFetching =
+    bankFetching ||
+    (canApprove && pendingFetching) ||
+    (isPortalAdmin && editRequestsFetching);
+
+  useEffect(() => {
+    if (searchParams.get("view") === "edit-requests" && isPortalAdmin) {
+      startTransition(() => setListFilter("edit-requests"));
+    }
+  }, [searchParams, isPortalAdmin]);
+
+  useEffect(() => {
+    if (listFilter !== "edit-requests" || !isPortalAdmin) {
+      return;
+    }
+
+    void notificationsApi
+      .markNotificationCategoryRead("QuestionEditRequest")
+      .then(() =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications() }),
+      )
+      .catch(() => {
+        // Non-blocking when marking read fails.
+      });
+  }, [listFilter, isPortalAdmin, queryClient]);
 
   function refetch() {
     void refetchBank();
     if (canApprove) {
       void refetchPending();
+    }
+    if (isPortalAdmin) {
+      void refetchEditRequests();
     }
   }
 
@@ -336,6 +385,11 @@ export function QuestionsPage() {
   function selectListFilter(next: ListFilter) {
     startTransition(() => {
       setListFilter((current) => (current === next ? "all" : next));
+      if (next === "edit-requests" && isPortalAdmin) {
+        setSearchParams({ view: "edit-requests" }, { replace: true });
+      } else if (searchParams.has("view")) {
+        setSearchParams({}, { replace: true });
+      }
     });
   }
 
@@ -346,6 +400,9 @@ export function QuestionsPage() {
       setClassId("");
       setDifficultyId("");
       setSearch("");
+      if (searchParams.has("view")) {
+        setSearchParams({}, { replace: true });
+      }
     });
   }
 
@@ -431,7 +488,12 @@ export function QuestionsPage() {
             </Button>
           </div>
         ) : null}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 sm:gap-2.5">
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5",
+            isPortalAdmin ? "lg:grid-cols-7" : "lg:grid-cols-6",
+          )}
+        >
           <QuestionBankStatTile
             label="Total"
             value={bankStats.total}
@@ -474,10 +536,20 @@ export function QuestionsPage() {
             active={listFilter === "active"}
             onClick={() => selectListFilter("active")}
           />
+          {isPortalAdmin ? (
+            <QuestionBankStatTile
+              label="Edit requests"
+              value={editRequests.length}
+              status="locked"
+              active={listFilter === "edit-requests"}
+              onClick={() => selectListFilter("edit-requests")}
+            />
+          ) : null}
         </div>
       </AppCard>
 
       {/* Category overview — full picture with counts */}
+      {listFilter !== "edit-requests" ? (
       <AppCard padded className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
@@ -562,6 +634,7 @@ export function QuestionsPage() {
           </div>
         ) : null}
       </AppCard>
+      ) : null}
 
       {error ? (
         <AppErrorState
@@ -574,16 +647,31 @@ export function QuestionsPage() {
       <AppCard padded={false} className="overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
           <p className="text-sm font-medium text-foreground">
-            {tableRows.length} question{tableRows.length === 1 ? "" : "s"}
-            {listFilter !== "all" ? (
-              <span className="ml-2 font-normal text-muted-foreground">
-                · {lensSummary}
-              </span>
-            ) : null}
+            {listFilter === "edit-requests" ? (
+              <>
+                {editRequests.length} edit request
+                {editRequests.length === 1 ? "" : "s"}
+              </>
+            ) : (
+              <>
+                {tableRows.length} question{tableRows.length === 1 ? "" : "s"}
+                {listFilter !== "all" ? (
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    · {lensSummary}
+                  </span>
+                ) : null}
+              </>
+            )}
           </p>
         </div>
 
-        {isLoading ? (
+        {listFilter === "edit-requests" ? (
+          <QuestionEditRequestsPanel
+            items={editRequests}
+            isLoading={editRequestsLoading}
+            error={editRequestsError}
+          />
+        ) : isLoading ? (
           <div className="p-4 sm:p-5">
             <AppLoadingSkeleton variant="table" count={5} />
           </div>
