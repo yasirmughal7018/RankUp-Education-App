@@ -30,6 +30,10 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             from relation in _dbContext.ParentStudentRelations.AsNoTracking()
             join student in _dbContext.Students.AsNoTracking() on relation.StudentId equals student.Id
             join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            join school in _dbContext.Schools.AsNoTracking() on (long?)user.SchoolId equals school.Id into schools
+            from school in schools.DefaultIfEmpty()
+            join campus in _dbContext.Campuses.AsNoTracking() on (long?)user.CampusId equals campus.Id into campuses
+            from campus in campuses.DefaultIfEmpty()
             where relation.ParentId == parentId && relation.IsActive
             orderby user.FullName
             select new LinkedStudentInfo(
@@ -39,7 +43,9 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
                 user.RollNumberTeacherCode ?? string.Empty,
                 student.Grade,
                 student.Section,
-                relation.Relationship))
+                relation.Relationship,
+                school != null ? school.Name : null,
+                campus != null ? campus.Name : null))
             .ToListAsync(cancellationToken);
     }
 

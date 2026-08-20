@@ -155,7 +155,7 @@ class _ParentChildrenPageState extends ConsumerState<ParentChildrenPage> {
                       ],
                     ),
                     subtitle: Text(
-                      '${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}',
+                      '${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}\n${student.placementLabel}',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push(

@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Building2, GraduationCap } from "lucide-react";
 import { PageHeader } from "@/core/components/PageHeader";
-import { formatStudentLabel } from "@/features/parent/domain/parentTypes";
+import {
+  formatStudentLabel,
+} from "@/features/parent/domain/parentTypes";
 import { AddChildDialog } from "@/features/parent/presentation/components/AddChildDialog";
 import {
   useLinkMyChildMutation,
@@ -101,6 +104,26 @@ export function ParentChildrenPage() {
                       ·
                     </span>
                     Roll {student.rollNumber?.trim() || "—"}
+                  </p>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <Building2
+                        className="h-3.5 w-3.5 shrink-0 text-slate-400"
+                        aria-hidden
+                      />
+                      <span className="truncate">
+                        {student.schoolName?.trim() || "School not assigned"}
+                      </span>
+                    </span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <GraduationCap
+                        className="h-3.5 w-3.5 shrink-0 text-slate-400"
+                        aria-hidden
+                      />
+                      <span className="truncate">
+                        {student.campusName?.trim() || "Campus not assigned"}
+                      </span>
+                    </span>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

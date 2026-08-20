@@ -8,4 +8,6 @@ public sealed record LinkedStudentInfo(
     string RollNumber,
     short Grade,
     string Section,
-    string Relationship);
+    string Relationship,
+    string? SchoolName,
+    string? CampusName);

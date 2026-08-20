@@ -7,7 +7,9 @@ public sealed record LinkedStudentResponse(
     string RollNumber,
     short Grade,
     string Section,
-    string Relationship);
+    string Relationship,
+    string? SchoolName,
+    string? CampusName);
 
 public sealed record LinkedStudentListResponse(IReadOnlyList<LinkedStudentResponse> Items);
 
@@ -25,5 +27,7 @@ public sealed record LinkMyChildResponse(
     short Grade,
     string Section,
     string Relationship,
+    string? SchoolName,
+    string? CampusName,
     bool AlreadyLinked);
 

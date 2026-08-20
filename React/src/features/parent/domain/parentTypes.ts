@@ -6,6 +6,8 @@ export interface LinkedStudent {
   grade: number;
   section: string;
   relationship: string;
+  schoolName?: string | null;
+  campusName?: string | null;
 }
 
 /** Parent self-link by CNIC or username. */
@@ -41,4 +43,12 @@ export function formatStudentLabel(student: LinkedStudent): string {
     ? `Grade ${student.grade} · ${section}`
     : `Grade ${student.grade}`;
   return `${student.fullName} (${classPart})`;
+}
+
+export function formatStudentPlacement(student: LinkedStudent): string {
+  const parts = [
+    student.schoolName?.trim() || null,
+    student.campusName?.trim() || null,
+  ].filter((part): part is string => Boolean(part) && part !== "—");
+  return parts.length > 0 ? parts.join(" · ") : "School not assigned";
 }

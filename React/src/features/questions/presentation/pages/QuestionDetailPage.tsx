@@ -30,6 +30,7 @@ import {
   isPendingQuestionStatus,
   isRejectedQuestionStatus,
 } from "@/features/questions/domain/questionTypes";
+import { QuestionDetailOptions } from "@/features/questions/presentation/components/QuestionDetailOptions";
 import {
   getQuestionActivityStatusKey,
   getQuestionWorkflowStatusKey,
@@ -521,34 +522,10 @@ export function QuestionDetailPage() {
           </div>
         ) : null}
 
-        {question.options.length > 0 ? (
-          <ul className="space-y-2">
-            {question.options.map((option) => (
-              <li
-                key={option.optionId}
-                className={
-                  option.isCorrect
-                    ? "flex items-center justify-between gap-3 rounded-lg border border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] px-4 py-3 text-sm text-[var(--status-approved-text)]"
-                    : "flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground"
-                }
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block">{option.optionText || "Image option"}</span>
-                  {option.optionImageUrl ? (
-                    <img
-                      src={option.optionImageUrl}
-                      alt=""
-                      className="mt-2 max-h-32 rounded-lg border border-border object-contain"
-                    />
-                  ) : null}
-                </span>
-                {option.isCorrect ? (
-                  <StatusBadge label="Correct" status="approved" />
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <QuestionDetailOptions
+          questionType={question.questionType}
+          options={question.options}
+        />
 
         {(question.acceptedAnswers?.length ?? 0) > 0 ? (
           <div>

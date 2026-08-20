@@ -8,6 +8,8 @@ class LinkedStudent {
     required this.grade,
     required this.section,
     required this.relationship,
+    this.schoolName,
+    this.campusName,
   });
 
   factory LinkedStudent.fromJson(Map<String, dynamic> json) {
@@ -19,6 +21,8 @@ class LinkedStudent {
       grade: (json['grade'] as num?)?.toInt() ?? 0,
       section: (json['section'] as String?)?.trim() ?? '',
       relationship: (json['relationship'] as String?)?.trim() ?? 'Guardian',
+      schoolName: (json['schoolName'] as String?)?.trim(),
+      campusName: (json['campusName'] as String?)?.trim(),
     );
   }
 
@@ -29,6 +33,8 @@ class LinkedStudent {
   final int grade;
   final String section;
   final String relationship;
+  final String? schoolName;
+  final String? campusName;
 
   String get label {
     final gradeSection = [
@@ -39,6 +45,14 @@ class LinkedStudent {
       return fullName;
     }
     return '$fullName ($gradeSection)';
+  }
+
+  String get placementLabel {
+    final parts = [
+      if (schoolName != null && schoolName!.isNotEmpty) schoolName,
+      if (campusName != null && campusName!.isNotEmpty) campusName,
+    ];
+    return parts.isEmpty ? 'School not assigned' : parts.join(' · ');
   }
 }
 
@@ -52,6 +66,8 @@ class LinkMyChildResult {
     required this.grade,
     required this.section,
     required this.relationship,
+    this.schoolName,
+    this.campusName,
     required this.alreadyLinked,
   });
 
@@ -64,6 +80,8 @@ class LinkMyChildResult {
       grade: (json['grade'] as num?)?.toInt() ?? 0,
       section: (json['section'] as String?)?.trim() ?? '',
       relationship: (json['relationship'] as String?)?.trim() ?? 'Guardian',
+      schoolName: (json['schoolName'] as String?)?.trim(),
+      campusName: (json['campusName'] as String?)?.trim(),
       alreadyLinked: json['alreadyLinked'] as bool? ?? false,
     );
   }
@@ -75,5 +93,7 @@ class LinkMyChildResult {
   final int grade;
   final String section;
   final String relationship;
+  final String? schoolName;
+  final String? campusName;
   final bool alreadyLinked;
 }

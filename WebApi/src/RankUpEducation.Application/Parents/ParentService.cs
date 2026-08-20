@@ -42,7 +42,9 @@ public sealed class ParentService : IParentService
                 student.RollNumber,
                 student.Grade,
                 student.Section,
-                student.Relationship)).ToArray());
+                student.Relationship,
+                student.SchoolName,
+                student.CampusName)).ToArray());
     }
 
     public async Task<LinkMyChildResponse> LinkMyChildAsync(
@@ -104,6 +106,8 @@ public sealed class ParentService : IParentService
             linked?.Grade ?? 0,
             linked?.Section ?? string.Empty,
             linked?.Relationship ?? relationship,
+            linked?.SchoolName,
+            linked?.CampusName,
             alreadyLinked);
     }
 
