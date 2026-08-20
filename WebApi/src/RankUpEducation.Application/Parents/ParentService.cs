@@ -44,7 +44,9 @@ public sealed class ParentService : IParentService
                 student.Section,
                 student.Relationship,
                 student.SchoolName,
-                student.CampusName)).ToArray());
+                student.CampusName,
+                student.IsActive,
+                student.AccountStatus)).ToArray());
     }
 
     public async Task<LinkMyChildResponse> LinkMyChildAsync(
@@ -108,6 +110,9 @@ public sealed class ParentService : IParentService
             linked?.Relationship ?? relationship,
             linked?.SchoolName,
             linked?.CampusName,
+            linked?.IsActive ?? studentUser.IsActive,
+            linked?.AccountStatus
+                ?? DirectoryAccountStatuses.FromUser(studentUser),
             alreadyLinked);
     }
 

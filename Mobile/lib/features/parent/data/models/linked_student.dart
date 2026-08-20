@@ -10,6 +10,8 @@ class LinkedStudent {
     required this.relationship,
     this.schoolName,
     this.campusName,
+    required this.isActive,
+    this.accountStatus,
   });
 
   factory LinkedStudent.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,8 @@ class LinkedStudent {
       relationship: (json['relationship'] as String?)?.trim() ?? 'Guardian',
       schoolName: (json['schoolName'] as String?)?.trim(),
       campusName: (json['campusName'] as String?)?.trim(),
+      isActive: json['isActive'] as bool? ?? true,
+      accountStatus: (json['accountStatus'] as String?)?.trim(),
     );
   }
 
@@ -35,6 +39,8 @@ class LinkedStudent {
   final String relationship;
   final String? schoolName;
   final String? campusName;
+  final bool isActive;
+  final String? accountStatus;
 
   String get label {
     final gradeSection = [
@@ -54,6 +60,27 @@ class LinkedStudent {
     ];
     return parts.isEmpty ? 'School not assigned' : parts.join(' · ');
   }
+
+  String get statusLabel {
+    final status = accountStatus?.trim();
+    if (status != null && status.isNotEmpty) {
+      switch (status) {
+        case 'Active':
+          return 'Active';
+        case 'ApprovedInactive':
+          return 'Approved';
+        case 'PendingApproval':
+          return 'Pending';
+        case 'Locked':
+          return 'Locked';
+        case 'Deactivated':
+          return 'Inactive';
+        case 'Rejected':
+          return 'Rejected';
+      }
+    }
+    return isActive ? 'Active' : 'Inactive';
+  }
 }
 
 /// Result of POST /parents/me/students (parent self-link).
@@ -68,6 +95,8 @@ class LinkMyChildResult {
     required this.relationship,
     this.schoolName,
     this.campusName,
+    required this.isActive,
+    this.accountStatus,
     required this.alreadyLinked,
   });
 
@@ -82,6 +111,8 @@ class LinkMyChildResult {
       relationship: (json['relationship'] as String?)?.trim() ?? 'Guardian',
       schoolName: (json['schoolName'] as String?)?.trim(),
       campusName: (json['campusName'] as String?)?.trim(),
+      isActive: json['isActive'] as bool? ?? true,
+      accountStatus: (json['accountStatus'] as String?)?.trim(),
       alreadyLinked: json['alreadyLinked'] as bool? ?? false,
     );
   }
@@ -95,5 +126,7 @@ class LinkMyChildResult {
   final String relationship;
   final String? schoolName;
   final String? campusName;
+  final bool isActive;
+  final String? accountStatus;
   final bool alreadyLinked;
 }

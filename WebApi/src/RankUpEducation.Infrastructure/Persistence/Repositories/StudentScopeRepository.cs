@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
+using RankUpEducation.Application.Directory;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Auth;
 
@@ -26,7 +27,7 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
         long parentId,
         CancellationToken cancellationToken)
     {
-        return await (
+        var rows = await (
             from relation in _dbContext.ParentStudentRelations.AsNoTracking()
             join student in _dbContext.Students.AsNoTracking() on relation.StudentId equals student.Id
             join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
@@ -36,17 +37,70 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             from campus in campuses.DefaultIfEmpty()
             where relation.ParentId == parentId && relation.IsActive
             orderby user.FullName
-            select new LinkedStudentInfo(
+            select new
+            {
                 student.Id,
                 user.FullName,
                 user.Username,
-                user.RollNumberTeacherCode ?? string.Empty,
+                RollNumber = user.RollNumberTeacherCode ?? string.Empty,
                 student.Grade,
                 student.Section,
                 relation.Relationship,
-                school != null ? school.Name : null,
-                campus != null ? campus.Name : null))
+                SchoolName = school != null ? school.Name : null,
+                CampusName = campus != null ? campus.Name : null,
+                user.IsActive,
+                HasPassword = user.PasswordHash != null && user.PasswordHash != "",
+                IsRejected = user.RejectedAt != null,
+            })
             .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return Array.Empty<LinkedStudentInfo>();
+        }
+
+        var lockedSet = await GetLockedUserIdsAsync(
+            rows.Select(row => row.Id).ToArray(),
+            cancellationToken);
+
+        return rows
+            .Select(row => new LinkedStudentInfo(
+                row.Id,
+                row.FullName,
+                row.Username,
+                row.RollNumber,
+                row.Grade,
+                row.Section,
+                row.Relationship,
+                row.SchoolName,
+                row.CampusName,
+                row.IsActive,
+                DirectoryAccountStatuses.Resolve(
+                    row.IsActive,
+                    row.HasPassword,
+                    row.IsRejected,
+                    lockedSet.Contains(row.Id))))
+            .ToArray();
+    }
+
+    private async Task<HashSet<long>> GetLockedUserIdsAsync(
+        IReadOnlyList<long> userIds,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return [];
+        }
+
+        var pendingChange = SchoolChangeRequestStatus.Pending;
+        var lockedIds = await _dbContext.UserSchoolChangeRequests.AsNoTracking()
+            .Where(request =>
+                request.Status == pendingChange && userIds.Contains(request.UserId))
+            .Select(request => request.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return lockedIds.ToHashSet();
     }
 
     public async Task<StudentSchoolContext?> GetStudentSchoolContextAsync(long studentId, CancellationToken cancellationToken)

@@ -10,4 +10,6 @@ public sealed record LinkedStudentInfo(
     string Section,
     string Relationship,
     string? SchoolName,
-    string? CampusName);
+    string? CampusName,
+    bool IsActive,
+    string AccountStatus);

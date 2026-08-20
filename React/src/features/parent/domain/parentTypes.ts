@@ -8,6 +8,8 @@ export interface LinkedStudent {
   relationship: string;
   schoolName?: string | null;
   campusName?: string | null;
+  isActive: boolean;
+  accountStatus?: string | null;
 }
 
 /** Parent self-link by CNIC or username. */

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Building2, GraduationCap } from "lucide-react";
 import { PageHeader } from "@/core/components/PageHeader";
+import { AccountStatusBadge } from "@/features/directory/presentation/components/AccountStatusBadge";
 import {
   formatStudentLabel,
 } from "@/features/parent/domain/parentTypes";
@@ -97,6 +98,11 @@ export function ParentChildrenPage() {
                     <span className="inline-flex max-w-full truncate rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-800">
                       {student.relationship?.trim() || "Guardian"}
                     </span>
+                    <AccountStatusBadge
+                      accountStatus={student.accountStatus}
+                      isActive={student.isActive}
+                      size="sm"
+                    />
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
                     {student.username}

@@ -134,6 +134,22 @@ class _ParentChildrenPageState extends ConsumerState<ParentChildrenPage> {
                         const SizedBox(width: 8),
                         Chip(
                           label: Text(
+                            student.statusLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          padding: EdgeInsets.zero,
+                          labelPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Chip(
+                          label: Text(
                             student.relationship.trim().isEmpty
                                 ? 'Guardian'
                                 : student.relationship.trim(),

@@ -9,7 +9,9 @@ public sealed record LinkedStudentResponse(
     string Section,
     string Relationship,
     string? SchoolName,
-    string? CampusName);
+    string? CampusName,
+    bool IsActive,
+    string AccountStatus);
 
 public sealed record LinkedStudentListResponse(IReadOnlyList<LinkedStudentResponse> Items);
 
@@ -29,5 +31,7 @@ public sealed record LinkMyChildResponse(
     string Relationship,
     string? SchoolName,
     string? CampusName,
+    bool IsActive,
+    string AccountStatus,
     bool AlreadyLinked);
 
