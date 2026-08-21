@@ -61,6 +61,17 @@ public interface IQuizService
         long quizId,
         long attemptId,
         CancellationToken cancellationToken);
+
+    /// <summary>Stores a binary file for a File Upload question and returns the public URL/path.</summary>
+    Task<UploadQuizAttemptFileResponse> UploadAttemptAnswerFileAsync(
+        long quizId,
+        long attemptId,
+        long attemptQuestionId,
+        Stream fileContent,
+        string fileName,
+        string contentType,
+        string deviceId,
+        CancellationToken cancellationToken);
 }
 
 /// <inheritdoc cref="IQuizService"/>
@@ -82,6 +93,7 @@ public sealed class QuizService : IQuizService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IQuizAiReviewService _aiReview;
     private readonly INotificationService _notifications;
+    private readonly IFileStorageService _fileStorage;
 
     public QuizService(
         IQuizRepository quizzes,
@@ -95,7 +107,8 @@ public sealed class QuizService : IQuizService
         IDateTimeProvider dateTimeProvider,
         IUnitOfWork unitOfWork,
         IQuizAiReviewService aiReview,
-        RankUpEducation.Application.Notifications.INotificationService notifications)
+        RankUpEducation.Application.Notifications.INotificationService notifications,
+        IFileStorageService fileStorage)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -109,6 +122,7 @@ public sealed class QuizService : IQuizService
         _unitOfWork = unitOfWork;
         _aiReview = aiReview;
         _notifications = notifications;
+        _fileStorage = fileStorage;
     }
 
     public async Task<QuizListResponse> ListAsync(
@@ -361,7 +375,11 @@ public sealed class QuizService : IQuizService
             throw new BusinessRuleException("This quiz has no active questions.");
         }
 
-        var orderedQuestions = OrderQuestionsForAttempt(quizQuestions, quiz.ShuffleQuestions);
+        var orderedQuestions = QuizQuestionSelection.SelectForAttempt(
+            quizQuestions,
+            question => question.DisplayOrder,
+            quiz.RandomQuestionCount,
+            quiz.ShuffleQuestions);
         await _attempts.AddAttemptAsync(attempt, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -1240,13 +1258,89 @@ public sealed class QuizService : IQuizService
         await _attempts.AddAttemptAnswersAsync(answerRows, cancellationToken);
     }
 
-    private static List<QuizQuestionItem> OrderQuestionsForAttempt(
-        IReadOnlyList<QuizQuestionItem> questions,
-        bool shuffleQuestions)
-        => QuizQuestionOrder.OrderForAttempt(
-            questions,
-            question => question.DisplayOrder,
-            shuffleQuestions).ToList();
+    public async Task<UploadQuizAttemptFileResponse> UploadAttemptAnswerFileAsync(
+        long quizId,
+        long attemptId,
+        long attemptQuestionId,
+        Stream fileContent,
+        string fileName,
+        string contentType,
+        string deviceId,
+        CancellationToken cancellationToken)
+    {
+        EnsureStudentRole();
+        var studentId = RequireStudentId();
+        ValidateDeviceId(deviceId);
+
+        if (fileContent is null || !fileContent.CanRead)
+        {
+            throw new ValidationAppException(["A file is required."]);
+        }
+
+        if (fileContent.CanSeek && fileContent.Length > QuizAttemptFileUpload.MaxBytes)
+        {
+            throw new ValidationAppException(["File exceeds the 10 MB limit."]);
+        }
+
+        var fileNameTrimmed = fileName.AsTrimmedString();
+        if (string.IsNullOrWhiteSpace(fileNameTrimmed))
+        {
+            throw new ValidationAppException(["File name is required."]);
+        }
+
+        var extension = Path.GetExtension(fileNameTrimmed).ToLowerInvariant();
+        if (!QuizAttemptFileUpload.AllowedExtensions.Contains(extension))
+        {
+            throw new ValidationAppException(
+                [$"File type is not allowed. Allowed: {string.Join(", ", QuizAttemptFileUpload.AllowedExtensions)}"]);
+        }
+
+        var access = await _assignments.GetAssignmentAccessAsync(quizId, studentId, cancellationToken)
+            ?? throw new NotFoundAppException("This quiz is not assigned to you.");
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
+            ?? throw new NotFoundAppException("This quiz is not assigned to you.");
+
+        var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
+            AttemptStatusType,
+            InProgressStatusName,
+            fallback: LookupNames.QuizAttemptStatusIds.InProgress,
+            cancellationToken);
+
+        var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
+            ?? throw new NotFoundAppException("Attempt was not found.");
+
+        if (attempt.StudentId != studentId || attempt.StatusId != inProgressStatusId)
+        {
+            throw new BusinessRuleException("Only an in-progress attempt can accept file uploads.");
+        }
+
+        await EnsureAttemptWindowAsync(access, _dateTimeProvider.UtcNow, attempt, cancellationToken);
+        await EnsureDeviceLockAsync(quiz, attempt, cancellationToken, deviceId);
+
+        var attemptQuestion = await _attempts.GetAttemptQuestionByIdAsync(attemptQuestionId, cancellationToken)
+            ?? throw new NotFoundAppException("Question was not found.");
+
+        if (attemptQuestion.QuizAttemptId != attemptId)
+        {
+            throw new NotFoundAppException("Question was not found.");
+        }
+
+        if (!QuizQuestionHelper.IsFileUploadType(attemptQuestion.QuestionTypeName))
+        {
+            throw new BusinessRuleException("This question does not accept file uploads.");
+        }
+
+        var storageFolder = Path.Combine("uploads", "quiz-attempts", attemptId.ToString());
+        var storedUrl = await _fileStorage.SaveAsync(
+            fileContent,
+            fileNameTrimmed,
+            contentType,
+            cancellationToken,
+            storageFolder);
+
+        return new UploadQuizAttemptFileResponse(storedUrl, Path.GetFileName(storedUrl));
+    }
 
     private async Task<IReadOnlyList<QuizListItem>> ListForStudentAsync(
         string? search,

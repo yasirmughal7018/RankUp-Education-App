@@ -48,6 +48,13 @@ export interface QuizMonitoring {
   students: QuizMonitoringStudent[];
 }
 
+export interface AttemptReviewOption {
+  id: number;
+  text: string;
+  imageUrl?: string | null;
+  isCorrect: boolean;
+}
+
 export interface AttemptReviewQuestion {
   questionId: number;
   questionText: string;
@@ -56,10 +63,12 @@ export interface AttemptReviewQuestion {
   awardedMarks: number;
   isCorrect: boolean;
   selectedOptionId: number | null;
+  selectedOptionIds?: number[] | null;
   submittedText: string | null;
   parentFeedback: string | null;
   requiresReview: boolean;
   aiFeedback?: string | null;
+  options?: AttemptReviewOption[];
 }
 
 export interface AttemptReview {
@@ -138,4 +147,42 @@ export function getMonitorStatusTone(
   }
 
   return "default";
+}
+
+/** Build CSV rows for quiz monitoring export (reports-style). */
+export function buildQuizMonitoringCsv(monitoring: QuizMonitoring): string {
+  const headers = [
+    "Student ID",
+    "Student Name",
+    "Attempts",
+    "Best %",
+    "Status",
+    "Last Submitted",
+    "Review Done",
+    "Focus Loss",
+    "Clipboard Paste",
+  ];
+
+  const rows = monitoring.students.map((student) => [
+    student.studentId,
+    student.studentName,
+    student.attemptCount,
+    student.bestPercentage ?? "",
+    student.status,
+    student.lastSubmittedAt ?? "",
+    student.isReviewDone ? "Yes" : "No",
+    student.focusLossCount ?? 0,
+    student.clipboardPasteCount ?? 0,
+  ]);
+
+  const escape = (value: string | number) => {
+    const text = String(value);
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+
+  return [
+    headers.map(escape).join(","),
+    ...rows.map((row) => row.map(escape).join(",")),
+    "",
+  ].join("\n");
 }

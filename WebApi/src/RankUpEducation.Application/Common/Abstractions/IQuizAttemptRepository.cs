@@ -38,6 +38,10 @@ public interface IQuizAttemptRepository
         long questionId,
         CancellationToken cancellationToken);
 
+    Task<QuizAttemptQuestion?> GetAttemptQuestionByIdAsync(
+        long attemptQuestionId,
+        CancellationToken cancellationToken);
+
     Task<QuizAttemptAnswer?> GetAttemptAnswerEntityAsync(long attemptQuestionId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<QuizAttemptAnswer>> GetAttemptAnswerEntitiesAsync(

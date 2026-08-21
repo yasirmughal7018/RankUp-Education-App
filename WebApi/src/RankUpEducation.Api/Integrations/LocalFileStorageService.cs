@@ -17,7 +17,8 @@ public sealed class LocalFileStorageService : IFileStorageService
         Stream content,
         string fileName,
         string contentType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string storageFolder = "uploads/avatars")
     {
         // Infer extension from content type when the client omits a file extension.
         var extension = Path.GetExtension(fileName);
@@ -28,12 +29,13 @@ public sealed class LocalFileStorageService : IFileStorageService
                 "image/png" => ".png",
                 "image/webp" => ".webp",
                 "image/gif" => ".gif",
+                "application/pdf" => ".pdf",
                 _ => ".jpg",
             };
         }
 
-        var relativeFolder = Path.Combine("uploads", "avatars");
-        var absoluteFolder = Path.Combine(_environment.ContentRootPath, "wwwroot", relativeFolder);
+        var relativeFolder = storageFolder.Replace('\\', '/').Trim('/');
+        var absoluteFolder = Path.Combine(_environment.ContentRootPath, "wwwroot", relativeFolder.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(absoluteFolder);
 
         var storedName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
@@ -42,6 +44,6 @@ public sealed class LocalFileStorageService : IFileStorageService
         await using var fileStream = File.Create(absolutePath);
         await content.CopyToAsync(fileStream, cancellationToken);
 
-        return $"/{relativeFolder.Replace('\\', '/')}/{storedName}";
+        return $"/{relativeFolder}/{storedName}";
     }
 }

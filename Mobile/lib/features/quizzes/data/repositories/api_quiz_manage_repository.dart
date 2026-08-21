@@ -50,6 +50,10 @@ class ApiQuizManageRepository implements QuizManageRepository {
       _remote.assignQuiz(quizId, input);
 
   @override
+  Future<List<AssignmentBoardItem>> listAssignmentBoard({int? studentId}) =>
+      _remote.listAssignmentBoard(studentId: studentId);
+
+  @override
   Future<List<QuizAssignmentItem>> getAssignments(String quizId) =>
       _remote.getAssignments(quizId);
 

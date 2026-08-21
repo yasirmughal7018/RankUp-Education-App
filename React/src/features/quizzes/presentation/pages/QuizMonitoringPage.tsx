@@ -1,6 +1,8 @@
 import { Link, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
+import { downloadCsv } from "@/core/utils/csv";
 import {
+  buildQuizMonitoringCsv,
   displayStudentName,
   formatIntegrityCounters,
   formatMonitorStatus,
@@ -62,14 +64,30 @@ export function QuizMonitoringPage() {
         backTo={`/quizzes/${monitoring.quizId}`}
         backAriaLabel="Back to quiz"
         action={
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {monitoring.students.length > 0 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  downloadCsv(
+                    `quiz-${monitoring.quizId}-monitoring.csv`,
+                    buildQuizMonitoringCsv(monitoring),
+                  )
+                }
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Export CSV
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+            >
+              Refresh
+            </button>
+          </div>
         }
       />
 

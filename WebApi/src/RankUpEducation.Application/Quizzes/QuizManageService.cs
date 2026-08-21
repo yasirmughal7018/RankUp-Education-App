@@ -1,6 +1,7 @@
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Application.Lookups;
+using RankUpEducation.Application.Notifications;
 using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Approvals;
@@ -71,6 +72,8 @@ public sealed class QuizManageService : IQuizManageService
     private readonly IStudentScopeRepository _studentScope;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly IUserRepository _users;
+    private readonly INotificationService _notifications;
     private readonly QuizManageGuard _guard;
 
     public QuizManageService(
@@ -80,7 +83,9 @@ public sealed class QuizManageService : IQuizManageService
         ILookupRepository lookups,
         IStudentScopeRepository studentScope,
         IUnitOfWork unitOfWork,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IUserRepository users,
+        INotificationService notifications)
     {
         _quizzes = quizzes;
         _quizQuestions = quizQuestions;
@@ -89,6 +94,8 @@ public sealed class QuizManageService : IQuizManageService
         _studentScope = studentScope;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _users = users;
+        _notifications = notifications;
         _guard = new QuizManageGuard(quizzes, lookups);
     }
 
@@ -140,7 +147,8 @@ public sealed class QuizManageService : IQuizManageService
             request.ShuffleOptions,
             request.IsReviewRequired,
             request.NavigationMode,
-            QuizReviewDisplay.Full);
+            QuizReviewDisplay.Full,
+            request.RandomQuestionCount);
 
         var quizTypeName = await _lookups.GetLookupNameAsync(quizTypeId, cancellationToken);
         QuizTypeBehavior.ApplyCreateDefaults(quiz, quizTypeName, request.NavigationMode);
@@ -161,6 +169,8 @@ public sealed class QuizManageService : IQuizManageService
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
         var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
 
+        QuizQuestionSelection.ValidateRandomQuestionCount(request.RandomQuestionCount, quiz.TotalQuestions);
+
         // Time limit is derived from question estimated times — never overwrite from the form.
         quiz.UpdateDetails(
             request.Title,
@@ -176,9 +186,13 @@ public sealed class QuizManageService : IQuizManageService
             request.ShuffleOptions,
             request.IsReviewRequired,
             request.NavigationMode,
-            QuizReviewDisplay.Full);
+            QuizReviewDisplay.Full,
+            request.RandomQuestionCount);
 
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
+        var refreshed = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz was not found.");
+        QuizQuestionSelection.ValidateRandomQuestionCount(refreshed.RandomQuestionCount, refreshed.TotalQuestions);
         await RecordTrailEventAsync(quizId, scope, ApprovalAction.Modified, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await BuildManageResponseAsync(quizId, cancellationToken);
@@ -241,6 +255,36 @@ public sealed class QuizManageService : IQuizManageService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (!await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
+        {
+            if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
+            {
+                await QuizApprovalNotifications.NotifyApproversOnTeacherPublishAsync(
+                    _notifications,
+                    _users,
+                    quiz,
+                    scope.UserId,
+                    cancellationToken);
+            }
+            else if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
+            {
+                await QuizApprovalNotifications.NotifyPortalAdminsOnSchoolApprovedAsync(
+                    _notifications,
+                    _users,
+                    quiz,
+                    scope.UserId,
+                    cancellationToken);
+            }
+            else
+            {
+                await QuizApprovalNotifications.NotifyCreatorOnFinalApprovedAsync(
+                    _notifications,
+                    quiz,
+                    scope.UserId,
+                    cancellationToken);
+            }
+        }
 
         return await BuildManageResponseAsync(quizId, cancellationToken);
     }
@@ -313,6 +357,29 @@ public sealed class QuizManageService : IQuizManageService
             cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
+        {
+            await QuizApprovalNotifications.NotifyPortalAdminsOnSchoolApprovedAsync(
+                _notifications,
+                _users,
+                quiz,
+                scope.UserId,
+                cancellationToken);
+            await QuizApprovalNotifications.NotifyCreatorOnSchoolEndorsedAsync(
+                _notifications,
+                quiz,
+                scope.UserId,
+                cancellationToken);
+        }
+        else
+        {
+            await QuizApprovalNotifications.NotifyCreatorOnFinalApprovedAsync(
+                _notifications,
+                quiz,
+                scope.UserId,
+                cancellationToken);
+        }
+
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new ApproveQuizResponse(quizId, nextStatusName, lifecycleName);
     }
@@ -369,6 +436,13 @@ public sealed class QuizManageService : IQuizManageService
             request.Reason);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        await QuizApprovalNotifications.NotifyCreatorOnRejectedAsync(
+            _notifications,
+            quiz,
+            scope.UserId,
+            request.Reason,
+            cancellationToken);
+
         var reason = quiz.RejectionReason;
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new RejectQuizResponse(quizId, "Rejected", lifecycleName, reason);
@@ -378,6 +452,8 @@ public sealed class QuizManageService : IQuizManageService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireApprovalScope(GetCurrentUser());
+        // PortalAdmin: all schools; Pending + SchoolApproved. SchoolAdmin: own school; Pending only.
+        // CampusAdmin: own campus; Pending only.
         var schoolId = scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
             ? scope.SchoolId
             : null;
@@ -483,7 +559,8 @@ public sealed class QuizManageService : IQuizManageService
             source.ShuffleOptions,
             source.IsReviewRequired,
             source.NavigationMode,
-            QuizReviewDisplay.Full);
+            QuizReviewDisplay.Full,
+            source.RandomQuestionCount);
 
         await _quizzes.AddQuizAsync(copy, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

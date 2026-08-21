@@ -44,10 +44,26 @@ bool canManageQuestions(UserRole role) {
       role == UserRole.tutor;
 }
 
-/// SchoolAdmin / PortalAdmin may approve teacher quizzes (not CampusAdmin).
+/// SchoolAdmin, CampusAdmin, and PortalAdmin may approve teacher quizzes.
 bool canApproveQuizzes(UserRole role) {
-  return role == UserRole.schoolAdmin || role == UserRole.portalAdmin;
+  return role == UserRole.schoolAdmin ||
+      role == UserRole.campusAdmin ||
+      role == UserRole.portalAdmin;
 }
+
+/// Roles that use the teacher quiz manage hub (create, assign, monitor, review).
+bool canManageQuizzes(UserRole role) {
+  return role == UserRole.teacher ||
+      role == UserRole.coordinator ||
+      role == UserRole.parent ||
+      role == UserRole.tutor ||
+      role == UserRole.schoolAdmin ||
+      role == UserRole.campusAdmin ||
+      role == UserRole.portalAdmin;
+}
+
+/// Parent-only quiz dashboard route.
+bool canViewParentQuizDashboard(UserRole role) => role == UserRole.parent;
 
 /// Roles that may endorse or publish bank questions.
 bool canApproveQuestions(UserRole role) {
@@ -96,6 +112,7 @@ List<({String value, String label})> assignModesForRole(UserRole role) {
     UserRole.schoolAdmin => [
         ...studentModes,
         (value: 'allinschool', label: 'All in school'),
+        (value: 'public', label: 'Public (catalog)'),
       ],
     UserRole.portalAdmin => [
         ...studentModes,
@@ -109,6 +126,15 @@ List<({String value, String label})> assignModesForRole(UserRole role) {
         (value: 'allingrade', label: 'All in grade'),
         (value: 'allinsection', label: 'All in section'),
       ],
+  };
+}
+
+/// Default assign mode in the assign sheet (mirrors web AssignQuizDialog).
+String defaultAssignModeForRole(UserRole role) {
+  return switch (role) {
+    UserRole.schoolAdmin => 'allinschool',
+    UserRole.portalAdmin => 'public',
+    _ => assignModesForRole(role).first.value,
   };
 }
 

@@ -1,5 +1,7 @@
 /** Student quiz-taking HTTP client — start, draft, submit, results. */
 import { apiRequest } from "@/core/api/apiClient";
+import { readStoredSession } from "@/core/auth/tokenStorage";
+import { environment } from "@/app/environment";
 import type {
   QuizAttemptResult,
   QuizDetail,
@@ -103,6 +105,45 @@ export async function syncOfflineQuizAttempt(
       },
     },
   );
+}
+
+/** Upload a binary file for a File Upload question; returns the stored URL. */
+export async function uploadQuizAttemptFile(
+  quizId: number,
+  attemptId: number,
+  attemptQuestionId: number,
+  file: File,
+): Promise<{ fileUrl: string; storedFileName: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("deviceId", getStudentDeviceId());
+
+  const token = readStoredSession()?.accessToken;
+  const response = await fetch(
+    `${environment.apiBaseUrl}/quizzes/${quizId}/attempts/${attemptId}/questions/${attemptQuestionId}/upload`,
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    },
+  );
+
+  const payload = (await response.json()) as {
+    success?: boolean;
+    message?: string;
+    data?: { fileUrl: string; storedFileName: string };
+    errors?: string[];
+  };
+
+  if (!response.ok || payload.success === false || !payload.data) {
+    throw new Error(
+      payload.message ||
+        payload.errors?.[0] ||
+        "Unable to upload file for this answer.",
+    );
+  }
+
+  return payload.data;
 }
 
 /** Fetch graded result for an attempt. */

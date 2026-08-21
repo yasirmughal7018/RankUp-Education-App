@@ -1,14 +1,23 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { ListChecks, MessageSquareText } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { ArrowDownUp, ListChecks, MessageSquareText, Shuffle } from "lucide-react";
 import {
   isFillBlankType,
+  isMatchingType,
   isMultipleChoiceType,
+  isOrderingType,
   isSingleChoiceType,
   isTrueFalseType,
+  matchingPairCount,
+  normalizeQuestionType,
 } from "@/features/questions/domain/questionTypes";
 import type { QuizQuestionItem } from "@/features/quizzes/domain/quizTypes";
 
 const FILL_INLINE_MAX_CHARS = 48;
+
+export interface QuizAnswerOption {
+  optionText: string;
+  isCorrect?: boolean;
+}
 
 function collectCorrectAnswers(question: QuizQuestionItem): string[] {
   const fromOptions = question.options
@@ -37,17 +46,32 @@ export function answersFromQuizQuestion(question: QuizQuestionItem): string[] {
   return collectCorrectAnswers(question);
 }
 
-interface AnswerRevealProps {
-  answers: string[];
+interface AnswerRevealPanelProps {
+  count: number;
   ariaLabel: string;
-  icon: "list" | "text";
+  title: string;
+  icon: "list" | "text" | "matching" | "ordering";
+  children: ReactNode;
 }
 
-function AnswerReveal({ answers, ariaLabel, icon }: AnswerRevealProps) {
+function AnswerRevealPanel({
+  count,
+  ariaLabel,
+  title,
+  icon,
+  children,
+}: AnswerRevealPanelProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
   const panelId = useId();
-  const Icon = icon === "list" ? ListChecks : MessageSquareText;
+  const Icon =
+    icon === "list"
+      ? ListChecks
+      : icon === "text"
+        ? MessageSquareText
+        : icon === "matching"
+          ? Shuffle
+          : ArrowDownUp;
 
   useEffect(() => {
     if (!open) {
@@ -93,20 +117,198 @@ function AnswerReveal({ answers, ariaLabel, icon }: AnswerRevealProps) {
         }}
       >
         <Icon className="h-3.5 w-3.5" aria-hidden />
-        <span className="text-[10px] font-semibold tabular-nums">
-          {answers.length}
-        </span>
+        <span className="text-[10px] font-semibold tabular-nums">{count}</span>
       </button>
       {open ? (
         <span
           id={panelId}
           role="dialog"
-          className="absolute right-0 top-full z-30 mt-1.5 w-64 max-w-[min(16rem,calc(100vw-2rem))] rounded-lg border border-slate-200 bg-white p-2.5 shadow-lg"
+          className="absolute right-0 top-full z-30 mt-1.5 w-72 max-w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-slate-200 bg-white p-2.5 shadow-lg"
         >
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Correct answer{answers.length === 1 ? "" : "s"}
+            {title}
           </p>
-          <ul className="max-h-48 space-y-1.5 overflow-auto text-xs text-slate-700">
+          <div className="max-h-56 overflow-auto">{children}</div>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function MatchingPairsPanel({ options }: { options: QuizAnswerOption[] }) {
+  const pairCount = matchingPairCount(
+    options.map((option) => ({
+      optionText: option.optionText,
+      isCorrect: option.isCorrect ?? false,
+    })),
+  );
+
+  return (
+    <ul className="space-y-2 text-xs text-slate-700">
+      {Array.from({ length: pairCount }, (_, pairIndex) => {
+        const left = options[pairIndex];
+        const right = options[pairCount + pairIndex];
+        if (!left || !right) {
+          return null;
+        }
+
+        return (
+          <li
+            key={`pair-${pairIndex}`}
+            className="rounded-md border border-emerald-200 bg-emerald-50/80 p-2"
+          >
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+              Pair {pairIndex + 1}
+            </p>
+            <div className="space-y-1">
+              <p className="flex items-start gap-1.5 leading-snug">
+                <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                  L{pairIndex + 1}
+                </span>
+                <span className="min-w-0">{left.optionText.trim() || "—"}</span>
+              </p>
+              <p className="flex items-start gap-1.5 leading-snug">
+                <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                  R{pairIndex + 1}
+                </span>
+                <span className="min-w-0">{right.optionText.trim() || "—"}</span>
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function OrderingPanel({ options }: { options: QuizAnswerOption[] }) {
+  return (
+    <ol className="space-y-1.5 text-xs text-slate-700">
+      {options.map((option, index) => (
+        <li
+          key={`order-${index}-${option.optionText.slice(0, 12)}`}
+          className="flex items-start gap-1.5 rounded-md bg-slate-50 px-2 py-1.5 leading-snug"
+        >
+          <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+            {index + 1}
+          </span>
+          <span className="min-w-0">{option.optionText.trim() || "—"}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+interface QuizQuestionAnswerAsideProps {
+  questionType: string;
+  answers: string[];
+  /** Full option rows — required for matching/ordering pair and order display. */
+  options?: QuizAnswerOption[];
+}
+
+/**
+ * Shows correct answer(s) to the right of question text.
+ * Single / True-False: inline. Multiple Choice: click icon. Matching / Ordering: pair or order popup.
+ */
+export function QuizQuestionAnswerAside({
+  questionType,
+  answers,
+  options = [],
+}: QuizQuestionAnswerAsideProps) {
+  const type = normalizeQuestionType(questionType);
+  const filledOptions = options.filter((option) => option.optionText.trim().length > 0);
+
+  if (isMatchingType(type)) {
+    if (filledOptions.length >= 2) {
+      const pairCount = matchingPairCount(
+        filledOptions.map((option) => ({
+          optionText: option.optionText,
+          isCorrect: option.isCorrect ?? false,
+        })),
+      );
+      if (pairCount > 0) {
+        return (
+          <AnswerRevealPanel
+            count={pairCount}
+            ariaLabel={`Show ${pairCount} matching pair${pairCount === 1 ? "" : "s"}`}
+            title="Matching pairs"
+            icon="matching"
+          >
+            <MatchingPairsPanel options={filledOptions} />
+          </AnswerRevealPanel>
+        );
+      }
+    }
+    return (
+      <span className="shrink-0 text-xs text-slate-400" title="No pairs set">
+        —
+      </span>
+    );
+  }
+
+  if (isOrderingType(type)) {
+    if (filledOptions.length > 0) {
+      return (
+        <AnswerRevealPanel
+          count={filledOptions.length}
+          ariaLabel={`Show correct order (${filledOptions.length} items)`}
+          title="Correct order"
+          icon="ordering"
+        >
+          <OrderingPanel options={filledOptions} />
+        </AnswerRevealPanel>
+      );
+    }
+    return (
+      <span className="shrink-0 text-xs text-slate-400" title="No items set">
+        —
+      </span>
+    );
+  }
+
+  if (answers.length === 0) {
+    return (
+      <span className="shrink-0 text-xs text-slate-400" title="No answer set">
+        —
+      </span>
+    );
+  }
+
+  if (isMultipleChoiceType(type)) {
+    return (
+      <AnswerRevealPanel
+        count={answers.length}
+        ariaLabel={`Show ${answers.length} correct answers`}
+        title={`Correct answer${answers.length === 1 ? "" : "s"}`}
+        icon="list"
+      >
+        <ul className="space-y-1.5 text-xs text-slate-700">
+          {answers.map((answer, index) => (
+            <li
+              key={`${index}-${answer.slice(0, 24)}`}
+              className="rounded-md bg-slate-50 px-2 py-1.5 leading-snug"
+            >
+              {answer}
+            </li>
+          ))}
+        </ul>
+      </AnswerRevealPanel>
+    );
+  }
+
+  if (isFillBlankType(type)) {
+    const joined = answers.join(", ");
+    const useIcon =
+      answers.length > 1 || joined.length > FILL_INLINE_MAX_CHARS;
+    if (useIcon) {
+      return (
+        <AnswerRevealPanel
+          count={answers.length}
+          ariaLabel="Show fill-in answer"
+          title="Accepted answers"
+          icon="text"
+        >
+          <ul className="space-y-1.5 text-xs text-slate-700">
             {answers.map((answer, index) => (
               <li
                 key={`${index}-${answer.slice(0, 24)}`}
@@ -116,54 +318,7 @@ function AnswerReveal({ answers, ariaLabel, icon }: AnswerRevealProps) {
               </li>
             ))}
           </ul>
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
-interface QuizQuestionAnswerAsideProps {
-  questionType: string;
-  answers: string[];
-}
-
-/**
- * Shows correct answer(s) to the right of question text.
- * Single / True-False: inline. Multiple Choice: click icon. Long Fill: click icon.
- */
-export function QuizQuestionAnswerAside({
-  questionType,
-  answers,
-}: QuizQuestionAnswerAsideProps) {
-  if (answers.length === 0) {
-    return (
-      <span className="shrink-0 text-xs text-slate-400" title="No answer set">
-        —
-      </span>
-    );
-  }
-
-  if (isMultipleChoiceType(questionType)) {
-    return (
-      <AnswerReveal
-        answers={answers}
-        ariaLabel={`Show ${answers.length} correct answers`}
-        icon="list"
-      />
-    );
-  }
-
-  if (isFillBlankType(questionType)) {
-    const joined = answers.join(", ");
-    const useIcon =
-      answers.length > 1 || joined.length > FILL_INLINE_MAX_CHARS;
-    if (useIcon) {
-      return (
-        <AnswerReveal
-          answers={answers}
-          ariaLabel="Show fill-in answer"
-          icon="text"
-        />
+        </AnswerRevealPanel>
       );
     }
     return (
@@ -176,7 +331,7 @@ export function QuizQuestionAnswerAside({
     );
   }
 
-  if (isSingleChoiceType(questionType) || isTrueFalseType(questionType)) {
+  if (isSingleChoiceType(type) || isTrueFalseType(type)) {
     const answer = answers[0] ?? "";
     return (
       <span
@@ -191,11 +346,23 @@ export function QuizQuestionAnswerAside({
   const joined = answers.join(", ");
   if (joined.length > FILL_INLINE_MAX_CHARS || answers.length > 1) {
     return (
-      <AnswerReveal
-        answers={answers}
+      <AnswerRevealPanel
+        count={answers.length}
         ariaLabel="Show correct answers"
+        title={`Correct answer${answers.length === 1 ? "" : "s"}`}
         icon="list"
-      />
+      >
+        <ul className="space-y-1.5 text-xs text-slate-700">
+          {answers.map((answer, index) => (
+            <li
+              key={`${index}-${answer.slice(0, 24)}`}
+              className="rounded-md bg-slate-50 px-2 py-1.5 leading-snug"
+            >
+              {answer}
+            </li>
+          ))}
+        </ul>
+      </AnswerRevealPanel>
     );
   }
 

@@ -103,6 +103,29 @@ class QuizManageRemoteDataSource {
     }
   }
 
+  Future<List<AssignmentBoardItem>> listAssignmentBoard({int? studentId}) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/quizzes/assignments',
+        queryParameters: {
+          if (studentId != null && studentId > 0) 'studentId': studentId,
+        },
+      );
+      return _readList(response.data, (payload) {
+        final items = payload is Map<String, dynamic> ? payload['items'] : payload;
+        if (items is! List) {
+          return const <AssignmentBoardItem>[];
+        }
+        return items
+            .whereType<Map<String, dynamic>>()
+            .map(AssignmentBoardItem.fromJson)
+            .toList();
+      });
+    } on DioException catch (error) {
+      throw mapDioException(error);
+    }
+  }
+
   Future<List<QuizAssignmentItem>> getAssignments(String quizId) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(

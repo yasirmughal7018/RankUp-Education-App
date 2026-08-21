@@ -24,6 +24,8 @@ export interface QuizDetail {
   schoolName: string;
   resultStatus: string;
   resultPercent: number | null;
+  /** Questions presented per attempt when random subset is enabled. */
+  questionsPerAttempt?: number | null;
 }
 
 export interface QuizAttemptOption {
@@ -119,9 +121,17 @@ export interface SyncOfflineQuizAttemptResult {
   result?: QuizAttemptResult | null;
 }
 
+export interface QuizResultOption {
+  id: number;
+  text: string;
+  imageUrl?: string | null;
+  isCorrect: boolean;
+}
+
 export interface QuizResultQuestion {
   id: number;
   text: string;
+  questionType?: string | null;
   marks: number;
   awardedMarks: number;
   isCorrect: boolean;
@@ -131,6 +141,7 @@ export interface QuizResultQuestion {
   submittedText: string | null;
   selectedOptionIds?: number[] | null;
   correctOptionIds?: number[] | null;
+  options?: QuizResultOption[];
 }
 
 export interface QuizAttemptResult {
@@ -188,7 +199,7 @@ export function canTakeStudentQuizzes(role: string): boolean {
   return role === "Student";
 }
 
-/** Question requires free-text answer (Fill / Descriptive / File / essay-style). */
+/** Question requires free-text answer (Fill / Descriptive / essay-style). */
 export function isTextQuestionType(questionType: string): boolean {
   const normalized = questionType.toLowerCase().replace(/\s+/g, "");
   return (
@@ -198,9 +209,14 @@ export function isTextQuestionType(questionType: string): boolean {
     normalized.includes("short") ||
     normalized.includes("long") ||
     normalized.includes("essay") ||
-    normalized.includes("descriptive") ||
-    normalized.includes("file")
+    normalized.includes("descriptive")
   );
+}
+
+/** File Upload — link or uploaded binary URL in submitted text. */
+export function isFileUploadQuestionType(questionType: string): boolean {
+  const normalized = questionType.toLowerCase().replace(/\s+/g, "");
+  return normalized.includes("file");
 }
 
 /** Multiple Choice — students may select more than one option. */

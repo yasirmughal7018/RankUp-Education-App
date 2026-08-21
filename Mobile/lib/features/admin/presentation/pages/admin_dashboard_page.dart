@@ -11,7 +11,8 @@ class AdminDashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).user;
-    final roleLabel = user?.role.label ?? 'Admin';
+    final role = user?.role ?? UserRole.portalAdmin;
+    final roleLabel = role.label;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -41,12 +42,70 @@ class AdminDashboardPage extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '$roleLabel can review account access requests from mobile and web notifications.',
+            '$roleLabel can review account access requests and manage school quizzes from mobile.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 24),
+          if (canManageQuizzes(role)) ...[
+            Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  child: Icon(
+                    Icons.assignment_outlined,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                title: const Text('Manage quizzes'),
+                subtitle: const Text(
+                  'Create, assign, monitor, and review quizzes',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.go('/quizzes'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: theme.colorScheme.tertiaryContainer,
+                  child: Icon(
+                    Icons.dashboard_outlined,
+                    color: theme.colorScheme.onTertiaryContainer,
+                  ),
+                ),
+                title: const Text('Assignment board'),
+                subtitle: const Text(
+                  'Cross-quiz view of student assignments',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/quizzes/assignments'),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (canApproveQuizzes(role)) ...[
+            Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  child: Icon(
+                    Icons.approval_outlined,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                title: const Text('Quiz approvals'),
+                subtitle: const Text(
+                  'Approve or reject teacher quizzes',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/quizzes/approvals'),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Card(
             child: ListTile(
               leading: CircleAvatar(

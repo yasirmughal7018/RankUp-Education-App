@@ -756,6 +756,62 @@ class PendingQuizApprovalItem {
   final DateTime? createdAt;
 }
 
+/// Cross-quiz assignment row from `GET /quizzes/assignments`.
+class AssignmentBoardItem {
+  const AssignmentBoardItem({
+    required this.assignmentId,
+    required this.quizId,
+    required this.quizTitle,
+    required this.studentId,
+    required this.studentName,
+    required this.startAt,
+    required this.endAt,
+    required this.allowedAttempts,
+    required this.attemptCount,
+    required this.isReviewDone,
+    required this.resultStatus,
+    required this.monitorStatus,
+  });
+
+  factory AssignmentBoardItem.fromJson(Map<String, dynamic> json) {
+    return AssignmentBoardItem(
+      assignmentId: _asInt(json['assignmentId']),
+      quizId: _asInt(json['quizId']),
+      quizTitle: _asString(json['quizTitle']),
+      studentId: _asInt(json['studentId']),
+      studentName: _asString(json['studentName']),
+      startAt: _parseDateTime(json['startAt']),
+      endAt: _parseDateTime(json['endAt']),
+      allowedAttempts: _asInt(json['allowedAttempts'], fallback: 1),
+      attemptCount: _asInt(json['attemptCount']),
+      isReviewDone: json['isReviewDone'] == true,
+      resultStatus: _asString(json['resultStatus']),
+      monitorStatus: _asString(json['monitorStatus']),
+    );
+  }
+
+  final int assignmentId;
+  final int quizId;
+  final String quizTitle;
+  final int studentId;
+  final String studentName;
+  final DateTime startAt;
+  final DateTime endAt;
+  final int allowedAttempts;
+  final int attemptCount;
+  final bool isReviewDone;
+  final String resultStatus;
+  final String monitorStatus;
+}
+
+DateTime _parseDateTime(Object? value) {
+  if (value == null) {
+    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  }
+  return DateTime.tryParse(value.toString()) ??
+      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+}
+
 String _asString(Object? value, {String fallback = ''}) {
   if (value == null) {
     return fallback;

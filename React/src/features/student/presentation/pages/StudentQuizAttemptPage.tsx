@@ -19,8 +19,10 @@ import {
   isMatchingQuestionType,
   isMultiSelectQuestionType,
   isOrderingQuestionType,
+  isFileUploadQuestionType,
   isTextQuestionType,
 } from "@/features/student/domain/studentQuizTypes";
+import * as studentQuizApi from "@/features/student/data/studentQuizApi";
 import {
   clearOfflineQuizSyncQueue,
   enqueueOfflineQuizSync,
@@ -352,6 +354,8 @@ export function StudentQuizAttemptPage() {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeWarning, setTimeWarning] = useState<string | null>(null);
+  const [fileUploadBusy, setFileUploadBusy] = useState(false);
+  const [fileUploadError, setFileUploadError] = useState<string | null>(null);
   const [showLowTimeDialog, setShowLowTimeDialog] = useState(false);
   const [focusLossCount, setFocusLossCount] = useState(
     () =>
@@ -921,6 +925,34 @@ export function StudentQuizAttemptPage() {
     markDirty();
   }
 
+  async function handleFileUploadSelected(file: File | null) {
+    if (!currentQuestion || currentQuestionLocked || !file) {
+      return;
+    }
+
+    setFileUploadError(null);
+    setFileUploadBusy(true);
+    try {
+      const result = await studentQuizApi.uploadQuizAttemptFile(
+        numericQuizId,
+        numericAttemptId,
+        currentQuestion.id,
+        file,
+      );
+      updateCurrentAnswer({
+        selectedOptionId: null,
+        selectedOptionIds: [],
+        submittedText: result.fileUrl,
+      });
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Unable to upload file.";
+      setFileUploadError(message);
+    } finally {
+      setFileUploadBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <PageHeader
@@ -1084,7 +1116,60 @@ export function StudentQuizAttemptPage() {
             </p>
           ) : null}
 
-          {isTextQuestionType(currentQuestion.questionType) ? (
+          {isFileUploadQuestionType(currentQuestion.questionType) ? (
+            <div className="space-y-3">
+              <label className="block text-sm text-slate-700">
+                <span className="mb-1 block font-medium">Upload file</span>
+                <input
+                  type="file"
+                  disabled={currentQuestionLocked || fileUploadBusy}
+                  onChange={(event) => {
+                    void handleFileUploadSelected(event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                  className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700"
+                />
+              </label>
+              {fileUploadBusy ? (
+                <p className="text-xs text-slate-500">Uploading…</p>
+              ) : null}
+              {fileUploadError ? (
+                <p className="text-xs text-red-600">{fileUploadError}</p>
+              ) : null}
+              {currentAnswer?.submittedText?.trim() ? (
+                <p className="text-xs text-emerald-700">
+                  Attached:{" "}
+                  <a
+                    href={currentAnswer.submittedText}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    {currentAnswer.submittedText}
+                  </a>
+                </p>
+              ) : null}
+              <div>
+                <p className="mb-1 text-xs text-slate-500">
+                  Or paste a file link (Drive, OneDrive, etc.)
+                </p>
+                <input
+                  type="url"
+                  value={currentAnswer?.submittedText ?? ""}
+                  disabled={currentQuestionLocked}
+                  onChange={(event) =>
+                    updateCurrentAnswer({
+                      selectedOptionId: null,
+                      selectedOptionIds: [],
+                      submittedText: event.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+          ) : isTextQuestionType(currentQuestion.questionType) ? (
             <textarea
               rows={4}
               value={currentAnswer?.submittedText ?? ""}
@@ -1098,11 +1183,7 @@ export function StudentQuizAttemptPage() {
               }
               onPaste={currentQuestionLocked ? undefined : handleAnswerPaste}
               className={inputClassName}
-              placeholder={
-                currentQuestion.questionType.toLowerCase().includes("file")
-                  ? "Paste a file link or path (e.g. Drive/OneDrive URL)..."
-                  : "Type your answer..."
-              }
+              placeholder="Type your answer..."
             />
           ) : isMatchingQuestionType(currentQuestion.questionType) ? (
             (() => {

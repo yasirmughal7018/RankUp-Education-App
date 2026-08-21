@@ -258,6 +258,14 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                 cancellationToken);
     }
 
+    public Task<QuizAttemptQuestion?> GetAttemptQuestionByIdAsync(
+        long attemptQuestionId,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.QuizAttemptQuestions
+            .FirstOrDefaultAsync(item => item.Id == attemptQuestionId, cancellationToken);
+    }
+
     public Task<QuizAttemptAnswer?> GetAttemptAnswerEntityAsync(
         long attemptQuestionId,
         CancellationToken cancellationToken)

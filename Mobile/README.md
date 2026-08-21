@@ -1,13 +1,14 @@
 # RankUp Education Mobile
 
-Flutter mobile app architecture for RankUp Education. The app targets Android and iOS and supports Student, Parent, and Teacher roles from one shared codebase.
+Flutter mobile app for RankUp Education. Supports **Student**, **Parent**, **Teacher**, **Coordinator**, **Tutor**, and admin roles (**SchoolAdmin**, **CampusAdmin**, **PortalAdmin**) from one shared codebase.
 
 ## Current Scope
 
 - Feature-based Clean Architecture under `lib/features`
 - Riverpod state management
-- GoRouter role-based navigation
-- Dio API client foundation for the .NET REST API
+- GoRouter role-based navigation (including `/parent/quiz-dashboard`, `/quizzes/assignments`, `/quizzes/approvals`)
+- Dio API client for the .NET REST API
+- Quiz flows: student attempt (with offline sync), teacher/parent/tutor manage, assignment board, monitoring, subjective review, admin quiz approvals (PortalAdmin / SchoolAdmin / CampusAdmin)
 - Secure token storage foundation
 - Offline synchronization placeholder
 - Notification service placeholder

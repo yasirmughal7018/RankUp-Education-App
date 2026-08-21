@@ -7,4 +7,7 @@ public static class QuizNotificationCategories
     public const string QuizSubmitted = "QuizSubmitted";
     public const string QuizReviewed = "QuizReviewed";
     public const string QuizAutoSubmitted = "QuizAutoSubmitted";
+    public const string QuizPendingApproval = "QuizPendingApproval";
+    public const string QuizApproved = "QuizApproved";
+    public const string QuizRejected = "QuizRejected";
 }

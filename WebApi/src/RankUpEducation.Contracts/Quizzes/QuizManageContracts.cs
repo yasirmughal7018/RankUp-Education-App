@@ -26,6 +26,7 @@ public sealed record CreateQuizRequest(
     short? QuizTypeId = null,
     string? NavigationMode = null,
     string? ReviewDisplayMode = null,
+    short? RandomQuestionCount = null,
     int? SchoolId = null,
     int? CampusId = null);
 
@@ -44,7 +45,8 @@ public sealed record UpdateQuizRequest(
     bool ShuffleOptions,
     bool IsReviewRequired,
     string? NavigationMode = null,
-    string? ReviewDisplayMode = null);
+    string? ReviewDisplayMode = null,
+    short? RandomQuestionCount = null);
 
 /// <summary>Owner manage view returned after create/update/publish/question changes.</summary>
 public sealed record ManageQuizResponse(
@@ -73,6 +75,7 @@ public sealed record ManageQuizResponse(
     bool IsReviewRequired,
     string NavigationMode,
     string ReviewDisplayMode,
+    short? RandomQuestionCount,
     string CreatedBy,
     string SchoolName,
     int? SchoolId,

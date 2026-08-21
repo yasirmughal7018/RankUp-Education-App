@@ -45,7 +45,15 @@ public sealed record AttemptReviewQuestionResponse(
     string? ParentFeedback,
     bool RequiresReview,
     IReadOnlyList<long>? SelectedOptionIds = null,
-    string? AiFeedback = null);
+    string? AiFeedback = null,
+    IReadOnlyList<AttemptReviewOptionResponse>? Options = null);
+
+/// <summary>Frozen option row shown on the teacher review screen.</summary>
+public sealed record AttemptReviewOptionResponse(
+    long Id,
+    string Text,
+    string? ImageUrl,
+    bool IsCorrect);
 
 /// <summary>Manual mark and optional feedback for one question during review.</summary>
 public sealed record MarkAttemptAnswerRequest(

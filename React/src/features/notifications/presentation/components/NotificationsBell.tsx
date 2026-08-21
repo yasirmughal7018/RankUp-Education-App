@@ -32,6 +32,9 @@ const QUIZ_NOTIFICATION_CATEGORIES = new Set([
   "QuizSubmitted",
   "QuizAutoSubmitted",
   "QuizReviewed",
+  "QuizPendingApproval",
+  "QuizApproved",
+  "QuizRejected",
 ]);
 
 const PASSWORD_RESET_TITLE_PREFIX = "Password reset: ";
@@ -102,6 +105,18 @@ function hrefForCategory(
 
   if (category === "QuizAssigned" || category === "QuizReviewed") {
     return role === "Student" ? "/student/quizzes" : "/quizzes";
+  }
+
+  if (category === "QuizApproved" || category === "QuizRejected") {
+    return "/quizzes";
+  }
+
+  if (category === "QuizPendingApproval") {
+    return role === "PortalAdmin" ||
+      role === "SchoolAdmin" ||
+      role === "CampusAdmin"
+      ? "/admin/quiz-approvals"
+      : "/quizzes";
   }
 
   if (category === "QuizSubmitted" || category === "QuizAutoSubmitted") {

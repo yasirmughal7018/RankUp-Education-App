@@ -15,6 +15,9 @@ const _quizNotificationCategories = {
   'QuizSubmitted',
   'QuizAutoSubmitted',
   'QuizReviewed',
+  'QuizPendingApproval',
+  'QuizApproved',
+  'QuizRejected',
 };
 
 bool _isQuizCategory(String category) =>
@@ -36,6 +39,9 @@ String _categoryLabel(String category) {
     'QuizSubmitted' => 'Quiz submitted',
     'QuizAutoSubmitted' => 'Quiz auto-submitted',
     'QuizReviewed' => 'Quiz reviewed',
+    'QuizPendingApproval' => 'Quiz pending approval',
+    'QuizApproved' => 'Quiz approved',
+    'QuizRejected' => 'Quiz rejected',
     'RegistrationRequest' => 'Registration',
     _ => category,
   };

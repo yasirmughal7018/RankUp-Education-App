@@ -16,6 +16,12 @@ import {
 export function AdminQuizApprovalsPage() {
   const { user } = useAuth();
   const isPortalAdmin = user?.role === "PortalAdmin";
+  const isCampusAdmin = user?.role === "CampusAdmin";
+  const approvalDescription = isPortalAdmin
+    ? "Review quizzes from any school. Pending items need first-tier or your final approval; SchoolApproved items need portal approval. Rejected quizzes cannot be approved until the teacher resubmits."
+    : isCampusAdmin
+      ? "Approve pending teacher quizzes in your campus (first-tier endorsement) or reject with a required reason. You cannot approve quizzes from other campuses."
+      : "Approve pending teacher quizzes in your school (first-tier endorsement) or reject with a required reason. SchoolApproved items await portal final approval.";
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     usePendingQuizApprovalsQuery();
   const approveQuiz = useApproveQuizMutation();
@@ -73,11 +79,7 @@ export function AdminQuizApprovalsPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Quiz approvals"
-        description={
-          isPortalAdmin
-            ? "Pending quizzes need school/campus review or your final approval. SchoolApproved quizzes need portal approval. Rejected quizzes cannot be approved until the teacher resubmits."
-            : "Approve pending teacher quizzes (SchoolApproved) or reject with a required reason. Rejected quizzes cannot be approved by anyone until resubmitted."
-        }
+        description={approvalDescription}
         action={
           <button
             type="button"

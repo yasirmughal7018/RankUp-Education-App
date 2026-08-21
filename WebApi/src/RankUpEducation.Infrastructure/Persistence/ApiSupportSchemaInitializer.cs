@@ -44,6 +44,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuizOptionalScopeLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizNavigationAndMarkReviewSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizReviewDisplayModeSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizRandomQuestionCountSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizOfflineSyncSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizContentFreezeAndIntegritySupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
@@ -1092,6 +1093,11 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
     private const string QuizReviewDisplayModeSupportSql = """
         ALTER TABLE public.quizzes
             ADD COLUMN IF NOT EXISTS review_display_mode varchar(20) NOT NULL DEFAULT 'ScoreOnly';
+        """;
+
+    private const string QuizRandomQuestionCountSupportSql = """
+        ALTER TABLE public.quizzes
+            ADD COLUMN IF NOT EXISTS random_question_count smallint NULL;
         """;
 
     private const string QuizOfflineSyncSupportSql = """

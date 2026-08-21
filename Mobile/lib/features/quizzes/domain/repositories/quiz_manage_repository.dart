@@ -26,6 +26,8 @@ abstract class QuizManageRepository {
 
   Future<void> assignQuiz(String quizId, AssignQuizInput input);
 
+  Future<List<AssignmentBoardItem>> listAssignmentBoard({int? studentId});
+
   Future<List<QuizAssignmentItem>> getAssignments(String quizId);
 
   Future<List<PendingReviewItem>> listPendingReviews();

@@ -228,6 +228,22 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             .Where(answer => attemptQuestions.Select(item => item.Id).Contains(answer.QuizAttemptQuestionId))
             .ToListAsync(cancellationToken);
 
+        var attemptQuestionIds = attemptQuestions.Select(item => item.Id).ToArray();
+        var frozenOptions = await _dbContext.QuizAttemptQuestionOptions.AsNoTracking()
+            .Where(option => attemptQuestionIds.Contains(option.QuizAttemptQuestionId))
+            .OrderBy(option => option.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+        var legacyQuestionIds = attemptQuestions
+            .Select(item => item.QuestionId)
+            .Distinct()
+            .ToArray();
+        var legacyOptions = legacyQuestionIds.Length == 0
+            ? []
+            : await _dbContext.QuestionOptions.AsNoTracking()
+                .Where(option => legacyQuestionIds.Contains(option.QuestionId))
+                .ToListAsync(cancellationToken);
+
         var fillQuestionIds = attemptQuestions
             .Where(item =>
             {
@@ -332,6 +348,28 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     .Select(row => row.SubmittedText)
                     .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
 
+                var snapshotOptions = frozenOptions
+                    .Where(option => option.QuizAttemptQuestionId == item.Id)
+                    .Select(option => new QuizQuestionOptionItem(
+                        option.SourceOptionId ?? option.Id,
+                        option.OptionText,
+                        option.OptionImageUrl,
+                        option.IsCorrect))
+                    .ToArray();
+
+                if (snapshotOptions.Length == 0)
+                {
+                    snapshotOptions = legacyOptions
+                        .Where(option => option.QuestionId == item.QuestionId)
+                        .OrderBy(option => option.Id)
+                        .Select(option => new QuizQuestionOptionItem(
+                            option.Id,
+                            option.OptionText,
+                            option.OptionImageUrl,
+                            option.IsCorrect))
+                        .ToArray();
+                }
+
                 return new AttemptReviewQuestionItem(
                     item.Id,
                     item.QuestionId,
@@ -346,6 +384,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     requiresReview,
                     item.QuizReviewId,
                     selectedOptionIds,
+                    snapshotOptions,
                     hasHumanReviewFeedback,
                     aiFeedback);
             }).ToArray(),

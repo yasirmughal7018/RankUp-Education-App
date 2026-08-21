@@ -207,8 +207,17 @@ export function StudentQuizDetailPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-500">Questions</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {quiz.questionCount}
+            {quiz.questionsPerAttempt != null &&
+            quiz.questionsPerAttempt < quiz.questionCount
+              ? `${quiz.questionsPerAttempt} of ${quiz.questionCount}`
+              : quiz.questionCount}
           </p>
+          {quiz.questionsPerAttempt != null &&
+          quiz.questionsPerAttempt < quiz.questionCount ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Random subset per attempt
+            </p>
+          ) : null}
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-500">Total marks</p>

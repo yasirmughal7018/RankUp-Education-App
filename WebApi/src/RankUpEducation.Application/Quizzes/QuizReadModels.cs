@@ -84,7 +84,8 @@ public sealed record QuizDetailItem(
     string? RejectionReason = null,
     IReadOnlyList<QuizApprovalEventItem>? ApprovalHistory = null,
     int? SchoolId = null,
-    int? CampusId = null);
+    int? CampusId = null,
+    short? RandomQuestionCount = null);
 
 /// <summary>One quiz workflow event projected from app_approval.</summary>
 public sealed record QuizApprovalEventItem(
@@ -268,6 +269,7 @@ public sealed record AttemptReviewQuestionItem(
     bool RequiresReview,
     long? QuizReviewId,
     IReadOnlyList<long> SelectedOptionIds,
+    IReadOnlyList<QuizQuestionOptionItem> Options,
     bool HasHumanReviewFeedback = false,
     string? AiFeedback = null);
 

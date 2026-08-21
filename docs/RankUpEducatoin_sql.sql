@@ -333,6 +333,7 @@ CREATE TABLE public.quizzes (
 	time_limit_minutes int2 NULL,
 	allowed_attempts int2 NULL,
 	shuffle_questions bool DEFAULT true NOT NULL,
+	random_question_count int2 NULL,
 	shuffle_options bool DEFAULT true NOT NULL,
 	navigation_mode varchar(20) DEFAULT 'Free'::character varying NOT NULL,
 	instructions varchar(1000) NOT NULL,

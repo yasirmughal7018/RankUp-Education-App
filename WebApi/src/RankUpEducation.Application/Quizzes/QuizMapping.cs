@@ -83,7 +83,8 @@ internal static class QuizMapping
             item.CreatedByName,
             item.SchoolName,
             ResolveResultStatusName(item.QuizResultStatusName, item.AttemptCount, attemptLimit, item.BestPercentage, item.LastSubmittedAt),
-            item.BestPercentage);
+            item.BestPercentage,
+            item.RandomQuestionCount ?? item.TotalQuestions);
     }
 
     private static string ResolveResultStatusName(
@@ -169,7 +170,17 @@ internal static class QuizMapping
                     question.SelectedOptionIds,
                     visibility.ShowCorrectAnswers
                         ? correctOptions.Select(option => option.OptionId).ToArray()
-                        : null);
+                        : null,
+                    string.IsNullOrWhiteSpace(question.QuestionTypeName)
+                        ? null
+                        : question.QuestionTypeName,
+                    question.Options
+                        .Select(option => new QuizResultOptionResponse(
+                            option.OptionId,
+                            option.OptionText,
+                            option.OptionImageUrl,
+                            visibility.ShowCorrectAnswers && option.IsCorrect))
+                        .ToArray());
             }).ToArray(),
             visibility.ReviewPending,
             visibility.Mode);

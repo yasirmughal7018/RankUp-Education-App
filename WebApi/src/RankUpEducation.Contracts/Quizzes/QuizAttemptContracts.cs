@@ -134,4 +134,16 @@ public sealed record QuizResultQuestionResponse(
     long? CorrectOptionId,
     string? SubmittedText,
     IReadOnlyList<long>? SelectedOptionIds = null,
-    IReadOnlyList<long>? CorrectOptionIds = null);
+    IReadOnlyList<long>? CorrectOptionIds = null,
+    string? QuestionType = null,
+    IReadOnlyList<QuizResultOptionResponse>? Options = null);
+
+/// <summary>Frozen option row on the student/parent result screen.</summary>
+public sealed record QuizResultOptionResponse(
+    long Id,
+    string Text,
+    string? ImageUrl,
+    bool IsCorrect);
+
+/// <summary>Stored file URL returned after a student uploads a File Upload answer.</summary>
+public sealed record UploadQuizAttemptFileResponse(string FileUrl, string StoredFileName);

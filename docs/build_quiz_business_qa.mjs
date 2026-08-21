@@ -575,10 +575,10 @@ const checklist = [
 
 const knownGaps = [
   "Matching MVP: pair-row authoring UI (web); mobile uses labeled L/R option slots. Storage is even option counts (lefts first, then rights). Option shuffle is disabled for Matching/Ordering.",
-  "File Upload (105) is link/path MVP via SubmittedText — binary blob upload, storage, and review download are not built yet. File Upload and Media are hidden on every create path; existing attempt rows still work.",
+  "File Upload (105) and Media (108) remain hidden on every create path; attempts accept binary upload (wwwroot) or pasted URL in SubmittedText. Dedicated review download UX is not built yet.",
   "Practice post-submit teaching UX remains soft (type defaults only; no Practice-specific post-submit flow).",
   "Surprise PortalAdmin/AI-only authorship is future policy — teachers may still create Surprise quizzes today.",
-  "Random question subset selection is not built (ShuffleQuestions/options exist; per-student N-of-M pools do not).",
+  "Automated QZ-01–QZ-21 full-stack E2E (Playwright + test DB) is not built — workflow rules are covered by unit/scenario tests only.",
   "AI review uses OpenAI when configured; otherwise heuristic fallback (not a required OpenAI path).",
 ];
 

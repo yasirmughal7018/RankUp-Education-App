@@ -6,7 +6,7 @@ Monorepo for the RankUp Education platform: Flutter mobile app, ASP.NET Core Web
 
 | Project | Path | Stack | Purpose |
 | --- | --- | --- | --- |
-| **Mobile** | [`Mobile/`](Mobile/) | Flutter + Riverpod | Student, Parent, and Teacher mobile experience |
+| **Mobile** | [`Mobile/`](Mobile/) | Flutter + Riverpod | Student, Parent, Teacher, Coordinator, Tutor, and admin mobile experience |
 | **Web API** | [`WebApi/`](WebApi/) | .NET 10 ASP.NET Core | Shared REST API, auth, quizzes, directory, reports |
 | **React** | [`React/`](React/) | React 19 + Vite + TanStack Query | Admin, teacher, parent, and student web UI |
 
@@ -76,9 +76,9 @@ More detail: [`Mobile/README.md`](Mobile/README.md)
 
 ## Roles
 
-API-backed roles: `PortalAdmin`, `SchoolAdmin`, `CampusAdmin`, `Teacher`, `Student`, `Parent`.
+API-backed roles: `PortalAdmin`, `SchoolAdmin`, `CampusAdmin`, `Teacher`, `Coordinator`, `Tutor`, `Student`, `Parent`.
 
-- Roles are stored in `app_user_roles` (not on `app_users`). **Student** and **PortalAdmin** are exclusive; SchoolAdmin / CampusAdmin / Teacher / Parent may combine (common case: **Parent + Teacher**).
+- Roles are stored in `app_user_roles` (not on `app_users`). **Student** and **PortalAdmin** are exclusive; SchoolAdmin / CampusAdmin / Teacher / Parent / Coordinator / Tutor may combine (common case: **Parent + Teacher**).
 - Session role is on the JWT / `refresh_tokens.active_role` (UI: “Current” / “Acting as”) — not an `is_active` column on role rows.
 - Users can request or remove Parent/Teacher as an additional role; directory admins can grant Parent↔Teacher. See [`docs/02_RankUp_Authentication_Logic.html`](docs/02_RankUp_Authentication_Logic.html).
 

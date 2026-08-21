@@ -4,7 +4,12 @@ namespace RankUpEducation.Integration.FileStorage;
 
 public sealed class NoOpFileStorageService : IFileStorageService
 {
-    public Task<string> SaveAsync(Stream content, string fileName, string contentType, CancellationToken cancellationToken)
+    public Task<string> SaveAsync(
+        Stream content,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken,
+        string storageFolder = "uploads/avatars")
     {
         throw new NotSupportedException("File storage provider is not configured.");
     }

@@ -27,6 +27,7 @@ public sealed class QuizConfiguration : IEntityTypeConfiguration<Quiz>
         builder.Property(quiz => quiz.AllowedAttempts).HasColumnName("allowed_attempts");
         builder.Property(quiz => quiz.ShuffleQuestions).HasColumnName("shuffle_questions").HasDefaultValue(true);
         builder.Property(quiz => quiz.ShuffleOptions).HasColumnName("shuffle_options").HasDefaultValue(true);
+        builder.Property(quiz => quiz.RandomQuestionCount).HasColumnName("random_question_count");
         builder.Property(quiz => quiz.NavigationMode).HasColumnName("navigation_mode").HasMaxLength(20).HasDefaultValue("Free");
         builder.Property(quiz => quiz.ReviewDisplayMode).HasColumnName("review_display_mode").HasMaxLength(20).HasDefaultValue("ScoreOnly");
         builder.Property(quiz => quiz.AudienceScope).HasColumnName("audience_scope").HasMaxLength(20).HasDefaultValue("Assigned");

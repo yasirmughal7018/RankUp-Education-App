@@ -30,7 +30,14 @@ internal static class QuizReviewMapping
                 question.ParentFeedback,
                 question.RequiresReview,
                 question.SelectedOptionIds,
-                question.AiFeedback)).ToArray(),
+                question.AiFeedback,
+                question.Options
+                    .Select(option => new AttemptReviewOptionResponse(
+                        option.OptionId,
+                        option.OptionText,
+                        option.OptionImageUrl,
+                        option.IsCorrect))
+                    .ToArray())).ToArray(),
             detail.FocusLossCount,
             detail.ClipboardPasteCount);
 }

@@ -66,9 +66,15 @@ class ParentDashboardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
+                  onPressed: () => context.go('/parent/quiz-dashboard'),
+                  icon: const Icon(Icons.dashboard_outlined),
+                  label: const Text('Quiz dashboard'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
                   onPressed: () => context.go('/quizzes'),
                   icon: const Icon(Icons.assignment_outlined),
-                  label: const Text('Quizzes'),
+                  label: const Text('Manage quizzes'),
                 ),
                 const SizedBox(height: 20),
                 Text(

@@ -87,13 +87,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   bool _flushingOffline = false;
   String? _deviceId;
 
-  bool get _isTeacher {
-    final role = ref.watch(authControllerProvider).user?.role;
-    return role == UserRole.teacher ||
-        role == UserRole.coordinator ||
-        role == UserRole.parent ||
-        role == UserRole.tutor;
-  }
+  bool get _isTeacher => canManageQuizzes(_role);
 
   UserRole get _role =>
       ref.watch(authControllerProvider).user?.role ?? UserRole.student;
@@ -216,6 +210,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
                 },
                 onOpenPendingReviews: () {
                   unawaited(_openPendingReviews());
+                },
+                onOpenAssignmentBoard: () {
+                  context.push('/quizzes/assignments');
                 },
               )
             : _QuizListView(

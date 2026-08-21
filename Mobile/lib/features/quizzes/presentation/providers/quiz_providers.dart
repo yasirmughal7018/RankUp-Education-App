@@ -3,6 +3,7 @@ import 'package:rankup_education/core/api/api_client.dart';
 import 'package:rankup_education/core/network/connectivity_service.dart';
 import 'package:rankup_education/core/storage/student_device_id_store.dart';
 import 'package:rankup_education/features/quizzes/data/datasources/quiz_manage_remote_datasource.dart';
+import 'package:rankup_education/features/quizzes/data/models/quiz_manage_models.dart';
 import 'package:rankup_education/features/quizzes/data/datasources/quiz_remote_datasource.dart';
 import 'package:rankup_education/features/quizzes/data/repositories/api_quiz_manage_repository.dart';
 import 'package:rankup_education/features/quizzes/data/repositories/api_quiz_repository.dart';
@@ -45,8 +46,16 @@ final quizzesControllerProvider =
   );
 });
 
-/// Teacher create / manage / assign / review state.
+/// Teacher create / manage / assign / subjective review state.
 final teacherQuizManageControllerProvider = StateNotifierProvider<
     TeacherQuizManageController, TeacherQuizManageState>((ref) {
   return TeacherQuizManageController(ref.watch(quizManageRepositoryProvider));
+});
+
+/// Cross-quiz assignment board (`GET /quizzes/assignments`).
+final assignmentBoardProvider = FutureProvider.autoDispose
+    .family<List<AssignmentBoardItem>, int?>((ref, studentId) async {
+  return ref
+      .watch(quizManageRepositoryProvider)
+      .listAssignmentBoard(studentId: studentId);
 });

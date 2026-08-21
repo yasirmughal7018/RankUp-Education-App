@@ -91,6 +91,8 @@ export interface ManageQuiz {
   difficultyLevelId: number;
   questionCount: number;
   totalMarks: number;
+  /** When set, each attempt presents this many randomly chosen questions from the pool. */
+  randomQuestionCount?: number | null;
   timeLimitMinutes: number | null;
   allowedAttempts: number | null;
   instructions: string[];
@@ -133,6 +135,8 @@ export interface QuizFormValues {
   allowedAttempts: number | null;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  /** Random N-of-M subset per attempt; null = all questions. */
+  randomQuestionCount: number | null;
   isReviewRequired: boolean;
   navigationMode: QuizNavigationMode;
   reviewDisplayMode: QuizReviewDisplayMode;
@@ -433,6 +437,7 @@ export function createEmptyQuizForm(): QuizFormValues {
     allowedAttempts: 1,
     shuffleQuestions: false,
     shuffleOptions: true,
+    randomQuestionCount: null,
     isReviewRequired: true,
     navigationMode: "Free",
     reviewDisplayMode: "Full",
@@ -530,6 +535,7 @@ export function mapManageQuizToForm(quiz: ManageQuiz): QuizFormValues {
     allowedAttempts: quiz.allowedAttempts,
     shuffleQuestions: quiz.shuffleQuestions,
     shuffleOptions: quiz.shuffleOptions,
+    randomQuestionCount: quiz.randomQuestionCount ?? null,
     isReviewRequired: quiz.isReviewRequired,
     navigationMode: normalizeQuizNavigationMode(quiz.navigationMode),
     reviewDisplayMode: normalizeQuizReviewDisplayMode(quiz.reviewDisplayMode),
@@ -554,6 +560,7 @@ export function buildQuizPayload(values: QuizFormValues) {
     allowedAttempts: values.allowedAttempts,
     shuffleQuestions: values.shuffleQuestions,
     shuffleOptions: values.shuffleOptions,
+    randomQuestionCount: values.randomQuestionCount,
     isReviewRequired: values.isReviewRequired,
     navigationMode: normalizeQuizNavigationMode(values.navigationMode),
     reviewDisplayMode: "Full" as const,
@@ -581,6 +588,14 @@ export function validateQuizForm(values: QuizFormValues, requireQuizType = false
 
   if (requireQuizType && values.quizTypeId <= 0) {
     return "Quiz type is required.";
+  }
+
+  if (
+    values.randomQuestionCount != null &&
+    values.randomQuestionCount > 0 &&
+    values.randomQuestionCount > 999
+  ) {
+    return "Random question count must be 999 or less.";
   }
 
   return null;

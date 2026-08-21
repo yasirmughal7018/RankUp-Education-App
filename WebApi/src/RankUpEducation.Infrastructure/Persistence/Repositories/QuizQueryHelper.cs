@@ -177,7 +177,8 @@ internal static class QuizQueryHelper
             quizResultStatusName ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus),
             string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
             lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"),
-            quiz.RejectionReason);
+            quiz.RejectionReason,
+            RandomQuestionCount: quiz.RandomQuestionCount);
     }
 
     public static async Task<IReadOnlyDictionary<short, string>> LoadLifecycleNamesAsync(

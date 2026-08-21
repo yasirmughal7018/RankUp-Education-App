@@ -67,9 +67,9 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<PendingReviewListResponse>.Ok(response));
     }
 
-    /// <summary>School-admin queue of teacher quizzes pending approval.</summary>
+    /// <summary>Approval queue: PortalAdmin (all schools), SchoolAdmin (own school), CampusAdmin (own campus).</summary>
     [HttpGet("pending-approval")]
-    [Authorize(Roles = "PortalAdmin,SchoolAdmin")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
     public async Task<ActionResult<ApiResponse<PendingQuizApprovalListResponse>>> ListPendingApprovalAsync(
         CancellationToken cancellationToken)
     {
@@ -113,6 +113,35 @@ public sealed class QuizzesController : ControllerBase
             request,
             cancellationToken);
         return Ok(ApiResponse<SaveQuizAttemptAnswersResponse>.Ok(response, "Answers saved."));
+    }
+
+    /// <summary>Uploads a binary file for a File Upload question (stores URL in draft answer text).</summary>
+    [HttpPost("{quizId:long}/attempts/{attemptId:long}/questions/{attemptQuestionId:long}/upload")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<ApiResponse<UploadQuizAttemptFileResponse>>> UploadAttemptFileAsync(
+        long quizId,
+        long attemptId,
+        long attemptQuestionId,
+        IFormFile file,
+        [FromForm] string deviceId,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length <= 0)
+        {
+            return BadRequest(ApiResponse<UploadQuizAttemptFileResponse>.Fail("A file is required."));
+        }
+
+        await using var stream = file.OpenReadStream();
+        var response = await _quizService.UploadAttemptAnswerFileAsync(
+            quizId,
+            attemptId,
+            attemptQuestionId,
+            stream,
+            file.FileName,
+            file.ContentType,
+            deviceId,
+            cancellationToken);
+        return Ok(ApiResponse<UploadQuizAttemptFileResponse>.Ok(response, "File uploaded."));
     }
 
     /// <summary>Submits answers and scores the attempt.</summary>

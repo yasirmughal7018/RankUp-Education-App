@@ -340,11 +340,7 @@ public sealed class QuizAssignService : IQuizAssignService
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-            var canAssign =
-                LookupNames.IsFinalApprovedName(approvalName)
-                || (scope.Role == UserRole.SchoolAdmin
-                    && LookupNames.IsSchoolApprovedName(approvalName));
-            if (!canAssign)
+            if (!QuizAssignRules.CanAssignWithApproval(scope.Role, approvalName))
             {
                 throw new BusinessRuleException(
                     scope.Role == UserRole.SchoolAdmin

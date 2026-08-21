@@ -66,6 +66,9 @@ public sealed class Quiz : SoftDeleteEntity
     public bool ShuffleQuestions { get; private set; } = true;
     public bool ShuffleOptions { get; private set; } = true;
 
+    /// <summary>When set and less than <see cref="TotalQuestions"/>, each attempt randomly receives this many questions.</summary>
+    public short? RandomQuestionCount { get; private set; }
+
     /// <summary>Free = jump anywhere; Sequential = prev/next only; Locked = forward only after answering.</summary>
     public string NavigationMode { get; private set; } = "Free";
 
@@ -108,7 +111,8 @@ public sealed class Quiz : SoftDeleteEntity
         bool shuffleOptions,
         bool isReviewRequired,
         string? navigationMode = null,
-        string? reviewDisplayMode = null)
+        string? reviewDisplayMode = null,
+        short? randomQuestionCount = null)
     {
         QuizTitle = quizTitle.AsTrimmedString();
         Description = description.AsTrimmedString();
@@ -121,12 +125,23 @@ public sealed class Quiz : SoftDeleteEntity
         AllowedAttempts = allowedAttempts;
         ShuffleQuestions = shuffleQuestions;
         ShuffleOptions = shuffleOptions;
+        RandomQuestionCount = NormalizeRandomQuestionCount(randomQuestionCount, TotalQuestions);
         IsReviewRequired = isReviewRequired;
         NavigationMode = NormalizeNavigationMode(navigationMode);
         // Review display modes are retired — results are always Full once review is not pending.
         _ = reviewDisplayMode;
         ReviewDisplayMode = "Full";
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    internal static short? NormalizeRandomQuestionCount(short? randomQuestionCount, short totalQuestions)
+    {
+        if (randomQuestionCount is null or <= 0 || totalQuestions <= 0)
+        {
+            return null;
+        }
+
+        return randomQuestionCount >= totalQuestions ? null : randomQuestionCount;
     }
 
     private static string NormalizeNavigationMode(string? navigationMode)

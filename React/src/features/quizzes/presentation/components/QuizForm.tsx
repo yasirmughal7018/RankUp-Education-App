@@ -456,6 +456,32 @@ export function QuizForm({
         </label>
       </div>
 
+      <div>
+        <FieldLabel
+          htmlFor="randomQuestionCount"
+          optional
+          hint="Leave blank to use all attached questions. When set, each student receives a random subset of this size at attempt start (frozen for that attempt)."
+        >
+          Random questions per attempt
+        </FieldLabel>
+        <input
+          id="randomQuestionCount"
+          type="number"
+          min={1}
+          value={values.randomQuestionCount ?? ""}
+          disabled={isSubmitting}
+          onChange={(event) => {
+            const raw = event.target.value.trim();
+            setValues((current) => ({
+              ...current,
+              randomQuestionCount: raw === "" ? null : Number(raw),
+            }));
+          }}
+          className={inputClassName}
+          placeholder="All questions"
+        />
+      </div>
+
       <div className="flex justify-end gap-3">
         <button
           type="button"

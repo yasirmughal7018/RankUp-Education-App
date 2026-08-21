@@ -16,8 +16,10 @@ import 'package:rankup_education/features/notifications/presentation/pages/notif
 import 'package:rankup_education/features/parent/presentation/pages/parent_child_history_page.dart';
 import 'package:rankup_education/features/parent/presentation/pages/parent_children_page.dart';
 import 'package:rankup_education/features/parent_dashboard/presentation/pages/parent_dashboard_page.dart';
+import 'package:rankup_education/features/parent_dashboard/presentation/pages/parent_quiz_dashboard_page.dart';
 import 'package:rankup_education/features/profile/presentation/pages/profile_page.dart';
 import 'package:rankup_education/features/questions/presentation/pages/questions_page.dart';
+import 'package:rankup_education/features/quizzes/presentation/pages/assignment_board_page.dart';
 import 'package:rankup_education/features/quizzes/presentation/pages/quiz_approvals_page.dart';
 import 'package:rankup_education/features/quizzes/presentation/pages/quiz_monitoring_page.dart';
 import 'package:rankup_education/features/quizzes/presentation/pages/quizzes_page.dart';
@@ -78,6 +80,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _dashboardPath(user.role);
       }
 
+      if (isAuthenticated &&
+          location == '/quizzes/assignments' &&
+          !canManageQuizzes(user.role)) {
+        return _dashboardPath(user.role);
+      }
+
+      if (isAuthenticated &&
+          location == '/parent/quiz-dashboard' &&
+          !canViewParentQuizDashboard(user.role)) {
+        return _dashboardPath(user.role);
+      }
+
       return null;
     },
     routes: [
@@ -110,6 +124,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/parent',
             builder: (context, state) => const ParentDashboardPage(),
+          ),
+          GoRoute(
+            path: '/parent/quiz-dashboard',
+            builder: (context, state) => const ParentQuizDashboardPage(),
           ),
           GoRoute(
             path: '/parent/children',
@@ -162,6 +180,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/quizzes',
             builder: (context, state) => const QuizzesPage(),
+          ),
+          GoRoute(
+            path: '/quizzes/assignments',
+            builder: (context, state) => const AssignmentBoardPage(),
           ),
           GoRoute(
             path: '/quizzes/approvals',
@@ -312,7 +334,7 @@ List<_NavDestination> _destinationsFor(UserRole role) {
         ),
         _NavDestination(
           'Quizzes',
-          '/quizzes',
+          '/parent/quiz-dashboard',
           Icons.assignment_outlined,
           Icons.assignment,
         ),
@@ -388,6 +410,12 @@ List<_NavDestination> _destinationsFor(UserRole role) {
     UserRole.portalAdmin =>
       const [
         _NavDestination('Home', '/admin', Icons.home_outlined, Icons.home),
+        _NavDestination(
+          'Quizzes',
+          '/quizzes',
+          Icons.assignment_outlined,
+          Icons.assignment,
+        ),
         _NavDestination(
           'Approvals',
           '/admin/registrations',

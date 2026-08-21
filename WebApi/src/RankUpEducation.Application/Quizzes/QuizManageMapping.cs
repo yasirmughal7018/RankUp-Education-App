@@ -36,6 +36,7 @@ internal static class QuizManageMapping
             detail.IsReviewRequired,
             detail.NavigationMode,
             detail.ReviewDisplayMode,
+            detail.RandomQuestionCount,
             detail.CreatedByName,
             detail.SchoolName,
             detail.SchoolId,

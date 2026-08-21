@@ -576,6 +576,7 @@ export function QuizManageDetailPage() {
                       <QuizQuestionAnswerAside
                         questionType={question.questionType}
                         answers={answers}
+                        options={question.options}
                       />
                     </div>
 

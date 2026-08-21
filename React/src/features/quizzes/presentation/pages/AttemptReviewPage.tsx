@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import { AttemptReviewAnswerDisplay } from "@/features/quizzes/presentation/components/AttemptReviewAnswerDisplay";
 
 const inputClassName = FORM_FIELD_CLASS;
 
@@ -230,14 +231,7 @@ export function AttemptReviewPage() {
               ) : null}
             </div>
 
-            {question.submittedText ? (
-              <div className="mb-3 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <p className="mb-1 text-xs font-medium uppercase text-slate-500">
-                  Student answer
-                </p>
-                {question.submittedText}
-              </div>
-            ) : null}
+            <AttemptReviewAnswerDisplay question={question} />
 
             {question.aiFeedback?.trim() ? (
               <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">

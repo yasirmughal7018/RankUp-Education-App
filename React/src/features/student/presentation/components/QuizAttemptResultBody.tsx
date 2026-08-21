@@ -2,12 +2,9 @@ import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
+import { QuizAnswerDisplay } from "@/features/quizzes/presentation/components/QuizAnswerDisplay";
 import type { QuizAttemptResult } from "@/features/student/domain/studentQuizTypes";
-import {
-  formatCorrectOptionIds,
-  formatSelectedOptionIds,
-  resolveQuizResultDisplay,
-} from "@/features/student/domain/quizResultDisplay";
+import { resolveQuizResultDisplay } from "@/features/student/domain/quizResultDisplay";
 
 interface QuizAttemptResultBodyProps {
   result: QuizAttemptResult;
@@ -65,69 +62,63 @@ export function QuizAttemptResultBody({
       ) : null}
 
       <div className="space-y-4">
-        {result.questions.map((question, index) => {
-          const selected = formatSelectedOptionIds(question);
-          const correct = formatCorrectOptionIds(question);
-
-          return (
-            <section
-              key={question.id}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <div className="mb-2 flex items-start justify-between gap-3">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Q{index + 1}. {question.text}
-                </h2>
-                {display.showScore ? (
-                  display.showCorrectness ? (
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
-                        question.isCorrect
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-red-50 text-red-700"
-                      }`}
-                    >
-                      {question.awardedMarks}/{question.marks}
-                    </span>
-                  ) : (
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                      {question.awardedMarks}/{question.marks}
-                    </span>
-                  )
-                ) : (
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
-                    Pending
+        {result.questions.map((question, index) => (
+          <section
+            key={question.id}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-900">
+                Q{index + 1}. {question.text}
+              </h2>
+              {display.showScore ? (
+                display.showCorrectness ? (
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                      question.isCorrect
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-red-50 text-red-700"
+                    }`}
+                  >
+                    {question.awardedMarks}/{question.marks}
                   </span>
-                )}
-              </div>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                    {question.awardedMarks}/{question.marks}
+                  </span>
+                )
+              ) : (
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
+                  Pending
+                </span>
+              )}
+            </div>
 
-              {question.submittedText ? (
-                <p className="text-sm text-slate-700">
-                  {answerLabel}: {question.submittedText}
-                </p>
-              ) : null}
+            <QuizAnswerDisplay
+              question={{
+                questionType: question.questionType ?? "Single Choice",
+                selectedOptionId: question.selectedOptionId,
+                selectedOptionIds: question.selectedOptionIds,
+                submittedText: question.submittedText,
+                options: question.options?.map((option) => ({
+                  id: option.id,
+                  text: option.text,
+                  imageUrl: option.imageUrl,
+                  isCorrect: option.isCorrect,
+                })),
+              }}
+              answerLabel={answerLabel}
+              showCorrectAnswers={display.showCorrectAnswers}
+              selectedMatchLabel="Your match"
+              yourOrderLabel={answerLabel}
+              className="mt-1"
+            />
 
-              {selected ? (
-                <p className="mt-1 text-sm text-slate-700">
-                  Selected option id{selected.includes(",") ? "s" : ""}:{" "}
-                  {selected}
-                </p>
-              ) : null}
-
-              {display.showCorrectAnswers && correct ? (
-                <p className="mt-1 text-sm font-medium text-emerald-800">
-                  Correct option id{correct.includes(",") ? "s" : ""}: {correct}
-                </p>
-              ) : null}
-
-              {display.showExplanations && question.explanation ? (
-                <p className="mt-2 text-sm text-slate-600">
-                  {question.explanation}
-                </p>
-              ) : null}
-            </section>
-          );
-        })}
+            {display.showExplanations && question.explanation ? (
+              <p className="mt-2 text-sm text-slate-600">{question.explanation}</p>
+            ) : null}
+          </section>
+        ))}
       </div>
     </>
   );

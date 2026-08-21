@@ -25,6 +25,7 @@ class TeacherQuizListView extends StatelessWidget {
     required this.onOpenQuiz,
     required this.onCreateQuiz,
     required this.onOpenPendingReviews,
+    required this.onOpenAssignmentBoard,
     super.key,
   });
 
@@ -35,6 +36,7 @@ class TeacherQuizListView extends StatelessWidget {
   final ValueChanged<QuizSummary> onOpenQuiz;
   final VoidCallback onCreateQuiz;
   final VoidCallback onOpenPendingReviews;
+  final VoidCallback onOpenAssignmentBoard;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +69,12 @@ class TeacherQuizListView extends StatelessWidget {
             onSubmitted: (_) => onSearch(),
           ),
           const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onOpenAssignmentBoard,
+            icon: const Icon(Icons.dashboard_outlined),
+            label: const Text('Assignment board'),
+          ),
+          const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: onOpenPendingReviews,
             icon: const Icon(Icons.rate_review_outlined),
@@ -865,7 +873,7 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
   @override
   void initState() {
     super.initState();
-    _mode = assignModesForRole(widget.role).first.value;
+    _mode = defaultAssignModeForRole(widget.role);
     final now = DateTime.now();
     _startAt = now.add(const Duration(hours: 1));
     _endAt = now.add(const Duration(hours: 25));

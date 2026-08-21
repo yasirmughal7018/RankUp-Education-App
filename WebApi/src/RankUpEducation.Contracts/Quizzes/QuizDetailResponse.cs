@@ -26,4 +26,5 @@ public sealed record QuizDetailResponse(
     string CreatedBy,
     string SchoolName,
     string ResultStatus,
-    short? ResultPercent);
+    short? ResultPercent,
+    short? QuestionsPerAttempt = null);

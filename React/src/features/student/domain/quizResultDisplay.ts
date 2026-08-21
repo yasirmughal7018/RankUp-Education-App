@@ -40,35 +40,3 @@ export function resolveQuizResultDisplay(
     modeNote: null,
   };
 }
-
-export function formatSelectedOptionIds(question: {
-  selectedOptionId: number | null;
-  selectedOptionIds?: number[] | null;
-}): string | null {
-  const ids =
-    question.selectedOptionIds && question.selectedOptionIds.length > 0
-      ? question.selectedOptionIds
-      : question.selectedOptionId != null
-        ? [question.selectedOptionId]
-        : [];
-  if (ids.length === 0) {
-    return null;
-  }
-  return ids.join(", ");
-}
-
-export function formatCorrectOptionIds(question: {
-  correctOptionId: number | null;
-  correctOptionIds?: number[] | null;
-}): string | null {
-  const ids =
-    question.correctOptionIds && question.correctOptionIds.length > 0
-      ? question.correctOptionIds
-      : question.correctOptionId != null
-        ? [question.correctOptionId]
-        : [];
-  if (ids.length === 0) {
-    return null;
-  }
-  return ids.join(", ");
-}
