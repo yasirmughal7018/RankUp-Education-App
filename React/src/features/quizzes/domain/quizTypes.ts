@@ -332,7 +332,7 @@ function isSchoolQuizTypeName(quizType: string): boolean {
 /** SchoolAdmin reviews Teacher/Coordinator/CampusAdmin quizzes; CampusAdmin reviews Teacher/Coordinator only. */
 export function canReviewQuizApproval(
   role: UserRole,
-  quizType: string,
+  _quizType: string,
   createdByRole?: UserRole | string | null,
 ): boolean {
   if (!canApproveQuizzes(role)) {
@@ -404,8 +404,8 @@ export function canDeleteOrArchiveQuiz(
   userId: number | string,
   createdBy: string,
   lifecycleStatus: string,
-  approvalStatus: string,
-  quizType: string,
+  _approvalStatus: string,
+  _quizType: string,
 ): boolean {
   if (role === "PortalAdmin") {
     return true;
@@ -525,7 +525,7 @@ export function canAssignQuiz(
   lifecycleStatus: string,
   approvalStatus: string,
   questionCount: number,
-  quizType: string,
+  _quizType: string,
 ): boolean {
   if (!isPublishedQuizLifecycle(lifecycleStatus) || questionCount <= 0) {
     return false;
@@ -616,7 +616,7 @@ export function canPortalPublishQuiz(
   role: UserRole,
   lifecycleStatus: string,
   approvalStatus: string,
-  quizType: string,
+  _quizType: string,
   createdByRole?: UserRole | string | null,
 ): boolean {
   if (role !== "PortalAdmin" || !isDraftQuiz(lifecycleStatus)) {

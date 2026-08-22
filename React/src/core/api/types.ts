@@ -144,11 +144,19 @@ export function dashboardPathForRole(role: UserRole): string {
   return "/dashboard";
 }
 
-/** Normalize API user payloads that may omit `roles` (older sessions). */
+/** Map leftover API tokens (retired Tutor) onto current roles. */
+function normalizeUserRole(role: string | null | undefined): UserRole {
+  if (role === "Tutor" || role === "tutor") {
+    return "Parent";
+  }
+  return (role as UserRole) || "Student";
+}
+
+/** Normalize API user payloads that may omit `roles` or still send Tutor. */
 export function normalizeCurrentUser(user: CurrentUser): CurrentUser {
-  const roles =
-    Array.isArray(user.roles) && user.roles.length > 0
-      ? user.roles
-      : [user.role];
-  return { ...user, roles };
+  const role = normalizeUserRole(user?.role);
+  const rawRoles =
+    Array.isArray(user?.roles) && user.roles.length > 0 ? user.roles : [role];
+  const roles = rawRoles.map((item) => normalizeUserRole(item));
+  return { ...user, role, roles };
 }
