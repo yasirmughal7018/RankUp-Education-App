@@ -18,6 +18,7 @@ import {
   canPortalPublishQuiz,
   canAssignQuiz,
   canRequestQuizEdit,
+  canResubmitQuizForReview,
   canSubmitQuizForReview,
   formatQuizDisplayStatusLabel,
   formatQuizDuration,
@@ -409,6 +410,16 @@ export function QuizManageDetailPage() {
       settingsEditable,
       quiz.approvalHistory,
     );
+  const resubmitForReview =
+    user != null &&
+    canResubmitQuizForReview(
+      user.role,
+      user.id,
+      quiz.createdBy,
+      quiz.lifecycleStatus,
+      quiz.approvalStatus,
+      quiz.questionCount,
+    );
   const portalCanPublish =
     user != null &&
     canPortalPublishQuiz(
@@ -761,7 +772,7 @@ export function QuizManageDetailPage() {
           </div>
         ) : approvalRejected ? (
           <div className="mb-3 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
-            This quiz was rejected and cannot be approved until you resubmit it.
+            This quiz was rejected and cannot be approved until the creator resubmits it.
           </div>
         ) : schoolApproved ? (
           <div className="mb-3 rounded-lg border border-[var(--status-active-border)] bg-[var(--status-active-bg)] px-4 py-3 text-sm text-[var(--status-active-text)]">
@@ -972,7 +983,7 @@ export function QuizManageDetailPage() {
                 Publish quiz
               </button>
             ) : null}
-            {approvalRejected && canAuthor ? (
+            {resubmitForReview ? (
               <button
                 type="button"
                 disabled={isSubmitting || quiz.questionCount === 0}

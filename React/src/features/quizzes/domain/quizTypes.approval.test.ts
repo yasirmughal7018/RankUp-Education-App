@@ -10,6 +10,7 @@ import {
   canRequestQuizEdit,
   canReviewQuizApproval,
   canReviewQuizEditRequests,
+  canResubmitQuizForReview,
   canSubmitQuizForReview,
   canViewOrgQuizCatalog,
   defaultQuizListMineOnly,
@@ -304,7 +305,7 @@ describe("canDeleteOrArchiveQuiz", () => {
     ).toBe(true);
   });
 
-  it("allows teacher owner on approved published quizzes", () => {
+  it("denies teacher owner on published or assigned quizzes", () => {
     expect(
       canDeleteOrArchiveQuiz(
         "Teacher",
@@ -314,20 +315,30 @@ describe("canDeleteOrArchiveQuiz", () => {
         "Approved",
         "Practice",
       ),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      canDeleteOrArchiveQuiz(
+        "SchoolAdmin",
+        42,
+        "42",
+        "Assigned",
+        "Approved",
+        "Practice",
+      ),
+    ).toBe(false);
   });
 
-  it("denies teacher owner on published pending quizzes", () => {
+  it("allows teacher owner to delete their own draft", () => {
     expect(
       canDeleteOrArchiveQuiz(
         "Teacher",
         42,
         "42",
-        "Published",
+        "Draft",
         "Pending",
         "Practice",
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("denies parent owner on parent private quizzes", () => {
@@ -520,6 +531,60 @@ describe("canSubmitQuizForReview", () => {
     ).toBe(false);
     expect(
       canSubmitQuizForReview("Teacher", 42, "42", "Draft", "Pending", 0, true),
+    ).toBe(false);
+    expect(
+      canSubmitQuizForReview(
+        "PortalAdmin",
+        1,
+        "99",
+        "Draft",
+        "Pending",
+        3,
+        true,
+      ),
+    ).toBe(false);
+  });
+
+  it("lets only the owner resubmit after reject — not PortalAdmin", () => {
+    expect(
+      canResubmitQuizForReview(
+        "SchoolAdmin",
+        42,
+        "42",
+        "Draft",
+        "Rejected",
+        3,
+      ),
+    ).toBe(true);
+    expect(
+      canResubmitQuizForReview(
+        "PortalAdmin",
+        1,
+        "42",
+        "Draft",
+        "Rejected",
+        3,
+      ),
+    ).toBe(false);
+    expect(
+      canResubmitQuizForReview(
+        "PortalAdmin",
+        1,
+        "1",
+        "Draft",
+        "Rejected",
+        3,
+      ),
+    ).toBe(false);
+    expect(
+      canResubmitQuizForReview(
+        "SchoolAdmin",
+        5,
+        "42",
+        "Draft",
+        "Rejected",
+        3,
+      ),
     ).toBe(false);
   });
 

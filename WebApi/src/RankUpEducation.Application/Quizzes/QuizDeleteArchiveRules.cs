@@ -5,7 +5,11 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
 
-/// <summary>Delete and archive eligibility by creator type, approval tier, and actor role.</summary>
+/// <summary>
+/// Delete and archive eligibility. PortalAdmin may archive any quiz.
+/// Other roles may only delete their own Draft (non-ParentPrivate).
+/// Published or Assigned quizzes (including any student/child assignment) are PortalAdmin-only.
+/// </summary>
 public static class QuizDeleteArchiveRules
 {
     public static void EnsureCanDeleteOrArchive(
@@ -36,13 +40,8 @@ public static class QuizDeleteArchiveRules
             return;
         }
 
-        if (LookupNames.IsFinalApprovedName(approvalName))
-        {
-            return;
-        }
-
         throw new ForbiddenAppException(
-            "Only a portal admin can delete or archive a published quiz that is not yet approved.");
+            "Only a portal admin can archive a published or assigned quiz.");
     }
 
     private static bool IsDraftLifecycle(string lifecycleName)

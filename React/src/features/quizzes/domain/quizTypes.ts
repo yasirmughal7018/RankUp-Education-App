@@ -414,11 +414,8 @@ export function canDeleteOrArchiveQuiz(
     return false;
   }
 
-  if (isDraftQuiz(lifecycleStatus)) {
-    return true;
-  }
-
-  return isFinalApprovedQuizStatus(approvalStatus);
+  // Owners may delete their own Draft. Published / Assigned / Archived → PortalAdmin only.
+  return isDraftQuiz(lifecycleStatus);
 }
 
 /** True once the owner has submitted the quiz for approval (trail event). */
@@ -446,7 +443,7 @@ export function isQuizAwaitingApprovalReview(
   );
 }
 
-/** Creator submits a draft quiz for school/portal review; lifecycle stays Draft. Owner only (plus portal admin). */
+/** Creator submits a draft quiz for school/portal review; lifecycle stays Draft. Owner only — PortalAdmin reviews, they do not submit. */
 export function canSubmitQuizForReview(
   role: UserRole,
   userId: number | string,
@@ -480,11 +477,35 @@ export function canSubmitQuizForReview(
     return false;
   }
 
-  if (role === "PortalAdmin") {
-    return true;
+  return isQuizOwnerWhoMaySubmitForReview(role, userId, createdBy);
+}
+
+/** Owner resubmits after reject. The rejecting PortalAdmin (or any non-owner) cannot resubmit. */
+export function canResubmitQuizForReview(
+  role: UserRole,
+  userId: number | string,
+  createdBy: string,
+  lifecycleStatus: string,
+  approvalStatus: string,
+  questionCount: number,
+): boolean {
+  if (!isDraftQuiz(lifecycleStatus) || questionCount <= 0) {
+    return false;
   }
 
-  if (!isQuizOwner(userId, createdBy)) {
+  if (!isRejectedQuizApprovalStatus(approvalStatus)) {
+    return false;
+  }
+
+  return isQuizOwnerWhoMaySubmitForReview(role, userId, createdBy);
+}
+
+function isQuizOwnerWhoMaySubmitForReview(
+  role: UserRole,
+  userId: number | string,
+  createdBy: string,
+): boolean {
+  if (role === "PortalAdmin" || !isQuizOwner(userId, createdBy)) {
     return false;
   }
 

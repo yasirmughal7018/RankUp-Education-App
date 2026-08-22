@@ -59,24 +59,7 @@ public sealed class QuizDeleteArchiveRulesTests
     }
 
     [Fact]
-    public void EnsureCanDeleteOrArchive_TeacherOwner_AllowsApprovedPublished()
-    {
-        var quiz = CreateQuiz(createdBy: "42");
-        var scope = new QuizManageScope(UserRole.Teacher, 42, 42, 1, 10);
-
-        var ex = Record.Exception(() =>
-            QuizDeleteArchiveRules.EnsureCanDeleteOrArchive(
-                quiz,
-                scope,
-                lifecycleName: "Published",
-                approvalName: "Approved",
-                isParentPrivateQuiz: false));
-
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void EnsureCanDeleteOrArchive_TeacherOwner_RejectsPublishedPending()
+    public void EnsureCanDeleteOrArchive_TeacherOwner_RejectsPublished()
     {
         var quiz = CreateQuiz(createdBy: "42");
         var scope = new QuizManageScope(UserRole.Teacher, 42, 42, 1, 10);
@@ -86,7 +69,24 @@ public sealed class QuizDeleteArchiveRulesTests
                 quiz,
                 scope,
                 lifecycleName: "Published",
-                approvalName: "Pending",
+                approvalName: "Approved",
+                isParentPrivateQuiz: false));
+
+        Assert.Contains("portal admin", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EnsureCanDeleteOrArchive_SchoolAdminOwner_RejectsAssigned()
+    {
+        var quiz = CreateQuiz(createdBy: "42");
+        var scope = new QuizManageScope(UserRole.SchoolAdmin, 42, 42, 1, null);
+
+        var ex = Assert.Throws<ForbiddenAppException>(() =>
+            QuizDeleteArchiveRules.EnsureCanDeleteOrArchive(
+                quiz,
+                scope,
+                lifecycleName: "Assigned",
+                approvalName: "Approved",
                 isParentPrivateQuiz: false));
 
         Assert.Contains("portal admin", ex.Message, StringComparison.OrdinalIgnoreCase);

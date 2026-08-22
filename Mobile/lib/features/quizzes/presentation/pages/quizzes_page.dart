@@ -334,14 +334,16 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
                   .duplicateQuiz(quiz.id);
               await _load();
             },
-            onArchive: () async {
-              final quiz = _selectedQuiz;
-              if (quiz == null) return;
-              await ref
-                  .read(teacherQuizManageControllerProvider.notifier)
-                  .archiveQuiz(quiz.id);
-              await _load();
-            },
+            onArchive: _role == UserRole.portalAdmin
+                ? () async {
+                    final quiz = _selectedQuiz;
+                    if (quiz == null) return;
+                    await ref
+                        .read(teacherQuizManageControllerProvider.notifier)
+                        .archiveQuiz(quiz.id);
+                    await _load();
+                  }
+                : null,
             onCancel: () async {
               final quiz = _selectedQuiz;
               if (quiz == null) return;

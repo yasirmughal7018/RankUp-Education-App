@@ -497,7 +497,7 @@ class TeacherQuizManageView extends StatelessWidget {
                   icon: const Icon(Icons.copy_outlined),
                   label: const Text('Duplicate'),
                 ),
-              if (quiz.isPublished && onArchive != null)
+              if ((quiz.isPublished || quiz.isAssigned) && onArchive != null)
                 OutlinedButton.icon(
                   onPressed: state.isSaving ? null : onArchive,
                   icon: const Icon(Icons.archive_outlined),
