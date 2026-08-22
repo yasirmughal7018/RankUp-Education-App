@@ -238,7 +238,8 @@ public sealed class QuizManageService : IQuizManageService
 
         var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
 
-        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent or UserRole.Tutor)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent
+            or UserRole.Tutor or UserRole.SchoolAdmin)
         {
             await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
 
@@ -250,7 +251,7 @@ public sealed class QuizManageService : IQuizManageService
             await RecordTrailEventAsync(quizId, scope, ApprovalAction.SubmittedForReview, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
+            if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin)
             {
                 await QuizApprovalNotifications.NotifyApproversOnTeacherPublishAsync(
                     _notifications,
@@ -342,6 +343,8 @@ public sealed class QuizManageService : IQuizManageService
             scope,
             await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken));
 
+        QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope);
+
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
         if (LookupNames.IsRejectedApprovalName(approvalName))
         {
@@ -428,6 +431,8 @@ public sealed class QuizManageService : IQuizManageService
 
         var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
         EnsureApprovalTargetAccess(quiz, scope, isParentPrivate);
+
+        QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope);
 
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
@@ -848,7 +853,7 @@ public sealed class QuizManageService : IQuizManageService
         short? requestedQuizTypeId,
         CancellationToken cancellationToken)
     {
-        if (scope.Role == UserRole.Parent)
+        if (scope.Role is UserRole.Parent or UserRole.Tutor)
         {
             return await _guard.RequireLookupAsync(
                 LookupNames.QuizType,
@@ -860,7 +865,7 @@ public sealed class QuizManageService : IQuizManageService
         {
             if (await _quizzes.IsParentPrivateQuizTypeAsync(requestedQuizTypeId.Value, cancellationToken))
             {
-                throw new ValidationAppException(["Only parents can create parent private quizzes."]);
+                throw new ValidationAppException(["Only parents and tutors can create parent private quizzes."]);
             }
 
             return requestedQuizTypeId.Value;

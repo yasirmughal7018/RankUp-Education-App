@@ -28,7 +28,8 @@ import {
   canAuthorQuizzes,
   canViewOrgQuizCatalog,
   defaultQuizListMineOnly,
-  isDraftQuiz,
+  formatQuizDisplayStatusLabel,
+  isUnpublishedQuizDisplayStatus,
   type QuizSummary,
 } from "@/features/quizzes/domain/quizTypes";
 import { useQuizzesQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
@@ -77,7 +78,7 @@ function matchesListFilter(quiz: QuizSummary, filter: ListFilter): boolean {
     case "all":
       return true;
     case "draft":
-      return isDraftQuiz(status);
+      return isUnpublishedQuizDisplayStatus(status);
     case "published":
       return status === "published";
     case "assigned":
@@ -105,22 +106,12 @@ function listFilterLabel(filter: ListFilter): string {
 }
 
 function displayQuizListStatusLabel(status: string): string {
-  const raw = status.trim();
-  if (!raw) {
-    return "Unknown";
-  }
-  if (isDraftQuiz(raw)) {
-    return "Draft";
-  }
-  return raw
-    .split(/[\s_]+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
+  return formatQuizDisplayStatusLabel(status);
 }
 
 function getQuizListStatusKey(status: string): ApprovalStatusKey {
   const s = normalizeStatus(status);
-  if (isDraftQuiz(s)) {
+  if (s === "approval pending" || isDraftQuiz(s) || s === "school approved" || s === "awaiting publish") {
     return "pending";
   }
   if (s === "published") {
@@ -239,7 +230,7 @@ export function QuizzesPage() {
 
     for (const quiz of scopedQuizzes) {
       const status = normalizeStatus(quiz.status);
-      if (isDraftQuiz(status)) {
+      if (isUnpublishedQuizDisplayStatus(status)) {
         draft += 1;
       } else if (status === "published") {
         published += 1;

@@ -102,7 +102,8 @@ internal static class QuizQueryHelper
         short? bestPercentage,
         DateTimeOffset? lastSubmittedAt,
         short lifecycleStatusId,
-        string lifecycleStatusName)
+        string lifecycleStatusName,
+        string? approvalStatusName = null)
     {
         return new QuizListItem(
             quiz.Id,
@@ -127,7 +128,9 @@ internal static class QuizQueryHelper
             attemptCount,
             bestPercentage,
             lastSubmittedAt,
-            lifecycleStatusName);
+            lifecycleStatusName,
+            ApprovalStatusName: approvalStatusName
+                ?? lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"));
     }
 
     public static QuizDetailItem MapQuizDetail(

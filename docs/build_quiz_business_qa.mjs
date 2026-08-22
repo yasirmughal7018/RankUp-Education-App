@@ -640,6 +640,7 @@ const checklist = [
   "SchoolAdmin/PortalAdmin may create quizzes; School/Campus publish → SchoolApproved; Portal publish → Approved.",
   "Rejected cannot be approved by anyone until teacher re-publish resets to Pending. Reject reason required.",
   "Teacher/Coordinator list API returns all published quizzes in campus scope (any creator) plus own drafts; client Mine only toggle optional.",
+  "Staff list/manage UI display status: Draft+Pending+questions → Approval Pending; Draft+SchoolApproved → School Approved; Draft+Approved → Awaiting Publish; Draft+Pending+0 questions → Draft.",
   "Fill answers hidden from students before submission (attempt payload).",
   "Quiz notifications (submit/auto-submit/etc.) via in-app bell.",
   "Offline sync via ClientSyncId + POST .../sync (web + mobile).",
@@ -728,7 +729,7 @@ const html = `<!doctype html>
   <div class="ok"><strong>Canonical model:</strong> Every quiz starts <strong>Pending Approval</strong> (Approval=Pending, Lifecycle=Draft). <strong>Approval</strong> and <strong>publishing</strong> are separate: School/Campus admins may <em>approve</em> (→ SchoolApproved) but never auto-publish; only <strong>PortalAdmin</strong> <em>publishes</em> (Lifecycle → Published). While Pending or approved-but-unpublished (Draft): not assignable, students cannot attempt; owner may edit per ownership rules. Creator cannot self-approve. <strong>Published</strong> staff catalog uses role + school/campus scope (not <code>CreatedBy</code> alone).</div>
 
   <div class="note"><strong>Two dimensions:</strong> <strong>Lifecycle</strong> (Draft 60 → Published 61 → Assigned 62 → Archived 63) and <strong>Approval</strong> (Pending 40 → SchoolApproved 41 → Approved 42 / Rejected 43). Assign requires <strong>Published</strong> lifecycle, not approval alone. Per-student progress lives on attempts and assignment QuizResultStatus — never on the quiz row.</div>
-  <div class="note"><strong>Terminology:</strong> lifecycle <strong>Draft (60)</strong> = unpublished (includes Pending Approval and post-approval waiting for PortalAdmin publish). Approval <strong>Pending (40)</strong> is the initial approval gate on every create — distinct from lifecycle naming.</div>
+  <div class="note"><strong>Terminology:</strong> lifecycle <strong>Draft (60)</strong> = unpublished (includes Pending Approval and post-approval waiting for PortalAdmin publish). Approval <strong>Pending (40)</strong> is the initial approval gate on every create — distinct from lifecycle naming. <strong>UI display status</strong> (list + manage): when lifecycle is Draft and approval is Pending with ≥1 question, show <strong>Approval Pending</strong> (not plain Draft). Draft + SchoolApproved → <strong>School Approved</strong>; Draft + Approved → <strong>Awaiting Publish</strong>; Draft + Pending + 0 questions → <strong>Draft</strong> (work in progress).</div>
 
   <h2>1. Lifecycle statuses</h2>
   ${htmlTable(["ID", "Lifecycle", "Meaning"], lifecycleStatuses)}
@@ -992,6 +993,9 @@ const docChildren = [
   docParagraph(
     "Two dimensions: Lifecycle (Draft→Published→Assigned→Archived) and Approval (Pending→SchoolApproved→Approved/Rejected). Assign requires Published lifecycle.",
     { run: { bold: true, color: "92400E" } },
+  ),
+  docParagraph(
+    "UI display status (list + manage): Draft + Pending + ≥1 question → Approval Pending; Draft + SchoolApproved → School Approved; Draft + Approved → Awaiting Publish; Draft + Pending + 0 questions → Draft (work in progress). Lifecycle stays Draft until PortalAdmin publishes.",
   ),
 
   docHeading("1. Lifecycle statuses"),

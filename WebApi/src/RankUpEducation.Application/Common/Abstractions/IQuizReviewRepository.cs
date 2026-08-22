@@ -12,11 +12,12 @@ public interface IQuizReviewRepository
 
     /// <summary>
     /// Pending subjective reviews. Pass creatorUserId for Teacher/Parent ownership,
-    /// schoolId for SchoolAdmin, or neither for PortalAdmin (platform-wide).
+    /// schoolId for SchoolAdmin, campusId for CampusAdmin, or neither for PortalAdmin (platform-wide).
     /// </summary>
     Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsAsync(
         long? creatorUserId,
         int? schoolId,
+        int? campusId,
         CancellationToken cancellationToken);
 
     Task<AttemptReviewDetailItem?> GetAttemptReviewDetailAsync(

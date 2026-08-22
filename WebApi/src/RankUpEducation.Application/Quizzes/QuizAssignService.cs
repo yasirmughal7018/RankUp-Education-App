@@ -82,9 +82,9 @@ public sealed class QuizAssignService : IQuizAssignService
 
         if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
         {
-            if (scope.Role != UserRole.Parent)
+            if (scope.Role is not (UserRole.Parent or UserRole.Tutor))
             {
-                throw new ForbiddenAppException("Only parents can assign ParentPrivate quizzes.");
+                throw new ForbiddenAppException("Only parents and tutors can assign ParentPrivate quizzes.");
             }
 
             var privateMode = request.Mode.AsLowercase();
@@ -106,10 +106,10 @@ public sealed class QuizAssignService : IQuizAssignService
         var mode = request.Mode.AsLowercase();
         if (mode == "public")
         {
-            if (scope.Role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin))
+            if (scope.Role != UserRole.PortalAdmin)
             {
                 throw new ForbiddenAppException(
-                    "Only school or portal administrators can publish public catalog quizzes.");
+                    "Only portal administrators can publish public catalog quizzes.");
             }
 
             quiz.SetAudienceAccess("Public", request.StartAt, request.EndAt, request.AllowedAttempts);
@@ -338,7 +338,8 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new BusinessRuleException("Quiz must contain at least one question before assignment.");
         }
 
-        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.CampusAdmin
+            or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             if (!QuizAssignRules.CanAssignWithApproval(scope.Role, approvalName))
@@ -350,13 +351,13 @@ public sealed class QuizAssignService : IQuizAssignService
             }
         }
         else if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken)
-            && scope.Role == UserRole.Parent)
+            && scope.Role is UserRole.Parent or UserRole.Tutor)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             if (!LookupNames.IsFinalApprovedName(approvalName))
             {
                 throw new BusinessRuleException(
-                    "Parent quizzes must be approved by a portal admin before assignment.");
+                    "ParentPrivate quizzes must be approved by a portal admin before assignment.");
             }
         }
 
@@ -428,6 +429,18 @@ public sealed class QuizAssignService : IQuizAssignService
                 "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
                 "allinschool" => await ResolveAllInSchoolStudentsAsync(scope, request, cancellationToken),
                 _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for school admins."])
+            };
+        }
+
+        if (scope.Role == UserRole.CampusAdmin)
+        {
+            return mode switch
+            {
+                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
+                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
+                "allingrade" => await ResolveAllInGradeStudentsAsync(scope, request, cancellationToken),
+                "allinsection" => await ResolveAllInSectionStudentsAsync(scope, request, cancellationToken),
+                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for campus admins."])
             };
         }
 

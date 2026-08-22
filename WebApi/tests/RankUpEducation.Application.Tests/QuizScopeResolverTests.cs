@@ -24,21 +24,58 @@ public sealed class QuizScopeResolverTests
     {
         var scope = new QuizManageScope(UserRole.SchoolAdmin, 5, 5, 2, null);
 
-        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+        var (creatorUserId, schoolId, campusId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
 
         Assert.Null(creatorUserId);
         Assert.Equal(2, schoolId);
+        Assert.Null(campusId);
     }
 
     [Fact]
-    public void ResolveOwnerListFilter_CampusAdmin_UsesSchoolNotCreator()
+    public void ResolveOwnerListFilter_CampusAdmin_UsesSchoolAndCampusNotCreator()
     {
         var scope = new QuizManageScope(UserRole.CampusAdmin, 7, 7, 1, 10);
 
-        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+        var (creatorUserId, schoolId, campusId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
 
         Assert.Null(creatorUserId);
         Assert.Equal(1, schoolId);
+        Assert.Equal(10, campusId);
+    }
+
+    [Fact]
+    public void EnsureCanApproveOrRejectQuiz_BlocksSelfApprovalForSchoolAdmin()
+    {
+        var quiz = CreateQuiz(createdBy: "5");
+        var scope = new QuizManageScope(UserRole.SchoolAdmin, 5, 5, 1, null);
+
+        var ex = Assert.Throws<ForbiddenAppException>(() =>
+            QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope));
+
+        Assert.Contains("own quiz", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EnsureCanApproveOrRejectQuiz_AllowsPortalAdminOnOwnQuiz()
+    {
+        var quiz = CreateQuiz(createdBy: "1");
+        var scope = new QuizManageScope(UserRole.PortalAdmin, 1, 1, null, null);
+
+        var ex = Record.Exception(() =>
+            QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void RequireAssignScope_AllowsCampusAdminWithCampusContext()
+    {
+        var scope = QuizScopeResolver.RequireAssignScope(
+            new TestCurrentUser("CampusAdmin", userId: 7, schoolId: 1, campusId: 10));
+
+        Assert.Equal(UserRole.CampusAdmin, scope.Role);
+        Assert.Equal(1, scope.SchoolId);
+        Assert.Equal(10, scope.CampusId);
     }
 
     [Fact]

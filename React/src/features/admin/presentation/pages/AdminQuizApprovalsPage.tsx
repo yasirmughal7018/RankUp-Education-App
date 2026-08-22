@@ -3,6 +3,7 @@ import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import {
   canReviewQuizApproval,
+  isQuizOwner,
   type PendingQuizApproval,
 } from "@/features/quizzes/domain/quizTypes";
 import {
@@ -143,6 +144,11 @@ export function AdminQuizApprovalsPage() {
                   const canReview = user
                     ? canReviewQuizApproval(user.role, quiz.quizTypeName)
                     : false;
+                  const isOwnQuiz = user
+                    ? isQuizOwner(user.id, quiz.createdBy)
+                    : false;
+                  const canActOnQuiz =
+                    canReview && (isPortalAdmin || !isOwnQuiz);
 
                   return (
                   <tr key={quiz.quizId} className="hover:bg-slate-50">
@@ -173,6 +179,10 @@ export function AdminQuizApprovalsPage() {
                       {!canReview ? (
                         <span className="text-xs text-muted-foreground">
                           Portal admin only
+                        </span>
+                      ) : !canActOnQuiz ? (
+                        <span className="text-xs text-muted-foreground">
+                          Cannot approve your own quiz
                         </span>
                       ) : rejectingQuizId === quiz.quizId ? (
                         <div className="ml-auto flex max-w-xs flex-col items-stretch gap-2">

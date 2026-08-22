@@ -77,8 +77,12 @@ public sealed class QuizReviewService : IQuizReviewService
     public async Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
-        var items = await _reviews.ListPendingReviewsAsync(creatorUserId, schoolId, cancellationToken);
+        var (creatorUserId, schoolId, campusId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+        var items = await _reviews.ListPendingReviewsAsync(
+            creatorUserId,
+            schoolId,
+            campusId,
+            cancellationToken);
 
         return new PendingReviewListResponse(items.Select(item => new PendingReviewItemResponse(
             item.QuizId,

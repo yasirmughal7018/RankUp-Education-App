@@ -91,6 +91,7 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
     public async Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsAsync(
         long? creatorUserId,
         int? schoolId,
+        int? campusId,
         CancellationToken cancellationToken)
     {
         var submittedStatusIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
@@ -126,6 +127,13 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
         if (schoolId is not null)
         {
             query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
+        }
+
+        if (campusId is not null)
+        {
+            query = query.Where(row =>
+                row.quiz.SchoolCampusId == campusId.Value
+                || row.quiz.SchoolCampusId == null);
         }
 
         var rows = await query

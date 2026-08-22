@@ -93,6 +93,7 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
     public async Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardAsync(
         long? creatorUserId,
         int? schoolId,
+        int? campusId,
         long? studentId,
         CancellationToken cancellationToken)
     {
@@ -111,6 +112,13 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
         if (schoolId is not null)
         {
             query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
+        }
+
+        if (campusId is not null)
+        {
+            query = query.Where(row =>
+                row.quiz.SchoolCampusId == campusId.Value
+                || row.quiz.SchoolCampusId == null);
         }
 
         if (studentId is not null)

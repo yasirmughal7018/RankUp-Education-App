@@ -10,6 +10,7 @@ import {
   canSubmitQuizForReview,
   canViewOrgQuizCatalog,
   defaultQuizListMineOnly,
+  formatQuizDisplayStatusLabel,
   hasQuizAssignmentStarted,
   isFinalApprovedQuizStatus,
   isParentPrivateQuizType,
@@ -17,6 +18,7 @@ import {
   isQuizOwner,
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
+  resolveQuizDisplayStatus,
 } from "@/features/quizzes/domain/quizTypes";
 
 describe("quiz list visibility helpers", () => {
@@ -27,12 +29,12 @@ describe("quiz list visibility helpers", () => {
     expect(canViewOrgQuizCatalog("Teacher")).toBe(false);
   });
 
-  it("defaults mine-only off for org admins and on for individual authors", () => {
+  it("defaults mine-only off for all roles (optional filter)", () => {
     expect(defaultQuizListMineOnly("SchoolAdmin")).toBe(false);
     expect(defaultQuizListMineOnly("PortalAdmin")).toBe(false);
     expect(defaultQuizListMineOnly("CampusAdmin")).toBe(false);
-    expect(defaultQuizListMineOnly("Teacher")).toBe(true);
-    expect(defaultQuizListMineOnly("Coordinator")).toBe(true);
+    expect(defaultQuizListMineOnly("Teacher")).toBe(false);
+    expect(defaultQuizListMineOnly("Coordinator")).toBe(false);
     expect(defaultQuizListMineOnly(undefined)).toBe(false);
   });
 });
@@ -222,11 +224,38 @@ describe("canReviewQuizApproval", () => {
   });
 });
 
+describe("resolveQuizDisplayStatus", () => {
+  it("shows Approval Pending after submit when draft lifecycle and pending approval", () => {
+    expect(resolveQuizDisplayStatus("Draft", "Pending", 3)).toBe(
+      "Approval Pending",
+    );
+    expect(resolveQuizDisplayStatus("Draft", "Pending", 0)).toBe("Draft");
+    expect(formatQuizDisplayStatusLabel("approval pending")).toBe(
+      "Approval Pending",
+    );
+  });
+});
+
 describe("canSubmitQuizForReview", () => {
-  it("requires draft lifecycle and editable settings", () => {
-    expect(canSubmitQuizForReview("Draft", 3, true)).toBe(true);
-    expect(canSubmitQuizForReview("Published", 3, true)).toBe(false);
-    expect(canSubmitQuizForReview("Draft", 0, true)).toBe(false);
+  it("requires draft, questions, editable settings, and ownership", () => {
+    expect(
+      canSubmitQuizForReview("Teacher", 42, "42", "Draft", 3, true),
+    ).toBe(true);
+    expect(
+      canSubmitQuizForReview("SchoolAdmin", 42, "42", "Draft", 3, true),
+    ).toBe(true);
+    expect(
+      canSubmitQuizForReview("Teacher", 42, "99", "Draft", 3, true),
+    ).toBe(false);
+    expect(
+      canSubmitQuizForReview("CampusAdmin", 42, "42", "Draft", 3, true),
+    ).toBe(false);
+    expect(
+      canSubmitQuizForReview("Teacher", 42, "42", "Published", 3, true),
+    ).toBe(false);
+    expect(
+      canSubmitQuizForReview("Teacher", 42, "42", "Draft", 0, true),
+    ).toBe(false);
   });
 });
 

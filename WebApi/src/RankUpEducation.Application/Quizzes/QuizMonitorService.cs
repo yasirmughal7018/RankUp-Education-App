@@ -44,10 +44,11 @@ public sealed class QuizMonitorService : IQuizMonitorService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+        var (creatorUserId, schoolId, campusId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
         var items = await _assignments.ListAssignmentBoardAsync(
             creatorUserId,
             schoolId,
+            campusId,
             studentId,
             cancellationToken);
         var now = _dateTimeProvider.UtcNow;

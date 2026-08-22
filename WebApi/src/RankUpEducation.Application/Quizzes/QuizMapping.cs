@@ -9,7 +9,10 @@ internal static class QuizMapping
     {
         var attemptLimit = item.AllowedAttempts <= 0 ? (short)1 : item.AllowedAttempts;
         var status = item.StartDateTime is null && !string.IsNullOrWhiteSpace(item.LifecycleStatusName)
-            ? item.LifecycleStatusName.ToLowerInvariant()
+            ? QuizDisplayStatus.ResolveStaffListStatus(
+                item.LifecycleStatusName,
+                item.ApprovalStatusName,
+                item.TotalQuestions).ToLowerInvariant()
             : QuizStatusCalculator.ResolveListStatus(
                 now,
                 item.StartDateTime,

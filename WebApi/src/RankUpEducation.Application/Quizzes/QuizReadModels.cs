@@ -28,7 +28,8 @@ public sealed record QuizListItem(
     short? BestPercentage,
     DateTimeOffset? LastSubmittedAt,
     string? LifecycleStatusName = null,
-    string? QuizResultStatusName = null);
+    string? QuizResultStatusName = null,
+    string? ApprovalStatusName = null);
 
 /// <summary>Quiz awaiting school-admin approval (Pending or Rejected).</summary>
 public sealed record PendingQuizApprovalItem(

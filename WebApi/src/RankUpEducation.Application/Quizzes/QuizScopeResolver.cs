@@ -106,11 +106,12 @@ public static class QuizScopeResolver
         return new QuizManageScope(role, userId, userId, currentUser.SchoolId, currentUser.CampusId);
     }
 
-    /// <summary>Requires Parent, Teacher, Coordinator, SchoolAdmin, or PortalAdmin for assignment operations.</summary>
+    /// <summary>Requires Parent, Teacher, Coordinator, CampusAdmin, SchoolAdmin, or PortalAdmin for assignment operations.</summary>
     public static QuizManageScope RequireAssignScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Tutor or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (UserRole.Parent or UserRole.Tutor or UserRole.Teacher or UserRole.Coordinator
+                or UserRole.CampusAdmin or UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("Your role cannot assign quizzes.");
         }
@@ -127,6 +128,15 @@ public static class QuizScopeResolver
             var campusId = currentUser.CampusId
                 ?? throw new ForbiddenAppException($"{role} campus context was not found.");
 
+            return new QuizManageScope(role, userId, profileId, schoolId, campusId);
+        }
+
+        if (role == UserRole.CampusAdmin)
+        {
+            var schoolId = currentUser.SchoolId
+                ?? throw new ForbiddenAppException("Campus admin school context was not found.");
+            var campusId = currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus admin campus context was not found.");
             return new QuizManageScope(role, userId, profileId, schoolId, campusId);
         }
 
@@ -199,17 +209,31 @@ public static class QuizScopeResolver
 
     /// <summary>
     /// List filters for assignment board / pending reviews / reports-style boards.
-    /// Teacher/Parent: own quizzes; SchoolAdmin: school; PortalAdmin: platform.
+    /// Teacher/Parent: own quizzes; SchoolAdmin: school; CampusAdmin: campus; PortalAdmin: platform.
     /// </summary>
-    public static (long? CreatorUserId, int? SchoolId) ResolveOwnerListFilter(QuizManageScope scope)
+    public static (long? CreatorUserId, int? SchoolId, int? CampusId) ResolveOwnerListFilter(QuizManageScope scope)
     {
         return scope.Role switch
         {
-            UserRole.SchoolAdmin => (null, scope.SchoolId),
-            UserRole.CampusAdmin => (null, scope.SchoolId),
-            UserRole.PortalAdmin => (null, null),
-            _ => (scope.UserId, null),
+            UserRole.SchoolAdmin => (null, scope.SchoolId, null),
+            UserRole.CampusAdmin => (null, scope.SchoolId, scope.CampusId),
+            UserRole.PortalAdmin => (null, null, null),
+            _ => (scope.UserId, null, null),
         };
+    }
+
+    /// <summary>No self-approval except PortalAdmin (platform final authority).</summary>
+    public static void EnsureCanApproveOrRejectQuiz(Quiz quiz, QuizManageScope scope)
+    {
+        if (scope.Role == UserRole.PortalAdmin)
+        {
+            return;
+        }
+
+        if (IsQuizOwner(quiz, scope))
+        {
+            throw new ForbiddenAppException("You cannot approve or reject your own quiz.");
+        }
     }
 
     /// <summary>
@@ -260,6 +284,18 @@ public static class QuizScopeResolver
             if (scope.SchoolId != context.SchoolId)
             {
                 throw new ForbiddenAppException("You can only assign quizzes to students in your school.");
+            }
+
+            return;
+        }
+
+        if (scope.Role == UserRole.CampusAdmin)
+        {
+            var context = await studentScope.GetStudentSchoolContextAsync(studentId, cancellationToken)
+                ?? throw new ForbiddenAppException("Student school context was not found.");
+            if (scope.SchoolId != context.SchoolId || scope.CampusId != context.CampusId)
+            {
+                throw new ForbiddenAppException("You can only assign quizzes to students in your campus.");
             }
         }
     }

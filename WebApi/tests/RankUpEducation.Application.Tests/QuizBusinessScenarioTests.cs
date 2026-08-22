@@ -53,4 +53,11 @@ public sealed class QuizBusinessScenarioTests
         Assert.Equal(3, second.Length);
         Assert.NotEqual(first, second);
     }
+
+    [Fact]
+    public void QZ23_CampusAdminCannotAssignAtSchoolApproved()
+    {
+        Assert.False(QuizAssignRules.CanAssignWithApproval(UserRole.CampusAdmin, "SchoolApproved"));
+        Assert.True(QuizAssignRules.CanAssignWithApproval(UserRole.CampusAdmin, "Approved"));
+    }
 }

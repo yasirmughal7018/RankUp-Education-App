@@ -264,12 +264,9 @@ export function canViewOrgQuizCatalog(role: UserRole): boolean {
   );
 }
 
-/** Default for the optional "Mine only" list filter on the quizzes dashboard. */
-export function defaultQuizListMineOnly(role: UserRole | undefined): boolean {
-  if (!role || !canAuthorQuizzes(role)) {
-    return false;
-  }
-  return !canViewOrgQuizCatalog(role);
+/** Default for the optional "Mine only" list filter — off so campus/school catalog is visible by default (§6a). */
+export function defaultQuizListMineOnly(_role: UserRole | undefined): boolean {
+  return false;
 }
 
 /** True for roles that may approve/reject teacher quizzes. */
@@ -346,17 +343,92 @@ export function canDeleteOrArchiveQuiz(
   return isFinalApprovedQuizStatus(approvalStatus);
 }
 
-/** Creator submits a draft quiz for school/portal review; lifecycle stays Draft. */
+/** Creator submits a draft quiz for school/portal review; lifecycle stays Draft. Owner only (plus portal admin). */
 export function canSubmitQuizForReview(
+  role: UserRole,
+  userId: number | string,
+  createdBy: string,
   lifecycleStatus: string,
   questionCount: number,
   settingsEditable: boolean,
 ): boolean {
+  if (!settingsEditable || !isDraftQuiz(lifecycleStatus) || questionCount <= 0) {
+    return false;
+  }
+
+  if (role === "PortalAdmin") {
+    return true;
+  }
+
+  if (!isQuizOwner(userId, createdBy)) {
+    return false;
+  }
+
   return (
-    settingsEditable &&
-    isDraftQuiz(lifecycleStatus) &&
-    questionCount > 0
+    role === "Teacher" ||
+    role === "Coordinator" ||
+    role === "SchoolAdmin" ||
+    role === "Parent" ||
+    role === "Tutor"
   );
+}
+
+/** Whether the caller may assign this quiz (mirrors API RequireAssignableQuizAsync gates). */
+export function canAssignQuiz(
+  role: UserRole,
+  lifecycleStatus: string,
+  approvalStatus: string,
+  questionCount: number,
+  quizType: string,
+): boolean {
+  if (!isPublishedQuizLifecycle(lifecycleStatus) || questionCount <= 0) {
+    return false;
+  }
+
+  if (isParentPrivateQuizType(quizType)) {
+    if (role !== "Parent" && role !== "Tutor") {
+      return false;
+    }
+    return isFinalApprovedQuizStatus(approvalStatus);
+  }
+
+  if (
+    role === "Teacher" ||
+    role === "Coordinator" ||
+    role === "PortalAdmin" ||
+    role === "CampusAdmin"
+  ) {
+    return isFinalApprovedQuizStatus(approvalStatus);
+  }
+
+  if (role === "SchoolAdmin") {
+    return (
+      isFinalApprovedQuizStatus(approvalStatus) ||
+      isSchoolApprovedQuizStatus(approvalStatus)
+    );
+  }
+
+  return false;
+}
+
+/** Quiz types shown on create — Parent/Tutor → ParentPrivate only; Teacher/Coordinator → school types only. */
+export function quizTypesForRole(
+  role: UserRole | undefined,
+  allTypes: Array<{ id: number; name: string }>,
+): Array<{ id: number; name: string }> {
+  if (!role) {
+    return allTypes;
+  }
+
+  if (role === "Parent" || role === "Tutor") {
+    return allTypes.filter((type) => isParentPrivateQuizType(type.name));
+  }
+
+  if (role === "Teacher" || role === "Coordinator") {
+    return allTypes.filter((type) => !isParentPrivateQuizType(type.name));
+  }
+
+  return allTypes;
 }
 
 /** Portal admin publishes an approved draft quiz to the catalog (lifecycle → Published). */
@@ -435,11 +507,14 @@ export function assignModesForRole(role: UserRole): Array<{
         label: "All in school",
         group: "School",
       },
-      {
-        value: "public",
-        label: "Public (catalog)",
-        group: "Platform",
-      },
+    ];
+  }
+
+  if (role === "CampusAdmin") {
+    return [
+      ...studentModes,
+      { value: "allingrade", label: "All in grade", group: "Class" },
+      { value: "allinsection", label: "All in section", group: "Class" },
     ];
   }
 
@@ -471,6 +546,75 @@ export function assignModesForRole(role: UserRole): Array<{
     { value: "allingrade", label: "All in grade", group: "Class" },
     { value: "allinsection", label: "All in section", group: "Class" },
   ];
+}
+
+/** User-facing status combining lifecycle + approval (staff catalog / manage UI). */
+export function resolveQuizDisplayStatus(
+  lifecycleStatus: string,
+  approvalStatus: string,
+  questionCount: number,
+): string {
+  const lifecycle = lifecycleStatus.trim().toLowerCase();
+  const approval = approvalStatus.trim().toLowerCase();
+
+  if (!isDraftQuiz(lifecycle)) {
+    return lifecycleStatus.trim();
+  }
+
+  if (isRejectedQuizApprovalStatus(approval)) {
+    return "Rejected";
+  }
+
+  if (isSchoolApprovedQuizStatus(approval)) {
+    return "School Approved";
+  }
+
+  if (isFinalApprovedQuizStatus(approval)) {
+    return "Awaiting Publish";
+  }
+
+  if (isPendingQuizApprovalStatus(approval)) {
+    return questionCount > 0 ? "Approval Pending" : "Draft";
+  }
+
+  return "Draft";
+}
+
+export function isUnpublishedQuizDisplayStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return (
+    isDraftQuiz(normalized) ||
+    normalized === "approval pending" ||
+    normalized === "school approved" ||
+    normalized === "awaiting publish" ||
+    normalized === "rejected"
+  );
+}
+
+export function formatQuizDisplayStatusLabel(status: string): string {
+  const raw = status.trim();
+  if (!raw) {
+    return "Unknown";
+  }
+
+  const normalized = raw.toLowerCase();
+  if (normalized === "approval pending") {
+    return "Approval Pending";
+  }
+  if (normalized === "school approved") {
+    return "School Approved";
+  }
+  if (normalized === "awaiting publish") {
+    return "Awaiting Publish";
+  }
+  if (isDraftQuiz(normalized)) {
+    return "Draft";
+  }
+
+  return raw
+    .split(/[\s_]+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 }
 
 /** Initial editable lifecycle: Draft (legacy "Not Assigned" still accepted). */

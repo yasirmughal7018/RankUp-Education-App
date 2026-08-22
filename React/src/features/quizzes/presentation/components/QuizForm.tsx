@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import type { UserRole } from "@/core/api/types";
 import type {
   QuizFormValues,
   QuizNavigationMode,
 } from "@/features/quizzes/domain/quizTypes";
 import {
+  quizTypesForRole,
   resolveQuizTypeDefaults,
   validateQuizForm,
 } from "@/features/quizzes/domain/quizTypes";
@@ -27,6 +29,7 @@ interface QuizFormProps {
   submitLabel: string;
   isSubmitting?: boolean;
   showContextStudentId?: boolean;
+  authorRole?: UserRole;
   /** When true, quiz type is required (create). Edit hides the field because API update omits type. */
   requireQuizType?: boolean;
   onSubmit: (values: QuizFormValues) => Promise<void>;
@@ -41,15 +44,33 @@ export function QuizForm({
   submitLabel,
   isSubmitting = false,
   showContextStudentId = false,
+  authorRole,
   requireQuizType = false,
   onSubmit,
   onCancel,
 }: QuizFormProps) {
   const [values, setValues] = useState(initialValues);
   const [error, setError] = useState<string | null>(null);
-  const { data: quizTypes = [] } = useLookups(
+  const { data: allQuizTypes = [], isLoading: quizTypesLoading } = useLookups(
     requireQuizType ? LOOKUP_TYPES.QUIZ_TYPE : undefined,
   );
+  const quizTypes = quizTypesForRole(authorRole, allQuizTypes);
+
+  useEffect(() => {
+    if (!requireQuizType || quizTypes.length === 0 || values.quizTypeId > 0) {
+      return;
+    }
+
+    if (quizTypes.length === 1) {
+      const onlyType = quizTypes[0];
+      const typeDefaults = resolveQuizTypeDefaults(onlyType.name);
+      setValues((current) => ({
+        ...current,
+        quizTypeId: onlyType.id,
+        ...typeDefaults,
+      }));
+    }
+  }, [requireQuizType, quizTypes, values.quizTypeId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -174,26 +195,54 @@ export function QuizForm({
         />
 
         {requireQuizType ? (
-          <LookupSelect
-            label="Quiz type"
-            type={LOOKUP_TYPES.QUIZ_TYPE}
-            value={values.quizTypeId || ""}
-            disabled={isSubmitting}
-            required
-            onChange={(quizTypeId) => {
-              const nextTypeId = quizTypeId === "" ? 0 : quizTypeId;
-              const typeName =
-                quizTypes.find((item) => item.id === nextTypeId)?.name ?? "";
-              const typeDefaults =
-                nextTypeId > 0 ? resolveQuizTypeDefaults(typeName) : null;
+          <div>
+            <FieldLabel htmlFor="quizTypeId" required>
+              Quiz type
+            </FieldLabel>
+            <select
+              id="quizTypeId"
+              value={values.quizTypeId || ""}
+              disabled={
+                isSubmitting ||
+                quizTypesLoading ||
+                (authorRole === "Parent" || authorRole === "Tutor") &&
+                  quizTypes.length === 1
+              }
+              required
+              onChange={(event) => {
+                const nextTypeId = event.target.value
+                  ? Number(event.target.value)
+                  : 0;
+                const typeName =
+                  quizTypes.find((item) => item.id === nextTypeId)?.name ?? "";
+                const typeDefaults =
+                  nextTypeId > 0 ? resolveQuizTypeDefaults(typeName) : null;
 
-              setValues((current) => ({
-                ...current,
-                quizTypeId: nextTypeId,
-                ...(typeDefaults ?? {}),
-              }));
-            }}
-          />
+                setValues((current) => ({
+                  ...current,
+                  quizTypeId: nextTypeId,
+                  ...(typeDefaults ?? {}),
+                }));
+              }}
+              className={inputClassName}
+            >
+              <option value="" disabled>
+                {quizTypesLoading ? "Loading..." : "Select quiz type"}
+              </option>
+              {quizTypes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            {(authorRole === "Parent" || authorRole === "Tutor") &&
+            quizTypes.length === 1 ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                ParentPrivate quizzes are created automatically for linked{" "}
+                {authorRole === "Tutor" ? "students" : "children"}.
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         <div>

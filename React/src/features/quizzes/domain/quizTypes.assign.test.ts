@@ -6,11 +6,19 @@ function modeValues(role: Parameters<typeof assignModesForRole>[0]): string[] {
 }
 
 describe("assignModesForRole", () => {
-  it("gives SchoolAdmin public catalog assign like web", () => {
+  it("gives SchoolAdmin school-wide assign without public catalog", () => {
     const modes = modeValues("SchoolAdmin");
     expect(modes).toContain("allinschool");
-    expect(modes).toContain("public");
+    expect(modes).not.toContain("public");
     expect(modes).not.toContain("multischool");
+  });
+
+  it("gives CampusAdmin campus-scoped bulk modes", () => {
+    const modes = modeValues("CampusAdmin");
+    expect(modes).toContain("allingrade");
+    expect(modes).toContain("allinsection");
+    expect(modes).not.toContain("public");
+    expect(modes).not.toContain("allinschool");
   });
 
   it("gives PortalAdmin public and multi-school modes", () => {

@@ -17,11 +17,12 @@ public interface IQuizAssignmentRepository
 
     /// <summary>
     /// Cross-quiz assignment board. Pass creatorUserId for Teacher/Parent ownership,
-    /// schoolId for SchoolAdmin, or neither for PortalAdmin (platform-wide).
+    /// schoolId for SchoolAdmin, campusId for CampusAdmin, or neither for PortalAdmin (platform-wide).
     /// </summary>
     Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardAsync(
         long? creatorUserId,
         int? schoolId,
+        int? campusId,
         long? studentId,
         CancellationToken cancellationToken);
 

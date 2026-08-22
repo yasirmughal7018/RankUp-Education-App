@@ -15,12 +15,15 @@ import {
   canDeleteOrArchiveQuiz,
   canEditQuizSettings,
   canPortalPublishQuiz,
+  canAssignQuiz,
   canSubmitQuizForReview,
+  formatQuizDisplayStatusLabel,
   formatQuizDuration,
   isDraftQuiz,
   isPublishedQuizLifecycle,
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
+  resolveQuizDisplayStatus,
   sumQuizEstimatedSeconds,
   sumQuizMarks,
   type ManageQuiz,
@@ -352,11 +355,16 @@ export function QuizManageDetailPage() {
       assignments,
     );
   const questionsEditable = settingsEditable;
-  const submitForReview = canSubmitQuizForReview(
-    quiz.lifecycleStatus,
-    quiz.questionCount,
-    settingsEditable,
-  );
+  const submitForReview =
+    user != null &&
+    canSubmitQuizForReview(
+      user.role,
+      user.id,
+      quiz.createdBy,
+      quiz.lifecycleStatus,
+      quiz.questionCount,
+      settingsEditable,
+    );
   const portalCanPublish =
     user != null &&
     canPortalPublishQuiz(
@@ -375,13 +383,27 @@ export function QuizManageDetailPage() {
       quiz.approvalStatus,
       quiz.quizType,
     );
+  const canAssign =
+    user != null &&
+    canAssignQuiz(
+      user.role,
+      quiz.lifecycleStatus,
+      quiz.approvalStatus,
+      quiz.questionCount,
+      quiz.quizType,
+    );
+  const displayStatus = resolveQuizDisplayStatus(
+    quiz.lifecycleStatus,
+    quiz.approvalStatus,
+    quiz.questionCount,
+  );
   const quizScopeRows = resolveQuizScopeRows(quiz, scopeCampusName);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <PageHeader
         title={quiz.title}
-        description={`${quiz.subject} · ${quiz.grade} · ${quiz.lifecycleStatus}`}
+        description={`${quiz.subject} · ${quiz.grade} · ${displayStatus}`}
         backTo="/quizzes"
         backAriaLabel="Back to quizzes"
         action={
@@ -473,11 +495,17 @@ export function QuizManageDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge
-                label={quiz.lifecycleStatus}
-                tone={getQuestionStatusTone(quiz.lifecycleStatus, true)}
+                label={displayStatus}
+                tone={getQuestionStatusTone(displayStatus, true)}
               />
+              {!isDraftQuiz(quiz.lifecycleStatus.trim().toLowerCase()) ? (
+                <StatusBadge
+                  label={quiz.lifecycleStatus}
+                  tone={getQuestionStatusTone(quiz.lifecycleStatus, true)}
+                />
+              ) : null}
               <StatusBadge
-                label={quiz.approvalStatus}
+                label={formatQuizDisplayStatusLabel(quiz.approvalStatus)}
                 tone={getQuestionStatusTone(quiz.approvalStatus, true)}
               />
               <StatusBadge label={quiz.quizType} />
@@ -624,7 +652,16 @@ export function QuizManageDetailPage() {
           </p>
         ) : null}
 
-        {published ? (
+        {published && !canAssign ? (
+          <p className="w-full basis-full text-sm text-amber-800">
+            This quiz is published but not yet approved for assignment.
+            {schoolApproved
+              ? " A portal admin must give final approval before you can assign."
+              : " Wait for the required approval before assigning."}
+          </p>
+        ) : null}
+
+        {published && canAssign ? (
           <>
             <button
               type="button"
