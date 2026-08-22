@@ -797,7 +797,6 @@ export function isPendingQuizApprovalStatus(status: string): boolean {
   const normalized = status.trim().toLowerCase();
   return (
     normalized === "pending" ||
-    normalized === "draft" ||
     normalized === "under review" ||
     normalized === "approval pending" ||
     normalized === "pending approval"

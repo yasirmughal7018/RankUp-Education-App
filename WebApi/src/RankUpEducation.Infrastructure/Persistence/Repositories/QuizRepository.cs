@@ -203,7 +203,7 @@ public sealed class QuizRepository : IQuizRepository
         var pendingApprovalIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
             LookupNames.QuizApprovalStatus,
-            LookupNames.PendingApprovalStatusNames,
+            LookupNames.PendingApprovalStatusReadNames,
             cancellationToken);
         var pipelineApprovalIds = (
             await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
@@ -279,7 +279,7 @@ public sealed class QuizRepository : IQuizRepository
         var pendingIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
             LookupNames.QuizApprovalStatus,
-            LookupNames.PendingApprovalStatusNames,
+            LookupNames.PendingApprovalStatusReadNames,
             cancellationToken);
         var schoolApprovedIds = includeSchoolApproved
             ? await QuizQueryHelper.ResolveStatusIdsByNamesAsync(

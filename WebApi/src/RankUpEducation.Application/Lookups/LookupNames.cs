@@ -109,8 +109,24 @@ public static class LookupNames
 
     public static readonly string[] ParentPrivateQuizTypeNames = ["ParentPrivate", "Parent Private", "Private"];
     public static readonly string[] SchoolQuizTypeNames = ["Practice", "Assessment", "Competition", "Surprise"];
-    public static readonly string[] PendingApprovalStatusNames =
-        ["Pending", "Draft", "Under Review", "Approval Pending", "Pending Approval"];
+    /// <summary>
+    /// Canonical QuizApprovalStatus write name (lookup id 40). There are exactly four
+    /// approval lookups: Pending, SchoolApproved, Approved, Rejected.
+    /// Do not put lifecycle Draft or UI labels such as "Approval Pending" here.
+    /// </summary>
+    public static readonly string[] PendingApprovalStatusNames = ["Pending"];
+
+    /// <summary>Older QuizApprovalStatus row names that still mean Pending (40) when reading.</summary>
+    public static readonly string[] PendingApprovalLegacyNames = ["Under Review"];
+
+    /// <summary>
+    /// Staff UI labels only (not lookup rows). Same stored status as Pending (40) after submit.
+    /// </summary>
+    public static readonly string[] PendingApprovalDisplayLabels = ["Approval Pending", "Pending Approval"];
+
+    /// <summary>Names used to find Pending rows in the database (canonical + legacy, not UI labels).</summary>
+    public static string[] PendingApprovalStatusReadNames
+        => [..PendingApprovalStatusNames, ..PendingApprovalLegacyNames];
     public static readonly string[] SchoolApprovedStatusNames = ["SchoolApproved", "School Approved"];
     /// <summary>Initial editable lifecycle (DB may still say "Not Assigned" until initializer renames).</summary>
     public static readonly string[] DraftLifecycleNames = ["Draft", "Not Assigned", "DRAFT"];
@@ -125,7 +141,9 @@ public static class LookupNames
         ["Rejected", "Declined", "Cancelled", "REJECTED"];
 
     public static bool IsPendingApprovalName(string? name)
-        => MatchesAnyName(name, PendingApprovalStatusNames);
+        => MatchesAnyName(name, PendingApprovalStatusNames)
+           || MatchesAnyName(name, PendingApprovalLegacyNames)
+           || MatchesAnyName(name, PendingApprovalDisplayLabels);
 
     public static bool IsSchoolApprovedName(string? name)
         => MatchesAnyName(name, SchoolApprovedStatusNames);
@@ -147,6 +165,35 @@ public static class LookupNames
     /// <summary>True when portal has given final approval (canonical id 42 or aliases).</summary>
     public static bool IsFinalApproved(short approvalStatusId, string? name)
         => approvalStatusId == QuizApprovalStatusIds.Approved || IsFinalApprovedName(name);
+
+    /// <summary>True when lifecycle is unpublished Draft (including legacy "Not Assigned").</summary>
+    public static bool IsDraftLifecycleName(string? name)
+        => MatchesAnyName(name, DraftLifecycleNames);
+
+    /// <summary>
+    /// Submitted unpublished quiz that is not SchoolApproved, Approved, or Rejected.
+    /// Covers UI "Approval Pending" even when the stored lookup name is mismatched.
+    /// </summary>
+    public static bool IsSubmittedDraftAwaitingReview(
+        short approvalStatusId,
+        string? approvalName,
+        string? lifecycleName,
+        bool hasSubmittedForReview)
+    {
+        if (!hasSubmittedForReview || !IsDraftLifecycleName(lifecycleName))
+        {
+            return false;
+        }
+
+        if (IsRejectedApprovalName(approvalName)
+            || IsFinalApproved(approvalStatusId, approvalName)
+            || IsSchoolApproved(approvalStatusId, approvalName))
+        {
+            return false;
+        }
+
+        return true;
+    }
 
     private static bool MatchesAnyName(string? name, IReadOnlyList<string> names)
     {

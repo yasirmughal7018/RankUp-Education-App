@@ -11,11 +11,40 @@ public sealed class QuizApprovalLookupTests
     [InlineData("Approval Pending", true)]
     [InlineData("Pending Approval", true)]
     [InlineData(" Approval Pending ", true)]
+    [InlineData("Draft", false)]
     [InlineData("SchoolApproved", false)]
     [InlineData("Approved", false)]
     public void IsPendingApprovalName_RecognizesQueueStates(string name, bool expected)
     {
         Assert.Equal(expected, LookupNames.IsPendingApprovalName(name));
+    }
+
+    [Fact]
+    public void PendingApprovalStatusNames_IsCanonicalPendingOnly()
+    {
+        Assert.Equal(["Pending"], LookupNames.PendingApprovalStatusNames);
+        Assert.DoesNotContain("Draft", LookupNames.PendingApprovalStatusNames);
+        Assert.DoesNotContain("Approval Pending", LookupNames.PendingApprovalStatusNames);
+    }
+
+    [Fact]
+    public void IsSubmittedDraftAwaitingReview_TreatsSubmittedDraftAsPending()
+    {
+        Assert.True(LookupNames.IsSubmittedDraftAwaitingReview(
+            0,
+            "Unknown",
+            "Draft",
+            hasSubmittedForReview: true));
+        Assert.False(LookupNames.IsSubmittedDraftAwaitingReview(
+            LookupNames.QuizApprovalStatusIds.Approved,
+            "Approved",
+            "Draft",
+            hasSubmittedForReview: true));
+        Assert.False(LookupNames.IsSubmittedDraftAwaitingReview(
+            LookupNames.QuizApprovalStatusIds.Pending,
+            "Pending",
+            "Draft",
+            hasSubmittedForReview: false));
     }
 
     [Fact]

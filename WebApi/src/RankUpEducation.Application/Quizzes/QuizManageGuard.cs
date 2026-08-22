@@ -131,8 +131,8 @@ internal sealed class QuizManageGuard
 
         var now = DateTimeOffset.UtcNow;
         grant.MarkEditUsed(now);
-        var pendingApprovalStatusId = await RequireLookupAsync(
-            LookupNames.QuizApprovalStatus,
+        var pendingApprovalStatusId = await RequireQuizApprovalStatusAsync(
+            LookupNames.QuizApprovalStatusIds.Pending,
             LookupNames.PendingApprovalStatusNames,
             cancellationToken);
         var draftLifecycleStatusId = await RequireLookupAsync(
@@ -178,6 +178,24 @@ internal sealed class QuizManageGuard
         }
 
         return id;
+    }
+
+    /// <summary>Resolves a quiz approval lookup by canonical id first, then by write names.</summary>
+    public async Task<short> RequireQuizApprovalStatusAsync(
+        short preferredId,
+        IReadOnlyList<string> names,
+        CancellationToken cancellationToken)
+    {
+        var preferred = await _lookups.GetByIdAndTypeAsync(
+            preferredId,
+            LookupNames.QuizApprovalStatus,
+            cancellationToken);
+        if (preferred is not null)
+        {
+            return preferred.Id;
+        }
+
+        return await RequireLookupAsync(LookupNames.QuizApprovalStatus, names, cancellationToken);
     }
 
     public async Task<short> ResolveQuestionTypeIdAsync(string questionType, CancellationToken cancellationToken)

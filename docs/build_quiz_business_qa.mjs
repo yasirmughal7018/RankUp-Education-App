@@ -30,6 +30,13 @@ const lifecycleStatuses = [
   ["63", "Archived", "Soft-retired when assignments exist (IsActive=false). Same school/campus/portal visibility rules as Published. Hard-deleted instead when there are no assignments."],
 ];
 
+const approvalDisplayLabels = [
+  ["Approval Pending", "UI label only — not a lookup", "Shown when Lifecycle=Draft and Approval=Pending (40), the owner has submitted, and the quiz has ≥1 question. Stored value remains Pending."],
+  ["School Approved", "UI label only — not a lookup", "Shown when Lifecycle=Draft and Approval=SchoolApproved (41)."],
+  ["Awaiting Publish", "UI label only — not a lookup", "Shown when Lifecycle=Draft and Approval=Approved (42). Waiting for PortalAdmin publish."],
+  ["Draft", "Lifecycle 60 (not an approval status)", "WIP: unsubmitted, or submitted with 0 questions. Never write Draft into QuizApprovalStatus."],
+];
+
 const approvalStatuses = [
   ["40", "Pending", "Every newly created quiz starts here (create, duplicate, resubmit after reject, or after a granted edit is saved). Not in the approver queue until the owner clicks Submit for approval. Lifecycle remains Draft. Not assignable; students cannot attempt. Owner may edit without an edit request."],
   ["41", "SchoolApproved", "SchoolAdmin or CampusAdmin approved a Teacher/Coordinator quiz (Pending → SchoolApproved). Does not apply to SchoolAdmin/CampusAdmin/Parent/Tutor created quizzes (those skip this step). Does not publish — lifecycle stays Draft. Owner cannot edit in place; they send an edit request. Not assignable until PortalAdmin publishes. PortalAdmin queue may include SchoolApproved rows."],
@@ -38,7 +45,7 @@ const approvalStatuses = [
 ];
 
 const approvalVsPublishRules = [
-  "Approval and publishing are separate permissions. Approval changes ApprovalStatus only; publishing changes LifecycleStatus to Published.",
+  "Exactly four QuizApprovalStatus lookups: Pending (40), SchoolApproved (41), Approved (42), Rejected (43). The staff label Approval Pending is UI-only (Draft + Pending after submit). Draft is lifecycle 60, not an approval status. Under Review is a QuizResultStatus / legacy alias, not a fifth approval lookup.",
   "Every newly created quiz starts with Approval=Pending and Lifecycle=Draft. It is owner-only until the owner clicks Submit for approval; then it appears in the approver queue (and PortalAdmin catalog).",
   "While Pending (or Rejected) and Lifecycle still Draft: cannot assign; students cannot attempt; owner may edit per ownership rules.",
   "Once the quiz is SchoolApproved, Approved, Published, or Assigned, the owner cannot edit in place. They send an edit request (reason min 10 chars). Teacher/Coordinator requests go to SchoolAdmin, CampusAdmin, and PortalAdmin — any one approval grants a one-time edit. SchoolAdmin, CampusAdmin, Parent, and Tutor requests go to PortalAdmin only. PortalAdmin may still edit directly.",
@@ -782,7 +789,10 @@ const html = `<!doctype html>
   ${htmlTable(["ID", "Lifecycle", "Meaning"], lifecycleStatuses)}
 
   <h2>2. Approval statuses</h2>
+  <p>Exactly four <code>QuizApprovalStatus</code> lookup rows. <strong>Approval Pending</strong> and <strong>Draft</strong> are not extra approval statuses — see the display-label table below.</p>
   ${htmlTable(["ID", "Approval", "Meaning"], approvalStatuses)}
+  <h3>2b. Staff UI display labels (not lookup rows)</h3>
+  ${htmlTable(["Label on screen", "Kind", "Meaning"], approvalDisplayLabels)}
   <h3>2a. Approval vs publishing (separate permissions)</h3>
   <pre style="background:#f8fafc;border:1px solid #dbe3ed;border-radius:8px;padding:12px;font-size:13px;line-height:1.5;overflow-x:auto">Quiz Created (Draft + Pending)
      │
@@ -794,6 +804,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
      │       ├── Campus Admin → Approve (→ SchoolApproved, stays Draft)
      │       └── Portal Admin → Approve (→ Approved) + Publish (→ Published)
      │
+     └── SchoolAdmin / CampusAdmin created → Portal Admin only (Pending → Approved), then Publish
      └── Parent / Tutor (ParentPrivate / PrivateParent) → Portal Admin approve + publish</pre>
   ${htmlList(approvalVsPublishRules)}
   <h3>Deprecated / deactivated lookup rows</h3>
@@ -1055,7 +1066,12 @@ const docChildren = [
   docTable(["ID", "Lifecycle", "Meaning"], lifecycleStatuses),
 
   docHeading("2. Approval statuses"),
+  docParagraph(
+    "Exactly four QuizApprovalStatus lookup rows: Pending (40), SchoolApproved (41), Approved (42), Rejected (43). Approval Pending and Draft are not extra approval statuses.",
+  ),
   docTable(["ID", "Approval", "Meaning"], approvalStatuses),
+  docHeading("2b. Staff UI display labels (not lookup rows)", HeadingLevel.HEADING_2),
+  docTable(["Label on screen", "Kind", "Meaning"], approvalDisplayLabels),
   docHeading("2a. Approval vs publishing", HeadingLevel.HEADING_2),
   ...approvalVsPublishRules.map(docBullet),
 
