@@ -5,7 +5,7 @@ namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>
 /// Type-specific behavioral defaults and enforcement for Practice / Assessment /
-/// Competition / Surprise / ParentPrivate quizzes.
+/// Competition / Surprise quizzes.
 /// </summary>
 public static class QuizTypeBehavior
 {
@@ -53,12 +53,6 @@ public static class QuizTypeBehavior
         if (IsSurprise(name))
         {
             return new TypeDefaults(1, 15, true, true, false, "Sequential");
-        }
-
-        if (name.Equals("ParentPrivate", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("Parent Private", StringComparison.OrdinalIgnoreCase))
-        {
-            return new TypeDefaults(2, 30, false, false, true, "Free");
         }
 
         // Assessment (default school type)

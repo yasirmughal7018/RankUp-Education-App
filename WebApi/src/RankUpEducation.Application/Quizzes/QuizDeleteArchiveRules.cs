@@ -7,7 +7,7 @@ namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>
 /// Delete and archive eligibility. PortalAdmin may archive any quiz.
-/// Other roles may only delete their own Draft (non-ParentPrivate).
+/// Other roles may only delete their own Draft.
 /// Published or Assigned quizzes (including any student/child assignment) are PortalAdmin-only.
 /// </summary>
 public static class QuizDeleteArchiveRules
@@ -16,17 +16,11 @@ public static class QuizDeleteArchiveRules
         Quiz quiz,
         QuizManageScope scope,
         string lifecycleName,
-        string approvalName,
-        bool isParentPrivateQuiz)
+        string approvalName)
     {
         if (scope.Role == UserRole.PortalAdmin)
         {
             return;
-        }
-
-        if (isParentPrivateQuiz)
-        {
-            throw new ForbiddenAppException("Only a portal admin can delete or archive parent quizzes.");
         }
 
         if (!QuizScopeResolver.IsQuizOwner(quiz, scope))

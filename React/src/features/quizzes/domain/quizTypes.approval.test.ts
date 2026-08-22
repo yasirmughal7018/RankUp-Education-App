@@ -19,7 +19,6 @@ import {
   formatQuizDisplayStatusLabel,
   hasQuizAssignmentStarted,
   isFinalApprovedQuizStatus,
-  isParentPrivateQuizType,
   isQuizInManageOrgScope,
   isQuizMetadataEditable,
   isQuizOwner,
@@ -51,11 +50,8 @@ describe("quiz list visibility helpers", () => {
       canAssignQuiz("Parent", "Published", "Approved", 3, "Practice"),
     ).toBe(true);
     expect(
-      canAssignQuiz("Parent", "Published", "Approved", 2, "ParentPrivate"),
+      canAssignQuiz("Teacher", "Published", "Approved", 2, "Practice"),
     ).toBe(true);
-    expect(
-      canAssignQuiz("Teacher", "Published", "Approved", 2, "ParentPrivate"),
-    ).toBe(false);
     expect(
       canAssignQuiz("Student", "Published", "Approved", 3, "Practice"),
     ).toBe(false);
@@ -372,7 +368,7 @@ describe("canDeleteOrArchiveQuiz", () => {
     ).toBe(true);
   });
 
-  it("denies parent owner on parent private quizzes", () => {
+  it("allows parent owner to delete their own draft", () => {
     expect(
       canDeleteOrArchiveQuiz(
         "Parent",
@@ -380,9 +376,9 @@ describe("canDeleteOrArchiveQuiz", () => {
         "42",
         "Draft",
         "Pending",
-        "ParentPrivate",
+        "Practice",
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
@@ -477,24 +473,29 @@ describe("canApproveQuizOnDetailPage", () => {
     ).toBe(true);
   });
 
-  it("blocks school admin on parent private quizzes", () => {
+  it("blocks school admin on parent-created quizzes", () => {
     expect(
       canApproveQuizOnDetailPage(
         "SchoolAdmin",
         5,
         "99",
-        "ParentPrivate",
+        "Practice",
         "Draft",
         "Pending",
+        "Parent",
       ),
     ).toBe(false);
   });
 });
 
 describe("canReviewQuizApproval", () => {
-  it("limits parent private quizzes to portal admin", () => {
-    expect(canReviewQuizApproval("PortalAdmin", "ParentPrivate")).toBe(true);
-    expect(canReviewQuizApproval("SchoolAdmin", "ParentPrivate")).toBe(false);
+  it("limits parent-created quizzes to portal admin", () => {
+    expect(canReviewQuizApproval("PortalAdmin", "Practice", "Parent")).toBe(
+      true,
+    );
+    expect(canReviewQuizApproval("SchoolAdmin", "Practice", "Parent")).toBe(
+      false,
+    );
     expect(canReviewQuizApproval("SchoolAdmin", "Practice")).toBe(true);
     expect(canReviewQuizApproval("SchoolAdmin", "Practice", "SchoolAdmin")).toBe(
       false,

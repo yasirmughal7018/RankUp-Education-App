@@ -235,10 +235,10 @@ export function QuizForm({
                 </option>
               ))}
             </select>
-            {authorRole === "Parent" && quizTypes.length === 1 ? (
+            {authorRole === "Parent" ? (
               <p className="mt-1 text-xs text-muted-foreground">
-                ParentPrivate quizzes are created automatically for linked
-                children.
+                Parent quizzes use the same types as school quizzes and appear
+                in the shared catalog after publish.
               </p>
             ) : null}
           </div>

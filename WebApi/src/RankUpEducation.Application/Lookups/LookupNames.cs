@@ -18,7 +18,6 @@ public static class LookupNames
         public const short Assessment = 2;
         public const short Competition = 3;
         public const short Surprise = 4;
-        public const short ParentPrivate = 5;
     }
 
     /// <summary>
@@ -107,7 +106,6 @@ public static class LookupNames
     public static readonly string[] MediumDifficultyNames = ["Medium"];
     public static readonly string[] HardDifficultyNames = ["Hard"];
 
-    public static readonly string[] ParentPrivateQuizTypeNames = ["ParentPrivate", "Parent Private", "Private"];
     public static readonly string[] SchoolQuizTypeNames = ["Practice", "Assessment", "Competition", "Surprise"];
     /// <summary>
     /// Canonical QuizApprovalStatus write name (lookup id 40). There are exactly four

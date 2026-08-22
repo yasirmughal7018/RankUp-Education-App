@@ -80,20 +80,6 @@ public sealed class QuizAssignService : IQuizAssignService
         var quiz = await RequireAssignableQuizAsync(quizId, scope, cancellationToken);
         ValidateAssignRequest(request);
 
-        if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
-        {
-            if (scope.Role is not UserRole.Parent)
-            {
-                throw new ForbiddenAppException("Only parents can assign ParentPrivate quizzes.");
-            }
-
-            var privateMode = request.Mode.AsLowercase();
-            if (privateMode is "allingrade" or "allinsection" or "allinschool" or "multischool" or "public")
-            {
-                throw new ValidationAppException(["ParentPrivate quizzes can only target linked children."]);
-            }
-        }
-
         var quizTypeName = await _lookups.GetLookupNameAsync(quiz.QuizTypeId, cancellationToken);
         QuizTypeBehavior.EnsureAssignable(
             quizTypeName,
@@ -375,11 +361,7 @@ public sealed class QuizAssignService : IQuizAssignService
         // to their own students or children. SchoolAdmin/CampusAdmin stay org-scoped.
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent)
         {
-            var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
-            if (!isParentPrivate)
-            {
-                return quiz;
-            }
+            return quiz;
         }
 
         // Public catalog quizzes may be viewed/assigned by any assign-capable role.

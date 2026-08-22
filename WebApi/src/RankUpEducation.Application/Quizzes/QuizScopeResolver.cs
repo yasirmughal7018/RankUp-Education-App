@@ -152,7 +152,7 @@ public static class QuizScopeResolver
 
     /// <summary>
     /// Staff catalog of Published/Assigned/Archived school-type quizzes is platform-wide
-    /// (any school, any creator). ParentPrivate and Draft stay scoped.
+    /// (any school, any creator). Draft stays scoped.
     /// </summary>
     public static bool CanViewPublishedSchoolCatalog(UserRole role)
         => role is UserRole.PortalAdmin
@@ -169,15 +169,14 @@ public static class QuizScopeResolver
     public static void EnsureCanViewQuiz(
         Quiz quiz,
         QuizManageScope scope,
-        bool isDraftLifecycle,
-        bool isParentPrivate)
+        bool isDraftLifecycle)
     {
         if (scope.Role == UserRole.PortalAdmin || IsQuizOwner(quiz, scope))
         {
             return;
         }
 
-        if (!isDraftLifecycle && !isParentPrivate && CanViewPublishedSchoolCatalog(scope.Role))
+        if (!isDraftLifecycle && CanViewPublishedSchoolCatalog(scope.Role))
         {
             return;
         }

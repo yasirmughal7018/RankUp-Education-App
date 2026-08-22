@@ -1119,7 +1119,18 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             END
         WHERE id IN (64, 65, 66) AND type = 'QuizLifecycleStatus';
 
-        UPDATE public.lookups SET is_active = TRUE
+        -- ParentPrivate is retired. Remap existing quizzes to Practice and hide lookup 5.
+        UPDATE public.quizzes
+        SET quiz_type_id = 1
+        WHERE quiz_type_id = 5
+          AND EXISTS (SELECT 1 FROM public.lookups p WHERE p.id = 1 AND p.type = 'QuizType');
+
+        UPDATE public.lookups
+        SET is_active = FALSE,
+            name = CASE
+                WHEN name IN ('ParentPrivate', 'Parent Private', 'Private') THEN 'ParentPrivate (legacy)'
+                ELSE name
+            END
         WHERE id = 5 AND type = 'QuizType';
         """;
 

@@ -40,7 +40,7 @@ public interface IQuizRepository
     /// other authors' Draft quizzes are included only if they are in the approval pipeline
     /// (submitted Pending, SchoolApproved, Approved, Rejected). Unsubmitted WIP stays owner-only.
     /// When <paramref name="includePublishedFromAllSchools"/> is true, Published/Assigned/Archived
-    /// school-type quizzes (not ParentPrivate) are visible regardless of school or creator.
+    /// school-type quizzes are visible regardless of school or creator.
     /// When <paramref name="includeInScopeSubmittedDrafts"/> is true, submitted Teacher/Coordinator
     /// pipeline drafts in the given school/campus are included so SchoolAdmin/CampusAdmin can review.
     /// </summary>
@@ -87,6 +87,4 @@ public interface IQuizRepository
     Task<bool> HasAnyAttemptsAsync(long quizId, CancellationToken cancellationToken);
 
     Task<bool> HasSubmittedForReviewAsync(long quizId, CancellationToken cancellationToken);
-
-    Task<bool> IsParentPrivateQuizTypeAsync(short quizTypeId, CancellationToken cancellationToken);
 }

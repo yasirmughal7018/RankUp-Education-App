@@ -318,10 +318,15 @@ export function isFinalApprovedQuizStatus(status: string): boolean {
   return status.trim().toLowerCase() === "approved";
 }
 
-/** Parent-created private quiz type (ParentPrivate). */
-export function isParentPrivateQuizType(quizType: string): boolean {
+/** School quiz types shown on create (Practice, Assessment, Competition, Surprise). */
+function isSchoolQuizTypeName(quizType: string): boolean {
   const normalized = quizType.trim().toLowerCase().replace(/\s+/g, "");
-  return normalized === "parentprivate" || normalized === "private";
+  return (
+    normalized === "practice" ||
+    normalized === "assessment" ||
+    normalized === "competition" ||
+    normalized === "surprise"
+  );
 }
 
 /** SchoolAdmin reviews Teacher/Coordinator/CampusAdmin quizzes; CampusAdmin reviews Teacher/Coordinator only. */
@@ -332,10 +337,6 @@ export function canReviewQuizApproval(
 ): boolean {
   if (!canApproveQuizzes(role)) {
     return false;
-  }
-
-  if (isParentPrivateQuizType(quizType)) {
-    return role === "PortalAdmin";
   }
 
   if (createdByRole === "CampusAdmin") {
@@ -356,7 +357,7 @@ export function canReviewQuizApproval(
  * Approver review mode on /quizzes/:id — show approve/reject only (no edit, assign, publish).
  * SchoolAdmin: Pending Teacher/Coordinator/CampusAdmin quizzes in school, not own quiz.
  * CampusAdmin: Pending Teacher/Coordinator quizzes in campus, not own quiz.
- * Portal: Pending or SchoolApproved (final approve), including SchoolAdmin-created and ParentPrivate when Pending.
+ * Portal: Pending or SchoolApproved (final approve), including SchoolAdmin/Parent-created when Pending.
  */
 export function canApproveQuizOnDetailPage(
   role: UserRole,
@@ -396,8 +397,7 @@ export function quizApprovalButtonLabel(role: UserRole): string {
 
 /**
  * Delete (draft) or archive (published+): portal admin always;
- * parent quizzes portal-only; teacher/coordinator owner when draft or final Approved;
- * published-but-not-approved → portal admin only.
+ * owner when draft; published/assigned → portal admin only.
  */
 export function canDeleteOrArchiveQuiz(
   role: UserRole,
@@ -409,10 +409,6 @@ export function canDeleteOrArchiveQuiz(
 ): boolean {
   if (role === "PortalAdmin") {
     return true;
-  }
-
-  if (isParentPrivateQuizType(quizType)) {
-    return false;
   }
 
   if (!isQuizOwner(userId, createdBy)) {
@@ -535,13 +531,6 @@ export function canAssignQuiz(
     return false;
   }
 
-  if (isParentPrivateQuizType(quizType)) {
-    if (role !== "Parent") {
-      return false;
-    }
-    return isFinalApprovedQuizStatus(approvalStatus);
-  }
-
   if (
     role === "Teacher" ||
     role === "Coordinator" ||
@@ -598,17 +587,14 @@ export function isQuizInManageOrgScope(
   return false;
 }
 
-/** Quiz types shown on create — Parent → ParentPrivate only; school staff → school types only. */
+/** Quiz types shown on create — school types for every authoring role, including Parent. */
 export function quizTypesForRole(
   role: UserRole | undefined,
   allTypes: Array<{ id: number; name: string }>,
 ): Array<{ id: number; name: string }> {
+  const schoolTypes = allTypes.filter((type) => isSchoolQuizTypeName(type.name));
   if (!role) {
-    return allTypes;
-  }
-
-  if (role === "Parent") {
-    return allTypes.filter((type) => isParentPrivateQuizType(type.name));
+    return schoolTypes.length > 0 ? schoolTypes : allTypes;
   }
 
   if (
@@ -616,12 +602,13 @@ export function quizTypesForRole(
     role === "Coordinator" ||
     role === "SchoolAdmin" ||
     role === "CampusAdmin" ||
-    role === "PortalAdmin"
+    role === "PortalAdmin" ||
+    role === "Parent"
   ) {
-    return allTypes.filter((type) => !isParentPrivateQuizType(type.name));
+    return schoolTypes;
   }
 
-  return allTypes;
+  return schoolTypes.length > 0 ? schoolTypes : allTypes;
 }
 
 /** Portal admin publishes an approved draft quiz to the catalog (lifecycle → Published). */
@@ -636,10 +623,7 @@ export function canPortalPublishQuiz(
     return false;
   }
 
-  if (
-    isParentPrivateQuizType(quizType) ||
-    isPortalAdminOnlyQuizCreator(createdByRole)
-  ) {
+  if (isPortalAdminOnlyQuizCreator(createdByRole)) {
     return (
       isPendingQuizApprovalStatus(approvalStatus) ||
       isFinalApprovedQuizStatus(approvalStatus)
@@ -1084,18 +1068,6 @@ export function resolveQuizTypeDefaults(quizTypeName: string): Pick<
       shuffleOptions: true,
       isReviewRequired: false,
       navigationMode: "Sequential",
-      reviewDisplayMode: "Full",
-    };
-  }
-
-  if (name === "parentprivate" || name === "private") {
-    return {
-      allowedAttempts: 2,
-      timeLimitMinutes: null,
-      shuffleQuestions: false,
-      shuffleOptions: false,
-      isReviewRequired: true,
-      navigationMode: "Free",
       reviewDisplayMode: "Full",
     };
   }

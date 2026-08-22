@@ -152,8 +152,7 @@ public sealed class QuizScopeResolverTests
             QuizScopeResolver.EnsureCanViewQuiz(
                 quiz,
                 islAdmin,
-                isDraftLifecycle: false,
-                isParentPrivate: false));
+                isDraftLifecycle: false));
 
         Assert.Null(ex);
         Assert.Throws<ForbiddenAppException>(() =>
@@ -171,30 +170,14 @@ public sealed class QuizScopeResolverTests
             QuizScopeResolver.EnsureCanViewQuiz(
                 quiz,
                 teacher,
-                isDraftLifecycle: false,
-                isParentPrivate: false)));
+                isDraftLifecycle: false)));
         Assert.Null(Record.Exception(() =>
             QuizScopeResolver.EnsureCanViewQuiz(
                 quiz,
                 parent,
-                isDraftLifecycle: false,
-                isParentPrivate: false)));
+                isDraftLifecycle: false)));
         Assert.Throws<ForbiddenAppException>(() =>
             QuizScopeResolver.EnsureOwnsQuiz(quiz, teacher));
-    }
-
-    [Fact]
-    public void EnsureCanViewQuiz_BlocksParentPrivateFromOtherSchoolAdmin()
-    {
-        var quiz = CreateQuiz(schoolId: 1, campusId: 10, createdBy: "99");
-        var islAdmin = new QuizManageScope(UserRole.SchoolAdmin, 8, 8, 2, null);
-
-        Assert.Throws<ForbiddenAppException>(() =>
-            QuizScopeResolver.EnsureCanViewQuiz(
-                quiz,
-                islAdmin,
-                isDraftLifecycle: false,
-                isParentPrivate: true));
     }
 
     [Fact]

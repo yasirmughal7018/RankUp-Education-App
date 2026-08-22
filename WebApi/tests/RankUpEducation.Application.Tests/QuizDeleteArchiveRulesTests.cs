@@ -18,27 +18,25 @@ public sealed class QuizDeleteArchiveRulesTests
                 quiz,
                 scope,
                 lifecycleName: "Published",
-                approvalName: "Pending",
-                isParentPrivateQuiz: true));
+                approvalName: "Pending"));
 
         Assert.Null(ex);
     }
 
     [Fact]
-    public void EnsureCanDeleteOrArchive_ParentQuiz_RejectsOwner()
+    public void EnsureCanDeleteOrArchive_ParentOwner_AllowsDraft()
     {
         var quiz = CreateQuiz(createdBy: "42");
         var scope = new QuizManageScope(UserRole.Parent, 42, 42, null, null);
 
-        var ex = Assert.Throws<ForbiddenAppException>(() =>
+        var ex = Record.Exception(() =>
             QuizDeleteArchiveRules.EnsureCanDeleteOrArchive(
                 quiz,
                 scope,
                 lifecycleName: "Draft",
-                approvalName: "Pending",
-                isParentPrivateQuiz: true));
+                approvalName: "Pending"));
 
-        Assert.Contains("portal admin", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(ex);
     }
 
     [Fact]
@@ -52,8 +50,7 @@ public sealed class QuizDeleteArchiveRulesTests
                 quiz,
                 scope,
                 lifecycleName: "Draft",
-                approvalName: "Pending",
-                isParentPrivateQuiz: false));
+                approvalName: "Pending"));
 
         Assert.Null(ex);
     }
@@ -69,8 +66,7 @@ public sealed class QuizDeleteArchiveRulesTests
                 quiz,
                 scope,
                 lifecycleName: "Published",
-                approvalName: "Approved",
-                isParentPrivateQuiz: false));
+                approvalName: "Approved"));
 
         Assert.Contains("portal admin", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -86,8 +82,7 @@ public sealed class QuizDeleteArchiveRulesTests
                 quiz,
                 scope,
                 lifecycleName: "Assigned",
-                approvalName: "Approved",
-                isParentPrivateQuiz: false));
+                approvalName: "Approved"));
 
         Assert.Contains("portal admin", ex.Message, StringComparison.OrdinalIgnoreCase);
     }

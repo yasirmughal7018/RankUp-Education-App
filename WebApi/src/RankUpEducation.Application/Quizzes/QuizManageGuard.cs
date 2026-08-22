@@ -78,8 +78,7 @@ internal sealed class QuizManageGuard
         }
 
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
-        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
-        QuizScopeResolver.EnsureCanViewQuiz(quiz, scope, IsDraftLifecycle(lifecycleName), isParentPrivate);
+        QuizScopeResolver.EnsureCanViewQuiz(quiz, scope, IsDraftLifecycle(lifecycleName));
         await EnsureDraftVisibleAsync(quiz, scope, cancellationToken);
         return quiz;
     }
@@ -120,11 +119,6 @@ internal sealed class QuizManageGuard
 
         if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
-            if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
-            {
-                throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
-            }
-
             if (scope.Role == UserRole.SchoolAdmin && quiz.SchoolId != scope.SchoolId)
             {
                 throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");

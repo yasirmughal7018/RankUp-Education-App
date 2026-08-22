@@ -23,7 +23,7 @@ public sealed class QuizBusinessScenarioTests
     }
 
     [Fact]
-    public void QZ03_ParentPrivateUsesApprovedLookupName()
+    public void QZ03_ApprovedLookupNameIsFinalApproved()
     {
         Assert.True(LookupNames.IsFinalApprovedName("Approved"));
     }

@@ -216,13 +216,11 @@ public sealed class QuizManageService : IQuizManageService
 
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
         QuizDeleteArchiveRules.EnsureCanDeleteOrArchive(
             quiz,
             scope,
             lifecycleName,
-            approvalName,
-            isParentPrivate);
+            approvalName);
 
         if (await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken)
             || await _quizzes.HasAnyAttemptsAsync(quizId, cancellationToken))
@@ -245,8 +243,6 @@ public sealed class QuizManageService : IQuizManageService
         {
             throw new BusinessRuleException("Quiz is already published.");
         }
-
-        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
 
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent
             or UserRole.SchoolAdmin or UserRole.CampusAdmin)
@@ -324,16 +320,14 @@ public sealed class QuizManageService : IQuizManageService
             lifecycleName,
             hasSubmitted);
 
-        if (isParentPrivate || portalOnlyCreator)
+        if (portalOnlyCreator)
         {
             if (!LookupNames.IsPendingApproval(quiz.ApprovalStatusId, approvalName)
                 && !LookupNames.IsFinalApproved(quiz.ApprovalStatusId, approvalName)
                 && !awaitingReview)
             {
                 throw new BusinessRuleException(
-                    isParentPrivate
-                        ? "Parent quizzes must be pending portal review before publish."
-                        : "This quiz must be pending portal review or already approved before publish.");
+                    "This quiz must be pending portal review or already approved before publish.");
             }
         }
         else if (!LookupNames.IsSchoolApproved(quiz.ApprovalStatusId, approvalName)
@@ -369,10 +363,7 @@ public sealed class QuizManageService : IQuizManageService
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
-        EnsureApprovalTargetAccess(
-            quiz,
-            scope,
-            await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken));
+        EnsureApprovalTargetAccess(quiz, scope);
 
         QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope);
 
@@ -481,8 +472,7 @@ public sealed class QuizManageService : IQuizManageService
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
-        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
-        EnsureApprovalTargetAccess(quiz, scope, isParentPrivate);
+        EnsureApprovalTargetAccess(quiz, scope);
 
         QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope);
 
@@ -592,19 +582,8 @@ public sealed class QuizManageService : IQuizManageService
 
     private static void EnsureApprovalTargetAccess(
         Quiz quiz,
-        QuizManageScope scope,
-        bool isParentPrivateQuiz)
+        QuizManageScope scope)
     {
-        if (isParentPrivateQuiz)
-        {
-            if (scope.Role != UserRole.PortalAdmin)
-            {
-                throw new ForbiddenAppException("Only a portal admin can review parent quizzes.");
-            }
-
-            return;
-        }
-
         if (scope.Role == UserRole.PortalAdmin)
         {
             return;
@@ -628,6 +607,7 @@ public sealed class QuizManageService : IQuizManageService
             }
         }
     }
+
     public async Task<DuplicateQuizResponse> DuplicateAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
@@ -749,13 +729,11 @@ public sealed class QuizManageService : IQuizManageService
 
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
         QuizDeleteArchiveRules.EnsureCanDeleteOrArchive(
             quiz,
             scope,
             lifecycleName,
-            approvalName,
-            isParentPrivate);
+            approvalName);
 
         if (IsArchivedLifecycle(lifecycleName))
         {
@@ -795,13 +773,11 @@ public sealed class QuizManageService : IQuizManageService
 
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
         QuizDeleteArchiveRules.EnsureCanDeleteOrArchive(
             quiz,
             scope,
             lifecycleName,
-            approvalName,
-            isParentPrivate);
+            approvalName);
 
         if (!IsArchivedLifecycle(lifecycleName))
         {
@@ -981,21 +957,8 @@ public sealed class QuizManageService : IQuizManageService
         short? requestedQuizTypeId,
         CancellationToken cancellationToken)
     {
-        if (scope.Role == UserRole.Parent)
-        {
-            return await _guard.RequireLookupAsync(
-                LookupNames.QuizType,
-                LookupNames.ParentPrivateQuizTypeNames,
-                cancellationToken);
-        }
-
         if (requestedQuizTypeId is > 0)
         {
-            if (await _quizzes.IsParentPrivateQuizTypeAsync(requestedQuizTypeId.Value, cancellationToken))
-            {
-                throw new ValidationAppException(["Only parents can create parent private quizzes."]);
-            }
-
             return requestedQuizTypeId.Value;
         }
 

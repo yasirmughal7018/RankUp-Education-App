@@ -198,19 +198,9 @@ public sealed class QuizRepository : IQuizRepository
                 LookupNames.SchoolQuizTypeNames,
                 cancellationToken)
             : Array.Empty<short>();
-        var parentPrivateTypeIds = includePublishedFromAllSchools || includeInScopeSubmittedDrafts
-            ? (await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
-                    _dbContext,
-                    LookupNames.QuizType,
-                    LookupNames.ParentPrivateQuizTypeNames,
-                    cancellationToken))
-                .Append(LookupNames.QuizTypeIds.ParentPrivate)
-                .Distinct()
-                .ToArray()
-            : Array.Empty<short>();
         // Evaluate local collection size outside the EF expression so an empty
         // name-resolve result still includes canonical school types 1–4.
-        var includeAnyNonPrivatePublished = includePublishedFromAllSchools && schoolQuizTypeIds.Count == 0;
+        var includeAnySchoolPublished = includePublishedFromAllSchools && schoolQuizTypeIds.Count == 0;
 
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => !quiz.IsDeleted);
@@ -219,7 +209,6 @@ public sealed class QuizRepository : IQuizRepository
         // approved / rejected). SchoolAdmin/CampusAdmin see submitted in-scope drafts (review queue).
         // Unsubmitted WIP is owner-only.
         // Published / Assigned / Archived school-type quizzes: shared catalog (any school/creator).
-        // ParentPrivate stays out of that catalog.
         query = query.Where(quiz =>
             (draftIds.Contains(quiz.LifecycleStatusId)
                 && (
@@ -233,7 +222,6 @@ public sealed class QuizRepository : IQuizRepository
                         && schoolId != null
                         && quiz.SchoolId == schoolId
                         && (campusId == null || quiz.SchoolCampusId == campusId)
-                        && !parentPrivateTypeIds.Contains(quiz.QuizTypeId)
                         && (
                             pipelineApprovalIds.Contains(quiz.ApprovalStatusId)
                             || (pendingApprovalIds.Contains(quiz.ApprovalStatusId)
@@ -242,8 +230,7 @@ public sealed class QuizRepository : IQuizRepository
                 && (quiz.AudienceScope == "Public"
                     || includeAllSchools
                     || (includePublishedFromAllSchools
-                        && !parentPrivateTypeIds.Contains(quiz.QuizTypeId)
-                        && (includeAnyNonPrivatePublished
+                        && (includeAnySchoolPublished
                             || schoolQuizTypeIds.Contains(quiz.QuizTypeId)
                             || quiz.QuizTypeId == LookupNames.QuizTypeIds.Practice
                             || quiz.QuizTypeId == LookupNames.QuizTypeIds.Assessment
@@ -306,12 +293,6 @@ public sealed class QuizRepository : IQuizRepository
             return Array.Empty<PendingQuizApprovalItem>();
         }
 
-        var parentPrivateTypeIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
-            _dbContext,
-            LookupNames.QuizType,
-            LookupNames.ParentPrivateQuizTypeNames,
-            cancellationToken);
-
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz =>
                 quiz.IsActive &&
@@ -342,11 +323,6 @@ public sealed class QuizRepository : IQuizRepository
         if (campusId is not null)
         {
             query = query.Where(quiz => quiz.SchoolCampusId == campusId.Value);
-        }
-
-        if (parentPrivateTypeIds.Count > 0 && !includeSchoolApproved)
-        {
-            query = query.Where(quiz => !parentPrivateTypeIds.Contains(quiz.QuizTypeId));
         }
 
         var quizzes = await query
@@ -752,13 +728,6 @@ public sealed class QuizRepository : IQuizRepository
     public async Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken)
     {
         await _dbContext.Approvals.AddAsync(approval, cancellationToken);
-    }
-
-    public async Task<bool> IsParentPrivateQuizTypeAsync(short quizTypeId, CancellationToken cancellationToken)
-    {
-        var typeName = await _lookups.GetLookupNameAsync(quizTypeId, cancellationToken);
-        return LookupNames.ParentPrivateQuizTypeNames
-            .Any(name => name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<IReadOnlyList<QuizListItem>> ListFromAssignmentsAsync(
