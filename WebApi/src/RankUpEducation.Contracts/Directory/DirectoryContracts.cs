@@ -37,7 +37,6 @@ public sealed record DirectorySummaryResponse(
     DirectoryStatusCounts SchoolAdmins,
     DirectoryStatusCounts CampusAdmins,
     DirectoryStatusCounts Coordinators,
-    DirectoryStatusCounts Tutors,
     IReadOnlyList<string> VisibleSections);
 
 /// <summary>Non-paged list of schools.</summary>
@@ -96,7 +95,6 @@ public sealed record DirectoryStudentResponse(
     IReadOnlyList<string> TeacherNames,
     IReadOnlyList<string> CoordinatorNames,
     IReadOnlyList<string> ParentNames,
-    IReadOnlyList<string> TutorNames,
     string? MobileNumber,
     string? Cnic,
     string? EmailAddress,
@@ -262,41 +260,6 @@ public sealed record DirectoryParentResponse(
     /// <summary>Active linked students (id + name) for link/unlink UI.</summary>
     IReadOnlyList<DirectoryLinkedStudentSummary> LinkedStudents);
 
-public sealed record DirectoryTutorListResponse(
-    IReadOnlyList<DirectoryTutorResponse> Items,
-    int PageNumber,
-    int PageSize,
-    int TotalCount);
-
-public sealed record DirectoryTutorResponse(
-    long TutorId,
-    string FullName,
-    string Username,
-    int LinkedStudentCount,
-    IReadOnlyList<string> LinkedStudentNames,
-    bool IsActive,
-    string? AvatarUrl,
-    string? MobileNumber,
-    string? Cnic,
-    string? EmailAddress,
-    DateOnly? CreatedDate,
-    DateTimeOffset? RequestedAt,
-    DateTimeOffset? RejectedAt,
-    DateTimeOffset? LastLoginAt,
-    string? ReasonMessage,
-    bool NeedsPasswordSetup,
-    IReadOnlyList<DirectoryApprovalHistoryItem> ApprovalHistory,
-    string AccountStatus,
-    IReadOnlyList<string> Roles,
-    IReadOnlyList<DirectoryLinkedStudentSummary> LinkedStudents);
-
-public sealed record CreateDirectoryTutorRequest(
-    string FullName,
-    string Username,
-    string? Cnic = null,
-    string? MobileNumber = null,
-    string? EmailAddress = null);
-
 public sealed record CreateDirectoryParentRequest(
     string FullName,
     string Username,
@@ -390,17 +353,6 @@ public sealed record LinkParentStudentResponse(
     long ParentId,
     long StudentId,
     string Relationship,
-    bool IsActive);
-
-/// <summary>Admin link of a tutor to a student by CNIC or username.</summary>
-public sealed record LinkDirectoryTutorStudentRequest(string Identifier);
-
-public sealed record LinkDirectoryTutorStudentResponse(
-    long TutorId,
-    long StudentId,
-    string FullName,
-    string Username,
-    bool AlreadyLinked,
     bool IsActive);
 
 /// <summary>Bulk deactivate request listing entity ids.</summary>

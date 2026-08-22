@@ -64,8 +64,6 @@ function roleBadgeClass(role: string): string {
       return "border border-[hsl(var(--achievement))]/25 bg-[hsl(var(--achievement-light))] text-[hsl(var(--achievement))]";
     case "Teacher":
       return "border border-[hsl(var(--ai))]/25 bg-[hsl(var(--ai-light))] text-[hsl(var(--ai))]";
-    case "Tutor":
-      return "border border-brand-200 bg-brand-50 text-brand-700";
     default:
       return "border border-border bg-muted text-muted-foreground";
   }

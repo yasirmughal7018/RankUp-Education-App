@@ -14,7 +14,6 @@ export interface StudentMeOverview {
   parents: StudentMePerson[];
   coordinators: StudentMePerson[];
   teachers: StudentMePerson[];
-  tutors: StudentMePerson[];
 }
 
 export function formatStudentClassLabel(overview: StudentMeOverview): string {

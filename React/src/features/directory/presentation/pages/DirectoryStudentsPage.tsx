@@ -55,7 +55,6 @@ const PAGE_SIZE = 50;
 export function DirectoryStudentsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
-  const canViewTutors = user?.role === "PortalAdmin";
   const [searchParams] = useSearchParams();
   const initialSearch = searchParams.get("search") ?? "";
 
@@ -544,9 +543,6 @@ export function DirectoryStudentsPage() {
           parents={assignedPeopleTarget.parentNames ?? []}
           coordinators={assignedPeopleTarget.coordinatorNames ?? []}
           teachers={assignedPeopleTarget.teacherNames ?? []}
-          tutors={
-            canViewTutors ? (assignedPeopleTarget.tutorNames ?? []) : null
-          }
           onClose={() => setAssignedPeopleTarget(null)}
         />
       ) : null}

@@ -61,7 +61,7 @@ public static class QuizApprovalNotifications
             includeCampusAdmins: false,
             cancellationToken);
 
-    /// <summary>SchoolAdmin/Parent/Tutor submit — PortalAdmin queue only.</summary>
+    /// <summary>SchoolAdmin/Parent submit — PortalAdmin queue only.</summary>
     public static Task NotifyPortalAdminsOnSubmitForReviewAsync(
         INotificationService notifications,
         IUserRepository users,

@@ -150,8 +150,8 @@ There is **no** `POST /api/questions/{questionId}/approve-ai` route. `isAiApprov
 
 Workflow:
 
-1. Teacher / Coordinator / Tutor / Parent / CampusAdmin / SchoolAdmin creates a question → status **PendingReview**, `isActive = false`, Visibility **None**. PortalAdmin create auto-publishes (Approved + Public + Active).
-2. CampusAdmin endorses (not own; Teacher/Coordinator/Tutor/Parent in campus) → **Approved**, Visibility **Campus**, `isActive = false`.
+1. Teacher / Coordinator / Parent / CampusAdmin / SchoolAdmin creates a question → status **PendingReview**, `isActive = false`, Visibility **None**. PortalAdmin create auto-publishes (Approved + Public + Active).
+2. CampusAdmin endorses (not own; Teacher/Coordinator/Parent in campus) → **Approved**, Visibility **Campus**, `isActive = false`.
 3. SchoolAdmin endorses (not own; including CampusAdmin in school) → **Approved**, Visibility **School**, `isActive = false`.
 4. PortalAdmin publishes pending or endorsed → **Approved**, Visibility **Public**, `isActive = true` (quiz-usable).
 5. Eligible higher-tier admin rejects with a reason → **Rejected**, `isActive = false`. Owner edit does not auto-submit; `POST .../submit` returns it to PendingReview.

@@ -50,7 +50,6 @@ class StudentDashboardMapper {
         parentNames: overview?.parentNames ?? const [],
         coordinatorNames: overview?.coordinatorNames ?? const [],
         teacherNames: overview?.teacherNames ?? const [],
-        tutorNames: overview?.tutorNames ?? const [],
       ),
       level: StudentLevelModel(
         currentLevel: 'Learner',

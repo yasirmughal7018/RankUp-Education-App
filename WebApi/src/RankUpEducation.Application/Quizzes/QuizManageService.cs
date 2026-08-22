@@ -249,7 +249,7 @@ public sealed class QuizManageService : IQuizManageService
         var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
 
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent
-            or UserRole.Tutor or UserRole.SchoolAdmin or UserRole.CampusAdmin)
+            or UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
             await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
 
@@ -918,19 +918,8 @@ public sealed class QuizManageService : IQuizManageService
         int? requestCampusId,
         CancellationToken cancellationToken)
     {
-        if (scope.Role is UserRole.Parent or UserRole.Tutor)
+        if (scope.Role == UserRole.Parent)
         {
-            if (scope.Role == UserRole.Tutor)
-            {
-                var tutorLinkedStudentIds = await _studentScope.GetTutorLinkedStudentIdsAsync(scope.ProfileId, cancellationToken);
-                if (tutorLinkedStudentIds.Count == 0)
-                {
-                    throw new BusinessRuleException("Link at least one student before creating a quiz.");
-                }
-
-                return new StudentSchoolContext(null, null, 0);
-            }
-
             var linkedStudentIds = await _studentScope.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken);
             if (linkedStudentIds.Count == 0)
             {
@@ -992,7 +981,7 @@ public sealed class QuizManageService : IQuizManageService
         short? requestedQuizTypeId,
         CancellationToken cancellationToken)
     {
-        if (scope.Role is UserRole.Parent or UserRole.Tutor)
+        if (scope.Role == UserRole.Parent)
         {
             return await _guard.RequireLookupAsync(
                 LookupNames.QuizType,
@@ -1004,7 +993,7 @@ public sealed class QuizManageService : IQuizManageService
         {
             if (await _quizzes.IsParentPrivateQuizTypeAsync(requestedQuizTypeId.Value, cancellationToken))
             {
-                throw new ValidationAppException(["Only parents and tutors can create parent private quizzes."]);
+                throw new ValidationAppException(["Only parents can create parent private quizzes."]);
             }
 
             return requestedQuizTypeId.Value;

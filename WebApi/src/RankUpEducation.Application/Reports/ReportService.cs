@@ -52,8 +52,7 @@ public sealed class ReportService : IReportService
         CancellationToken cancellationToken)
     {
         await EnsureCanViewStudentAsync(studentId, cancellationToken);
-        long? creatorUserId = ParseRole() == UserRole.Tutor ? _currentUser.UserId : null;
-        return await _reports.GetStudentQuizHistoryAsync(studentId, cancellationToken, creatorUserId);
+        return await _reports.GetStudentQuizHistoryAsync(studentId, cancellationToken);
     }
 
     public async Task<RankingReportResponse> GetRankingsAsync(
@@ -166,18 +165,6 @@ public sealed class ReportService : IReportService
             return;
         }
 
-        if (role == UserRole.Tutor)
-        {
-            var tutorId = _currentUser.ProfileId ?? _currentUser.UserId
-                ?? throw new ForbiddenAppException("Tutor profile was not found.");
-            if (!await _studentScope.IsTutorLinkedStudentAsync(tutorId, studentId, cancellationToken))
-            {
-                throw new ForbiddenAppException("You can only view linked student history.");
-            }
-
-            return;
-        }
-
         if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             var teacherId = _currentUser.ProfileId ?? _currentUser.UserId
@@ -223,7 +210,7 @@ public sealed class ReportService : IReportService
     private void EnsureAdminOrTeacher()
     {
         var role = ParseRole();
-        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher or UserRole.Coordinator or UserRole.Tutor))
+        if (role is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.Teacher or UserRole.Coordinator))
         {
             throw new ForbiddenAppException("You do not have access to reports.");
         }
@@ -236,11 +223,6 @@ public sealed class ReportService : IReportService
         if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             return (_currentUser.SchoolId, _currentUser.CampusId, _currentUser.UserId);
-        }
-
-        if (role == UserRole.Tutor)
-        {
-            return (null, null, _currentUser.UserId);
         }
 
         if (role == UserRole.SchoolAdmin)

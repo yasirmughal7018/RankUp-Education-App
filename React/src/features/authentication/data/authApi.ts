@@ -177,7 +177,7 @@ export async function requestSchoolChange(
 }
 
 export interface RequestAdditionalRoleRequest {
-  role: "Parent" | "Teacher" | "Coordinator" | "Tutor";
+  role: "Parent" | "Teacher" | "Coordinator";
   schoolId?: number | null;
   campusId?: number | null;
   teacherCode?: string | null;
@@ -190,7 +190,7 @@ export interface RequestAdditionalRoleResponse {
   message: string;
 }
 
-/** Request Parent, Teacher, Coordinator, or Tutor as an additional role (account stays active).
+/** Request Parent, Teacher, or Coordinator as an additional role (account stays active).
  * For Teacher/Coordinator, teacherCode is the role code; schoolId + campusId are required. */
 export async function requestAdditionalRole(
   request: RequestAdditionalRoleRequest,
@@ -226,7 +226,7 @@ export interface RegisterAccountRequest {
   fullName: string;
   mobileNumber?: string | null;
   emailAddress?: string | null;
-  userType: "Student" | "Parent" | "Teacher" | "Tutor";
+  userType: "Student" | "Parent" | "Teacher";
   rollNumberTeacherCode?: string | null;
   reasonMessage?: string | null;
   schoolId?: number | null;
@@ -332,7 +332,7 @@ export async function clearPasswordForReset(username: string): Promise<void> {
   });
 }
 
-/** Public self-registration (Student, Parent, Teacher, or Tutor). */
+/** Public self-registration (Student, Parent, or Teacher). */
 export async function registerAccount(
   request: RegisterAccountRequest,
 ): Promise<RegisterAccountResponse> {

@@ -80,15 +80,4 @@ public interface IStudentScopeRepository
         int schoolId,
         int campusId,
         CancellationToken cancellationToken);
-
-    /// <summary>Returns student ids linked to the tutor profile.</summary>
-    Task<IReadOnlyList<long>> GetTutorLinkedStudentIdsAsync(long tutorId, CancellationToken cancellationToken);
-
-    /// <summary>Returns linked students with display fields for tutor dashboards.</summary>
-    Task<IReadOnlyList<TutorLinkedStudentInfo>> GetTutorLinkedStudentsAsync(
-        long tutorId,
-        CancellationToken cancellationToken);
-
-    /// <summary>Returns whether the student is linked to the given tutor.</summary>
-    Task<bool> IsTutorLinkedStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken);
 }

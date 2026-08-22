@@ -77,7 +77,7 @@ function studentMatchesQuery(
   return haystack.includes(term);
 }
 
-/** View / unlink students linked to a parent or tutor. */
+/** View / unlink students linked to a parent. */
 export function ManageLinkedStudentsDialog({
   parentName,
   linkedStudents,

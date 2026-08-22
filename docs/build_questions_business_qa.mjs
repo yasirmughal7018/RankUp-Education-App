@@ -56,9 +56,9 @@ const statuses = [
 
 const lifecycle = [
   [
-    "Create / import by Teacher, Coordinator, Tutor, Parent, CampusAdmin, SchoolAdmin",
+    "Create / import by Teacher, Coordinator, Parent, CampusAdmin, SchoolAdmin",
     "PendingReview",
-    "IsActive=false; Visibility=None. Teacher/Coordinator/Tutor/CampusAdmin/SchoolAdmin: org stamped from creator; audience = creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. Parent: no school/campus stamp (family-private); audience = creator + PortalAdmin only until published.",
+    "IsActive=false; Visibility=None. Teacher/Coordinator/CampusAdmin/SchoolAdmin: org stamped from creator; audience = creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. Parent: no school/campus stamp (family-private); audience = creator + PortalAdmin only until published.",
   ],
   [
     "Create / import by PortalAdmin",
@@ -73,17 +73,17 @@ const lifecycle = [
   [
     "Endorse by CampusAdmin",
     "Approved (endorsed, not published)",
-    "A Teacher/Coordinator/Tutor question in the same campus only. Visibility=Campus; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish. (Parent-created questions skip campus/school queues.)",
+    "A Teacher/Coordinator question in the same campus only. Visibility=Campus; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish. (Parent-created questions skip campus/school queues.)",
   ],
   [
     "Endorse by SchoolAdmin",
     "Approved (endorsed, not published)",
-    "A Teacher/Coordinator/Tutor/CampusAdmin question in the same school. Visibility=School; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish.",
+    "A Teacher/Coordinator/CampusAdmin question in the same school. Visibility=School; IsActive=false; audience stays restricted; not quiz-usable; still needs PortalAdmin to publish.",
   ],
   [
     "Publish by PortalAdmin",
     "Approved (published)",
-    "Visibility=Public; IsActive=true; attachable from the bank picker by quiz-managing roles (Teacher, Coordinator, Tutor, Parent, SchoolAdmin, PortalAdmin — not CampusAdmin). Only PortalAdmin can publish.",
+    "Visibility=Public; IsActive=true; attachable from the bank picker by quiz-managing roles (Teacher, Coordinator, Parent, SchoolAdmin, PortalAdmin — not CampusAdmin). Only PortalAdmin can publish.",
   ],
   [
     "Reject by eligible approver",
@@ -118,8 +118,8 @@ const lifecycle = [
 ];
 
 const permissions = [
-  ["Browse/manage bank", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No"],
-  ["Create", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No"],
+  ["Browse/manage bank", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No"],
+  ["Create", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No"],
   [
     "Edit/delete own PendingReview or Rejected",
     "Any",
@@ -128,16 +128,14 @@ const permissions = [
     "Own",
     "Own",
     "Own",
-    "Own",
     "No",
   ],
-  ["Edit/delete Approved or endorsed", "Any", "No", "No", "No", "No", "No", "No", "No"],
+  ["Edit/delete Approved or endorsed", "Any", "No", "No", "No", "No", "No", "No"],
   [
-    "Approve a Teacher / Coordinator / Tutor / Parent question",
+    "Approve a Teacher / Coordinator / Parent question",
     "Publish → Public",
     "Endorse (own school)",
     "Endorse (own campus)",
-    "No",
     "No",
     "No",
     "No",
@@ -152,7 +150,6 @@ const permissions = [
     "No",
     "No",
     "No",
-    "No",
   ],
   [
     "Approve a SchoolAdmin question",
@@ -163,9 +160,8 @@ const permissions = [
     "No",
     "No",
     "No",
-    "No",
   ],
-  ["Publish (Public + Active)", "Yes", "No", "No", "No", "No", "No", "No", "No"],
+  ["Publish (Public + Active)", "Yes", "No", "No", "No", "No", "No", "No"],
   [
     "Manage quizzes / attach published bank questions / inline quiz create",
     "Yes",
@@ -174,16 +170,14 @@ const permissions = [
     "Yes",
     "Yes",
     "Yes",
-    "Yes",
     "No",
   ],
-  ["Activate / deactivate / archive / unarchive", "Yes", "No", "No", "No", "No", "No", "No", "No"],
+  ["Activate / deactivate / archive / unarchive", "Yes", "No", "No", "No", "No", "No", "No"],
   [
     "View Approval history on detail",
     "Yes",
     "Yes (visible questions)",
     "Yes (visible questions)",
-    "Yes (own + Public)",
     "Yes (own + Public)",
     "Yes (own + Public)",
     "Yes (own + Public)",
@@ -276,7 +270,7 @@ const scenarios = [
   [
     "Q-01",
     "Create starts pending",
-    "Create as Teacher/Coordinator/Tutor/Parent/CampusAdmin/SchoolAdmin.",
+    "Create as Teacher/Coordinator/Parent/CampusAdmin/SchoolAdmin.",
     "Status=PendingReview, IsActive=false, Visibility=None; audience = creator + creator's CampusAdmin/SchoolAdmin + PortalAdmin. Draft is never created (leftover Draft rows, if any, still read as Draft).",
   ],
   [
@@ -288,13 +282,13 @@ const scenarios = [
   [
     "Q-02",
     "Campus endorsement (not published)",
-    "CampusAdmin approves an in-campus Teacher/Coordinator/Tutor/Parent question.",
+    "CampusAdmin approves an in-campus Teacher/Coordinator/Parent question.",
     "Status=Approved (endorsed), Visibility=Campus, IsActive=false; audience stays restricted; NOT quiz-usable; still awaits PortalAdmin to publish.",
   ],
   [
     "Q-03",
     "School endorsement (not published)",
-    "SchoolAdmin approves an in-school Teacher/Coordinator/Tutor/Parent/CampusAdmin question.",
+    "SchoolAdmin approves an in-school Teacher/Coordinator/Parent/CampusAdmin question.",
     "Status=Approved (endorsed), Visibility=School, IsActive=false; audience stays restricted; NOT quiz-usable; still awaits PortalAdmin to publish.",
   ],
   [
@@ -312,7 +306,7 @@ const scenarios = [
   [
     "Q-06",
     "Non-public isolation",
-    "Another Teacher, Coordinator, Tutor, or Parent in the same campus, a user in another campus/school, or an unrelated admin opens the bank.",
+    "Another Teacher, Coordinator, or Parent in the same campus, a user in another campus/school, or an unrelated admin opens the bank.",
     "A PendingReview or endorsed (Campus/School) question is NOT visible to them. Only Public (PortalAdmin-published) questions appear.",
   ],
   [
@@ -348,13 +342,13 @@ const scenarios = [
   [
     "Q-10b",
     "Active edit request",
-    "Teacher/Coordinator/Tutor/Parent/CampusAdmin/SchoolAdmin views an Active Public question and sends an edit request with a valid reason. PortalAdmin approves; the requester saves a change.",
+    "Teacher/Coordinator/Parent/CampusAdmin/SchoolAdmin views an Active Public question and sends an edit request with a valid reason. PortalAdmin approves; the requester saves a change.",
     "Request stored in app_question_edit_request; PortalAdmins queued in app_approval (entity_type 2105). After approve, PUT is allowed once: grant is consumed, question returns to PendingReview (Inactive, Visibility=None), trail Modified + SubmittedForReview.",
   ],
   [
     "Q-11",
     "Excel import (non–PortalAdmin)",
-    "Teacher/Coordinator/Tutor/Parent/CampusAdmin/SchoolAdmin uploads valid/invalid rows, runs dry-run, then confirms.",
+    "Teacher/Coordinator/Parent/CampusAdmin/SchoolAdmin uploads valid/invalid rows, runs dry-run, then confirms.",
     "Valid rows become PendingReview only (IsActive=false, Visibility=None); row errors are reported. A Status column cannot approve.",
   ],
   [
@@ -372,7 +366,7 @@ const scenarios = [
   [
     "Q-13",
     "Approval history trail",
-    "Teacher, Coordinator, or Tutor creates; CampusAdmin endorses; owner edits; PortalAdmin publishes, deactivates, archives, unarchives.",
+    "Teacher, Coordinator creates; CampusAdmin endorses; owner edits; PortalAdmin publishes, deactivates, archives, unarchives.",
     "Question detail shows every step in Approval history — actor name + role, action chip, timestamp, and the rejection reason when present — in chronological order for all roles.",
   ],
   [
@@ -395,20 +389,20 @@ const scenarios = [
   ],
   [
     "Q-16",
-    "Campus/School see Coordinator and Tutor",
-    "A Coordinator and a Tutor in the same campus create PendingReview questions. CampusAdmin opens the bank and pending-approval queue. SchoolAdmin does the same at school scope.",
-    "CampusAdmin sees both (same campus). SchoolAdmin sees Coordinator/Tutor/Teacher/Parent/CampusAdmin pending in that school. List, pending-approval, and GetById use the same creator-role lists.",
+    "Campus/School see Coordinator",
+    "A Coordinator in the same campus create PendingReview questions. CampusAdmin opens the bank and pending-approval queue. SchoolAdmin does the same at school scope.",
+    "CampusAdmin sees both (same campus). SchoolAdmin sees Coordinator/Teacher/Parent/CampusAdmin pending in that school. List, pending-approval, and GetById use the same creator-role lists.",
   ],
   [
     "Q-17",
     "CampusAdmin cannot attach bank questions to quizzes",
     "CampusAdmin endorses a question; PortalAdmin publishes it Public+Active. CampusAdmin opens Quizzes to attach it or add an inline question.",
-    "Forbidden. CampusAdmin may manage the question bank and endorse, and may school-approve quizzes, but cannot create/manage quizzes or call POST /api/quizzes/{id}/questions or from-bank attach. A Teacher/SchoolAdmin/PortalAdmin (or Coordinator/Tutor/Parent) must attach it.",
+    "Forbidden. CampusAdmin may manage the question bank and endorse, and may school-approve quizzes, but cannot create/manage quizzes or call POST /api/quizzes/{id}/questions or from-bank attach. A Teacher/SchoolAdmin/PortalAdmin (or Coordinator/Parent) must attach it.",
   ],
 ];
 
 const checklist = [
-  "Create and import (Teacher/Coordinator/Tutor/Parent/CampusAdmin/SchoolAdmin) always produce PendingReview, IsActive=false, Visibility=None.",
+  "Create and import (Teacher/Coordinator/Parent/CampusAdmin/SchoolAdmin) always produce PendingReview, IsActive=false, Visibility=None.",
   "PortalAdmin create and import auto-publish (Approved + Public + Active). Import calls the same create path; a Status column cannot override that.",
   "PortalAdmin-created questions are auto-published (Approved + Public + Active).",
   "Draft (110) is leftover only: create/import never write it; GET still returns status Draft for old rows (not remapped to PendingReview); owners may still edit/delete those rows.",
@@ -416,7 +410,7 @@ const checklist = [
   "A PendingReview or endorsed (Campus/School) question is visible ONLY to its creator plus that creator's CampusAdmin, SchoolAdmin, and PortalAdmin — never peers or other orgs (Parent excepted: creator + PortalAdmin only).",
   "Only PortalAdmin approval publishes a question (Approved + Public + Active + quiz-usable).",
   "CampusAdmin/SchoolAdmin approval is an endorsement: Status=Approved but IsActive=false, audience stays restricted, and it is NOT quiz-usable until PortalAdmin publishes it.",
-  "Approver must be a higher tier than the creator; no self or same-tier approval (Teacher/Coordinator/Tutor/Parent→Campus/School/Portal; CampusAdmin→School/Portal; SchoolAdmin→Portal only). Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions.",
+  "Approver must be a higher tier than the creator; no self or same-tier approval (Teacher/Coordinator/Parent→Campus/School/Portal; CampusAdmin→School/Portal; SchoolAdmin→Portal only). Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions.",
   "Only a Published (Public) Approved bank question can be toggled Active/Inactive by PortalAdmin. Bank endorse leaves IsActive=false. Exception: inline quiz create sets Campus + IsActive=true without Public.",
   "PortalAdmin may deactivate a Published question; UI shows Status=Approved and Activity=Inactive.",
   "Reject requires a reason and clears active/endorsement/visibility state.",
@@ -426,9 +420,9 @@ const checklist = [
   "Archived and inactive are not interchangeable: Archived is status; inactive is a flag.",
   "Bank quiz eligibility (eligibleForQuizOnly / attach from bank) requires Approved + Public + IsActive + ApprovedBy (published by PortalAdmin). Inline-on-quiz questions are Campus + Active and are used on that quiz without being Public.",
   "Question bank excludes Students; students receive questions only through quiz attempts.",
-  "Coordinator and Tutor have the same bank-create rights as Teacher/Parent: own + Public visibility, no endorse/publish.",
-  "CampusAdmin list, pending-approval, and GetById include Teacher/Coordinator/Tutor in the same campus (not own). SchoolAdmin includes those plus CampusAdmin in the same school. Parent creators are excluded — PortalAdmin only.",
-  "CampusAdmin can manage the question bank and endorse, but cannot manage quizzes: no quiz create, no inline question, no attach-from-bank. Quiz-managing roles are Teacher, Coordinator, Tutor, Parent, SchoolAdmin, and PortalAdmin. CampusAdmin may still school-approve campus quizzes.",
+  "Coordinator has the same bank-create rights as Teacher/Parent: own + Public visibility, no endorse/publish.",
+  "CampusAdmin list, pending-approval, and GetById include Teacher/Coordinator in the same campus (not own). SchoolAdmin includes those plus CampusAdmin in the same school. Parent creators are excluded — PortalAdmin only.",
+  "CampusAdmin can manage the question bank and endorse, but cannot manage quizzes: no quiz create, no inline question, no attach-from-bank. Quiz-managing roles are Teacher, Coordinator, Parent, SchoolAdmin, and PortalAdmin. CampusAdmin may still school-approve campus quizzes.",
   "Single/Multi/True-False/Fill/Descriptive/Matching/Ordering are offered on web, Mobile, Excel import, quiz inline, and API create. File Upload and Media are rejected on those create paths; existing rows stay valid for update/attempt until re-enabled.",
   "File Upload is a link/path MVP (SubmittedText) — hidden on web create; binary blob upload, storage, and review download are not built yet.",
   "Accepted answers are hidden from students before attempt submission.",
@@ -533,17 +527,17 @@ const html = `<!doctype html>
 
   <h2>4. Role permissions</h2>
   ${htmlTable(
-    ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Coordinator", "Tutor", "Parent", "Student"],
+    ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Coordinator", "Parent", "Student"],
     permissions,
   )}
-  <div class="note"><strong>Approval hierarchy:</strong> the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Tutor/Parent → CampusAdmin, SchoolAdmin, or PortalAdmin; CampusAdmin → SchoolAdmin or PortalAdmin; SchoolAdmin → PortalAdmin only. No self-approval and no same-tier approval. Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions. Any eligible higher tier may act independently (no forced sequential chain). PortalAdmin-created questions are auto-published. Coordinator and Tutor are bank creators like Teacher/Parent: they cannot endorse or publish.</div>
-  <div class="note"><strong>CampusAdmin vs quizzes:</strong> CampusAdmin can browse/create/endorse in the question bank. CampusAdmin cannot manage quizzes (<code>QuizScopeResolver.RequireManageScope</code> excludes them), so they cannot attach a published bank question or create an inline quiz question. A Teacher, Coordinator, Tutor, Parent, SchoolAdmin, or PortalAdmin must put the question on a quiz. CampusAdmin may still school-approve quizzes in their campus (see Quizzes QA).</div>
+  <div class="note"><strong>Approval hierarchy:</strong> the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Parent → CampusAdmin, SchoolAdmin, or PortalAdmin; CampusAdmin → SchoolAdmin or PortalAdmin; SchoolAdmin → PortalAdmin only. No self-approval and no same-tier approval. Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions. Any eligible higher tier may act independently (no forced sequential chain). PortalAdmin-created questions are auto-published. Coordinator is a bank creator like Teacher/Parent: they cannot endorse or publish.</div>
+  <div class="note"><strong>CampusAdmin vs quizzes:</strong> CampusAdmin can browse/create/endorse in the question bank. CampusAdmin cannot manage quizzes (<code>QuizScopeResolver.RequireManageScope</code> excludes them), so they cannot attach a published bank question or create an inline quiz question. A Teacher, Coordinator, Parent, SchoolAdmin, or PortalAdmin must put the question on a quiz. CampusAdmin may still school-approve quizzes in their campus (see Quizzes QA).</div>
 
   <h2>5. Visibility rules</h2>
   ${htmlTable(
     ["Visibility", "Set by", "Audience"],
     [
-      ["None (PendingReview)", "Create (Teacher/Coordinator/Tutor/Parent/CampusAdmin/SchoolAdmin)", "Creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. No peers, no other campuses/schools."],
+      ["None (PendingReview)", "Create (Teacher/Coordinator/Parent/CampusAdmin/SchoolAdmin)", "Creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. No peers, no other campuses/schools."],
       ["Campus (endorsed)", "CampusAdmin approval", "Same restricted audience as None — an endorsement marker only. Not broadened to campus peers; not quiz-usable."],
       ["School (endorsed)", "SchoolAdmin approval", "Same restricted audience as None. Not broadened to school peers; not quiz-usable."],
       ["Public (published)", "PortalAdmin approval", "Visible to all question-managing roles. Attachable onto quizzes by quiz-managing roles (not CampusAdmin)."],
@@ -560,7 +554,7 @@ const html = `<!doctype html>
     "ApprovedBy (the PortalAdmin publisher) is present.",
   ])}
   <p>Bank-endorsed (Campus/School, IsActive=false) questions are NOT attachable until PortalAdmin publishes them. PortalAdmin can deactivate a Published bank question: Status stays Approved, Activity shows Inactive, and it is removed from new bank selection. Archiving changes status to Archived and forces Inactive.</p>
-  <p><strong>Who can attach:</strong> Teacher, Coordinator, Tutor, Parent, SchoolAdmin, and PortalAdmin. <strong>CampusAdmin cannot</strong> — they endorse in the bank only; they have no quiz manage/inline/from-bank APIs.</p>
+  <p><strong>Who can attach:</strong> Teacher, Coordinator, Parent, SchoolAdmin, and PortalAdmin. <strong>CampusAdmin cannot</strong> — they endorse in the bank only; they have no quiz manage/inline/from-bank APIs.</p>
   <p><strong>Inline exception:</strong> <code>POST /api/quizzes/{quizId}/questions</code> creates a question with <code>MarkFullyApproved</code> (Visibility=Campus, IsActive=true). It skips bank PendingReview and is used on that quiz immediately. It is not Public, so it does not appear in the bank picker. Removing it from the quiz deactivates the row when the caller created it.</p>
 
   <h2>7. Question types</h2>
@@ -586,7 +580,7 @@ const html = `<!doctype html>
   ${htmlTable(["Endpoint", "Business effect"], apiTransitions)}
 
   <h2>10. Approval history (workflow trail)</h2>
-  <p>Every question carries a full audit trail in the generic <code>app_approval</code> table (<code>entity_type = 2102</code> Question, <code>request_id</code> = question id; user-registration rows share the same table with <code>entity_type = 2101</code> User). <code>request_id</code> is polymorphic (question / quiz / school-change) — there is no typed FK to <code>questions</code>. <code>entity_type</code> and <code>action</code> are lookup-backed (<code>ApprovalEntityType</code> / <code>ApprovalAction</code>). Each row stores the acting user (FK to <code>app_users</code>), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel — for Teacher, Coordinator, Tutor, Parent, CampusAdmin, SchoolAdmin, and PortalAdmin alike — with an actor card, role, colour-coded action chip, and the rejection reason inline.</p>
+  <p>Every question carries a full audit trail in the generic <code>app_approval</code> table (<code>entity_type = 2102</code> Question, <code>request_id</code> = question id; user-registration rows share the same table with <code>entity_type = 2101</code> User). <code>request_id</code> is polymorphic (question / quiz / school-change) — there is no typed FK to <code>questions</code>. <code>entity_type</code> and <code>action</code> are lookup-backed (<code>ApprovalEntityType</code> / <code>ApprovalAction</code>). Each row stores the acting user (FK to <code>app_users</code>), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel — for Teacher, Coordinator, Parent, CampusAdmin, SchoolAdmin, and PortalAdmin alike — with an actor card, role, colour-coded action chip, and the rejection reason inline.</p>
   ${htmlTable(["Event", "Meaning", "Recorded for"], trailEvents)}
   ${htmlList([
     "Inline quiz-created and quiz-duplicated questions record Created + Endorsed in one step and are Campus + Active (not Public).",
@@ -630,7 +624,7 @@ const html = `<!doctype html>
     "Delete remains blocked while a question is linked to a quiz; guided unlink-then-delete is optional.",
     "File Upload binary blob upload/storage/download remains optional future work; current MVP is paste link/path into SubmittedText. File Upload and Media are hidden on every create path (web, Mobile, Excel import, API create, quiz inline); existing rows still work until re-enabled.",
     "Mobile Question Bank supports create, import, endorse/reject, activate/deactivate/archive, and Public+Active quiz-ready filtering; richer pair-row Matching editors remain web-first. Mobile create matches web: File Upload and Media are hidden.",
-    "Coordinator and Tutor are bank creators like Teacher/Parent. CampusAdmin list/pending/GetById include Teacher/Coordinator/Tutor/Parent in the same campus; SchoolAdmin also includes CampusAdmin in the same school. CampusAdmin cannot manage quizzes or attach bank questions.",
+    "Coordinator is a bank creator like Teacher/Parent. CampusAdmin list/pending/GetById include Teacher/Coordinator/Parent in the same campus; SchoolAdmin also includes CampusAdmin in the same school. CampusAdmin cannot manage quizzes or attach bank questions.",
     "External AI grading for Fill is future work; current AllowAiReview behavior is OpenAI when configured, else heuristic.",
   ])}
 
@@ -741,15 +735,15 @@ const docChildren = [
 
   docHeading("4. Role permissions"),
   docTable(
-    ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Coordinator", "Tutor", "Parent", "Student"],
+    ["Action", "PortalAdmin", "SchoolAdmin", "CampusAdmin", "Teacher", "Coordinator", "Parent", "Student"],
     permissions,
   ),
   docParagraph(
-    "Approval hierarchy: the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Tutor/Parent → CampusAdmin/SchoolAdmin/PortalAdmin; CampusAdmin → SchoolAdmin/PortalAdmin; SchoolAdmin → PortalAdmin only. No self or same-tier approval. Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions. Any eligible higher tier may act independently. PortalAdmin-created questions are auto-published. Coordinator and Tutor are bank creators like Teacher/Parent: they cannot endorse or publish.",
+    "Approval hierarchy: the approver must be a strictly higher tier than the creator — Teacher/Coordinator/Parent → CampusAdmin/SchoolAdmin/PortalAdmin; CampusAdmin → SchoolAdmin/PortalAdmin; SchoolAdmin → PortalAdmin only. No self or same-tier approval. Web and Mobile hide Endorse/Reject on the signed-in CampusAdmin/SchoolAdmin's own questions. Any eligible higher tier may act independently. PortalAdmin-created questions are auto-published. Coordinator is a bank creator like Teacher/Parent: they cannot endorse or publish.",
     { run: { bold: true, color: "92400E" } },
   ),
   docParagraph(
-    "CampusAdmin vs quizzes: CampusAdmin can browse/create/endorse in the question bank but cannot manage quizzes (RequireManageScope excludes them). They cannot attach a published bank question or create an inline quiz question. Teacher, Coordinator, Tutor, Parent, SchoolAdmin, and PortalAdmin can. CampusAdmin may still school-approve quizzes in their campus (see Quizzes QA).",
+    "CampusAdmin vs quizzes: CampusAdmin can browse/create/endorse in the question bank but cannot manage quizzes (RequireManageScope excludes them). They cannot attach a published bank question or create an inline quiz question. Teacher, Coordinator, Parent, SchoolAdmin, and PortalAdmin can. CampusAdmin may still school-approve quizzes in their campus (see Quizzes QA).",
     { run: { bold: true, color: "92400E" } },
   ),
 
@@ -757,7 +751,7 @@ const docChildren = [
   docTable(
     ["Visibility", "Set by", "Audience"],
     [
-      ["None (PendingReview)", "Create (Teacher/Coordinator/Tutor/Parent/CampusAdmin/SchoolAdmin)", "Creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. No peers or other orgs."],
+      ["None (PendingReview)", "Create (Teacher/Coordinator/Parent/CampusAdmin/SchoolAdmin)", "Creator + creator's CampusAdmin + creator's SchoolAdmin + PortalAdmin. No peers or other orgs."],
       ["Campus (endorsed)", "CampusAdmin approval", "Same restricted audience as None; endorsement marker only; not quiz-usable."],
       ["School (endorsed)", "SchoolAdmin approval", "Same restricted audience as None; endorsement marker only; not quiz-usable."],
       ["Public (published)", "PortalAdmin approval", "Visible to all question-managing roles. Attachable onto quizzes by quiz-managing roles (not CampusAdmin)."],
@@ -799,7 +793,7 @@ const docChildren = [
 
   docHeading("10. Approval history (workflow trail)"),
   docParagraph(
-    "Every question carries a full audit trail in the generic app_approval table (entity_type=2102 Question, request_id = question id; user-registration rows share the table with entity_type=2101 User). request_id is polymorphic (question / quiz / school-change) — there is no typed FK to questions. entity_type and action are lookup-backed (ApprovalEntityType / ApprovalAction). Each row stores the acting user (FK to app_users), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel for every question-managing role (Teacher, Coordinator, Tutor, Parent, CampusAdmin, SchoolAdmin, PortalAdmin), with actor name, role, colour-coded action chip, and the rejection reason inline.",
+    "Every question carries a full audit trail in the generic app_approval table (entity_type=2102 Question, request_id = question id; user-registration rows share the table with entity_type=2101 User). request_id is polymorphic (question / quiz / school-change) — there is no typed FK to questions. entity_type and action are lookup-backed (ApprovalEntityType / ApprovalAction). Each row stores the acting user (FK to app_users), the role they acted as, the action, an optional reason, and a timestamp. The question detail page always shows this panel for every question-managing role (Teacher, Coordinator, Parent, CampusAdmin, SchoolAdmin, PortalAdmin), with actor name, role, colour-coded action chip, and the rejection reason inline.",
   ),
   docTable(["Event", "Meaning", "Recorded for"], trailEvents),
   ...[
@@ -842,7 +836,7 @@ const docChildren = [
     "Delete is blocked while quiz-linked; guided unlink is optional.",
     "File Upload binary blob upload/storage/download remains optional; MVP is paste link/path into SubmittedText. File Upload and Media are hidden on every create path (web, Mobile, Excel import, API create, quiz inline); existing rows still work until re-enabled.",
     "Mobile Question Bank supports create/import/endorse/publish lifecycle and Public+Active quiz-ready filtering; richer Matching pair-row editors remain web-first. Mobile create matches web: File Upload and Media are hidden.",
-    "Coordinator and Tutor are bank creators like Teacher/Parent. CampusAdmin list/pending/GetById include Teacher/Coordinator/Tutor/Parent in the same campus; SchoolAdmin also includes CampusAdmin in the same school. CampusAdmin cannot manage quizzes or attach bank questions.",
+    "Coordinator is a bank creator like Teacher/Parent. CampusAdmin list/pending/GetById include Teacher/Coordinator/Parent in the same campus; SchoolAdmin also includes CampusAdmin in the same school. CampusAdmin cannot manage quizzes or attach bank questions.",
     "External AI grading for Fill is future work; AllowAiReview uses OpenAI when configured, else heuristic.",
   ].map(docBullet),
 ];

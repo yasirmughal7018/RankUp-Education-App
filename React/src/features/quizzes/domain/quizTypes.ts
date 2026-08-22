@@ -251,7 +251,6 @@ export const QUIZ_MANAGER_ROLES: UserRole[] = [
   "Teacher",
   "Parent",
   "Coordinator",
-  "Tutor",
   "CampusAdmin",
   "SchoolAdmin",
   "PortalAdmin",
@@ -262,7 +261,6 @@ export const QUIZ_AUTHOR_ROLES: UserRole[] = [
   "Teacher",
   "Parent",
   "Coordinator",
-  "Tutor",
   "CampusAdmin",
   "SchoolAdmin",
   "PortalAdmin",
@@ -291,8 +289,7 @@ export function canViewOrgQuizCatalog(role: UserRole): boolean {
     role === "CampusAdmin" ||
     role === "Teacher" ||
     role === "Coordinator" ||
-    role === "Parent" ||
-    role === "Tutor"
+    role === "Parent"
   );
 }
 
@@ -522,8 +519,7 @@ function isQuizOwnerWhoMaySubmitForReview(
     role === "Coordinator" ||
     role === "SchoolAdmin" ||
     role === "CampusAdmin" ||
-    role === "Parent" ||
-    role === "Tutor"
+    role === "Parent"
   );
 }
 
@@ -540,7 +536,7 @@ export function canAssignQuiz(
   }
 
   if (isParentPrivateQuizType(quizType)) {
-    if (role !== "Parent" && role !== "Tutor") {
+    if (role !== "Parent") {
       return false;
     }
     return isFinalApprovedQuizStatus(approvalStatus);
@@ -551,8 +547,7 @@ export function canAssignQuiz(
     role === "Coordinator" ||
     role === "PortalAdmin" ||
     role === "CampusAdmin" ||
-    role === "Parent" ||
-    role === "Tutor"
+    role === "Parent"
   ) {
     return isFinalApprovedQuizStatus(approvalStatus);
   }
@@ -569,7 +564,7 @@ export function canAssignQuiz(
 
 /**
  * Org-scoped mutations (SchoolAdmin/CampusAdmin assign, campus archive checks).
- * Teacher/Coordinator/Parent/Tutor may still assign a published school-type quiz
+ * Teacher/Coordinator/Parent may still assign a published school-type quiz
  * from the shared catalog to their own roster/children even when this is false.
  */
 export function isQuizInManageOrgScope(
@@ -583,7 +578,7 @@ export function isQuizInManageOrgScope(
     return true;
   }
 
-  if (role === "Parent" || role === "Tutor") {
+  if (role === "Parent") {
     return true;
   }
 
@@ -603,7 +598,7 @@ export function isQuizInManageOrgScope(
   return false;
 }
 
-/** Quiz types shown on create — Parent/Tutor → ParentPrivate only; school staff → school types only. */
+/** Quiz types shown on create — Parent → ParentPrivate only; school staff → school types only. */
 export function quizTypesForRole(
   role: UserRole | undefined,
   allTypes: Array<{ id: number; name: string }>,
@@ -612,7 +607,7 @@ export function quizTypesForRole(
     return allTypes;
   }
 
-  if (role === "Parent" || role === "Tutor") {
+  if (role === "Parent") {
     return allTypes.filter((type) => isParentPrivateQuizType(type.name));
   }
 
@@ -657,14 +652,13 @@ export function canPortalPublishQuiz(
   );
 }
 
-/** SchoolAdmin / Parent / Tutor / PortalAdmin creators skip school endorsement. CampusAdmin goes to SchoolAdmin first. */
+/** SchoolAdmin / Parent / PortalAdmin creators skip school endorsement. CampusAdmin goes to SchoolAdmin first. */
 export function isPortalAdminOnlyQuizCreator(
   role: UserRole | string | null | undefined,
 ): boolean {
   return (
     role === "SchoolAdmin" ||
     role === "Parent" ||
-    role === "Tutor" ||
     role === "PortalAdmin"
   );
 }
@@ -698,17 +692,6 @@ export function assignModesForRole(role: UserRole): Array<{
         value: "alllinked",
         label: "All linked children",
         group: "Parent",
-      },
-    ];
-  }
-
-  if (role === "Tutor") {
-    return [
-      ...studentModes,
-      {
-        value: "alllinked",
-        label: "All linked students",
-        group: "Tutor",
       },
     ];
   }

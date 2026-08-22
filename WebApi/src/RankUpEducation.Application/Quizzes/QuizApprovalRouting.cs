@@ -6,7 +6,7 @@ namespace RankUpEducation.Application.Quizzes;
 /// Who reviews a submitted quiz, based on the creator's role.
 /// Teacher/Coordinator → SchoolAdmin or CampusAdmin may endorse (Pending → SchoolApproved), then PortalAdmin.
 /// CampusAdmin → SchoolAdmin may endorse (Pending → SchoolApproved), then PortalAdmin.
-/// SchoolAdmin, Parent, Tutor, and PortalAdmin creators → PortalAdmin only (Pending → Approved).
+/// SchoolAdmin, Parent, and PortalAdmin creators → PortalAdmin only (Pending → Approved).
 /// </summary>
 public static class QuizApprovalRouting
 {
@@ -14,7 +14,6 @@ public static class QuizApprovalRouting
     public static bool RequiresPortalAdminOnlyReview(UserRole creatorRole)
         => creatorRole is UserRole.SchoolAdmin
             or UserRole.Parent
-            or UserRole.Tutor
             or UserRole.PortalAdmin;
 
     /// <summary>
@@ -37,7 +36,7 @@ public static class QuizApprovalRouting
 
     /// <summary>
     /// Picks the quiz-author role from a user's assignments. Exclusive admin roles win;
-    /// otherwise Teacher, then Coordinator, then Parent, then Tutor.
+    /// otherwise Teacher, then Coordinator, then Parent.
     /// </summary>
     public static UserRole ResolveCreatorRole(IReadOnlyList<UserRole> roles)
     {
@@ -71,11 +70,6 @@ public static class QuizApprovalRouting
             return UserRole.Parent;
         }
 
-        if (roles.Contains(UserRole.Tutor))
-        {
-            return UserRole.Tutor;
-        }
-
         return UserRole.Teacher;
     }
 
@@ -86,6 +80,6 @@ public static class QuizApprovalRouting
         => creatorRole == UserRole.CampusAdmin
             ? "Only a school admin or portal admin can approve or reject quizzes created by campus admins."
             : RequiresPortalAdminOnlyReview(creatorRole)
-                ? "Only a portal admin can approve or reject quizzes created by school admins, parents, or tutors."
+                ? "Only a portal admin can approve or reject quizzes created by school admins or parents."
                 : "You do not have permission to approve or reject this quiz.";
 }

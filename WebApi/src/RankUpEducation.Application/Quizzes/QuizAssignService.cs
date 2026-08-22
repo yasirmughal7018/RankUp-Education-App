@@ -82,9 +82,9 @@ public sealed class QuizAssignService : IQuizAssignService
 
         if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
         {
-            if (scope.Role is not (UserRole.Parent or UserRole.Tutor))
+            if (scope.Role is not UserRole.Parent)
             {
-                throw new ForbiddenAppException("Only parents and tutors can assign ParentPrivate quizzes.");
+                throw new ForbiddenAppException("Only parents can assign ParentPrivate quizzes.");
             }
 
             var privateMode = request.Mode.AsLowercase();
@@ -340,7 +340,7 @@ public sealed class QuizAssignService : IQuizAssignService
 
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.CampusAdmin
             or UserRole.SchoolAdmin or UserRole.PortalAdmin
-            or UserRole.Parent or UserRole.Tutor)
+            or UserRole.Parent)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             if (!QuizAssignRules.CanAssignWithApproval(scope.Role, approvalName))
@@ -371,9 +371,9 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new NotFoundAppException($"Quiz #{quizId} was not found.");
         }
 
-        // Published school-type catalog may be assigned by teacher/coordinator/parent/tutor
+        // Published school-type catalog may be assigned by teacher/coordinator/parent
         // to their own students or children. SchoolAdmin/CampusAdmin stay org-scoped.
-        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent or UserRole.Tutor)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent)
         {
             var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
             if (!isParentPrivate)
@@ -384,7 +384,7 @@ public sealed class QuizAssignService : IQuizAssignService
 
         // Public catalog quizzes may be viewed/assigned by any assign-capable role.
         if (quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
-            && scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent or UserRole.Tutor)
+            && scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
         {
             return quiz;
         }
@@ -408,17 +408,6 @@ public sealed class QuizAssignService : IQuizAssignService
                 "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
                 "alllinked" => await _studentScope.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken),
                 "group" => await ResolveGroupStudentsAsync(scope, request, UserRole.Parent, cancellationToken),
-                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported."])
-            };
-        }
-
-        if (scope.Role == UserRole.Tutor)
-        {
-            return mode switch
-            {
-                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
-                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
-                "alllinked" => await _studentScope.GetTutorLinkedStudentIdsAsync(scope.ProfileId, cancellationToken),
                 _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported."])
             };
         }

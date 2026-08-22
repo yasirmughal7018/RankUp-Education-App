@@ -7,12 +7,11 @@ describe("canViewReports", () => {
     expect(canViewReports("SchoolAdmin")).toBe(true);
     expect(canViewReports("Teacher")).toBe(true);
     expect(canViewReports("Coordinator")).toBe(true);
-    expect(canViewReports("Tutor")).toBe(true);
+    expect(canViewReports("Parent")).toBe(true);
   });
 
-  it("denies student, parent, and unknown roles", () => {
+  it("denies student and unknown roles", () => {
     expect(canViewReports("Student")).toBe(false);
-    expect(canViewReports("Parent")).toBe(false);
     expect(canViewReports("")).toBe(false);
     expect(canViewReports("Guest")).toBe(false);
   });

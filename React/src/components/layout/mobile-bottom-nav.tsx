@@ -28,7 +28,6 @@ const ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
   "/student/dashboard": GraduationCap,
   "/parent/children": GraduationCap,
   "/parent/quiz-dashboard": ClipboardList,
-  "/tutor/students": GraduationCap,
   "/login": LogIn,
   "/request-access": LogIn,
 };

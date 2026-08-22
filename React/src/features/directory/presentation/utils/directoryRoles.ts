@@ -2,32 +2,28 @@
 export type DirectoryCombinableRole =
   | "Parent"
   | "Teacher"
-  | "Coordinator"
-  | "Tutor";
+  | "Coordinator";
 
 export const DIRECTORY_COMBINABLE_ROLES: DirectoryCombinableRole[] = [
   "Parent",
   "Teacher",
   "Coordinator",
-  "Tutor",
 ];
 
 export type DirectoryRoleContext =
   | "teachers"
   | "parents"
-  | "coordinators"
-  | "tutors";
+  | "coordinators";
 
 /**
  * Companion roles that can be removed from the current directory view.
  * The primary role for that page is never removable here.
  * @param options.includeParent When false, Parent is not offered for removal (School/Campus Admin).
- * @param options.includeTutor When false, Tutor is not offered for removal (School/Campus Admin).
  */
 export function getRemovableDirectoryRoles(
   roles: string[] | null | undefined,
   primaryRole: DirectoryCombinableRole,
-  options?: { includeParent?: boolean; includeTutor?: boolean },
+  options?: { includeParent?: boolean },
 ): DirectoryCombinableRole[] {
   const assigned = roles ?? [];
   if (assigned.length <= 1) {
@@ -35,28 +31,24 @@ export function getRemovableDirectoryRoles(
   }
 
   const includeParent = options?.includeParent !== false;
-  const includeTutor = options?.includeTutor !== false;
 
   return DIRECTORY_COMBINABLE_ROLES.filter(
     (role) =>
       role !== primaryRole &&
       assigned.includes(role) &&
-      (includeParent || role !== "Parent") &&
-      (includeTutor || role !== "Tutor"),
+      (includeParent || role !== "Parent"),
   );
 }
 
 /**
  * Roles shown under the name on directory lists.
- * Omits Tutor always; when primaryRole is set, also omits that role so only companions show.
+ * When primaryRole is set, omits that role so only companions show.
  */
 export function formatDirectoryListDisplayRoles(
   roles: string[] | null | undefined,
   primaryRole?: string,
 ): string | null {
-  const visible = (roles ?? []).filter(
-    (role) => role !== "Tutor" && role !== primaryRole,
-  );
+  const visible = (roles ?? []).filter((role) => role !== primaryRole);
   if (visible.length === 0) {
     return null;
   }

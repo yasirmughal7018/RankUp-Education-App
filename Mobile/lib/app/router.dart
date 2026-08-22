@@ -29,9 +29,6 @@ import 'package:rankup_education/features/settings/presentation/pages/settings_p
 import 'package:rankup_education/features/student_dashboard/presentation/pages/student_dashboard_page.dart';
 import 'package:rankup_education/features/teacher/presentation/pages/teacher_students_page.dart';
 import 'package:rankup_education/features/teacher_dashboard/presentation/pages/teacher_dashboard_page.dart';
-import 'package:rankup_education/features/tutor/presentation/pages/tutor_dashboard_page.dart';
-import 'package:rankup_education/features/tutor/presentation/pages/tutor_student_history_page.dart';
-import 'package:rankup_education/features/tutor/presentation/pages/tutor_students_page.dart';
 import 'package:rankup_education/features/worksheets/presentation/pages/worksheets_page.dart';
 
 /// Role-aware [GoRouter] with auth redirects and bottom navigation shell.
@@ -92,6 +89,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _dashboardPath(user.role);
       }
 
+      if (isAuthenticated && location.startsWith('/tutor')) {
+        return location.startsWith('/tutor/students')
+            ? '/parent/children'
+            : '/parent';
+      }
+
       return null;
     },
     routes: [
@@ -148,22 +151,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/teacher/students',
             builder: (context, state) => const TeacherStudentsPage(),
-          ),
-          GoRoute(
-            path: '/tutor',
-            builder: (context, state) => const TutorDashboardPage(),
-          ),
-          GoRoute(
-            path: '/tutor/students',
-            builder: (context, state) => const TutorStudentsPage(),
-          ),
-          GoRoute(
-            path: '/tutor/students/:studentId/history',
-            builder: (context, state) {
-              final studentId =
-                  int.tryParse(state.pathParameters['studentId'] ?? '') ?? 0;
-              return TutorStudentHistoryPage(studentId: studentId);
-            },
           ),
           GoRoute(
             path: '/admin',
@@ -248,7 +235,6 @@ String _dashboardPath(UserRole role) {
     UserRole.student => '/student',
     UserRole.parent => '/parent',
     UserRole.teacher || UserRole.coordinator => '/teacher',
-    UserRole.tutor => '/tutor',
     UserRole.schoolAdmin ||
     UserRole.campusAdmin ||
     UserRole.portalAdmin =>
@@ -370,33 +356,6 @@ List<_NavDestination> _destinationsFor(UserRole role) {
           '/messages',
           Icons.chat_bubble_outline,
           Icons.chat_bubble,
-        ),
-        _NavDestination(
-          'Profile',
-          '/profile',
-          Icons.person_outline,
-          Icons.person,
-        ),
-      ],
-    UserRole.tutor => const [
-        _NavDestination('Home', '/tutor', Icons.home_outlined, Icons.home),
-        _NavDestination(
-          'Students',
-          '/tutor/students',
-          Icons.groups_outlined,
-          Icons.groups,
-        ),
-        _NavDestination(
-          'Quizzes',
-          '/quizzes',
-          Icons.assignment_outlined,
-          Icons.assignment,
-        ),
-        _NavDestination(
-          'Reports',
-          '/reports',
-          Icons.bar_chart_outlined,
-          Icons.bar_chart,
         ),
         _NavDestination(
           'Profile',

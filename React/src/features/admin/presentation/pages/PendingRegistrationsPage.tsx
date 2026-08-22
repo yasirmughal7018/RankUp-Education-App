@@ -34,7 +34,7 @@ import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 import { cn } from "@/lib/utils";
 import * as registrationApi from "@/features/admin/data/registrationApi";
 
-type RegistrationRoleFilter = "" | "Student" | "Parent" | "Teacher" | "Tutor";
+type RegistrationRoleFilter = "" | "Student" | "Parent" | "Teacher";
 
 type ConfirmIntent = { kind: "bulk-approve"; count: number };
 
@@ -43,7 +43,6 @@ const ROLE_FILTER_OPTIONS: { value: RegistrationRoleFilter; label: string }[] = 
   { value: "Student", label: "Student" },
   { value: "Parent", label: "Parent" },
   { value: "Teacher", label: "Teacher" },
-  { value: "Tutor", label: "Tutor" },
 ];
 
 /** Theme-aligned role chips (Student / Parent / Teacher). */
@@ -54,8 +53,6 @@ function registrationRoleBadgeClass(role: UserRole | string): string {
     case "Parent":
       return "border border-[hsl(var(--achievement))]/25 bg-[hsl(var(--achievement-light))] text-[hsl(var(--achievement))]";
     case "Teacher":
-      return "border border-[hsl(var(--ai))]/25 bg-[hsl(var(--ai-light))] text-[hsl(var(--ai))]";
-    case "Tutor":
       return "border border-[hsl(var(--ai))]/25 bg-[hsl(var(--ai-light))] text-[hsl(var(--ai))]";
     default:
       return "border border-border bg-muted text-muted-foreground";

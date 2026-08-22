@@ -34,12 +34,6 @@ describe("assignModesForRole", () => {
     expect(modes).toContain("group");
   });
 
-  it("gives Tutor linked-student assign modes without group", () => {
-    const modes = modeValues("Tutor");
-    expect(modes).toContain("alllinked");
-    expect(modes).not.toContain("group");
-  });
-
   it("gives Teacher grade and section bulk modes", () => {
     const modes = modeValues("Teacher");
     expect(modes).toContain("allingrade");

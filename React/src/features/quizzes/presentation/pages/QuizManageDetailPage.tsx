@@ -217,8 +217,6 @@ function resolveQuizScopeRows(
       return schoolName ? [{ label: "School", value: schoolName }] : [];
     case "Parent":
       return [{ label: "Created as", value: "Parent" }];
-    case "Tutor":
-      return [{ label: "Created as", value: "Tutor" }];
     default:
       return [];
   }
@@ -452,7 +450,6 @@ export function QuizManageDetailPage() {
     user?.role === "Teacher" ||
     user?.role === "Coordinator" ||
     user?.role === "Parent" ||
-    user?.role === "Tutor" ||
     user?.role === "PortalAdmin";
   const canAssign =
     user != null &&

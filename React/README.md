@@ -121,25 +121,23 @@ npm run preview
 | `/admin/directory/teachers` | PortalAdmin, SchoolAdmin | Teachers search |
 | `/admin/directory/parents` | PortalAdmin, SchoolAdmin | Parents + link/unlink students |
 | `/reports` | PortalAdmin, SchoolAdmin, Teacher | Quiz summary, rankings, performance |
-| `/questions` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Question bank list |
-| `/questions/new` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Create question |
-| `/questions/:id` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Question detail |
-| `/questions/:id/edit` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Edit question |
-| `/quizzes` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Quiz list. Admins open Draft rows on `/quizzes/:id` to approve or reject |
-| `/quizzes/new` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Create quiz |
-| `/quizzes/:id` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Quiz detail, questions, publish, assign |
-| `/quizzes/:id/edit` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Edit quiz settings |
-| `/quizzes/reviews/pending` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Pending attempt reviews |
-| `/quizzes/assignments` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Assignment board overview |
-| `/quizzes/:id/monitoring` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Live quiz monitoring |
-| `/quizzes/:id/attempts/:attemptId/review` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Mark and finalize review |
+| `/questions` | Teacher, Parent, Coordinator, SchoolAdmin, CampusAdmin, PortalAdmin | Question bank list |
+| `/questions/new` | Teacher, Parent, Coordinator, SchoolAdmin, CampusAdmin, PortalAdmin | Create question |
+| `/questions/:id` | Teacher, Parent, Coordinator, SchoolAdmin, CampusAdmin, PortalAdmin | Question detail |
+| `/questions/:id/edit` | Teacher, Parent, Coordinator, SchoolAdmin, CampusAdmin, PortalAdmin | Edit question |
+| `/quizzes` | Teacher, Parent, Coordinator, SchoolAdmin, CampusAdmin, PortalAdmin | Quiz list. Admins open Draft rows on `/quizzes/:id` to approve or reject |
+| `/quizzes/new` | Teacher, Parent, Coordinator, SchoolAdmin, PortalAdmin | Create quiz |
+| `/quizzes/:id` | Teacher, Parent, Coordinator, SchoolAdmin, PortalAdmin | Quiz detail, questions, publish, assign |
+| `/quizzes/:id/edit` | Teacher, Parent, Coordinator, SchoolAdmin, PortalAdmin | Edit quiz settings |
+| `/quizzes/reviews/pending` | Teacher, Parent, Coordinator, SchoolAdmin, PortalAdmin | Pending attempt reviews |
+| `/quizzes/assignments` | Teacher, Parent, Coordinator, SchoolAdmin, PortalAdmin | Assignment board overview |
+| `/quizzes/:id/monitoring` | Teacher, Parent, Coordinator, SchoolAdmin, PortalAdmin | Live quiz monitoring |
+| `/quizzes/:id/attempts/:attemptId/review` | Teacher, Parent, Coordinator, SchoolAdmin, PortalAdmin | Mark and finalize review |
 | `/parent/quiz-dashboard` | Parent | Quiz stats, recent quizzes, linked children shortcuts |
 | `/parent/children` | Parent | Linked children overview |
 | `/parent/children/:studentId/history` | Parent | Child quiz history |
 | `/parent/children/:studentId/quizzes/:quizId/attempts/:attemptId/result` | Parent | Child attempt result |
 | `/teacher/students` | Teacher, Coordinator | Class roster and student groups |
-| `/tutor/students` | Tutor | Linked students |
-| `/tutor/students/:studentId/history` | Tutor | Linked student quiz history |
 | `/student/quizzes` | Student | Assigned quiz list |
 | `/student/quizzes/:id` | Student | Quiz detail and start attempt |
 | `/student/quizzes/:id/attempts/:attemptId` | Student | Take quiz attempt |
@@ -225,12 +223,6 @@ Timed attempts show a countdown and auto-submit when time expires. Answers are r
 - Quiz history: `GET /api/reports/students/{studentId}/quiz-history`
 - Assignment board supports `?studentId=` filtering
 
-## Tutor Linked Students
-
-- `GET /api/tutors/me/students` (link/unlink via tutor API)
-- Pages: `/tutor/students`, `/tutor/students/:studentId/history`
-- Tutors share quiz manage and assignment-board access with teachers (scoped to linked students for assign modes)
-
 ## Auth Extras
 
 - `POST /api/auth/password-reset/request` — `/forgot-password`
@@ -257,7 +249,7 @@ Timed attempts show a countdown and auto-submit when time expires. Answers are r
 5. On `401`, the app refreshes tokens via `POST /api/auth/token/refresh`.
 6. Logout calls `POST /api/auth/logout` and clears local storage.
 
-Supported roles from the API: `PortalAdmin`, `SchoolAdmin`, `CampusAdmin`, `Teacher`, `Coordinator`, `Tutor`, `Student`, `Parent`.
+Supported roles from the API: `PortalAdmin`, `SchoolAdmin`, `CampusAdmin`, `Teacher`, `Coordinator`, `Student`, `Parent`.
 
 Multi-role: assignments live in `app_user_roles`. Session role is `CurrentUser.role` (Acting as / Current); full list is `CurrentUser.roles`. Student and PortalAdmin cannot combine with other roles. See `docs/02_RankUp_Authentication_Logic.html`.
 

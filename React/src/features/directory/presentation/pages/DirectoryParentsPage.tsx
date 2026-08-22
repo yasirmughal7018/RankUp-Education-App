@@ -47,7 +47,6 @@ import {
   useDirectorySchoolsQuery,
   useGrantCoordinatorRoleToParentMutation,
   useGrantTeacherRoleToParentMutation,
-  useGrantTutorRoleToParentMutation,
   useLinkParentStudentMutation,
   useRemoveDirectoryRoleMutation,
   useUnlinkParentStudentMutation,
@@ -111,8 +110,6 @@ export function DirectoryParentsPage() {
     useState<DirectoryParent | null>(null);
   const [grantCoordinatorTarget, setGrantCoordinatorTarget] =
     useState<DirectoryParent | null>(null);
-  const [grantTutorTarget, setGrantTutorTarget] =
-    useState<DirectoryParent | null>(null);
   const [deactivateTarget, setDeactivateTarget] =
     useState<DirectoryParent | null>(null);
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
@@ -169,7 +166,6 @@ export function DirectoryParentsPage() {
   const bulkDeactivateMutation = useBulkDeactivateParentsMutation();
   const grantTeacherMutation = useGrantTeacherRoleToParentMutation();
   const grantCoordinatorMutation = useGrantCoordinatorRoleToParentMutation();
-  const grantTutorMutation = useGrantTutorRoleToParentMutation();
   const removeRoleMutation = useRemoveDirectoryRoleMutation();
   const linkStudentMutation = useLinkParentStudentMutation();
   const unlinkStudentMutation = useUnlinkParentStudentMutation();
@@ -207,7 +203,6 @@ export function DirectoryParentsPage() {
     bulkDeactivateMutation.isPending ||
     grantTeacherMutation.isPending ||
     grantCoordinatorMutation.isPending ||
-    grantTutorMutation.isPending ||
     removeRoleMutation.isPending ||
     linkStudentMutation.isPending ||
     unlinkStudentMutation.isPending;
@@ -324,7 +319,6 @@ export function DirectoryParentsPage() {
       const roles = parent.roles ?? [];
       const hasTeacherRole = roles.includes("Teacher");
       const hasCoordinatorRole = roles.includes("Coordinator");
-      const hasTutorRole = roles.includes("Tutor");
       const removableRoles = getRemovableDirectoryRoles(roles, "Parent");
       const overflowItems = [
         {
@@ -355,19 +349,6 @@ export function DirectoryParentsPage() {
                 onSelect: () => {
                   clearMessages();
                   setGrantCoordinatorTarget(parent);
-                },
-                disabled: busy,
-              },
-            ]
-          : []),
-        ...(!hasTutorRole
-          ? [
-              {
-                id: "add-tutor",
-                label: "Add Tutor role",
-                onSelect: () => {
-                  clearMessages();
-                  setGrantTutorTarget(parent);
                 },
                 disabled: busy,
               },
@@ -759,40 +740,6 @@ export function DirectoryParentsPage() {
           }}
         />
       ) : null}
-
-      <AppConfirmDialog
-        open={grantTutorTarget != null}
-        onOpenChange={(open) => {
-          if (!open && !grantTutorMutation.isPending) {
-            setGrantTutorTarget(null);
-          }
-        }}
-        title="Add Tutor role"
-        description={
-          grantTutorTarget
-            ? `Add the Tutor role to ${grantTutorTarget.fullName}? They keep Parent access and can switch to Tutor after login.`
-            : ""
-        }
-        confirmLabel="Add Tutor"
-        loading={grantTutorMutation.isPending}
-        onConfirm={() => {
-          void (async () => {
-            if (!grantTutorTarget) {
-              return;
-            }
-            try {
-              await grantTutorMutation.mutateAsync(grantTutorTarget.parentId);
-              setSuccessMessage(
-                `Tutor role added to ${grantTutorTarget.fullName}.`,
-              );
-              setGrantTutorTarget(null);
-            } catch (err) {
-              const apiError = err as ApiError;
-              setActionError(apiError.message ?? "Unable to add Tutor role.");
-            }
-          })();
-        }}
-      />
 
       <AppConfirmDialog
         open={deactivateTarget != null}

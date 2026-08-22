@@ -62,6 +62,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(TeacherClassSectionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(CoordinatorClassSectionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(TutorSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(RemapTutorRoleToParentSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionEditRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizEditRequestSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
@@ -115,6 +116,61 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         CREATE UNIQUE INDEX IF NOT EXISTS ux_tutor_student_relations_tutor_student
             ON public.tutor_student_relations (tutor_id, student_id);
+        """;
+
+    /// <summary>
+    /// Tutor is retired. Existing tutor accounts become Parent; tutor-student links
+    /// become parent-student links. Lookup 2017 stays for historical rows but is inactive.
+    /// </summary>
+    private const string RemapTutorRoleToParentSql = """
+        INSERT INTO public.app_user_parents (parent_id, mobile_number, modified_date)
+        SELECT t.tutor_id, t.mobile_number, COALESCE(t.modified_date, now())
+        FROM public.app_user_tutors t
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public.app_user_parents p WHERE p.parent_id = t.tutor_id
+        );
+
+        INSERT INTO public.parent_student_relations (parent_id, student_id, relationship, is_active, created_date)
+        SELECT r.tutor_id, r.student_id, 'Guardian', COALESCE(r.is_active, TRUE), COALESCE(r.created_date, CURRENT_DATE)
+        FROM public.tutor_student_relations r
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.parent_student_relations p
+            WHERE p.parent_id = r.tutor_id AND p.student_id = r.student_id
+        );
+
+        INSERT INTO public.app_user_roles (user_id, role)
+        SELECT ur.user_id, 2013
+        FROM public.app_user_roles ur
+        WHERE ur.role = 2017
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.app_user_roles existing
+              WHERE existing.user_id = ur.user_id AND existing.role = 2013
+          );
+
+        DELETE FROM public.app_user_roles WHERE role = 2017;
+
+        DO $remap_users_role$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'app_users' AND column_name = 'role'
+            ) THEN
+                UPDATE public.app_users SET role = 2013 WHERE role = 2017;
+            END IF;
+        END
+        $remap_users_role$;
+
+        UPDATE public.student_groups SET creator_role = 2013 WHERE creator_role = 2017;
+
+        UPDATE public.app_approval SET approved_by_role = 2013 WHERE approved_by_role = 2017;
+
+        UPDATE public.app_user_role_request SET requested_role = 2013 WHERE requested_role = 2017;
+
+        UPDATE public.lookups
+        SET is_active = FALSE
+        WHERE id = 2017 AND type = 'UserRole';
         """;
 
     private const string UserRoleRequestSupportSql = """

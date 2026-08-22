@@ -42,9 +42,6 @@ export function AppLayout() {
     if (user?.role === "Teacher" || user?.role === "Coordinator") {
       items.push({ to: "/teacher/students", label: "My students" });
     }
-    if (user?.role === "Tutor") {
-      items.push({ to: "/tutor/students", label: "My students" });
-    }
     if (user && canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });
     }
@@ -85,9 +82,6 @@ export function AppLayout() {
     }
     if (user.role === "Teacher" || user.role === "Coordinator") {
       items.push({ to: "/teacher/students", label: "Students" });
-    }
-    if (user.role === "Tutor") {
-      items.push({ to: "/tutor/students", label: "Students" });
     }
     if (canManageQuestions(user.role)) {
       items.push({ to: "/questions", label: "Questions" });

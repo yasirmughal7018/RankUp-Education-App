@@ -53,7 +53,6 @@ public static class QuestionScopeResolver
         var role = ParseRole(currentUser.Role);
         if (role is not (
             UserRole.Parent
-            or UserRole.Tutor
             or UserRole.Teacher
             or UserRole.Coordinator
             or UserRole.CampusAdmin
@@ -114,7 +113,7 @@ public static class QuestionScopeResolver
     /// <summary>
     /// Approval hierarchy + org check.
     /// Approver must be a strictly higher tier than the creator (no self / same-tier).
-    /// Teacher/Coordinator/Tutor/Parent → CampusAdmin / SchoolAdmin / PortalAdmin;
+    /// Teacher/Coordinator/Parent → CampusAdmin / SchoolAdmin / PortalAdmin;
     /// CampusAdmin → SchoolAdmin / PortalAdmin;
     /// SchoolAdmin → PortalAdmin only.
     /// Org: CampusAdmin same campus, SchoolAdmin same school, PortalAdmin any.
@@ -188,7 +187,7 @@ public static class QuestionScopeResolver
     /// <summary>
     /// Restricted audience for non-Public questions:
     /// creator always; PortalAdmin always;
-    /// Teacher/Coordinator/Tutor creators → their CampusAdmin (same campus) + SchoolAdmin (same school);
+    /// Teacher/Coordinator creators → their CampusAdmin (same campus) + SchoolAdmin (same school);
     /// CampusAdmin creators → SchoolAdmin (same school) only;
     /// SchoolAdmin creators → PortalAdmin only;
     /// Parent creators → creator + PortalAdmin only.
@@ -244,14 +243,13 @@ public static class QuestionScopeResolver
 
     /// <summary>
     /// Creator roles a CampusAdmin may see/endorse in their campus
-    /// (Teacher, Coordinator, Tutor). Parent bank questions are family-private
+    /// (Teacher, Coordinator). Parent bank questions are family-private
     /// until PortalAdmin publishes — not campus/school queues.
     /// </summary>
     public static readonly UserRole[] CampusAdminVisibleCreatorRoles =
     [
         UserRole.Teacher,
         UserRole.Coordinator,
-        UserRole.Tutor,
     ];
 
     /// <summary>
@@ -262,7 +260,6 @@ public static class QuestionScopeResolver
     [
         UserRole.Teacher,
         UserRole.Coordinator,
-        UserRole.Tutor,
         UserRole.CampusAdmin,
     ];
 
@@ -286,7 +283,7 @@ public static class QuestionScopeResolver
     public static bool IsCreatorVisibleToSchoolAdmin(UserRole createdByRole)
         => SchoolAdminVisibleCreatorRoles.Contains(createdByRole);
 
-    /// <summary>0 Teacher/Coordinator/Tutor/Parent, 1 CampusAdmin, 2 SchoolAdmin, 3 PortalAdmin.</summary>
+    /// <summary>0 Teacher/Coordinator/Parent, 1 CampusAdmin, 2 SchoolAdmin, 3 PortalAdmin.</summary>
     public static int ApprovalTier(UserRole role) => role switch
     {
         UserRole.PortalAdmin => 3,
@@ -300,7 +297,7 @@ public static class QuestionScopeResolver
         if (approverRole == UserRole.CampusAdmin
             && creatorRole is UserRole.CampusAdmin or UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
-            return "Campus Admin can only approve questions created by Teachers, Coordinators, or Tutors in their campus.";
+            return "Campus Admin can only approve questions created by Teachers or Coordinators in their campus.";
         }
 
         if (approverRole == UserRole.CampusAdmin && creatorRole == UserRole.Parent)
@@ -311,7 +308,7 @@ public static class QuestionScopeResolver
         if (approverRole == UserRole.SchoolAdmin
             && creatorRole is UserRole.SchoolAdmin or UserRole.PortalAdmin)
         {
-            return "School Admin can only approve questions created by Teachers, Coordinators, Tutors, or Campus Admins in their school.";
+            return "School Admin can only approve questions created by Teachers, Coordinators, or Campus Admins in their school.";
         }
 
         if (approverRole == UserRole.SchoolAdmin && creatorRole == UserRole.Parent)

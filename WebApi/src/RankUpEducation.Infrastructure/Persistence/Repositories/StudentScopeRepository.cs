@@ -329,47 +329,4 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
             cancellationToken);
         return roster.Contains(studentId);
     }
-
-    public async Task<IReadOnlyList<long>> GetTutorLinkedStudentIdsAsync(
-        long tutorId,
-        CancellationToken cancellationToken)
-    {
-        return await _dbContext.TutorStudentRelations.AsNoTracking()
-            .Where(relation => relation.TutorId == tutorId && relation.IsActive)
-            .Select(relation => relation.StudentId)
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<TutorLinkedStudentInfo>> GetTutorLinkedStudentsAsync(
-        long tutorId,
-        CancellationToken cancellationToken)
-    {
-        return await (
-            from relation in _dbContext.TutorStudentRelations.AsNoTracking()
-            join student in _dbContext.Students.AsNoTracking() on relation.StudentId equals student.Id
-            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
-            join school in _dbContext.Schools.AsNoTracking() on (long?)user.SchoolId equals school.Id into schools
-            from school in schools.DefaultIfEmpty()
-            where relation.TutorId == tutorId && relation.IsActive
-            orderby user.FullName
-            select new TutorLinkedStudentInfo(
-                student.Id,
-                user.FullName,
-                user.Username,
-                user.RollNumberTeacherCode ?? string.Empty,
-                student.Grade,
-                student.Section,
-                school != null ? school.Name : null))
-            .ToListAsync(cancellationToken);
-    }
-
-    public Task<bool> IsTutorLinkedStudentAsync(long tutorId, long studentId, CancellationToken cancellationToken)
-    {
-        return _dbContext.TutorStudentRelations.AsNoTracking()
-            .AnyAsync(
-                relation => relation.TutorId == tutorId
-                    && relation.StudentId == studentId
-                    && relation.IsActive,
-                cancellationToken);
-    }
 }

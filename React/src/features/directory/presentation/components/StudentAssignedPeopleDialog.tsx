@@ -6,8 +6,6 @@ interface StudentAssignedPeopleDialogProps {
   parents: string[];
   coordinators: string[];
   teachers: string[];
-  /** When omitted/null, Tutors section is hidden (SchoolAdmin / CampusAdmin). PortalAdmin passes the list. */
-  tutors?: string[] | null;
   onClose: () => void;
 }
 
@@ -47,11 +45,8 @@ export function StudentAssignedPeopleDialog({
   parents,
   coordinators,
   teachers,
-  tutors = null,
   onClose,
 }: StudentAssignedPeopleDialogProps) {
-  const showTutors = tutors != null;
-
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -77,18 +72,13 @@ export function StudentAssignedPeopleDialog({
           Assigned people
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          {showTutors
-            ? `Parents, coordinators, teachers, and tutors linked to ${studentName}.`
-            : `Parents, coordinators, and teachers linked to ${studentName}.`}
+          Parents, coordinators, and teachers linked to {studentName}.
         </p>
 
         <div className="mt-5 space-y-5">
           <PeopleSection title="Parents" names={parents} />
           <PeopleSection title="Coordinators" names={coordinators} />
           <PeopleSection title="Teachers" names={teachers} />
-          {showTutors ? (
-            <PeopleSection title="Tutors" names={tutors} />
-          ) : null}
         </div>
 
         <div className="mt-5 flex justify-end">

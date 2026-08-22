@@ -7,7 +7,6 @@ import {
   IdCard,
   RefreshCw,
   School,
-  UserRound,
   Users,
   UserCog,
 } from "lucide-react";
@@ -162,16 +161,13 @@ function ClassProfileCard({ data }: { data: StudentMeOverview }) {
   );
 }
 
-/** Student self-view: class/section and assigned parents, coordinators, teachers, tutors. */
+/** Student self-view: class/section and assigned parents, coordinators, and teachers. */
 export function StudentMyClassPage() {
   const { data, isLoading, error, refetch, isFetching } =
     useStudentMeOverviewQuery(true);
 
   const totalPeople = data
-    ? data.parents.length +
-      data.coordinators.length +
-      data.teachers.length +
-      data.tutors.length
+    ? data.parents.length + data.coordinators.length + data.teachers.length
     : 0;
 
   return (
@@ -179,7 +175,7 @@ export function StudentMyClassPage() {
       <AppPageHeader
         studentFacing
         title="My class"
-        subtitle="Your school placement and the parents, coordinators, teachers, and tutors linked to you."
+        subtitle="Your school placement and the parents, coordinators, and teachers linked to you."
         action={
           <Button
             type="button"
@@ -203,7 +199,7 @@ export function StudentMyClassPage() {
         <>
           <ClassProfileCard data={data} />
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <AppStatCard
               title="Parents"
               value={data.parents.length}
@@ -224,13 +220,6 @@ export function StudentMyClassPage() {
               icon={GraduationCap}
               colorVariant="success"
               description="Teaching your section"
-            />
-            <AppStatCard
-              title="Tutors"
-              value={data.tutors.length}
-              icon={UserRound}
-              colorVariant="warning"
-              description="Extra academic support"
             />
           </div>
 
@@ -268,14 +257,6 @@ export function StudentMyClassPage() {
                 emptyDescription="Teachers appear here once your class/section is on their roster."
                 icon={GraduationCap}
                 people={data.teachers}
-              />
-              <PeoplePanel
-                title="Tutors"
-                description="Tutors linked for extra help outside school classes."
-                emptyTitle="No tutors linked"
-                emptyDescription="A tutor can link you from their portal when approved."
-                icon={UserRound}
-                people={data.tutors}
               />
             </div>
           </section>

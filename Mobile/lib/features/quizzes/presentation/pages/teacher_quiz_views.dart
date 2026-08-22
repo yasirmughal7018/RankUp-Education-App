@@ -13,7 +13,6 @@ import 'package:rankup_education/features/quizzes/domain/entities/quiz_summary.d
 import 'package:rankup_education/features/quizzes/presentation/controllers/quizzes_controller.dart';
 import 'package:rankup_education/features/quizzes/presentation/controllers/teacher_quiz_manage_controller.dart';
 import 'package:rankup_education/features/quizzes/presentation/providers/quiz_providers.dart';
-import 'package:rankup_education/features/tutor/presentation/providers/tutor_providers.dart';
 
 /// Teacher-facing quiz list with search, create, and pending reviews.
 class TeacherQuizListView extends StatelessWidget {
@@ -879,7 +878,7 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
     _endAt = now.add(const Duration(hours: 25));
     _allowedAttempts = widget.defaultAllowedAttempts;
     Future.microtask(() {
-      if (widget.role == UserRole.parent || widget.role == UserRole.tutor) {
+      if (widget.role == UserRole.parent) {
         return;
       }
       ref.read(teacherQuizManageControllerProvider.notifier).loadStudents();
@@ -964,30 +963,10 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
     final state = ref.watch(teacherQuizManageControllerProvider);
     final manage = ref.read(teacherQuizManageControllerProvider.notifier);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
-    final usesLinkedStudents =
-        widget.role == UserRole.parent || widget.role == UserRole.tutor;
+    final usesLinkedStudents = widget.role == UserRole.parent;
     final search = _searchController.text.trim().toLowerCase();
     final List<DirectoryStudentOption> linkedStudents;
-    if (widget.role == UserRole.tutor) {
-      final items =
-          ref.watch(tutorLinkedStudentsProvider).valueOrNull ?? const [];
-      linkedStudents = items
-          .where(
-            (student) =>
-                search.isEmpty ||
-                student.fullName.toLowerCase().contains(search) ||
-                student.username.toLowerCase().contains(search),
-          )
-          .map(
-            (student) => DirectoryStudentOption(
-              studentId: '${student.studentId}',
-              fullName: student.fullName,
-              grade: student.grade,
-              section: student.section,
-            ),
-          )
-          .toList();
-    } else if (widget.role == UserRole.parent) {
+    if (widget.role == UserRole.parent) {
       final items = ref.watch(linkedStudentsProvider).valueOrNull ?? const [];
       linkedStudents = items
           .where(
@@ -1143,9 +1122,8 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                   'allinschool' =>
                     'Assigns to all active students in your school.',
                   'public' => 'Publishes this quiz to the public catalog.',
-                  'alllinked' => widget.role == UserRole.tutor
-                      ? 'Assigns to all students linked to your account.'
-                      : 'Assigns to all children linked to your account.',
+                  'alllinked' =>
+                    'Assigns to all children linked to your account.',
                   _ => 'The selected audience will receive this quiz.',
                 },
               ),

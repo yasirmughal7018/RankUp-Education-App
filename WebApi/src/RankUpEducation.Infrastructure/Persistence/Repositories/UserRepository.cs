@@ -6,7 +6,6 @@ using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Parents;
 using RankUpEducation.Domain.Students;
 using RankUpEducation.Domain.Teachers;
-using RankUpEducation.Domain.Tutors;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
@@ -381,11 +380,6 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Parents.AnyAsync(parent => parent.Id == userId, cancellationToken);
     }
 
-    public Task<bool> HasTutorProfileAsync(long userId, CancellationToken cancellationToken)
-    {
-        return _dbContext.Tutors.AnyAsync(tutor => tutor.Id == userId, cancellationToken);
-    }
-
     public async Task AddStudentProfileAsync(Student student, CancellationToken cancellationToken)
     {
         await _dbContext.Students.AddAsync(student, cancellationToken);
@@ -399,11 +393,6 @@ public sealed class UserRepository : IUserRepository
     public async Task AddParentProfileAsync(Parent parent, CancellationToken cancellationToken)
     {
         await _dbContext.Parents.AddAsync(parent, cancellationToken);
-    }
-
-    public async Task AddTutorProfileAsync(Tutor tutor, CancellationToken cancellationToken)
-    {
-        await _dbContext.Tutors.AddAsync(tutor, cancellationToken);
     }
 
     public Task<bool> HasStudentGroupsForRoleAsync(
@@ -502,10 +491,6 @@ public sealed class UserRepository : IUserRepository
             case UserRole.Parent:
                 var parent = await _dbContext.Parents.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
                 user.AttachProfileContext(parent?.Id, user.SchoolId, user.CampusId);
-                break;
-            case UserRole.Tutor:
-                var tutor = await _dbContext.Tutors.FirstOrDefaultAsync(profile => profile.Id == user.Id, cancellationToken);
-                user.AttachProfileContext(tutor?.Id ?? user.Id, null, null);
                 break;
             case UserRole.PortalAdmin:
             case UserRole.SchoolAdmin:

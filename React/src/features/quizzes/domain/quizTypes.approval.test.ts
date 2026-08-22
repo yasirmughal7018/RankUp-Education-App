@@ -37,7 +37,6 @@ describe("quiz list visibility helpers", () => {
     expect(canViewOrgQuizCatalog("Teacher")).toBe(true);
     expect(canViewOrgQuizCatalog("Coordinator")).toBe(true);
     expect(canViewOrgQuizCatalog("Parent")).toBe(true);
-    expect(canViewOrgQuizCatalog("Tutor")).toBe(true);
     expect(canViewOrgQuizCatalog("Student")).toBe(false);
   });
 
@@ -50,9 +49,6 @@ describe("quiz list visibility helpers", () => {
     ).toBe(true);
     expect(
       canAssignQuiz("Parent", "Published", "Approved", 3, "Practice"),
-    ).toBe(true);
-    expect(
-      canAssignQuiz("Tutor", "Published", "Approved", 2, "Competition"),
     ).toBe(true);
     expect(
       canAssignQuiz("Parent", "Published", "Approved", 2, "ParentPrivate"),
@@ -89,9 +85,8 @@ describe("canApproveQuizzes", () => {
 });
 
 describe("canManageQuizzes", () => {
-  it("includes coordinator and tutor alongside teacher roles", () => {
+  it("includes coordinator alongside teacher and parent roles", () => {
     expect(canManageQuizzes("Coordinator")).toBe(true);
-    expect(canManageQuizzes("Tutor")).toBe(true);
     expect(canManageQuizzes("Teacher")).toBe(true);
     expect(canManageQuizzes("Parent")).toBe(true);
   });

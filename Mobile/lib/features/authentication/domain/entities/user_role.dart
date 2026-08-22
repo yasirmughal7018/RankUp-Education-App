@@ -4,7 +4,6 @@ enum UserRole {
   parent,
   teacher,
   coordinator,
-  tutor,
   schoolAdmin,
   campusAdmin,
   portalAdmin,
@@ -14,10 +13,10 @@ enum UserRole {
 UserRole parseUserRole(String value) {
   return switch (value.trim().toLowerCase()) {
     'student' => UserRole.student,
-    'parent' => UserRole.parent,
+    // Tutor is retired; treat leftover tokens as Parent for one release.
+    'parent' || 'tutor' => UserRole.parent,
     'teacher' => UserRole.teacher,
     'coordinator' => UserRole.coordinator,
-    'tutor' => UserRole.tutor,
     'schooladmin' => UserRole.schoolAdmin,
     'campusadmin' => UserRole.campusAdmin,
     // PortalAdmin is the current API/DB name; superadmin is legacy.
@@ -40,8 +39,7 @@ bool canManageQuestions(UserRole role) {
       role == UserRole.campusAdmin ||
       role == UserRole.teacher ||
       role == UserRole.coordinator ||
-      role == UserRole.parent ||
-      role == UserRole.tutor;
+      role == UserRole.parent;
 }
 
 /// SchoolAdmin, CampusAdmin, and PortalAdmin may approve teacher quizzes.
@@ -56,7 +54,6 @@ bool canManageQuizzes(UserRole role) {
   return role == UserRole.teacher ||
       role == UserRole.coordinator ||
       role == UserRole.parent ||
-      role == UserRole.tutor ||
       role == UserRole.schoolAdmin ||
       role == UserRole.campusAdmin ||
       role == UserRole.portalAdmin;
@@ -105,10 +102,6 @@ List<({String value, String label})> assignModesForRole(UserRole role) {
         (value: 'group', label: 'Group'),
         (value: 'alllinked', label: 'All linked children'),
       ],
-    UserRole.tutor => [
-        ...studentModes,
-        (value: 'alllinked', label: 'All linked students'),
-      ],
     UserRole.schoolAdmin => [
         ...studentModes,
         (value: 'allinschool', label: 'All in school'),
@@ -145,7 +138,6 @@ extension UserRoleLabel on UserRole {
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
       UserRole.coordinator => 'Coordinator',
-      UserRole.tutor => 'Tutor',
       UserRole.schoolAdmin => 'School Admin',
       UserRole.campusAdmin => 'Campus Admin',
       UserRole.portalAdmin => 'Portal Admin',
@@ -158,7 +150,6 @@ extension UserRoleLabel on UserRole {
       UserRole.parent => 'Parent',
       UserRole.teacher => 'Teacher',
       UserRole.coordinator => 'Coordinator',
-      UserRole.tutor => 'Tutor',
       UserRole.schoolAdmin => 'SchoolAdmin',
       UserRole.campusAdmin => 'CampusAdmin',
       UserRole.portalAdmin => 'PortalAdmin',

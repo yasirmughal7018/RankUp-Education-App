@@ -12,7 +12,6 @@ public sealed class QuizApprovalRoutingTests
     [InlineData(UserRole.CampusAdmin, true)]
     [InlineData(UserRole.SchoolAdmin, false)]
     [InlineData(UserRole.Parent, false)]
-    [InlineData(UserRole.Tutor, false)]
     [InlineData(UserRole.PortalAdmin, false)]
     public void SchoolOrCampusMayEndorse_IncludesCampusAdminCreators(UserRole creator, bool expected)
     {

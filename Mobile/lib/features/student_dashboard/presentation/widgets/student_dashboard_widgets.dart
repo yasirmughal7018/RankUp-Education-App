@@ -1088,7 +1088,7 @@ String _formatNumber(int value) {
   return buffer.toString();
 }
 
-/// Parents, coordinators, teachers, and tutors for the signed-in student.
+/// Parents, coordinators, and teachers for the signed-in student.
 class StudentPeopleCard extends StatelessWidget {
   const StudentPeopleCard({required this.student, super.key});
 
@@ -1110,7 +1110,6 @@ class StudentPeopleCard extends StatelessWidget {
           _PeopleGroup(title: 'Parents', names: student.parentNames),
           _PeopleGroup(title: 'Coordinators', names: student.coordinatorNames),
           _PeopleGroup(title: 'Teachers', names: student.teacherNames),
-          _PeopleGroup(title: 'Tutors', names: student.tutorNames),
         ],
       ),
     );

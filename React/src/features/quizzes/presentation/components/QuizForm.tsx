@@ -205,7 +205,7 @@ export function QuizForm({
               disabled={
                 isSubmitting ||
                 quizTypesLoading ||
-                (authorRole === "Parent" || authorRole === "Tutor") &&
+                authorRole === "Parent" &&
                   quizTypes.length === 1
               }
               required
@@ -235,11 +235,10 @@ export function QuizForm({
                 </option>
               ))}
             </select>
-            {(authorRole === "Parent" || authorRole === "Tutor") &&
-            quizTypes.length === 1 ? (
+            {authorRole === "Parent" && quizTypes.length === 1 ? (
               <p className="mt-1 text-xs text-muted-foreground">
-                ParentPrivate quizzes are created automatically for linked{" "}
-                {authorRole === "Tutor" ? "students" : "children"}.
+                ParentPrivate quizzes are created automatically for linked
+                children.
               </p>
             ) : null}
           </div>

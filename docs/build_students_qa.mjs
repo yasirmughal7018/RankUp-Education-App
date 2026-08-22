@@ -28,10 +28,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DOC_DATE = "16 Aug 2026";
 const DOC_TITLE = "RankUp Education — Students Business & QA Guide";
 const DOC_SUBTITLE =
-  "Student identity, registration, directory, quizzes, rankings, dashboards, school change, Tutor links, and known gaps — as implemented.";
+  "Student identity, registration, directory, quizzes, rankings, dashboards, school change, parent links, and known gaps — as implemented.";
 
 const identityRules = [
-  ["Role exclusivity", "Student cannot combine with any other role (UserRoleRules). Adding Student when another role exists, or adding any role when Student exists, fails. Tutor/Parent/Teacher/Coordinator are combinable with each other but never with Student."],
+  ["Role exclusivity", "Student cannot combine with any other role (UserRoleRules). Adding Student when another role exists, or adding any role when Student exists, fails. Parent/Teacher/Coordinator are combinable with each other but never with Student."],
   ["Self role remove", "Student is never removable via RemoveMyRole; Student accounts have no companion roles."],
   ["Permissions (JWT /me)", "dashboard.view, quiz.attempt, worksheet.submit, message.send, discussion.participate, ranking.view — claim strings only; worksheets/messages/discussions remain stubs."],
   ["Profile table", "app_user_students: student_id = app_users.id; grade (Class lookup id); section (free text); optional mobile_number."],
@@ -42,13 +42,13 @@ const identityRules = [
 
 const registrationRules = [
   ["Endpoint", "POST /api/auth/register (AllowAnonymous)"],
-  ["Username", "Always email for Student / Parent / Teacher / Tutor"],
+  ["Username", "Always email for Student / Parent / Teacher"],
   ["Grade", "Required for Student (grade > 0); must be an active Class lookup"],
   ["Section", "Required for Student (non-blank trimmed text)"],
   ["School / campus", "Optional; campus requires school; drives approval queue routing"],
   ["Roll number", "Required only when a school is selected; cleared when no school"],
   ["Persistence", "Pending fields registration_grade + registration_section on app_users"],
-  ["Parent/Teacher/Tutor", "Grade/section rejected if sent for Parent, Teacher, or Tutor; Tutor never uses school/campus/roll"],
+  ["Parent/Teacher", "Grade/section rejected if sent for Parent or Teacher; Parent never uses school/campus/roll"],
 ];
 
 const publicOptions = [
@@ -58,14 +58,14 @@ const publicOptions = [
 ];
 
 const approvalRouting = [
-  ["No school (incl. Parent / Tutor)", "PortalAdmin only"],
+  ["No school (incl. Parent)", "PortalAdmin only"],
   ["School only", "SchoolAdmin (that school) + PortalAdmin"],
   ["Campus", "CampusAdmin (that campus) + SchoolAdmin + PortalAdmin"],
 ];
 
 const approvalActivation = [
-  ["PortalAdmin", "Can approve and activate any registration (including Parent / Tutor / no-school)"],
-  ["SchoolAdmin", "Can activate Student/Teacher with school in scope; cannot activate no-school / Parent / Tutor"],
+  ["PortalAdmin", "Can approve and activate any registration (including Parent / no-school)"],
+  ["SchoolAdmin", "Can activate Student/Teacher with school in scope; cannot activate no-school / Parent"],
   ["CampusAdmin", "Can activate Student/Teacher with campus in scope"],
   ["On Student activate", "CreateProfileForRoleAsync uses registration_grade + registration_section — no hardcoded grade 1 / section A"],
   ["Legacy pending", "Missing grade/section → validation: ask student to submit a new request"],
@@ -73,7 +73,7 @@ const approvalActivation = [
 ];
 
 const directoryRules = [
-  ["GET /directory/students", "Filters: schoolId, campusId, grade, search, paging. Scope by admin school/campus. Search name/username/roll. List payload may include teacherNames, parentNames, tutorNames for assigned-people UI."],
+  ["GET /directory/students", "Filters: schoolId, campusId, grade, search, paging. Scope by admin school/campus. Search name/username/roll. List payload may include teacherNames, parentNames for assigned-people UI."],
   ["POST /directory/students", "Requires FullName, email/username, RollNumber, Grade (>0), Section, SchoolId, CampusId. Creates active Student ready for password setup. Does not re-validate Class lookup (unlike register)."],
   ["PUT /directory/students/{id}", "Update name, campus (same school), roll, grade, section (and school/campus where allowed)."],
   ["Activate / deactivate / bulk-deactivate", "Scope-checked; deactivate revokes refresh tokens."],
@@ -89,16 +89,6 @@ const parentLinking = [
   ["Student “my parents”", "Not implemented — no student-facing parents list API/UI"],
 ];
 
-const tutorLinking = [
-  ["Model", "Tutor is a combinable tuition role (lookup 2017). Profile app_user_tutors; links in tutor_student_relations (not class roster)."],
-  ["Directory Tutors", "PortalAdmin only: /admin/directory/tutors — create, activate/deactivate, link/unlink students by CNIC or username."],
-  ["POST /directory/tutors/{tutorId}/students", "PortalAdmin link (body: cnic or username)"],
-  ["DELETE /directory/tutors/{tutorId}/students/{studentId}", "PortalAdmin unlink"],
-  ["Tutor self APIs", "Acting as Tutor: linked-student list / history surfaces (Web + Mobile as implemented)"],
-  ["Student assigned people", "Directory student tiles may show Teachers / Parents / Tutors names (view popup) for admins"],
-  ["Grant Tutor companion", "PortalAdmin may add Tutor onto Parent/Teacher/Coordinator (and reverse). School/Campus Admin cannot grant Tutor on Teachers/Coordinators lists."],
-];
-
 const quizStudentApis = [
   ["GET /quizzes", "Assigned quizzes for the student"],
   ["GET /quizzes/{quizId}", "Detail if assigned"],
@@ -106,7 +96,7 @@ const quizStudentApis = [
   ["PUT .../attempts/{id}/draft", "Save draft; optional offline sync fields"],
   ["POST .../attempts/{id}/submit", "Submit + score"],
   ["POST .../attempts/{id}/sync", "Offline replay; idempotent clientSyncId"],
-  ["GET .../attempts/{id}/result", "Own result (Parent or linked Tutor may view linked child)"],
+  ["GET .../attempts/{id}/result", "Own result (Parent may view linked child)"],
 ];
 
 const quizAttemptRules = [
@@ -115,11 +105,11 @@ const quizAttemptRules = [
   ["Attempts", "AllowedAttempts quota; Allow Retry may add extras"],
   ["Instructions", "Non-empty instructions require acknowledge on start"],
   ["Offline", "Draft/submit sync supported with clientSyncId / isOfflineSync"],
-  ["Students do not assign", "AssignedById is Teacher/Parent/Tutor; students only take"],
+  ["Students do not assign", "AssignedById is Teacher/Parent; students only take"],
 ];
 
 const reportsRankings = [
-  ["GET /reports/students/{id}/quiz-history", "Student: self only. Also Parent (linked), Tutor (linked via tutor_student_relations), Teacher/Coordinator/SchoolAdmin (campus), PortalAdmin. CampusAdmin not in ACL."],
+  ["GET /reports/students/{id}/quiz-history", "Student: self only. Also Parent (linked), Teacher/Coordinator/SchoolAdmin (campus), PortalAdmin. CampusAdmin not in ACL."],
   ["GET /reports/rankings/me?scope=class|school", "Student only. Rank by max submitted quiz_attempts.percentage. Class = campus+grade+section (grade-only if section empty). School = whole school. Optional quizId."],
   ["GET /reports/rankings", "Staff only (PortalAdmin/SchoolAdmin/Teacher/Coordinator) — not Student"],
   ["Summary / performance", "Staff only"],
@@ -132,7 +122,7 @@ const dashboardRules = [
 ];
 
 const schoolChangeRules = [
-  ["Who", "Student, Teacher, Coordinator, CampusAdmin (not PortalAdmin/SchoolAdmin/Parent/Tutor)"],
+  ["Who", "Student, Teacher, Coordinator, CampusAdmin (not PortalAdmin/SchoolAdmin/Parent)"],
   ["Student effect", "Sole role → full account lock + token revoke until approve/reject"],
   ["Approve", "Applies destination school/campus; unlocks"],
   ["Reject", "Unlock; optional leaveWithoutSchool clears school/campus only for Student requester"],
@@ -174,7 +164,7 @@ const mobileNav = [
 const gaps = [
   ["AI assistant", "Mobile static UI; no AI backend; dashboard AI omitted on live home"],
   ["Worksheets / messaging / discussions / attendance / rewards", "Stub APIs or placeholder UI; permission strings may still appear"],
-  ["Student “my parents” / “my tutors”", "Missing — student cannot list parents/tutors; parents/tutors link via admin or self CNIC/username flows"],
+  ["Student “my parents”", "Missing — student cannot list parents; parents link via admin or self CNIC/username flows"],
   ["Subject / city rankings", "Not built — only class and school scopes"],
   ["Directory Class lookup validation", "Register validates Class lookup; directory create only requires grade > 0"],
   ["CampusAdmin quiz history", "Not in student quiz-history ACL"],
@@ -196,14 +186,11 @@ const scenarios = [
   ["STU-12", "Dashboard honesty", "Open Web and Mobile student home with no fabricated APIs.", "No fake rank/AI/weak-topic cards; quiz stats from assigned quizzes only."],
   ["STU-13", "Parent link invisible to student", "Admin links parent↔student; student opens profile/home.", "No “my parents” list for the student."],
   ["STU-14", "Role exclusivity", "Try grant Teacher onto a Student account (or reverse).", "Business rule: Student accounts cannot be combined with other roles."],
-  ["STU-15", "Tutor cannot combine with Student", "Try grant Tutor onto a Student (or Student onto Tutor).", "Rejected by UserRoleRules — Student exclusive."],
-  ["STU-16", "PortalAdmin links Tutor↔Student", "PortalAdmin links student on Tutors directory by CNIC/username.", "tutor_student_relations row; student list may show tutorNames."],
-  ["STU-17", "SchoolAdmin cannot manage Tutors", "SchoolAdmin opens /admin/directory/tutors or tries tutor link API.", "Forbidden / no Tutors nav — PortalAdmin only."],
 ];
 
 const checklist = [
   "Student self-register requires Class grade + section; grades load from /auth/registration-options/grades.",
-  "Roll required only when school is selected; Parent/Tutor never get grade/section/school on register.",
+  "Roll required only when school is selected; Parent never get grade/section/school on register.",
   "Approve activation writes Student profile from registration_grade/section (no 1/A default).",
   "Legacy pending without grade/section cannot activate.",
   "Directory create/update requires grade+section+roll.",
@@ -214,10 +201,9 @@ const checklist = [
   "Mobile: home, quizzes, reports history, rankings — no fake Ayan/Sara leaderboard.",
   "Live dashboards omit fabricated rank/AI/streak UI.",
   "Quiz start requires deviceId; cross-device resume is locked.",
-  "Student school-change fully locks the account; Parent/Tutor cannot request school change.",
-  "Student cannot combine roles (including Tutor) or self-remove Student.",
-  "No student-facing my-parents / my-tutors API.",
-  "Tutor–student links and Tutors directory are PortalAdmin-only; School/Campus Admin cannot grant Tutor companions.",
+  "Student school-change fully locks the account; Parent cannot request school change.",
+  "Student cannot combine roles or self-remove Student.",
+  "No student-facing my-parents API.",
 ];
 
 function esc(text) {
@@ -283,13 +269,13 @@ const html = `<!doctype html>
       <span class="chip">Web + Mobile + API</span>
       <span class="chip">${esc(DOC_DATE)}</span>
       <span class="chip">Exclusive Student role</span>
-      <span class="chip">Tutor links (PortalAdmin)</span>
+      <span class="chip">Parent links</span>
       <span class="chip">Honest dashboards</span>
       <span class="chip">Peer rankings</span>
     </div>
   </header>
 
-  <div class="ok"><strong>Canonical Student MVP:</strong> exclusive Student role (never combines with Tutor/Parent/Teacher/…); register/directory with real grade (Class lookup) + section; take assigned quizzes (incl. offline); self history; class/school peer rankings from best attempt %; quiz-only dashboards. Parent and Tutor linking is admin/parent/tutor-side only (Tutors directory = PortalAdmin).</div>
+  <div class="ok"><strong>Canonical Student MVP:</strong> exclusive Student role (never combines with Parent/Teacher/…); register/directory with real grade (Class lookup) + section; take assigned quizzes (incl. offline); self history; class/school peer rankings from best attempt %; quiz-only dashboards. Parent linking is admin/parent-side only.</div>
 
   <div class="note"><strong>Related docs:</strong> User creation/approval (<code>03_RankUp_User_Creation_Approval_QA</code>), Quizzes (<code>05_RankUp_Quiz_Business_QA</code>), Questions (<code>04_RankUp_Questions_Business_QA</code>). This guide is Student-centric and does not restate full quiz lifecycle.</div>
 
@@ -313,9 +299,6 @@ const html = `<!doctype html>
 
   <h2>4. Parent linking</h2>
   ${htmlTable(["Endpoint / topic", "Rule"], parentLinking)}
-
-  <h2>4b. Tutor linking (tuition)</h2>
-  ${htmlTable(["Endpoint / topic", "Rule"], tutorLinking)}
 
   <h2>5. Quizzes (student take flow)</h2>
   <h3>5.1 Student-callable APIs</h3>
@@ -419,7 +402,7 @@ const docChildren = [
   docParagraph(DOC_SUBTITLE),
   docParagraph(`Version: current codebase · Date: ${DOC_DATE}`),
   docParagraph(
-    "Canonical Student MVP: exclusive role (never with Tutor); register/directory with Class grade + section; assigned quizzes + offline; self history; class/school peer rankings; honest quiz-only dashboards; Tutor links PortalAdmin-only.",
+    "Canonical Student MVP: exclusive role; register/directory with Class grade + section; assigned quizzes + offline; self history; class/school peer rankings; honest quiz-only dashboards; Parent links via directory or parent self-link.",
     { run: { bold: true, color: "166534" } },
   ),
 
@@ -441,9 +424,6 @@ const docChildren = [
 
   docHeading("4. Parent linking"),
   docTable(["Endpoint / topic", "Rule"], parentLinking),
-
-  docHeading("4b. Tutor linking (tuition)"),
-  docTable(["Endpoint / topic", "Rule"], tutorLinking),
 
   docHeading("5. Quizzes (student take flow)"),
   docHeading("5.1 Student-callable APIs", HeadingLevel.HEADING_2),

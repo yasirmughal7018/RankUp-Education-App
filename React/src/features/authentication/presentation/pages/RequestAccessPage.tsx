@@ -9,7 +9,7 @@ import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 const inputClassName = FORM_FIELD_CLASS;
 
-const USER_TYPES = ["Student", "Parent", "Teacher", "Tutor"] as const;
+const USER_TYPES = ["Student", "Parent", "Teacher"] as const;
 
 export function RequestAccessPage() {
   const [form, setForm] = useState({
@@ -36,11 +36,10 @@ export function RequestAccessPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const isParent = form.userType === "Parent";
-  const isTutor = form.userType === "Tutor";
   const isStudent = form.userType === "Student";
   const isTeacher = form.userType === "Teacher";
   const showSchoolFields = isStudent || isTeacher;
-  const isSchoolLess = isParent || isTutor;
+  const isSchoolLess = isParent;
 
   function updateField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -50,13 +49,13 @@ export function RequestAccessPage() {
     setForm((current) => ({
       ...current,
       userType,
-      ...(userType === "Parent" || userType === "Tutor"
+      ...(userType === "Parent"
         ? { schoolId: "", campusId: "", rollNumberTeacherCode: "", grade: "", section: "" }
         : userType === "Teacher"
           ? { grade: "", section: "" }
           : {}),
     }));
-    if (userType === "Parent" || userType === "Tutor") {
+    if (userType === "Parent") {
       setCampuses([]);
     }
   }
@@ -236,9 +235,7 @@ export function RequestAccessPage() {
     }
   }
 
-  const description = isTutor
-    ? "Tutor requests go to Portal Admin. Email is your username. School and campus are not required — you teach students from many schools."
-    : isParent
+  const description = isParent
     ? "Parent requests go to Portal Admin. Email is your username. School and campus are not required."
     : isStudent
       ? "Email is your username. Grade and section are required. Roll number is required only when you select a school."

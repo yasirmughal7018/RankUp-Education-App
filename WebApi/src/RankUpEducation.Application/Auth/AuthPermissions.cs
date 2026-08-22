@@ -75,14 +75,6 @@ public static class AuthPermissions
                 "message.send",
                 "discussion.moderate"
             ],
-            UserRole.Tutor =>
-            [
-                "dashboard.view",
-                "quiz.create",
-                "quiz.assign",
-                "quiz.review",
-                "message.send"
-            ],
             _ => Array.Empty<string>()
         };
     }

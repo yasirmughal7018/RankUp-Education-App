@@ -11,7 +11,6 @@ class StudentMeOverviewModel {
     required this.parentNames,
     required this.coordinatorNames,
     required this.teacherNames,
-    required this.tutorNames,
   });
 
   factory StudentMeOverviewModel.fromJson(Map<String, dynamic> json) {
@@ -23,11 +22,13 @@ class StudentMeOverviewModel {
       section: (json['section'] as String?)?.trim() ?? '',
       schoolName: (json['schoolName'] as String?)?.trim(),
       campusName: (json['campusName'] as String?)?.trim(),
-      parentNames: _asPeopleNames(json['parents'] ?? json['parentNames']),
+      parentNames: _mergeUniqueNames(
+        _asPeopleNames(json['parents'] ?? json['parentNames']),
+        _asPeopleNames(json['tutors'] ?? json['tutorNames']),
+      ),
       coordinatorNames:
           _asPeopleNames(json['coordinators'] ?? json['coordinatorNames']),
       teacherNames: _asPeopleNames(json['teachers'] ?? json['teacherNames']),
-      tutorNames: _asPeopleNames(json['tutors'] ?? json['tutorNames']),
     );
   }
 
@@ -41,7 +42,6 @@ class StudentMeOverviewModel {
   final List<String> parentNames;
   final List<String> coordinatorNames;
   final List<String> teacherNames;
-  final List<String> tutorNames;
 
   String get classLabel {
     final trimmedSection = section.trim();
@@ -67,6 +67,21 @@ int _asInt(Object? value) {
     return value.toInt();
   }
   return int.tryParse('$value') ?? 0;
+}
+
+List<String> _mergeUniqueNames(List<String> primary, List<String> extra) {
+  if (extra.isEmpty) {
+    return primary;
+  }
+
+  final seen = primary.map((name) => name.toLowerCase()).toSet();
+  final merged = [...primary];
+  for (final name in extra) {
+    if (seen.add(name.toLowerCase())) {
+      merged.add(name);
+    }
+  }
+  return merged;
 }
 
 List<String> _asPeopleNames(Object? value) {

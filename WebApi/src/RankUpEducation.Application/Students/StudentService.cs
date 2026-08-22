@@ -46,8 +46,7 @@ public sealed class StudentService : IStudentService
             classInfo.CampusName,
             MapPeople(people.Parents),
             MapPeople(people.Coordinators),
-            MapPeople(people.Teachers),
-            MapPeople(people.Tutors));
+            MapPeople(people.Teachers));
     }
 
     private static IReadOnlyList<StudentMePersonResponse> MapPeople(

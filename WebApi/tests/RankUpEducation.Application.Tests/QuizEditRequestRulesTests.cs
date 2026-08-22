@@ -28,7 +28,6 @@ public sealed class QuizEditRequestRulesTests
         Assert.True(QuizEditRequestRules.RoutesToSchoolAndCampusApprovers(UserRole.Coordinator));
         Assert.False(QuizEditRequestRules.RoutesToSchoolAndCampusApprovers(UserRole.SchoolAdmin));
         Assert.False(QuizEditRequestRules.RoutesToSchoolAndCampusApprovers(UserRole.Parent));
-        Assert.False(QuizEditRequestRules.RoutesToSchoolAndCampusApprovers(UserRole.Tutor));
         Assert.False(QuizEditRequestRules.RoutesToSchoolAndCampusApprovers(UserRole.CampusAdmin));
         Assert.False(QuizEditRequestRules.RoutesToSchoolAndCampusApprovers(UserRole.PortalAdmin));
     }
@@ -42,6 +41,5 @@ public sealed class QuizEditRequestRulesTests
         Assert.False(QuizEditRequestRules.CanReviewEditRequests(UserRole.Teacher));
         Assert.False(QuizEditRequestRules.CanReviewEditRequests(UserRole.Coordinator));
         Assert.False(QuizEditRequestRules.CanReviewEditRequests(UserRole.Parent));
-        Assert.False(QuizEditRequestRules.CanReviewEditRequests(UserRole.Tutor));
     }
 }

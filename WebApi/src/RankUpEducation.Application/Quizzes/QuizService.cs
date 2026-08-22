@@ -134,7 +134,7 @@ public sealed class QuizService : IQuizService
         var role = ParseRole(_currentUser.Role);
         var now = _dateTimeProvider.UtcNow;
 
-        if (role is UserRole.Student or UserRole.Parent or UserRole.Teacher or UserRole.Coordinator or UserRole.Tutor)
+        if (role is UserRole.Student or UserRole.Parent or UserRole.Teacher or UserRole.Coordinator)
         {
             var expired = await _assignments.ExpireOverdueUnattemptedAsync(now, cancellationToken);
             if (expired.ChangedCount > 0)
@@ -151,7 +151,6 @@ public sealed class QuizService : IQuizService
         {
             UserRole.Student => await ListForStudentAsync(search, subject, grade, cancellationToken),
             UserRole.Parent => await ListForParentAsync(search, subject, grade, cancellationToken),
-            UserRole.Tutor => await ListForTutorAsync(search, subject, grade, cancellationToken),
             UserRole.Teacher or UserRole.Coordinator => await ListForTeacherAsync(search, subject, grade, cancellationToken),
             UserRole.SchoolAdmin => await _quizzes.ListForSchoolAsync(
                 _currentUser.SchoolId,
@@ -219,7 +218,7 @@ public sealed class QuizService : IQuizService
             }
         }
 
-        if (role is UserRole.Teacher or UserRole.Coordinator or UserRole.Tutor)
+        if (role is UserRole.Teacher or UserRole.Coordinator)
         {
             var teacherUserId = _currentUser.UserId ?? throw new ForbiddenAppException("Teacher account was not found.");
             var ownedDetail = await _quizzes.GetDetailForCreatorAsync(quizId, teacherUserId, cancellationToken);
@@ -229,7 +228,7 @@ public sealed class QuizService : IQuizService
             }
         }
 
-        if (role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent or UserRole.Tutor)
+        if (role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
         {
             // Non-student viewers without creator detail fall back to list summary fields.
             var list = await ListAsync(null, null, null, cancellationToken);
@@ -1389,39 +1388,6 @@ public sealed class QuizService : IQuizService
             .ToArray();
     }
 
-    private async Task<IReadOnlyList<QuizListItem>> ListForTutorAsync(
-        string? search,
-        string? subject,
-        string? grade,
-        CancellationToken cancellationToken)
-    {
-        var tutorUserId = _currentUser.UserId ?? throw new ForbiddenAppException("Tutor account was not found.");
-        var profileId = _currentUser.ProfileId ?? tutorUserId;
-
-        var catalogItems = await _quizzes.ListForSchoolAsync(
-            schoolId: null,
-            campusId: null,
-            viewerUserId: tutorUserId,
-            includeAllDrafts: false,
-            includeAllSchools: false,
-            search,
-            subject,
-            grade,
-            cancellationToken,
-            includePublishedFromAllSchools: true);
-
-        var studentIds = await _studentScope.GetTutorLinkedStudentIdsAsync(profileId, cancellationToken);
-        var assignedItems = studentIds.Count > 0
-            ? await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken)
-            : Array.Empty<QuizListItem>();
-
-        return catalogItems
-            .Concat(assignedItems.Where(assigned => catalogItems.All(item => item.QuizId != assigned.QuizId)))
-            .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
-            .ThenByDescending(item => item.QuizId)
-            .ToArray();
-    }
-
     private async Task<IReadOnlyList<QuizListItem>> ListForTeacherAsync(
         string? search,
         string? subject,
@@ -1609,27 +1575,7 @@ public sealed class QuizService : IQuizService
             return attempt.StudentId;
         }
 
-        if (role == UserRole.Tutor)
-        {
-            var tutorId = _currentUser.ProfileId ?? _currentUser.UserId
-                ?? throw new ForbiddenAppException("Tutor profile was not found.");
-
-            if (!await _studentScope.IsTutorLinkedStudentAsync(tutorId, attempt.StudentId, cancellationToken))
-            {
-                throw new ForbiddenAppException("You can only view results for linked students.");
-            }
-
-            var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
-                ?? throw new NotFoundAppException("Quiz was not found.");
-            if (!string.Equals(quiz.CreatedByName, tutorId.ToString(), StringComparison.Ordinal))
-            {
-                throw new ForbiddenAppException("You can only view results for quizzes you created.");
-            }
-
-            return attempt.StudentId;
-        }
-
-        throw new ForbiddenAppException("Only students, linked parents, and tutors can view quiz attempt results.");
+        throw new ForbiddenAppException("Only students and linked parents can view quiz attempt results.");
     }
 
     private static bool HasAttemptAnswer(QuizAttemptQuestionItem question)

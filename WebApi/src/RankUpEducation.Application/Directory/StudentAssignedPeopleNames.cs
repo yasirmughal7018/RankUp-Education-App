@@ -7,5 +7,4 @@ public sealed record StudentAssignedPerson(string FullName, string? Detail);
 public sealed record StudentAssignedPeople(
     IReadOnlyList<StudentAssignedPerson> Parents,
     IReadOnlyList<StudentAssignedPerson> Coordinators,
-    IReadOnlyList<StudentAssignedPerson> Teachers,
-    IReadOnlyList<StudentAssignedPerson> Tutors);
+    IReadOnlyList<StudentAssignedPerson> Teachers);

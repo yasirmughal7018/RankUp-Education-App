@@ -34,7 +34,7 @@ public static class QuizEditRequestRules
 
     /// <summary>
     /// Teacher/Coordinator: SchoolAdmin + CampusAdmin + PortalAdmin (anyone may grant).
-    /// SchoolAdmin, CampusAdmin, Parent, Tutor: PortalAdmin only.
+    /// SchoolAdmin, CampusAdmin, Parent: PortalAdmin only.
     /// </summary>
     public static bool RoutesToSchoolAndCampusApprovers(UserRole requesterRole)
         => requesterRole is UserRole.Teacher or UserRole.Coordinator;

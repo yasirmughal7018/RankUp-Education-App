@@ -21,9 +21,6 @@ import {
   type DirectoryCoordinatorFilters,
   type DirectoryParent,
   type DirectoryParentFilters,
-  type DirectoryTutor,
-  type DirectoryTutorFilters,
-  type CreateDirectoryTutorInput,
   type DirectorySchool,
   type DirectorySchoolAdmin,
   type DirectorySchoolAdminFilters,
@@ -36,8 +33,6 @@ import {
   type DirectoryTeacherFilters,
   type LinkParentStudentInput,
   type LinkParentStudentResult,
-  type LinkDirectoryTutorStudentInput,
-  type LinkDirectoryTutorStudentResult,
   type PagedDirectoryResult,
   type UpdateDirectoryCampusAdminInput,
   type UpdateDirectoryCoordinatorInput,
@@ -119,7 +114,6 @@ export async function getDirectorySummary(): Promise<DirectorySummary> {
     parents: normalizePeopleCounts(raw.parents),
     teachers: normalizePeopleCounts(raw.teachers),
     coordinators: normalizePeopleCounts(raw.coordinators),
-    tutors: normalizePeopleCounts(raw.tutors ?? EMPTY_STATUS_COUNTS),
     schoolAdmins: normalizePeopleCounts(raw.schoolAdmins),
     campusAdmins: normalizePeopleCounts(raw.campusAdmins),
     visibleSections: Array.isArray(raw.visibleSections)
@@ -381,39 +375,6 @@ export async function listParents(
   );
 }
 
-export async function listTutors(
-  filters: DirectoryTutorFilters = {},
-): Promise<PagedDirectoryResult<DirectoryTutor>> {
-  return apiRequest<PagedDirectoryResult<DirectoryTutor>>(
-    `/directory/tutors${toQuery({
-      search: filters.search,
-      pageNumber: filters.pageNumber,
-      pageSize: filters.pageSize,
-    })}`,
-  );
-}
-
-export async function createTutor(
-  input: CreateDirectoryTutorInput,
-): Promise<DirectoryTutor> {
-  return apiRequest<DirectoryTutor>("/directory/tutors", {
-    method: "POST",
-    body: input,
-  });
-}
-
-export async function activateTutor(tutorId: number): Promise<void> {
-  await apiRequestVoid(`/directory/tutors/${tutorId}/activate`, {
-    method: "POST",
-  });
-}
-
-export async function deactivateTutor(tutorId: number): Promise<void> {
-  await apiRequestVoid(`/directory/tutors/${tutorId}/deactivate`, {
-    method: "POST",
-  });
-}
-
 /** Create parent account (or add Parent role to matching account). */
 export async function createParent(
   input: CreateDirectoryParentInput,
@@ -513,30 +474,6 @@ export async function unlinkParentStudent(
   studentId: number,
 ): Promise<void> {
   await apiRequestVoid(`/directory/parents/${parentId}/students/${studentId}`, {
-    method: "DELETE",
-  });
-}
-
-/** Link tutor to a student by CNIC or username. */
-export async function linkTutorStudent(
-  tutorId: number,
-  input: LinkDirectoryTutorStudentInput,
-): Promise<LinkDirectoryTutorStudentResult> {
-  return apiRequest<LinkDirectoryTutorStudentResult>(
-    `/directory/tutors/${tutorId}/students`,
-    {
-      method: "POST",
-      body: input,
-    },
-  );
-}
-
-/** Remove tutor-student link. */
-export async function unlinkTutorStudent(
-  tutorId: number,
-  studentId: number,
-): Promise<void> {
-  await apiRequestVoid(`/directory/tutors/${tutorId}/students/${studentId}`, {
     method: "DELETE",
   });
 }
@@ -691,72 +628,12 @@ export async function grantTeacherRoleToCoordinator(
 
 /** Remove a companion role from a multi-role directory account. */
 export async function removeDirectoryRole(
-  context: "teachers" | "parents" | "coordinators" | "tutors",
+  context: "teachers" | "parents" | "coordinators",
   userId: number,
-  role: "Parent" | "Teacher" | "Coordinator" | "Tutor",
+  role: "Parent" | "Teacher" | "Coordinator",
 ): Promise<{ userId: number; fullName: string; username: string; roles: string[] }> {
   return apiRequest(`/directory/${context}/${userId}/roles/${role.toLowerCase()}`, {
     method: "DELETE",
-  });
-}
-
-/** Add Tutor role to a Parent account. */
-export async function grantTutorRoleToParent(
-  parentId: number,
-): Promise<DirectoryTutor> {
-  return apiRequest<DirectoryTutor>(`/directory/parents/${parentId}/roles/tutor`, {
-    method: "POST",
-  });
-}
-
-/** Add Tutor role to a Teacher account. */
-export async function grantTutorRoleToTeacher(
-  teacherId: number,
-): Promise<DirectoryTutor> {
-  return apiRequest<DirectoryTutor>(
-    `/directory/teachers/${teacherId}/roles/tutor`,
-    { method: "POST" },
-  );
-}
-
-/** Add Tutor role to a Coordinator account. */
-export async function grantTutorRoleToCoordinator(
-  userId: number,
-): Promise<DirectoryTutor> {
-  return apiRequest<DirectoryTutor>(
-    `/directory/coordinators/${userId}/roles/tutor`,
-    { method: "POST" },
-  );
-}
-
-/** Add Parent role to a Tutor account. */
-export async function grantParentRoleToTutor(
-  tutorId: number,
-): Promise<DirectoryParent> {
-  return apiRequest<DirectoryParent>(`/directory/tutors/${tutorId}/roles/parent`, {
-    method: "POST",
-  });
-}
-
-/** Add Teacher role to a Tutor account. */
-export async function grantTeacherRoleToTutor(
-  tutorId: number,
-  input: GrantTeacherRoleInput,
-): Promise<DirectoryTeacher> {
-  return apiRequest<DirectoryTeacher>(
-    `/directory/tutors/${tutorId}/roles/teacher`,
-    { method: "POST", body: input },
-  );
-}
-
-/** Add Coordinator role to a Tutor account. */
-export async function grantCoordinatorRoleToTutor(
-  tutorId: number,
-  input: GrantCoordinatorRoleInput,
-): Promise<{ userId: number; fullName: string; username: string; roles: string[] }> {
-  return apiRequest(`/directory/tutors/${tutorId}/roles/coordinator`, {
-    method: "POST",
-    body: input,
   });
 }
 

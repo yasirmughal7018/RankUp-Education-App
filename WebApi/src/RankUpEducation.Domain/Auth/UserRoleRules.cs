@@ -14,7 +14,6 @@ public static class UserRoleRules
         UserRole.Teacher,
         UserRole.Parent,
         UserRole.Coordinator,
-        UserRole.Tutor,
     ];
 
     /// <summary>Returns whether the role may be added given existing assignments.</summary>
@@ -49,7 +48,7 @@ public static class UserRoleRules
             return existingRoles.Count == 0 && roleToAdd == UserRole.CampusAdmin;
         }
 
-        // Teacher, Parent, Coordinator, and Tutor may share one account.
+        // Teacher, Parent, and Coordinator may share one account.
         return CombinableRoles.Contains(roleToAdd)
             && existingRoles.All(CombinableRoles.Contains);
     }
@@ -107,7 +106,7 @@ public static class UserRoleRules
             return false;
         }
 
-        return roleToRemove is UserRole.Parent or UserRole.Teacher or UserRole.Coordinator or UserRole.Tutor;
+        return roleToRemove is UserRole.Parent or UserRole.Teacher or UserRole.Coordinator;
     }
 
     /// <summary>Throws when the role cannot be removed from this account.</summary>
@@ -129,6 +128,6 @@ public static class UserRoleRules
         }
 
         throw new BusinessRuleException(
-            "Only Parent, Teacher, Coordinator, or Tutor can be removed from your profile. Contact an admin for other role changes.");
+            "Only Parent, Teacher, or Coordinator can be removed from your profile. Contact an admin for other role changes.");
     }
 }

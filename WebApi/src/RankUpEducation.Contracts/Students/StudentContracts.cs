@@ -16,5 +16,4 @@ public sealed record StudentMeOverviewResponse(
     string? CampusName,
     IReadOnlyList<StudentMePersonResponse> Parents,
     IReadOnlyList<StudentMePersonResponse> Coordinators,
-    IReadOnlyList<StudentMePersonResponse> Teachers,
-    IReadOnlyList<StudentMePersonResponse> Tutors);
+    IReadOnlyList<StudentMePersonResponse> Teachers);

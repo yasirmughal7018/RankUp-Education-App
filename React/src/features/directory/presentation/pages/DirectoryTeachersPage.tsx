@@ -46,7 +46,6 @@ import {
   useDirectoryTeachersQuery,
   useGrantCoordinatorRoleToTeacherMutation,
   useGrantParentRoleToTeacherMutation,
-  useGrantTutorRoleToTeacherMutation,
   useRemoveDirectoryRoleMutation,
   useUpdateTeacherMutation,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
@@ -76,7 +75,6 @@ export function DirectoryTeachersPage() {
   const canManage = user != null && isAdminRole(user.role);
   const isPortalAdmin = user?.role === "PortalAdmin";
   const canGrantParentRole = isPortalAdmin;
-  const canGrantTutorRole = isPortalAdmin;
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isCampusAdmin = user?.role === "CampusAdmin";
   const lockedSchoolId =
@@ -110,8 +108,6 @@ export function DirectoryTeachersPage() {
   const [grantParentTarget, setGrantParentTarget] =
     useState<DirectoryTeacher | null>(null);
   const [grantCoordinatorTarget, setGrantCoordinatorTarget] =
-    useState<DirectoryTeacher | null>(null);
-  const [grantTutorTarget, setGrantTutorTarget] =
     useState<DirectoryTeacher | null>(null);
   const [deactivateTarget, setDeactivateTarget] =
     useState<DirectoryTeacher | null>(null);
@@ -170,7 +166,6 @@ export function DirectoryTeachersPage() {
   const bulkDeactivateMutation = useBulkDeactivateTeachersMutation();
   const grantParentMutation = useGrantParentRoleToTeacherMutation();
   const grantCoordinatorMutation = useGrantCoordinatorRoleToTeacherMutation();
-  const grantTutorMutation = useGrantTutorRoleToTeacherMutation();
   const removeRoleMutation = useRemoveDirectoryRoleMutation();
 
   const totalCount = data?.totalCount ?? 0;
@@ -213,7 +208,6 @@ export function DirectoryTeachersPage() {
     bulkDeactivateMutation.isPending ||
     grantParentMutation.isPending ||
     grantCoordinatorMutation.isPending ||
-    grantTutorMutation.isPending ||
     removeRoleMutation.isPending;
 
   const allVisibleSelected =
@@ -343,10 +337,8 @@ export function DirectoryTeachersPage() {
     const roles = teacher.roles ?? [];
     const hasParentRole = roles.includes("Parent");
     const hasCoordinatorRole = roles.includes("Coordinator");
-    const hasTutorRole = roles.includes("Tutor");
     const removableRoles = getRemovableDirectoryRoles(roles, "Teacher", {
       includeParent: canGrantParentRole,
-      includeTutor: canGrantTutorRole,
     });
     const overflowItems = [
       {
@@ -377,19 +369,6 @@ export function DirectoryTeachersPage() {
               onSelect: () => {
                 clearMessages();
                 setGrantCoordinatorTarget(teacher);
-              },
-              disabled: busy,
-            },
-          ]
-        : []),
-      ...(canGrantTutorRole && !hasTutorRole
-        ? [
-            {
-              id: "add-tutor",
-              label: "Add Tutor role",
-              onSelect: () => {
-                clearMessages();
-                setGrantTutorTarget(teacher);
               },
               disabled: busy,
             },
@@ -797,40 +776,6 @@ export function DirectoryTeachersPage() {
           }}
         />
       ) : null}
-
-      <AppConfirmDialog
-        open={grantTutorTarget != null}
-        onOpenChange={(open) => {
-          if (!open && !grantTutorMutation.isPending) {
-            setGrantTutorTarget(null);
-          }
-        }}
-        title="Add Tutor role"
-        description={
-          grantTutorTarget
-            ? `Add the Tutor role to ${grantTutorTarget.fullName}? They keep Teacher access and can switch to Tutor after login.`
-            : ""
-        }
-        confirmLabel="Add Tutor"
-        loading={grantTutorMutation.isPending}
-        onConfirm={() => {
-          void (async () => {
-            if (!grantTutorTarget) {
-              return;
-            }
-            try {
-              await grantTutorMutation.mutateAsync(grantTutorTarget.teacherId);
-              setSuccessMessage(
-                `Tutor role added to ${grantTutorTarget.fullName}.`,
-              );
-              setGrantTutorTarget(null);
-            } catch (err) {
-              const apiError = err as ApiError;
-              setActionError(apiError.message ?? "Unable to add Tutor role.");
-            }
-          })();
-        }}
-      />
 
       <AppConfirmDialog
         open={deactivateTarget != null}

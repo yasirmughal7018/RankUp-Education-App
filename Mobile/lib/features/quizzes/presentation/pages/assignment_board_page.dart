@@ -7,7 +7,6 @@ import 'package:rankup_education/features/authentication/presentation/providers/
 import 'package:rankup_education/features/parent/presentation/providers/parent_providers.dart';
 import 'package:rankup_education/features/quizzes/data/models/quiz_manage_models.dart';
 import 'package:rankup_education/features/quizzes/presentation/providers/quiz_providers.dart';
-import 'package:rankup_education/features/tutor/presentation/providers/tutor_providers.dart';
 
 /// Cross-quiz assignment overview (mirrors web `/quizzes/assignments`).
 class AssignmentBoardPage extends ConsumerStatefulWidget {
@@ -33,8 +32,7 @@ class _AssignmentBoardPageState extends ConsumerState<AssignmentBoardPage> {
     final role =
         ref.watch(authControllerProvider).user?.role ?? UserRole.student;
     final isParent = role == UserRole.parent;
-    final isTutor = role == UserRole.tutor;
-    final isLinkedAssigner = isParent || isTutor;
+    final isLinkedAssigner = isParent;
     final boardAsync = ref.watch(assignmentBoardProvider(_studentFilter));
 
     return Scaffold(
@@ -72,7 +70,6 @@ class _AssignmentBoardPageState extends ConsumerState<AssignmentBoardPage> {
             const SizedBox(height: 12),
             if (isLinkedAssigner)
               _LinkedStudentFilter(
-                role: role,
                 selectedStudentId: _studentFilter,
                 onChanged: (value) => setState(() => _studentFilter = value),
               ),
@@ -123,33 +120,15 @@ class _AssignmentBoardPageState extends ConsumerState<AssignmentBoardPage> {
 
 class _LinkedStudentFilter extends ConsumerWidget {
   const _LinkedStudentFilter({
-    required this.role,
     required this.selectedStudentId,
     required this.onChanged,
   });
 
-  final UserRole role;
   final int? selectedStudentId;
   final ValueChanged<int?> onChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (role == UserRole.tutor) {
-      final async = ref.watch(tutorLinkedStudentsProvider);
-      return async.when(
-        loading: () => const LinearProgressIndicator(),
-        error: (_, __) => const SizedBox.shrink(),
-        data: (students) => _StudentDropdown(
-          students: [
-            for (final student in students)
-              (id: student.studentId, label: student.label),
-          ],
-          selectedStudentId: selectedStudentId,
-          onChanged: onChanged,
-        ),
-      );
-    }
-
     final async = ref.watch(linkedStudentsProvider);
     return async.when(
       loading: () => const LinearProgressIndicator(),

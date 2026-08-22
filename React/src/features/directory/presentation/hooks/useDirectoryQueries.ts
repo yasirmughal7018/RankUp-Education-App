@@ -6,7 +6,6 @@ import type {
   CreateDirectoryCampusAdminInput,
   CreateDirectoryCoordinatorInput,
   CreateDirectoryParentInput,
-  CreateDirectoryTutorInput,
   CreateDirectorySchoolAdminInput,
   CreateDirectoryStudentInput,
   CreateDirectoryTeacherInput,
@@ -15,13 +14,11 @@ import type {
   GrantTeacherRoleInput,
   DirectoryCampusAdminFilters,
   DirectoryParentFilters,
-  DirectoryTutorFilters,
   DirectorySchoolAdminFilters,
   DirectoryStudentFilters,
   DirectoryTeacherFilters,
   DirectoryCoordinatorFilters,
   LinkParentStudentInput,
-  LinkDirectoryTutorStudentInput,
   UpdateDirectoryCampusAdminInput,
   UpdateDirectoryCoordinatorInput,
   UpdateDirectoryParentInput,
@@ -48,16 +45,10 @@ function invalidateParents(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["directory", "parents"] });
 }
 
-function invalidateTutors(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: ["directory", "tutors"] });
-  void queryClient.invalidateQueries({ queryKey: queryKeys.directorySummary() });
-}
-
 function invalidateComboRoles(queryClient: ReturnType<typeof useQueryClient>) {
   invalidateTeachers(queryClient);
   invalidateCoordinators(queryClient);
   invalidateParents(queryClient);
-  invalidateTutors(queryClient);
   void queryClient.invalidateQueries({ queryKey: queryKeys.directorySummary() });
 }
 
@@ -144,17 +135,6 @@ export function useDirectoryParentsQuery(
   return useQuery({
     queryKey: queryKeys.directoryParents(filters),
     queryFn: () => directoryApi.listParents(filters),
-    enabled,
-  });
-}
-
-export function useDirectoryTutorsQuery(
-  filters: DirectoryTutorFilters = {},
-  enabled = true,
-) {
-  return useQuery({
-    queryKey: queryKeys.directoryTutors(filters),
-    queryFn: () => directoryApi.listTutors(filters),
     enabled,
   });
 }
@@ -564,86 +544,10 @@ export function useRemoveDirectoryRoleMutation() {
       userId,
       role,
     }: {
-      context: "teachers" | "parents" | "coordinators" | "tutors";
+      context: "teachers" | "parents" | "coordinators";
       userId: number;
-      role: "Parent" | "Teacher" | "Coordinator" | "Tutor";
+      role: "Parent" | "Teacher" | "Coordinator";
     }) => directoryApi.removeDirectoryRole(context, userId, role),
-    onSuccess: () => invalidateComboRoles(queryClient),
-  });
-}
-
-/** Add Tutor role to a Parent account. */
-export function useGrantTutorRoleToParentMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (parentId: number) =>
-      directoryApi.grantTutorRoleToParent(parentId),
-    onSuccess: () => invalidateComboRoles(queryClient),
-  });
-}
-
-/** Add Tutor role to a Teacher account. */
-export function useGrantTutorRoleToTeacherMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (teacherId: number) =>
-      directoryApi.grantTutorRoleToTeacher(teacherId),
-    onSuccess: () => invalidateComboRoles(queryClient),
-  });
-}
-
-/** Add Tutor role to a Coordinator account. */
-export function useGrantTutorRoleToCoordinatorMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (userId: number) =>
-      directoryApi.grantTutorRoleToCoordinator(userId),
-    onSuccess: () => invalidateComboRoles(queryClient),
-  });
-}
-
-/** Add Parent role to a Tutor account. */
-export function useGrantParentRoleToTutorMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (tutorId: number) =>
-      directoryApi.grantParentRoleToTutor(tutorId),
-    onSuccess: () => invalidateComboRoles(queryClient),
-  });
-}
-
-/** Add Teacher role to a Tutor account. */
-export function useGrantTeacherRoleToTutorMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      tutorId,
-      input,
-    }: {
-      tutorId: number;
-      input: GrantTeacherRoleInput;
-    }) => directoryApi.grantTeacherRoleToTutor(tutorId, input),
-    onSuccess: () => invalidateComboRoles(queryClient),
-  });
-}
-
-/** Add Coordinator role to a Tutor account. */
-export function useGrantCoordinatorRoleToTutorMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      tutorId,
-      input,
-    }: {
-      tutorId: number;
-      input: GrantCoordinatorRoleInput;
-    }) => directoryApi.grantCoordinatorRoleToTutor(tutorId, input),
     onSuccess: () => invalidateComboRoles(queryClient),
   });
 }
@@ -708,34 +612,6 @@ export function useBulkDeactivateParentsMutation() {
   });
 }
 
-export function useCreateTutorMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: CreateDirectoryTutorInput) =>
-      directoryApi.createTutor(input),
-    onSuccess: () => invalidateTutors(queryClient),
-  });
-}
-
-export function useActivateTutorMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (tutorId: number) => directoryApi.activateTutor(tutorId),
-    onSuccess: () => invalidateTutors(queryClient),
-  });
-}
-
-export function useDeactivateTutorMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (tutorId: number) => directoryApi.deactivateTutor(tutorId),
-    onSuccess: () => invalidateTutors(queryClient),
-  });
-}
-
 /** Link parent student. */
 export function useLinkParentStudentMutation() {
   const queryClient = useQueryClient();
@@ -765,38 +641,6 @@ export function useUnlinkParentStudentMutation() {
       studentId: number;
     }) => directoryApi.unlinkParentStudent(parentId, studentId),
     onSuccess: () => invalidateParents(queryClient),
-  });
-}
-
-/** Link tutor student by CNIC or username (directory admin). */
-export function useLinkDirectoryTutorStudentMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      tutorId,
-      input,
-    }: {
-      tutorId: number;
-      input: LinkDirectoryTutorStudentInput;
-    }) => directoryApi.linkTutorStudent(tutorId, input),
-    onSuccess: () => invalidateTutors(queryClient),
-  });
-}
-
-/** Unlink tutor student (directory admin). */
-export function useUnlinkDirectoryTutorStudentMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      tutorId,
-      studentId,
-    }: {
-      tutorId: number;
-      studentId: number;
-    }) => directoryApi.unlinkTutorStudent(tutorId, studentId),
-    onSuccess: () => invalidateTutors(queryClient),
   });
 }
 

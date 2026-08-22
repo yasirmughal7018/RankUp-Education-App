@@ -12,5 +12,4 @@ public enum UserRole
     Teacher = 2014,
     Student = 2015,
     Coordinator = 2016,
-    Tutor = 2017,
 }

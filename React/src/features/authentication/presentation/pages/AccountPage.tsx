@@ -22,10 +22,10 @@ const SCHOOL_CHANGE_ROLES: UserRole[] = [
   "Coordinator",
 ];
 
-const REQUESTABLE_ROLES = ["Parent", "Teacher", "Coordinator", "Tutor"] as const;
+const REQUESTABLE_ROLES = ["Parent", "Teacher", "Coordinator"] as const;
 
 /** Roles the user may remove themselves when another role remains. */
-const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher", "Coordinator", "Tutor"];
+const REMOVABLE_ROLES: UserRole[] = ["Parent", "Teacher", "Coordinator"];
 
 type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 

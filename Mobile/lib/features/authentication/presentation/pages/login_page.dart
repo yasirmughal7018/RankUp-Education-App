@@ -680,8 +680,7 @@ class _AccountAccessRequestSheetState
   bool get _isStudent => _userType == 'Student';
   bool get _isTeacher => _userType == 'Teacher';
   bool get _isParent => _userType == 'Parent';
-  bool get _isTutor => _userType == 'Tutor';
-  bool get _isSchoolLess => _isParent || _isTutor;
+  bool get _isSchoolLess => _isParent;
 
   @override
   void initState() {
@@ -786,10 +785,6 @@ class _AccountAccessRequestSheetState
   bool get _showSchoolFields => _isStudent || _isTeacher;
 
   String get _helperDescription {
-    if (_isTutor) {
-      return 'Tutor requests go to Portal Admin. School, campus, and roll '
-          'number are not required — you teach students from many schools.';
-    }
     if (_isParent) {
       return 'Parent requests go to Portal Admin. School, campus, and roll '
           'number are not required.';
@@ -810,7 +805,7 @@ class _AccountAccessRequestSheetState
     }
     setState(() {
       _userType = value;
-      if (value == 'Parent' || value == 'Tutor') {
+      if (value == 'Parent') {
         _schoolId = null;
         _campusId = null;
         _gradeId = null;
@@ -905,7 +900,6 @@ class _AccountAccessRequestSheetState
                 items: const [
                   DropdownMenuItem(value: 'Student', child: Text('Student')),
                   DropdownMenuItem(value: 'Parent', child: Text('Parent')),
-                  DropdownMenuItem(value: 'Tutor', child: Text('Tutor')),
                   DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
                 ],
                 onChanged: _onUserTypeChanged,

@@ -72,12 +72,6 @@ const roleModules: Record<UserRole, string[]> = {
     "Review student submissions",
     "View quiz reports and rankings",
   ],
-  Tutor: [
-    "Link students from any school",
-    "Create and assign your own quizzes",
-    "Review attempts on your quizzes",
-    "View progress for your quizzes only",
-  ],
 };
 
 function quickLinksForRole(
@@ -114,13 +108,6 @@ function quickLinksForRole(
       { label: "Children", href: "/parent/children", icon: GraduationCap, hint: "Linked students" },
       { label: "Quiz dashboard", href: "/parent/quiz-dashboard", icon: ClipboardList, hint: "Progress" },
       { label: "Assignments", href: "/quizzes/assignments", icon: Users, hint: "Follow work" },
-    ];
-  }
-  if (role === "Tutor") {
-    return [
-      { label: "My students", href: "/tutor/students", icon: GraduationCap, hint: "Linked students" },
-      { label: "Quizzes", href: "/quizzes", icon: ClipboardList, hint: "Create & assign" },
-      { label: "Reports", href: "/reports", icon: BarChart3, hint: "Your quizzes" },
     ];
   }
   if (role === "Student") {

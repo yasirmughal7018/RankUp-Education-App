@@ -31,7 +31,6 @@ export const queryKeys = {
     ["student", "quizzes", quizId, "attempts", attemptId, "result"] as const,
   linkedStudents: () => ["parents", "me", "students"] as const,
   studentMeOverview: () => ["students", "me", "overview"] as const,
-  tutorLinkedStudents: () => ["tutors", "me", "students"] as const,
   teacherRoster: (activeRole?: string | null) =>
     ["teachers", "me", "roster", activeRole ?? null] as const,
   teacherGroups: (activeRole?: string | null) =>
@@ -73,11 +72,6 @@ export const queryKeys = {
     pageNumber?: number;
     pageSize?: number;
   }) => ["directory", "parents", filters] as const,
-  directoryTutors: (filters: {
-    search?: string;
-    pageNumber?: number;
-    pageSize?: number;
-  }) => ["directory", "tutors", filters] as const,
   directorySchoolAdmins: (filters: {
     schoolId?: number | null;
     search?: string;

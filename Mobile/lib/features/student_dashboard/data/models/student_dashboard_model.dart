@@ -339,7 +339,6 @@ class StudentSummaryModel {
     this.parentNames = const [],
     this.coordinatorNames = const [],
     this.teacherNames = const [],
-    this.tutorNames = const [],
   });
 
   final String name;
@@ -350,7 +349,6 @@ class StudentSummaryModel {
   final List<String> parentNames;
   final List<String> coordinatorNames;
   final List<String> teacherNames;
-  final List<String> tutorNames;
 }
 
 /// XP level and progress ring for the dashboard hero.
