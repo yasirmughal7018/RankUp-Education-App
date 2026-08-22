@@ -282,7 +282,7 @@ public sealed class QuizRepository : IQuizRepository
             query = query.Where(quiz => quiz.SchoolCampusId == campusId.Value);
         }
 
-        if (parentPrivateTypeIds.Count > 0)
+        if (parentPrivateTypeIds.Count > 0 && !includeSchoolApproved)
         {
             query = query.Where(quiz => !parentPrivateTypeIds.Contains(quiz.QuizTypeId));
         }

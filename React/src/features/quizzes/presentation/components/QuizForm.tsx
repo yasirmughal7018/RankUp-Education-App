@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type {
   QuizFormValues,
   QuizNavigationMode,
@@ -11,10 +11,6 @@ import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { useLookups } from "@/core/hooks/useLookups";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
-import {
-  useDirectoryCampusesQuery,
-  useDirectorySchoolsQuery,
-} from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 const NAVIGATION_MODE_OPTIONS: Array<{
@@ -31,12 +27,6 @@ interface QuizFormProps {
   submitLabel: string;
   isSubmitting?: boolean;
   showContextStudentId?: boolean;
-  /** PortalAdmin / SchoolAdmin: show school + campus ownership fields (optional on create). */
-  showSchoolCampusFields?: boolean;
-  requireCampusId?: boolean;
-  requireSchoolId?: boolean;
-  /** PortalAdmin can pick school; SchoolAdmin school comes from the token (read-only). */
-  schoolEditable?: boolean;
   /** When true, quiz type is required (create). Edit hides the field because API update omits type. */
   requireQuizType?: boolean;
   onSubmit: (values: QuizFormValues) => Promise<void>;
@@ -51,10 +41,6 @@ export function QuizForm({
   submitLabel,
   isSubmitting = false,
   showContextStudentId = false,
-  showSchoolCampusFields = false,
-  requireCampusId = false,
-  requireSchoolId = false,
-  schoolEditable = false,
   requireQuizType = false,
   onSubmit,
   onCancel,
@@ -64,40 +50,10 @@ export function QuizForm({
   const { data: quizTypes = [] } = useLookups(
     requireQuizType ? LOOKUP_TYPES.QUIZ_TYPE : undefined,
   );
-  const { data: schools = [], isLoading: schoolsLoading } =
-    useDirectorySchoolsQuery(showSchoolCampusFields);
-  const selectedSchoolId = values.schoolId ?? 0;
-  const { data: campuses = [], isLoading: campusesLoading } =
-    useDirectoryCampusesQuery(selectedSchoolId, showSchoolCampusFields);
-
-  const schoolOptions = useMemo(
-    () =>
-      schools.filter(
-        (school) => school.isActive || school.id === values.schoolId,
-      ),
-    [schools, values.schoolId],
-  );
-  const campusOptions = useMemo(
-    () =>
-      campuses.filter(
-        (campus) => campus.isActive || campus.id === values.campusId,
-      ),
-    [campuses, values.campusId],
-  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-
-    if (requireSchoolId && (values.schoolId == null || values.schoolId <= 0)) {
-      setError("School is required.");
-      return;
-    }
-
-    if (requireCampusId && (values.campusId == null || values.campusId <= 0)) {
-      setError("Campus is required.");
-      return;
-    }
 
     const validationError = validateQuizForm(values, requireQuizType);
     if (validationError) {
@@ -284,87 +240,6 @@ export function QuizForm({
               min={1}
             />
           </div>
-        ) : null}
-
-        {showSchoolCampusFields ? (
-          <>
-            <div>
-              <FieldLabel
-                htmlFor="schoolId"
-                required={requireSchoolId}
-                optional={!requireSchoolId}
-                hint="Places this quiz in an organization. This is not the student audience — after publish (and approval if needed), use Assign to choose public catalog, whole school, grade, section, or selected students."
-              >
-                School
-              </FieldLabel>
-              <select
-                id="schoolId"
-                value={values.schoolId ?? ""}
-                disabled={isSubmitting || schoolsLoading || !schoolEditable}
-                onChange={(event) => {
-                  const nextSchoolId = event.target.value
-                    ? Number(event.target.value)
-                    : null;
-                  setValues((current) => ({
-                    ...current,
-                    schoolId: nextSchoolId,
-                    campusId: null,
-                  }));
-                }}
-                className={inputClassName}
-                required={requireSchoolId}
-              >
-                <option value="">
-                  {schoolsLoading ? "Loading schools..." : "Select school"}
-                </option>
-                {schoolOptions.map((school) => (
-                  <option key={school.id} value={school.id}>
-                    {school.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <FieldLabel
-                htmlFor="campusId"
-                required={requireCampusId}
-                optional={!requireCampusId}
-                hint="Campus within the selected school. This is ownership context only — student audience is chosen later with Assign."
-              >
-                Campus
-              </FieldLabel>
-              <select
-                id="campusId"
-                value={values.campusId ?? ""}
-                disabled={
-                  isSubmitting || campusesLoading || !values.schoolId
-                }
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    campusId: event.target.value
-                      ? Number(event.target.value)
-                      : null,
-                  }))
-                }
-                className={inputClassName}
-                required={requireCampusId}
-              >
-                <option value="">
-                  {campusesLoading
-                    ? "Loading campuses..."
-                    : !values.schoolId
-                      ? "Select a school first"
-                      : "Select campus"}
-                </option>
-                {campusOptions.map((campus) => (
-                  <option key={campus.id} value={campus.id}>
-                    {campus.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
         ) : null}
 
         <div>

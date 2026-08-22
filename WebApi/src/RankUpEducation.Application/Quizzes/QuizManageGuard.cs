@@ -73,6 +73,7 @@ internal sealed class QuizManageGuard
         CancellationToken cancellationToken)
     {
         var quiz = await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+        QuizScopeResolver.EnsureCanEditQuizSettings(quiz, scope);
         await EnsureEditableLifecycleAsync(quiz, cancellationToken);
         return quiz;
     }

@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
-import type { PendingQuizApproval } from "@/features/quizzes/domain/quizTypes";
+import {
+  canReviewQuizApproval,
+  type PendingQuizApproval,
+} from "@/features/quizzes/domain/quizTypes";
 import {
   getQuestionStatusTone,
   StatusBadge,
@@ -18,9 +21,9 @@ export function AdminQuizApprovalsPage() {
   const isPortalAdmin = user?.role === "PortalAdmin";
   const isCampusAdmin = user?.role === "CampusAdmin";
   const approvalDescription = isPortalAdmin
-    ? "Review quizzes from any school. Pending items need first-tier or your final approval; SchoolApproved items need portal approval. Rejected quizzes cannot be approved until the teacher resubmits."
+    ? "Review teacher and parent quizzes. Pending teacher items need first-tier or your final approval; SchoolApproved items need portal approval. ParentPrivate quizzes require portal approval only. Rejected quizzes cannot be approved until the creator resubmits."
     : isCampusAdmin
-      ? "Approve pending teacher quizzes in your campus (first-tier endorsement) or reject with a required reason. You cannot approve quizzes from other campuses."
+      ? "Approve pending teacher quizzes in your campus (first-tier endorsement) or reject with a required reason. Parent quizzes are reviewed by portal admin only."
       : "Approve pending teacher quizzes in your school (first-tier endorsement) or reject with a required reason. SchoolApproved items await portal final approval.";
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     usePendingQuizApprovalsQuery();
@@ -136,7 +139,12 @@ export function AdminQuizApprovalsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {quizzes.map((quiz) => (
+                {quizzes.map((quiz) => {
+                  const canReview = user
+                    ? canReviewQuizApproval(user.role, quiz.quizTypeName)
+                    : false;
+
+                  return (
                   <tr key={quiz.quizId} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900">{quiz.title}</p>
@@ -162,7 +170,11 @@ export function AdminQuizApprovalsPage() {
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {rejectingQuizId === quiz.quizId ? (
+                      {!canReview ? (
+                        <span className="text-xs text-muted-foreground">
+                          Portal admin only
+                        </span>
+                      ) : rejectingQuizId === quiz.quizId ? (
                         <div className="ml-auto flex max-w-xs flex-col items-stretch gap-2">
                           <input
                             type="text"
@@ -222,7 +234,8 @@ export function AdminQuizApprovalsPage() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   canApproveQuizzes,
   canAssignAdminAudiences,
+  canDeleteOrArchiveQuiz,
+  canEditQuizSettings,
   canManageQuizzes,
+  canReviewQuizApproval,
   hasQuizAssignmentStarted,
   isFinalApprovedQuizStatus,
+  isParentPrivateQuizType,
   isQuizMetadataEditable,
+  isQuizOwner,
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
 } from "@/features/quizzes/domain/quizTypes";
@@ -94,5 +99,103 @@ describe("hasQuizAssignmentStarted", () => {
         Date.parse("2026-01-01T00:00:00Z"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("canEditQuizSettings", () => {
+  const openAssignments = [{ startAt: "2099-01-01T00:00:00Z", attemptCount: 0 }];
+
+  it("allows portal admin on editable published quizzes", () => {
+    expect(
+      canEditQuizSettings("PortalAdmin", 1, "99", "Published", openAssignments),
+    ).toBe(true);
+  });
+
+  it("allows the quiz owner on draft quizzes", () => {
+    expect(canEditQuizSettings("Teacher", 42, "42", "Draft", [])).toBe(true);
+  });
+
+  it("denies non-owner school admins", () => {
+    expect(
+      canEditQuizSettings("SchoolAdmin", 5, "99", "Draft", []),
+    ).toBe(false);
+  });
+
+  it("blocks edits once assignments start even for portal admin", () => {
+    expect(
+      canEditQuizSettings("PortalAdmin", 1, "99", "Published", [
+        { startAt: "2020-01-01T00:00:00Z", attemptCount: 0 },
+      ]),
+    ).toBe(false);
+  });
+});
+
+describe("isQuizOwner", () => {
+  it("matches string and numeric user ids", () => {
+    expect(isQuizOwner(42, "42")).toBe(true);
+    expect(isQuizOwner("42", "42")).toBe(true);
+    expect(isQuizOwner(43, "42")).toBe(false);
+  });
+});
+
+describe("canDeleteOrArchiveQuiz", () => {
+  it("allows portal admin for pending published teacher quizzes", () => {
+    expect(
+      canDeleteOrArchiveQuiz(
+        "PortalAdmin",
+        1,
+        "99",
+        "Published",
+        "Pending",
+        "Practice",
+      ),
+    ).toBe(true);
+  });
+
+  it("allows teacher owner on approved published quizzes", () => {
+    expect(
+      canDeleteOrArchiveQuiz(
+        "Teacher",
+        42,
+        "42",
+        "Published",
+        "Approved",
+        "Practice",
+      ),
+    ).toBe(true);
+  });
+
+  it("denies teacher owner on published pending quizzes", () => {
+    expect(
+      canDeleteOrArchiveQuiz(
+        "Teacher",
+        42,
+        "42",
+        "Published",
+        "Pending",
+        "Practice",
+      ),
+    ).toBe(false);
+  });
+
+  it("denies parent owner on parent private quizzes", () => {
+    expect(
+      canDeleteOrArchiveQuiz(
+        "Parent",
+        42,
+        "42",
+        "Draft",
+        "Pending",
+        "ParentPrivate",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("canReviewQuizApproval", () => {
+  it("limits parent private quizzes to portal admin", () => {
+    expect(canReviewQuizApproval("PortalAdmin", "ParentPrivate")).toBe(true);
+    expect(canReviewQuizApproval("SchoolAdmin", "ParentPrivate")).toBe(false);
+    expect(canReviewQuizApproval("SchoolAdmin", "Practice")).toBe(true);
   });
 });

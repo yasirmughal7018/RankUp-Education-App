@@ -2,8 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import {
-  canAuthorQuizzes,
-  isQuizMetadataEditable,
+  canEditQuizSettings,
   mapManageQuizToForm,
 } from "@/features/quizzes/domain/quizTypes";
 import { QuizForm } from "@/features/quizzes/presentation/components/QuizForm";
@@ -19,7 +18,6 @@ export function QuizEditPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const numericQuizId = Number(quizId);
-  const canAuthor = user != null && canAuthorQuizzes(user.role);
 
   const { data: quiz, isLoading, error } = useManageQuizQuery(numericQuizId);
   const { data: assignments = [], isLoading: assignmentsLoading } =
@@ -48,14 +46,21 @@ export function QuizEditPage() {
   }
 
   const editable =
-    canAuthor && isQuizMetadataEditable(quiz.lifecycleStatus, assignments);
+    user != null &&
+    canEditQuizSettings(
+      user.role,
+      user.id,
+      quiz.createdBy,
+      quiz.lifecycleStatus,
+      assignments,
+    );
 
   if (!editable) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <PageHeader
           title="Quiz is read-only"
-          description="Settings can only be changed while the quiz is Draft or Published and no assignment has started."
+          description="Only the quiz owner or a portal admin can change settings while the quiz is Draft or Published and no assignment has started."
           backTo={`/quizzes/${quizId}`}
           backAriaLabel="Back to quiz"
         />

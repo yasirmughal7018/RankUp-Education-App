@@ -95,6 +95,31 @@ public sealed class QuizScopeResolverTests
         Assert.True(QuizScopeResolver.IsQuizOwner(quiz, scope));
     }
 
+    [Fact]
+    public void EnsureCanEditQuizSettings_AllowsPortalAdminAndOwner()
+    {
+        var quiz = CreateQuiz(createdBy: "99");
+        var portalScope = new QuizManageScope(UserRole.PortalAdmin, 1, 1, null, null);
+        var ownerScope = new QuizManageScope(UserRole.Teacher, 99, 99, 1, 10);
+
+        Assert.Null(Record.Exception(() =>
+            QuizScopeResolver.EnsureCanEditQuizSettings(quiz, portalScope)));
+        Assert.Null(Record.Exception(() =>
+            QuizScopeResolver.EnsureCanEditQuizSettings(quiz, ownerScope)));
+    }
+
+    [Fact]
+    public void EnsureCanEditQuizSettings_RejectsSchoolAdminWhenNotOwner()
+    {
+        var quiz = CreateQuiz(createdBy: "99");
+        var scope = new QuizManageScope(UserRole.SchoolAdmin, 5, 5, 1, null);
+
+        var ex = Assert.Throws<ForbiddenAppException>(() =>
+            QuizScopeResolver.EnsureCanEditQuizSettings(quiz, scope));
+
+        Assert.Contains("owner", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static Quiz CreateQuiz(int? schoolId = 1, int? campusId = 10, string createdBy = "42")
     {
         return new Quiz(

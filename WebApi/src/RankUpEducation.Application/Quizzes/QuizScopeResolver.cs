@@ -176,6 +176,17 @@ public static class QuizScopeResolver
     public static bool IsQuizOwner(Quiz quiz, QuizManageScope scope)
         => string.Equals(quiz.CreatedByName, scope.UserId.ToString(), StringComparison.Ordinal);
 
+    /// <summary>Quiz metadata and questions: portal admin or creator only.</summary>
+    public static void EnsureCanEditQuizSettings(Quiz quiz, QuizManageScope scope)
+    {
+        if (scope.Role == UserRole.PortalAdmin || IsQuizOwner(quiz, scope))
+        {
+            return;
+        }
+
+        throw new ForbiddenAppException("Only the quiz owner or a portal admin can edit quiz settings.");
+    }
+
     /// <summary>
     /// List filters for assignment board / pending reviews / reports-style boards.
     /// Teacher/Parent: own quizzes; SchoolAdmin: school; PortalAdmin: platform.

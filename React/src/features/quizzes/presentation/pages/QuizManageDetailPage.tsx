@@ -12,9 +12,10 @@ import {
 } from "@/features/quizzes/presentation/components/QuizQuestionAnswerAside";
 import {
   canAuthorQuizzes,
+  canDeleteOrArchiveQuiz,
+  canEditQuizSettings,
   formatQuizDuration,
   isDraftQuiz,
-  isQuizMetadataEditable,
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
   sumQuizEstimatedSeconds,
@@ -160,37 +161,50 @@ function MetaInlineRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function resolveQuizCreatorRole(
+  quiz: Pick<ManageQuiz, "approvalHistory">,
+): string {
+  return (
+    quiz.approvalHistory?.find((entry) => entry.action === "Created")?.actorRole ??
+    ""
+  );
+}
+
 function resolveQuizScopeRows(
   quiz: ManageQuiz,
   campusName?: string | null,
 ): Array<{ label: string; value: string }> {
-  const created = quiz.approvalHistory?.find((entry) => entry.action === "Created");
-  const creatorRole = created?.actorRole ?? "";
-  const rows: Array<{ label: string; value: string }> = [];
+  const creatorRole = resolveQuizCreatorRole(quiz);
+  const schoolName = quiz.schoolName?.trim() ?? "";
+  const campus = campusName?.trim() ?? "";
 
-  const showSchool =
-    (creatorRole === "SchoolAdmin" || creatorRole === "PortalAdmin") &&
-    quiz.schoolId != null &&
-    quiz.schoolId > 0 &&
-    Boolean(quiz.schoolName?.trim());
-
-  const showCampus =
-    (creatorRole === "CampusAdmin" ||
-      creatorRole === "SchoolAdmin" ||
-      creatorRole === "PortalAdmin") &&
-    quiz.campusId != null &&
-    quiz.campusId > 0 &&
-    Boolean(campusName?.trim());
-
-  if (showSchool) {
-    rows.push({ label: "School", value: quiz.schoolName.trim() });
+  switch (creatorRole) {
+    case "PortalAdmin":
+      return [{ label: "Created as", value: "Portal Admin" }];
+    case "SchoolAdmin":
+      return schoolName ? [{ label: "School", value: schoolName }] : [];
+    case "CampusAdmin": {
+      if (schoolName && campus) {
+        return [{ label: "School", value: `${schoolName} - ${campus}` }];
+      }
+      if (schoolName) {
+        return [{ label: "School", value: schoolName }];
+      }
+      if (campus) {
+        return [{ label: "Campus", value: campus }];
+      }
+      return [];
+    }
+    case "Teacher":
+    case "Coordinator":
+      return schoolName ? [{ label: "School", value: schoolName }] : [];
+    case "Parent":
+      return [{ label: "Created as", value: "Parent" }];
+    case "Tutor":
+      return [{ label: "Created as", value: "Tutor" }];
+    default:
+      return [];
   }
-
-  if (showCampus) {
-    rows.push({ label: "Campus", value: campusName!.trim() });
-  }
-
-  return rows;
 }
 
 function canAllowRetry(assignment: {
@@ -249,9 +263,13 @@ export function QuizManageDetailPage() {
 
   const scopeSchoolId = quiz?.schoolId ?? 0;
   const scopeCampusId = quiz?.campusId ?? 0;
+  const quizCreatorRole = quiz ? resolveQuizCreatorRole(quiz) : "";
   const { data: scopeCampuses = [] } = useDirectoryCampusesQuery(
     scopeSchoolId,
-    detailQueriesEnabled && scopeSchoolId > 0 && scopeCampusId > 0,
+    detailQueriesEnabled &&
+      quizCreatorRole === "CampusAdmin" &&
+      scopeSchoolId > 0 &&
+      scopeCampusId > 0,
   );
   const scopeCampusName =
     scopeCampuses.find((campus) => campus.id === scopeCampusId)?.name ?? null;
@@ -324,9 +342,25 @@ export function QuizManageDetailPage() {
   const approvalRejected = isRejectedQuizApprovalStatus(quiz.approvalStatus);
   const schoolApproved = isSchoolApprovedQuizStatus(quiz.approvalStatus);
   const settingsEditable =
-    canAuthor &&
-    isQuizMetadataEditable(quiz.lifecycleStatus, assignments);
+    user != null &&
+    canEditQuizSettings(
+      user.role,
+      user.id,
+      quiz.createdBy,
+      quiz.lifecycleStatus,
+      assignments,
+    );
   const questionsEditable = settingsEditable;
+  const canRemoveQuiz =
+    user != null &&
+    canDeleteOrArchiveQuiz(
+      user.role,
+      user.id,
+      quiz.createdBy,
+      quiz.lifecycleStatus,
+      quiz.approvalStatus,
+      quiz.quizType,
+    );
   const quizScopeRows = resolveQuizScopeRows(quiz, scopeCampusName);
 
   return (
@@ -484,38 +518,43 @@ export function QuizManageDetailPage() {
             </button>
             {draft ? (
               <>
-            <button
-              type="button"
-              disabled={isSubmitting || quiz.questionCount === 0}
-              onClick={() =>
-                void runAction(() => publishQuiz.mutateAsync(), "Quiz published.")
-              }
-              className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
-            >
-              Publish
-            </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => {
-                void (async () => {
-                  setActionError(null);
-                  setSuccessMessage(null);
-                  flushSync(() => setSuppressDetailQueries(true));
-                  try {
-                    await deleteQuiz.mutateAsync();
-                    navigate("/quizzes");
-                  } catch (caught) {
-                    setSuppressDetailQueries(false);
-                    const apiError = caught as { message?: string };
-                    setActionError(apiError.message || "Action failed.");
+                <button
+                  type="button"
+                  disabled={isSubmitting || quiz.questionCount === 0}
+                  onClick={() =>
+                    void runAction(
+                      () => publishQuiz.mutateAsync(),
+                      "Quiz submitted for approval.",
+                    )
                   }
-                })();
-              }}
-              className="rounded-lg border border-[var(--status-rejected-border)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:bg-[var(--status-rejected-bg)] disabled:opacity-70"
-            >
-              Delete
-            </button>
+                  className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
+                >
+                  Publish
+                </button>
+                {canRemoveQuiz ? (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      void (async () => {
+                        setActionError(null);
+                        setSuccessMessage(null);
+                        flushSync(() => setSuppressDetailQueries(true));
+                        try {
+                          await deleteQuiz.mutateAsync();
+                          navigate("/quizzes");
+                        } catch (caught) {
+                          setSuppressDetailQueries(false);
+                          const apiError = caught as { message?: string };
+                          setActionError(apiError.message || "Action failed.");
+                        }
+                      })();
+                    }}
+                    className="rounded-lg border border-[var(--status-rejected-border)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:bg-[var(--status-rejected-bg)] disabled:opacity-70"
+                  >
+                    Delete
+                  </button>
+                ) : null}
               </>
             ) : null}
             {approvalRejected && canAuthor ? (
@@ -536,7 +575,7 @@ export function QuizManageDetailPage() {
           </>
         ) : null}
 
-        {archived && canAuthor ? (
+        {archived && canRemoveQuiz ? (
           <button
             type="button"
             disabled={isSubmitting}
@@ -560,26 +599,27 @@ export function QuizManageDetailPage() {
               Assign
             </button>
             {canAuthor ? (
-              <>
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() =>
-                    void runAction(async () => {
-                      const duplicated = await duplicateQuiz.mutateAsync();
-                      if (!duplicated?.id) {
-                        throw new Error(
-                          "Quiz was duplicated but the new quiz id was missing.",
-                        );
-                      }
-                      navigate(`/quizzes/${duplicated.id}`);
-                    }, "Quiz duplicated.")
-                  }
-                  className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
-                >
-                  Duplicate
-                </button>
-                <button
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() =>
+                  void runAction(async () => {
+                    const duplicated = await duplicateQuiz.mutateAsync();
+                    if (!duplicated?.id) {
+                      throw new Error(
+                        "Quiz was duplicated but the new quiz id was missing.",
+                      );
+                    }
+                    navigate(`/quizzes/${duplicated.id}`);
+                  }, "Quiz duplicated.")
+                }
+                className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
+              >
+                Duplicate
+              </button>
+            ) : null}
+            {canRemoveQuiz ? (
+              <button
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => {
@@ -606,7 +646,6 @@ export function QuizManageDetailPage() {
                 >
                   Archive
                 </button>
-              </>
             ) : null}
             {assignments.length > 0 ? (
               <button

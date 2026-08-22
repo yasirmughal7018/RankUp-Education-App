@@ -11,14 +11,6 @@ export function QuizCreatePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isPortalAdmin = user?.role === "PortalAdmin";
-  const isSchoolAdmin = user?.role === "SchoolAdmin";
-
-  const initialValues = {
-    ...createEmptyQuizForm(),
-    schoolId: isPortalAdmin ? null : (user?.schoolId ?? null),
-    campusId: user?.campusId ?? null,
-  };
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -31,14 +23,10 @@ export function QuizCreatePage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <QuizForm
-          initialValues={initialValues}
+          initialValues={createEmptyQuizForm()}
           submitLabel="Create quiz"
           isSubmitting={isSubmitting}
           showContextStudentId={user?.role === "Parent" || user?.role === "Tutor"}
-          showSchoolCampusFields={isPortalAdmin || isSchoolAdmin}
-          requireSchoolId={false}
-          requireCampusId={false}
-          schoolEditable={isPortalAdmin}
           requireQuizType
           onSubmit={async (values) => {
             setIsSubmitting(true);

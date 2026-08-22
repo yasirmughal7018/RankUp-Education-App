@@ -49,11 +49,7 @@ export function AppLayout() {
       items.push({ to: "/questions", label: "Questions" });
     }
     if (user && canManageQuizzes(user.role)) {
-      items.push(
-        { to: "/quizzes", label: "Quizzes", end: true },
-        { to: "/quizzes/assignments", label: "Assignments" },
-        { to: "/quizzes/reviews/pending", label: "Reviews" },
-      );
+      items.push({ to: "/quizzes", label: "Quizzes", end: true });
     }
     if (user && canViewReports(user.role)) {
       items.push({ to: "/reports", label: "Reports" });

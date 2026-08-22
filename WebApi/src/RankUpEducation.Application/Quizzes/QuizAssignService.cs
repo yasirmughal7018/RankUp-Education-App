@@ -348,6 +348,16 @@ public sealed class QuizAssignService : IQuizAssignService
                         : "Quizzes must be approved before assignment.");
             }
         }
+        else if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken)
+            && scope.Role == UserRole.Parent)
+        {
+            var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+            if (!LookupNames.IsFinalApprovedName(approvalName))
+            {
+                throw new BusinessRuleException(
+                    "Parent quizzes must be approved by a portal admin before assignment.");
+            }
+        }
 
         return quiz;
     }

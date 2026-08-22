@@ -274,6 +274,60 @@ export function isFinalApprovedQuizStatus(status: string): boolean {
   return status.trim().toLowerCase() === "approved";
 }
 
+/** Parent-created private quiz type (ParentPrivate). */
+export function isParentPrivateQuizType(quizType: string): boolean {
+  const normalized = quizType.trim().toLowerCase().replace(/\s+/g, "");
+  return normalized === "parentprivate" || normalized === "private";
+}
+
+/** School/Campus admins review teacher quizzes only; parent quizzes are portal-only. */
+export function canReviewQuizApproval(
+  role: UserRole,
+  quizType: string,
+): boolean {
+  if (!canApproveQuizzes(role)) {
+    return false;
+  }
+
+  if (isParentPrivateQuizType(quizType)) {
+    return role === "PortalAdmin";
+  }
+
+  return true;
+}
+
+/**
+ * Delete (draft) or archive (published+): portal admin always;
+ * parent quizzes portal-only; teacher/coordinator owner when draft or final Approved;
+ * published-but-not-approved → portal admin only.
+ */
+export function canDeleteOrArchiveQuiz(
+  role: UserRole,
+  userId: number | string,
+  createdBy: string,
+  lifecycleStatus: string,
+  approvalStatus: string,
+  quizType: string,
+): boolean {
+  if (role === "PortalAdmin") {
+    return true;
+  }
+
+  if (isParentPrivateQuizType(quizType)) {
+    return false;
+  }
+
+  if (!isQuizOwner(userId, createdBy)) {
+    return false;
+  }
+
+  if (isDraftQuiz(lifecycleStatus)) {
+    return true;
+  }
+
+  return isFinalApprovedQuizStatus(approvalStatus);
+}
+
 /** Single rejection status (legacy Cancelled/Declined map here). */
 export function isRejectedQuizApprovalStatus(status: string): boolean {
   const normalized = status.trim().toLowerCase();
@@ -400,6 +454,29 @@ export function isQuizMetadataEditable(
   }
 
   return false;
+}
+
+/** True when the signed-in user created the quiz row. */
+export function isQuizOwner(
+  userId: number | string,
+  createdBy: string,
+): boolean {
+  return String(userId) === String(createdBy);
+}
+
+/** Quiz settings and questions: owner or Portal Admin, while lifecycle allows edits. */
+export function canEditQuizSettings(
+  role: UserRole,
+  userId: number | string,
+  createdBy: string,
+  lifecycleStatus: string,
+  assignments: Array<{ startAt: string; attemptCount: number }> = [],
+): boolean {
+  if (!isQuizMetadataEditable(lifecycleStatus, assignments)) {
+    return false;
+  }
+
+  return role === "PortalAdmin" || isQuizOwner(userId, createdBy);
 }
 
 /** Normalize API/form navigation mode to a known value. */
