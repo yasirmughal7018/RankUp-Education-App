@@ -41,6 +41,8 @@ public interface IQuizRepository
     /// (submitted Pending, SchoolApproved, Approved, Rejected). Unsubmitted WIP stays owner-only.
     /// When <paramref name="includePublishedFromAllSchools"/> is true, Published/Assigned/Archived
     /// school-type quizzes (not ParentPrivate) are visible regardless of school or creator.
+    /// When <paramref name="includeInScopeSubmittedDrafts"/> is true, submitted Teacher/Coordinator
+    /// pipeline drafts in the given school/campus are included so SchoolAdmin/CampusAdmin can review.
     /// </summary>
     Task<IReadOnlyList<QuizListItem>> ListForSchoolAsync(
         int? schoolId,
@@ -52,7 +54,8 @@ public interface IQuizRepository
         string? subject,
         string? grade,
         CancellationToken cancellationToken,
-        bool includePublishedFromAllSchools = false);
+        bool includePublishedFromAllSchools = false,
+        bool includeInScopeSubmittedDrafts = false);
 
     Task<IReadOnlyList<PendingQuizApprovalItem>> ListPendingApprovalAsync(
         int? schoolId,

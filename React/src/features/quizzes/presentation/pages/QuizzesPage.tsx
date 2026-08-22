@@ -19,6 +19,7 @@ import {
   Plus,
   RefreshCw,
   Rows3,
+  ShieldCheck,
 } from "lucide-react";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { useLookups } from "@/core/hooks/useLookups";
@@ -27,6 +28,7 @@ import { StatusBadge } from "@/features/questions/presentation/components/Status
 import { QuestionBankStatTile } from "@/features/questions/presentation/components/QuestionBankStatTile";
 import { QuestionCategoryColumn } from "@/features/questions/presentation/components/QuestionCategoryColumn";
 import {
+  canApproveQuizzes,
   canAssignAdminAudiences,
   canAuthorQuizzes,
   canReviewQuizEditRequests,
@@ -52,6 +54,7 @@ import { cn } from "@/lib/utils";
 type ListFilter =
   | "all"
   | "draft"
+  | "pending-approval"
   | "published"
   | "assigned"
   | "archived"
@@ -85,6 +88,11 @@ function matchesListFilter(quiz: QuizSummary, filter: ListFilter): boolean {
       return true;
     case "draft":
       return isUnpublishedQuizDisplayStatus(status);
+    case "pending-approval":
+      return (
+        status === "approval pending" ||
+        status === "school approved"
+      );
     case "published":
       return status === "published";
     case "assigned":
@@ -102,6 +110,8 @@ function listFilterLabel(filter: ListFilter): string {
   switch (filter) {
     case "draft":
       return "Draft";
+    case "pending-approval":
+      return "pending approval";
     case "published":
       return "Published";
     case "assigned":
@@ -166,6 +176,7 @@ export function QuizzesPage() {
   const { user } = useAuth();
   const isAdminAssigner = user != null && canAssignAdminAudiences(user.role);
   const canAuthor = user != null && canAuthorQuizzes(user.role);
+  const canApprove = user != null && canApproveQuizzes(user.role);
 
   const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [subjectId, setSubjectId] = useState<number | "">("");
@@ -285,12 +296,16 @@ export function QuizzesPage() {
 
   const bankStats = useMemo(() => {
     let draft = 0;
+    let pendingApproval = 0;
     let published = 0;
     let assigned = 0;
     let archived = 0;
 
     for (const quiz of scopedQuizzes) {
       const status = normalizeStatus(quiz.status);
+      if (status === "approval pending" || status === "school approved") {
+        pendingApproval += 1;
+      }
       if (isUnpublishedQuizDisplayStatus(status)) {
         draft += 1;
       } else if (status === "published") {
@@ -305,6 +320,7 @@ export function QuizzesPage() {
     return {
       total: scopedQuizzes.length,
       draft,
+      pendingApproval,
       published,
       assigned,
       archived,
@@ -523,6 +539,20 @@ export function QuizzesPage() {
                 Pending reviews
               </Link>
             </Button>
+            {canApprove ? (
+              <Button
+                asChild
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 whitespace-nowrap"
+              >
+                <Link to="/admin/quiz-approvals">
+                  <ShieldCheck className="h-4 w-4" />
+                  Quiz approvals
+                </Link>
+              </Button>
+            ) : null}
             {canAuthor ? (
               <Button
                 asChild
@@ -557,7 +587,11 @@ export function QuizzesPage() {
         <div
           className={cn(
             "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5",
-            canReviewEditRequests ? "lg:grid-cols-6" : "lg:grid-cols-5",
+            canApprove && canReviewEditRequests
+              ? "lg:grid-cols-7"
+              : canApprove || canReviewEditRequests
+                ? "lg:grid-cols-6"
+                : "lg:grid-cols-5",
           )}
         >
           <QuestionBankStatTile
@@ -574,6 +608,15 @@ export function QuizzesPage() {
             active={listFilter === "draft"}
             onClick={() => selectListFilter("draft")}
           />
+          {canApprove ? (
+            <QuestionBankStatTile
+              label="Pending approval"
+              value={bankStats.pendingApproval}
+              status="pending"
+              active={listFilter === "pending-approval"}
+              onClick={() => selectListFilter("pending-approval")}
+            />
+          ) : null}
           <QuestionBankStatTile
             label="Published"
             value={bankStats.published}

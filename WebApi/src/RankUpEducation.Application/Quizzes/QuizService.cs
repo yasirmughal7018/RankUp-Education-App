@@ -163,7 +163,8 @@ public sealed class QuizService : IQuizService
                 subject,
                 grade,
                 cancellationToken,
-                includePublishedFromAllSchools: true),
+                includePublishedFromAllSchools: true,
+                includeInScopeSubmittedDrafts: true),
             UserRole.CampusAdmin => await _quizzes.ListForSchoolAsync(
                 _currentUser.SchoolId,
                 _currentUser.CampusId,
@@ -174,7 +175,8 @@ public sealed class QuizService : IQuizService
                 subject,
                 grade,
                 cancellationToken,
-                includePublishedFromAllSchools: true),
+                includePublishedFromAllSchools: true,
+                includeInScopeSubmittedDrafts: true),
             UserRole.PortalAdmin => await _quizzes.ListForSchoolAsync(
                 schoolId: null,
                 campusId: null,

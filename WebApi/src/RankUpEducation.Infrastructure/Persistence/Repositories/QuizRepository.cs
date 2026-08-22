@@ -164,7 +164,8 @@ public sealed class QuizRepository : IQuizRepository
         string? subject,
         string? grade,
         CancellationToken cancellationToken,
-        bool includePublishedFromAllSchools = false)
+        bool includePublishedFromAllSchools = false,
+        bool includeInScopeSubmittedDrafts = false)
     {
         var draftIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
@@ -197,7 +198,7 @@ public sealed class QuizRepository : IQuizRepository
                 LookupNames.SchoolQuizTypeNames,
                 cancellationToken)
             : Array.Empty<short>();
-        var parentPrivateTypeIds = includePublishedFromAllSchools
+        var parentPrivateTypeIds = includePublishedFromAllSchools || includeInScopeSubmittedDrafts
             ? (await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
                     _dbContext,
                     LookupNames.QuizType,
@@ -215,7 +216,8 @@ public sealed class QuizRepository : IQuizRepository
             .Where(quiz => !quiz.IsDeleted);
 
         // Draft: owner always. PortalAdmin also sees pipeline drafts (submitted / school-approved /
-        // approved / rejected). Unsubmitted WIP is owner-only.
+        // approved / rejected). SchoolAdmin/CampusAdmin see submitted in-scope drafts (review queue).
+        // Unsubmitted WIP is owner-only.
         // Published / Assigned / Archived school-type quizzes: shared catalog (any school/creator).
         // ParentPrivate stays out of that catalog.
         query = query.Where(quiz =>
@@ -223,6 +225,15 @@ public sealed class QuizRepository : IQuizRepository
                 && (
                     (viewerKey != null && quiz.CreatedByName == viewerKey)
                     || (includeAllDrafts
+                        && (
+                            pipelineApprovalIds.Contains(quiz.ApprovalStatusId)
+                            || (pendingApprovalIds.Contains(quiz.ApprovalStatusId)
+                                && submittedQuizIdQuery.Contains(quiz.Id))))
+                    || (includeInScopeSubmittedDrafts
+                        && schoolId != null
+                        && quiz.SchoolId == schoolId
+                        && (campusId == null || quiz.SchoolCampusId == campusId)
+                        && !parentPrivateTypeIds.Contains(quiz.QuizTypeId)
                         && (
                             pipelineApprovalIds.Contains(quiz.ApprovalStatusId)
                             || (pendingApprovalIds.Contains(quiz.ApprovalStatusId)

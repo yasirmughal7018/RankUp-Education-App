@@ -20,15 +20,18 @@ internal sealed class QuizManageGuard
     private readonly IQuizRepository _quizzes;
     private readonly ILookupRepository _lookups;
     private readonly IQuizEditRequestRepository? _editRequests;
+    private readonly IUserRepository? _users;
 
     public QuizManageGuard(
         IQuizRepository quizzes,
         ILookupRepository lookups,
-        IQuizEditRequestRepository? editRequests = null)
+        IQuizEditRequestRepository? editRequests = null,
+        IUserRepository? users = null)
     {
         _quizzes = quizzes;
         _lookups = lookups;
         _editRequests = editRequests;
+        _users = users;
     }
 
     internal sealed record EditableQuiz(Quiz Quiz, QuizEditRequest? Grant);
@@ -82,8 +85,9 @@ internal sealed class QuizManageGuard
     }
 
     /// <summary>
-    /// Draft quizzes are owner-only until Submit for approval. PortalAdmin may then open
-    /// pipeline drafts (submitted Pending, SchoolApproved, Approved, Rejected).
+    /// Draft quizzes are owner-only until Submit for approval. After submit, PortalAdmin
+    /// may open any pipeline draft; SchoolAdmin/CampusAdmin may open Teacher/Coordinator
+    /// pipeline drafts in their school/campus.
     /// </summary>
     public async Task EnsureDraftVisibleAsync(
         Quiz quiz,
@@ -101,15 +105,48 @@ internal sealed class QuizManageGuard
             return;
         }
 
-        if (scope.Role != UserRole.PortalAdmin)
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        var hasSubmitted = await _quizzes.HasSubmittedForReviewAsync(quiz.Id, cancellationToken);
+        if (!QuizDraftVisibility.IsVisibleToNonOwner(approvalName, hasSubmitted))
         {
             throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
         }
 
-        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-        var hasSubmitted = await _quizzes.HasSubmittedForReviewAsync(quiz.Id, cancellationToken);
-        if (QuizDraftVisibility.IsVisibleToNonOwner(approvalName, hasSubmitted))
+        if (scope.Role == UserRole.PortalAdmin)
         {
+            return;
+        }
+
+        if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
+        {
+            if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken))
+            {
+                throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
+            }
+
+            if (scope.Role == UserRole.SchoolAdmin && quiz.SchoolId != scope.SchoolId)
+            {
+                throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
+            }
+
+            if (scope.Role == UserRole.CampusAdmin
+                && (quiz.SchoolId != scope.SchoolId || quiz.SchoolCampusId != scope.CampusId))
+            {
+                throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
+            }
+
+            if (_users is not null
+                && QuizApprovalRouting.TryParseCreatorUserId(quiz.CreatedByName, out var creatorId))
+            {
+                var creator = await _users.GetByIdAsync(creatorId, cancellationToken);
+                if (creator is not null
+                    && !QuizApprovalRouting.SchoolOrCampusMayEndorse(
+                        QuizApprovalRouting.ResolveCreatorRole(creator.Roles)))
+                {
+                    throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
+                }
+            }
+
             return;
         }
 

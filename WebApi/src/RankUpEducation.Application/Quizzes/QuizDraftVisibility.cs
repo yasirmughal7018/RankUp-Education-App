@@ -4,7 +4,7 @@ namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>
 /// Work-in-progress drafts stay owner-only until Submit for approval.
-/// After that, PortalAdmin (and approval queues) may see the pipeline draft.
+/// After that, PortalAdmin and the school/campus approval queue may see the pipeline draft.
 /// </summary>
 public static class QuizDraftVisibility
 {

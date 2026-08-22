@@ -100,7 +100,7 @@ public sealed class QuizManageService : IQuizManageService
         _users = users;
         _notifications = notifications;
         _editRequestService = editRequestService;
-        _guard = new QuizManageGuard(quizzes, lookups, editRequests);
+        _guard = new QuizManageGuard(quizzes, lookups, editRequests, users);
     }
 
     public async Task<ManageQuizResponse> CreateAsync(CreateQuizRequest request, CancellationToken cancellationToken)
