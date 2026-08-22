@@ -70,8 +70,8 @@ public sealed class QuizBusinessScenarioTests
         Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Teacher));
         Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Coordinator));
         Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.PortalAdmin));
-        Assert.False(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Parent));
-        Assert.False(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Tutor));
+        Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Parent));
+        Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Tutor));
         Assert.False(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Student));
     }
 

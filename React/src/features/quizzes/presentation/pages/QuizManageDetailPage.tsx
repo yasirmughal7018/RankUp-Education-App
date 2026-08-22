@@ -448,9 +448,15 @@ export function QuizManageDetailPage() {
       quiz.schoolId,
       quiz.campusId,
     );
+  const canAssignFromSharedCatalog =
+    user?.role === "Teacher" ||
+    user?.role === "Coordinator" ||
+    user?.role === "Parent" ||
+    user?.role === "Tutor" ||
+    user?.role === "PortalAdmin";
   const canAssign =
     user != null &&
-    inManageOrgScope &&
+    (canAssignFromSharedCatalog || inManageOrgScope) &&
     canAssignQuiz(
       user.role,
       quiz.lifecycleStatus,

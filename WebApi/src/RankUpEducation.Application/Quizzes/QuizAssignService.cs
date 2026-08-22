@@ -339,7 +339,8 @@ public sealed class QuizAssignService : IQuizAssignService
         }
 
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.CampusAdmin
-            or UserRole.SchoolAdmin or UserRole.PortalAdmin)
+            or UserRole.SchoolAdmin or UserRole.PortalAdmin
+            or UserRole.Parent or UserRole.Tutor)
         {
             var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
             if (!QuizAssignRules.CanAssignWithApproval(scope.Role, approvalName))
@@ -348,16 +349,6 @@ public sealed class QuizAssignService : IQuizAssignService
                     scope.Role == UserRole.SchoolAdmin
                         ? "Quizzes must be school-approved or approved before assignment."
                         : "Quizzes must be approved before assignment.");
-            }
-        }
-        else if (await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken)
-            && scope.Role is UserRole.Parent or UserRole.Tutor)
-        {
-            var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
-            if (!LookupNames.IsFinalApprovedName(approvalName))
-            {
-                throw new BusinessRuleException(
-                    "ParentPrivate quizzes must be approved by a portal admin before assignment.");
             }
         }
 
@@ -380,9 +371,20 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new NotFoundAppException($"Quiz #{quizId} was not found.");
         }
 
+        // Published school-type catalog may be assigned by teacher/coordinator/parent/tutor
+        // to their own students or children. SchoolAdmin/CampusAdmin stay org-scoped.
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent or UserRole.Tutor)
+        {
+            var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
+            if (!isParentPrivate)
+            {
+                return quiz;
+            }
+        }
+
         // Public catalog quizzes may be viewed/assigned by any assign-capable role.
         if (quiz.AudienceScope.Equals("Public", StringComparison.OrdinalIgnoreCase)
-            && scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent)
+            && scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.CampusAdmin or UserRole.PortalAdmin or UserRole.Parent or UserRole.Tutor)
         {
             return quiz;
         }

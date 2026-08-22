@@ -3,6 +3,7 @@ import {
   canApproveQuizOnDetailPage,
   canApproveQuizzes,
   canAssignAdminAudiences,
+  canAssignQuiz,
   canAuthorQuizzes,
   canDeleteOrArchiveQuiz,
   canEditQuizSettings,
@@ -35,8 +36,33 @@ describe("quiz list visibility helpers", () => {
     expect(canViewOrgQuizCatalog("CampusAdmin")).toBe(true);
     expect(canViewOrgQuizCatalog("Teacher")).toBe(true);
     expect(canViewOrgQuizCatalog("Coordinator")).toBe(true);
-    expect(canViewOrgQuizCatalog("Parent")).toBe(false);
+    expect(canViewOrgQuizCatalog("Parent")).toBe(true);
+    expect(canViewOrgQuizCatalog("Tutor")).toBe(true);
     expect(canViewOrgQuizCatalog("Student")).toBe(false);
+  });
+
+  it("lets teacher, coordinator, and parent assign a published school-type quiz", () => {
+    expect(
+      canAssignQuiz("Teacher", "Published", "Approved", 3, "Practice"),
+    ).toBe(true);
+    expect(
+      canAssignQuiz("Coordinator", "Assigned", "Approved", 3, "Assessment"),
+    ).toBe(true);
+    expect(
+      canAssignQuiz("Parent", "Published", "Approved", 3, "Practice"),
+    ).toBe(true);
+    expect(
+      canAssignQuiz("Tutor", "Published", "Approved", 2, "Competition"),
+    ).toBe(true);
+    expect(
+      canAssignQuiz("Parent", "Published", "Approved", 2, "ParentPrivate"),
+    ).toBe(true);
+    expect(
+      canAssignQuiz("Teacher", "Published", "Approved", 2, "ParentPrivate"),
+    ).toBe(false);
+    expect(
+      canAssignQuiz("Student", "Published", "Approved", 3, "Practice"),
+    ).toBe(false);
   });
 
   it("defaults mine-only off for all roles (optional filter)", () => {

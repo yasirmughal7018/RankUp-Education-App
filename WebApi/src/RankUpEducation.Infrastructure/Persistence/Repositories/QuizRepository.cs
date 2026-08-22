@@ -134,7 +134,7 @@ public sealed class QuizRepository : IQuizRepository
             cancellationToken);
     }
 
-    public async Task<IReadOnlyList<QuizListItem>> ListForTeacherAsync(
+    public Task<IReadOnlyList<QuizListItem>> ListForTeacherAsync(
         long teacherUserId,
         int schoolId,
         int campusId,
@@ -142,47 +142,17 @@ public sealed class QuizRepository : IQuizRepository
         string? subject,
         string? grade,
         CancellationToken cancellationToken)
-    {
-        // Legacy path: scope by school/campus, not creator. Prefer ListForSchoolAsync from the service layer.
-        var query = _dbContext.Quizzes.AsNoTracking()
-            .Where(quiz => quiz.SchoolId == schoolId
-                && quiz.SchoolCampusId == campusId
-                && quiz.IsActive
-                && !quiz.IsDeleted);
-
-        query = QuizQueryHelper.ApplyQuizFilters(query, search, subject, grade);
-        var quizzes = await query.ToListAsync(cancellationToken);
-        var lookupNames = await QuizQueryHelper.LoadLookupNamesAsync(_dbContext, quizzes, cancellationToken);
-        var schools = await QuizQueryHelper.LoadSchoolNamesAsync(
-            _dbContext,
-            quizzes.Select(quiz => quiz.SchoolId).Distinct(),
-            cancellationToken);
-        var submittedQuizIds = await QuizQueryHelper.LoadQuizIdsSubmittedForReviewAsync(
-            _dbContext,
-            quizzes.Select(quiz => quiz.Id),
-            cancellationToken);
-
-        var items = new List<QuizListItem>();
-        foreach (var quiz in quizzes)
-        {
-            var item = QuizQueryHelper.MapQuizWithoutAssignment(
-                quiz,
-                lookupNames,
-                schools,
-                attemptCount: 0,
-                bestPercentage: null,
-                lastSubmittedAt: null,
-                quiz.LifecycleStatusId,
-                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
-                hasSubmittedForReview: submittedQuizIds.Contains(quiz.Id));
-            if (QuizQueryHelper.MatchesFilters(item, search, subject, grade))
-            {
-                items.Add(item);
-            }
-        }
-
-        return items;
-    }
+        => ListForSchoolAsync(
+            schoolId,
+            campusId,
+            viewerUserId: teacherUserId,
+            includeAllDrafts: false,
+            includeAllSchools: false,
+            search,
+            subject,
+            grade,
+            cancellationToken,
+            includePublishedFromAllSchools: true);
 
     public async Task<IReadOnlyList<QuizListItem>> ListForSchoolAsync(
         int? schoolId,
@@ -227,14 +197,27 @@ public sealed class QuizRepository : IQuizRepository
                 LookupNames.SchoolQuizTypeNames,
                 cancellationToken)
             : Array.Empty<short>();
+        var parentPrivateTypeIds = includePublishedFromAllSchools
+            ? (await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+                    _dbContext,
+                    LookupNames.QuizType,
+                    LookupNames.ParentPrivateQuizTypeNames,
+                    cancellationToken))
+                .Append(LookupNames.QuizTypeIds.ParentPrivate)
+                .Distinct()
+                .ToArray()
+            : Array.Empty<short>();
+        // Evaluate local collection size outside the EF expression so an empty
+        // name-resolve result still includes canonical school types 1–4.
+        var includeAnyNonPrivatePublished = includePublishedFromAllSchools && schoolQuizTypeIds.Count == 0;
 
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => !quiz.IsDeleted);
 
         // Draft: owner always. PortalAdmin also sees pipeline drafts (submitted / school-approved /
         // approved / rejected). Unsubmitted WIP is owner-only.
-        // Published / Assigned / Archived: all staff see school-type quizzes from any school/creator;
-        // ParentPrivate stays school/Public/portal scoped.
+        // Published / Assigned / Archived school-type quizzes: shared catalog (any school/creator).
+        // ParentPrivate stays out of that catalog.
         query = query.Where(quiz =>
             (draftIds.Contains(quiz.LifecycleStatusId)
                 && (
@@ -248,7 +231,13 @@ public sealed class QuizRepository : IQuizRepository
                 && (quiz.AudienceScope == "Public"
                     || includeAllSchools
                     || (includePublishedFromAllSchools
-                        && schoolQuizTypeIds.Contains(quiz.QuizTypeId))
+                        && !parentPrivateTypeIds.Contains(quiz.QuizTypeId)
+                        && (includeAnyNonPrivatePublished
+                            || schoolQuizTypeIds.Contains(quiz.QuizTypeId)
+                            || quiz.QuizTypeId == LookupNames.QuizTypeIds.Practice
+                            || quiz.QuizTypeId == LookupNames.QuizTypeIds.Assessment
+                            || quiz.QuizTypeId == LookupNames.QuizTypeIds.Competition
+                            || quiz.QuizTypeId == LookupNames.QuizTypeIds.Surprise))
                     || (schoolId != null
                         && quiz.SchoolId == schoolId
                         && (campusId == null

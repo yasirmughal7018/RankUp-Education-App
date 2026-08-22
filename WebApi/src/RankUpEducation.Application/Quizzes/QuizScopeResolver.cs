@@ -159,7 +159,9 @@ public static class QuizScopeResolver
             or UserRole.SchoolAdmin
             or UserRole.CampusAdmin
             or UserRole.Teacher
-            or UserRole.Coordinator;
+            or UserRole.Coordinator
+            or UserRole.Parent
+            or UserRole.Tutor;
 
     /// <summary>
     /// View (list/manage GET) for a published school-type quiz is allowed to all catalog staff.

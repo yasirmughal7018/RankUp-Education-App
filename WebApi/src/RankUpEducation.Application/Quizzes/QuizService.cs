@@ -1360,15 +1360,28 @@ public sealed class QuizService : IQuizService
         string? grade,
         CancellationToken cancellationToken)
     {
-        var parentId = _currentUser.ProfileId ?? _currentUser.UserId
-            ?? throw new ForbiddenAppException("Parent profile was not found.");
+        var parentUserId = _currentUser.UserId ?? throw new ForbiddenAppException("Parent account was not found.");
+        var parentId = _currentUser.ProfileId ?? parentUserId;
+
+        var catalogItems = await _quizzes.ListForSchoolAsync(
+            schoolId: null,
+            campusId: null,
+            viewerUserId: parentUserId,
+            includeAllDrafts: false,
+            includeAllSchools: false,
+            search,
+            subject,
+            grade,
+            cancellationToken,
+            includePublishedFromAllSchools: true);
 
         var studentIds = await _studentScope.GetLinkedStudentIdsAsync(parentId, cancellationToken);
-        var assignedItems = await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken);
-        var createdItems = await _quizzes.ListForCreatorAsync(parentId, search, subject, grade, cancellationToken);
+        var assignedItems = studentIds.Count > 0
+            ? await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken)
+            : Array.Empty<QuizListItem>();
 
-        return assignedItems
-            .Concat(createdItems.Where(created => assignedItems.All(assigned => assigned.QuizId != created.QuizId)))
+        return catalogItems
+            .Concat(assignedItems.Where(assigned => catalogItems.All(item => item.QuizId != assigned.QuizId)))
             .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
             .ThenByDescending(item => item.QuizId)
             .ToArray();
@@ -1383,14 +1396,25 @@ public sealed class QuizService : IQuizService
         var tutorUserId = _currentUser.UserId ?? throw new ForbiddenAppException("Tutor account was not found.");
         var profileId = _currentUser.ProfileId ?? tutorUserId;
 
+        var catalogItems = await _quizzes.ListForSchoolAsync(
+            schoolId: null,
+            campusId: null,
+            viewerUserId: tutorUserId,
+            includeAllDrafts: false,
+            includeAllSchools: false,
+            search,
+            subject,
+            grade,
+            cancellationToken,
+            includePublishedFromAllSchools: true);
+
         var studentIds = await _studentScope.GetTutorLinkedStudentIdsAsync(profileId, cancellationToken);
         var assignedItems = studentIds.Count > 0
             ? await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken)
             : Array.Empty<QuizListItem>();
-        var createdItems = await _quizzes.ListForCreatorAsync(tutorUserId, search, subject, grade, cancellationToken);
 
-        return assignedItems
-            .Concat(createdItems.Where(created => assignedItems.All(assigned => assigned.QuizId != created.QuizId)))
+        return catalogItems
+            .Concat(assignedItems.Where(assigned => catalogItems.All(item => item.QuizId != assigned.QuizId)))
             .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
             .ThenByDescending(item => item.QuizId)
             .ToArray();

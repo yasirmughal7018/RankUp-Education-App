@@ -290,11 +290,13 @@ export function canViewOrgQuizCatalog(role: UserRole): boolean {
     role === "SchoolAdmin" ||
     role === "CampusAdmin" ||
     role === "Teacher" ||
-    role === "Coordinator"
+    role === "Coordinator" ||
+    role === "Parent" ||
+    role === "Tutor"
   );
 }
 
-/** Default for the optional "Mine only" list filter — off so campus/school catalog is visible by default (§6a). */
+/** Default for the optional "Mine only" list filter — off so the shared published catalog is visible by default (§6a). */
 export function defaultQuizListMineOnly(_role: UserRole | undefined): boolean {
   return false;
 }
@@ -543,7 +545,9 @@ export function canAssignQuiz(
     role === "Teacher" ||
     role === "Coordinator" ||
     role === "PortalAdmin" ||
-    role === "CampusAdmin"
+    role === "CampusAdmin" ||
+    role === "Parent" ||
+    role === "Tutor"
   ) {
     return isFinalApprovedQuizStatus(approvalStatus);
   }
@@ -559,8 +563,9 @@ export function canAssignQuiz(
 }
 
 /**
- * Published school quizzes are viewable by all staff. Assign / duplicate / archive
- * stay school (SchoolAdmin) or campus (CampusAdmin / Teacher / Coordinator).
+ * Org-scoped mutations (SchoolAdmin/CampusAdmin assign, campus archive checks).
+ * Teacher/Coordinator/Parent/Tutor may still assign a published school-type quiz
+ * from the shared catalog to their own roster/children even when this is false.
  */
 export function isQuizInManageOrgScope(
   role: UserRole,

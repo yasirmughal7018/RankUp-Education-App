@@ -161,6 +161,29 @@ public sealed class QuizScopeResolverTests
     }
 
     [Fact]
+    public void EnsureCanViewQuiz_AllowsTeacherAndParentToViewPublishedSchoolQuiz()
+    {
+        var quiz = CreateQuiz(schoolId: 1, campusId: 10, createdBy: "99");
+        var teacher = new QuizManageScope(UserRole.Teacher, 42, 42, 2, 20);
+        var parent = new QuizManageScope(UserRole.Parent, 50, 50, null, null);
+
+        Assert.Null(Record.Exception(() =>
+            QuizScopeResolver.EnsureCanViewQuiz(
+                quiz,
+                teacher,
+                isDraftLifecycle: false,
+                isParentPrivate: false)));
+        Assert.Null(Record.Exception(() =>
+            QuizScopeResolver.EnsureCanViewQuiz(
+                quiz,
+                parent,
+                isDraftLifecycle: false,
+                isParentPrivate: false)));
+        Assert.Throws<ForbiddenAppException>(() =>
+            QuizScopeResolver.EnsureOwnsQuiz(quiz, teacher));
+    }
+
+    [Fact]
     public void EnsureCanViewQuiz_BlocksParentPrivateFromOtherSchoolAdmin()
     {
         var quiz = CreateQuiz(schoolId: 1, campusId: 10, createdBy: "99");
