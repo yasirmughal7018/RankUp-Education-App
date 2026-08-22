@@ -110,6 +110,32 @@ export interface ManageQuiz {
   questions: QuizQuestionItem[];
   /** Workflow trail from app_approval, oldest first. */
   approvalHistory?: QuizApprovalHistoryEntry[];
+  myEditRequest?: QuizEditRequestSummary | null;
+  hasApprovedEditGrant?: boolean;
+  pendingEditRequests?: QuizEditRequestSummary[] | null;
+}
+
+export interface QuizEditRequestSummary {
+  requestId: number;
+  quizId: number;
+  requesterName: string;
+  requesterRole: string;
+  reason: string;
+  status: string;
+  requestedAt: string;
+  resolvedAt?: string | null;
+  hasUnusedEditGrant: boolean;
+  decisionReason?: string | null;
+}
+
+export interface QuizEditRequestListItem {
+  requestId: number;
+  quizId: number;
+  quizTitle: string;
+  requesterName: string;
+  requesterRole: string;
+  reason: string;
+  requestedAt: string;
 }
 
 /** One entry in a quiz's approval trail. */
@@ -784,6 +810,22 @@ export function isQuizOwner(
   return String(userId) === String(createdBy);
 }
 
+/** True when the owner must request permission before editing. */
+export function isQuizLockedForOwnerEdit(
+  lifecycleStatus: string,
+  approvalStatus: string,
+): boolean {
+  if (isPublishedQuizLifecycle(lifecycleStatus)) {
+    return true;
+  }
+
+  return (
+    isDraftQuiz(lifecycleStatus) &&
+    (isSchoolApprovedQuizStatus(approvalStatus) ||
+      isFinalApprovedQuizStatus(approvalStatus))
+  );
+}
+
 /** Quiz settings and questions: owner or Portal Admin, while lifecycle allows edits. */
 export function canEditQuizSettings(
   role: UserRole,
@@ -791,12 +833,73 @@ export function canEditQuizSettings(
   createdBy: string,
   lifecycleStatus: string,
   assignments: Array<{ startAt: string; attemptCount: number }> = [],
+  approvalStatus: string = "Pending",
+  hasApprovedEditGrant: boolean = false,
 ): boolean {
-  if (!isQuizMetadataEditable(lifecycleStatus, assignments)) {
+  if (hasQuizAssignmentStarted(assignments)) {
     return false;
   }
 
-  return role === "PortalAdmin" || isQuizOwner(userId, createdBy);
+  const lifecycleAllows =
+    isDraftQuiz(lifecycleStatus) || isPublishedQuizLifecycle(lifecycleStatus);
+  if (!lifecycleAllows) {
+    return false;
+  }
+
+  if (role === "PortalAdmin") {
+    return true;
+  }
+
+  if (!isQuizOwner(userId, createdBy)) {
+    return false;
+  }
+
+  if (hasApprovedEditGrant) {
+    return true;
+  }
+
+  if (isQuizLockedForOwnerEdit(lifecycleStatus, approvalStatus)) {
+    return false;
+  }
+
+  return isQuizMetadataEditable(lifecycleStatus, assignments);
+}
+
+export function canRequestQuizEdit(args: {
+  role: UserRole;
+  userId: number | string;
+  createdBy: string;
+  lifecycleStatus: string;
+  approvalStatus: string;
+  hasApprovedEditGrant?: boolean;
+  myEditRequestStatus?: string | null;
+  assignments?: Array<{ startAt: string; attemptCount: number }>;
+}): boolean {
+  if (args.role === "PortalAdmin" || !isQuizOwner(args.userId, args.createdBy)) {
+    return false;
+  }
+
+  if (args.hasApprovedEditGrant) {
+    return false;
+  }
+
+  if (hasQuizAssignmentStarted(args.assignments ?? [])) {
+    return false;
+  }
+
+  if (!isQuizLockedForOwnerEdit(args.lifecycleStatus, args.approvalStatus)) {
+    return false;
+  }
+
+  return (args.myEditRequestStatus ?? "").toLowerCase() !== "pending";
+}
+
+export function canReviewQuizEditRequests(role: UserRole): boolean {
+  return (
+    role === "PortalAdmin" ||
+    role === "SchoolAdmin" ||
+    role === "CampusAdmin"
+  );
 }
 
 /** Normalize API/form navigation mode to a known value. */

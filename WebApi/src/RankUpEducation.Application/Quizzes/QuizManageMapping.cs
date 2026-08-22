@@ -9,7 +9,10 @@ internal static class QuizManageMapping
 {
     public static ManageQuizResponse ToManageResponse(
         QuizDetailItem detail,
-        IReadOnlyList<QuizQuestionItem> questions)
+        IReadOnlyList<QuizQuestionItem> questions,
+        QuizEditRequestSummary? myEditRequest = null,
+        bool hasApprovedEditGrant = false,
+        IReadOnlyList<QuizEditRequestSummary>? pendingEditRequests = null)
     {
         return new ManageQuizResponse(
             detail.QuizId,
@@ -54,7 +57,10 @@ internal static class QuizManageMapping
                     entry.ActorRole.ToString(),
                     entry.Reason,
                     entry.OccurredAt))
-                .ToArray());
+                .ToArray(),
+            myEditRequest,
+            hasApprovedEditGrant,
+            pendingEditRequests);
     }
 
     private static string ResolveCreatorDisplayName(QuizDetailItem detail)

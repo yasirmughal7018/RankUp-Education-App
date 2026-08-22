@@ -63,6 +63,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(CoordinatorClassSectionSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(TutorSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionEditRequestSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizEditRequestSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
 
@@ -420,6 +421,62 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         CREATE INDEX IF NOT EXISTS ix_app_approval_question_edit_pending
             ON public.app_approval (request_id)
             WHERE entity_type = 2105 AND approved_at IS NULL AND is_approved IS NULL;
+        """;
+
+    /// <summary>
+    /// Quiz edit requests (app_quiz_edit_request) plus app_approval queue rows (entity_type 2106).
+    /// </summary>
+    private const string QuizEditRequestSupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_quiz_edit_request (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            quiz_id BIGINT NOT NULL
+                REFERENCES public.quizzes (id) ON DELETE CASCADE,
+            requested_by_user_id BIGINT NOT NULL
+                REFERENCES public.app_users (id),
+            requested_by_role SMALLINT NOT NULL,
+            reason VARCHAR(1000) NOT NULL,
+            status SMALLINT NOT NULL DEFAULT 0,
+            requested_at TIMESTAMPTZ NOT NULL,
+            resolved_at TIMESTAMPTZ NULL,
+            edit_used_at TIMESTAMPTZ NULL,
+            decision_reason VARCHAR(1000) NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_quiz_edit_request_quiz
+            ON public.app_quiz_edit_request (quiz_id);
+
+        CREATE INDEX IF NOT EXISTS ix_quiz_edit_request_status
+            ON public.app_quiz_edit_request (status);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_quiz_edit_request_pending_user
+            ON public.app_quiz_edit_request (quiz_id, requested_by_user_id)
+            WHERE status = 0;
+
+        INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
+        SELECT 2106, 'QuizEditRequest', 'ApprovalEntityType', 6, TRUE, NULL
+        WHERE NOT EXISTS (SELECT 1 FROM public.lookups existing WHERE existing.id = 2106);
+
+        UPDATE public.lookups
+        SET name = 'QuizEditRequest',
+            type = 'ApprovalEntityType',
+            order_by = 6,
+            is_active = TRUE
+        WHERE id = 2106;
+
+        ALTER TABLE public.app_approval DROP CONSTRAINT IF EXISTS chk_app_approval_target;
+        ALTER TABLE public.app_approval
+            ADD CONSTRAINT chk_app_approval_target CHECK (
+                (entity_type = 2101 AND user_id IS NOT NULL AND request_id IS NULL)
+                OR (entity_type IN (2102, 2103, 2104, 2105, 2106) AND request_id IS NOT NULL AND user_id IS NULL)
+            );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_app_approval_quiz_edit_approver_role
+            ON public.app_approval (request_id, approved_by_user_id, approved_by_role)
+            WHERE entity_type = 2106;
+
+        CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_edit_pending
+            ON public.app_approval (request_id)
+            WHERE entity_type = 2106 AND approved_at IS NULL AND is_approved IS NULL;
         """;
 
     private const string SchoolSoftDeleteSupportSql = """
@@ -1483,6 +1540,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2103,           'Quiz',               'ApprovalEntityType',          3),
                 (2104,           'SchoolChangeRequest','ApprovalEntityType',          4),
                 (2105,           'QuestionEditRequest','ApprovalEntityType',          5),
+                (2106,           'QuizEditRequest',    'ApprovalEntityType',          6),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),
@@ -1511,6 +1569,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
                 (2103,           'Quiz',               'ApprovalEntityType',          3),
                 (2104,           'SchoolChangeRequest','ApprovalEntityType',          4),
                 (2105,           'QuestionEditRequest','ApprovalEntityType',          5),
+                (2106,           'QuizEditRequest',    'ApprovalEntityType',          6),
                 (2201,           'Created',            'ApprovalAction',              1),
                 (2202,           'SubmittedForReview', 'ApprovalAction',              2),
                 (2203,           'Approved',           'ApprovalAction',              3),

@@ -9,6 +9,8 @@ import type {
   ManageQuiz,
   PendingQuizApproval,
   QuizAssignment,
+  QuizEditRequestListItem,
+  QuizEditRequestSummary,
   QuizFormValues,
   QuizSummary,
   UpdateQuizQuestionInput,
@@ -79,6 +81,47 @@ export async function updateQuiz(
     method: "PUT",
     body: updatePayload,
   });
+}
+
+export async function requestQuizEdit(
+  quizId: number,
+  reason: string,
+): Promise<QuizEditRequestSummary> {
+  return apiRequest<QuizEditRequestSummary>(`/quizzes/${quizId}/edit-requests`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+export async function listPendingQuizEditRequests(): Promise<
+  QuizEditRequestListItem[]
+> {
+  const response = await apiRequest<{ items: QuizEditRequestListItem[] }>(
+    "/quizzes/edit-requests",
+  );
+  return response.items;
+}
+
+export async function approveQuizEditRequest(
+  requestId: number,
+): Promise<QuizEditRequestSummary> {
+  return apiRequest<QuizEditRequestSummary>(
+    `/quizzes/edit-requests/${requestId}/approve`,
+    { method: "POST" },
+  );
+}
+
+export async function rejectQuizEditRequest(
+  requestId: number,
+  reason: string,
+): Promise<QuizEditRequestSummary> {
+  return apiRequest<QuizEditRequestSummary>(
+    `/quizzes/edit-requests/${requestId}/reject`,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  );
 }
 
 /** Permanently delete a quiz. */

@@ -59,6 +59,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
     private readonly ILookupRepository _lookups;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
+    private readonly IQuizEditRequestService _editRequestService;
     private readonly QuizManageGuard _guard;
 
     public QuizQuestionService(
@@ -67,7 +68,9 @@ public sealed class QuizQuestionService : IQuizQuestionService
         IQuestionRepository questions,
         ILookupRepository lookups,
         IUnitOfWork unitOfWork,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IQuizEditRequestRepository editRequests,
+        IQuizEditRequestService editRequestService)
     {
         _quizzes = quizzes;
         _quizQuestions = quizQuestions;
@@ -75,7 +78,8 @@ public sealed class QuizQuestionService : IQuizQuestionService
         _lookups = lookups;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
-        _guard = new QuizManageGuard(quizzes, lookups);
+        _editRequestService = editRequestService;
+        _guard = new QuizManageGuard(quizzes, lookups, editRequests);
     }
 
     public async Task<QuizQuestionListResponse> ListForQuizAsync(long quizId, CancellationToken cancellationToken)
@@ -93,7 +97,8 @@ public sealed class QuizQuestionService : IQuizQuestionService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+        var editable = await _guard.RequireEditableQuizContextAsync(quizId, scope, cancellationToken);
+        var quiz = editable.Quiz;
         QuizManageGuard.ValidateQuestionRequest(request);
 
         var questionTypeId = await _guard.ResolveQuestionTypeIdAsync(request.QuestionType, cancellationToken);
@@ -172,6 +177,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
             new QuizQuestion(quizId, question.Id, displayOrder, request.Marks, request.EstimatedTimeSeconds),
             cancellationToken);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
+        await ConsumeGrantIfNeededAsync(editable, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await BuildManageResponseAsync(quizId, cancellationToken);
@@ -183,7 +189,8 @@ public sealed class QuizQuestionService : IQuizQuestionService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+        var editable = await _guard.RequireEditableQuizContextAsync(quizId, scope, cancellationToken);
+        var quiz = editable.Quiz;
 
         if (request.QuestionId <= 0)
         {
@@ -257,6 +264,8 @@ public sealed class QuizQuestionService : IQuizQuestionService
             new QuizQuestion(quizId, question.Id, displayOrder, marks, question.EstimatedTimeSeconds),
             cancellationToken);
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
+        await ConsumeGrantIfNeededAsync(editable, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await BuildManageResponseAsync(quizId, cancellationToken);
@@ -269,7 +278,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+        var editable = await _guard.RequireEditableQuizContextAsync(quizId, scope, cancellationToken);
         QuizManageGuard.ValidateQuestionRequest(request);
 
         var link = await _quizQuestions.GetQuizQuestionLinkAsync(quizId, questionId, cancellationToken)
@@ -313,6 +322,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
                 ApprovalAction.Modified,
                 DateTimeOffset.UtcNow),
             cancellationToken);
+        await ConsumeGrantIfNeededAsync(editable, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await BuildManageResponseAsync(quizId, cancellationToken);
@@ -324,7 +334,7 @@ public sealed class QuizQuestionService : IQuizQuestionService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+        var editable = await _guard.RequireEditableQuizContextAsync(quizId, scope, cancellationToken);
 
         var link = await _quizQuestions.GetQuizQuestionLinkAsync(quizId, questionId, cancellationToken)
             ?? throw new NotFoundAppException("Question was not found on this quiz.");
@@ -339,9 +349,22 @@ public sealed class QuizQuestionService : IQuizQuestionService
         }
 
         await _quizQuestions.RecalculateQuizTotalsAsync(quizId, cancellationToken);
+        await ConsumeGrantIfNeededAsync(editable, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await BuildManageResponseAsync(quizId, cancellationToken);
+    }
+
+    private async Task ConsumeGrantIfNeededAsync(
+        QuizManageGuard.EditableQuiz editable,
+        CancellationToken cancellationToken)
+    {
+        if (editable.Grant is null)
+        {
+            return;
+        }
+
+        await _guard.ConsumeEditGrantAsync(editable.Quiz, editable.Grant, cancellationToken);
     }
 
     private async Task ReplaceAnswersAsync(
@@ -413,6 +436,8 @@ public sealed class QuizQuestionService : IQuizQuestionService
             ?? throw new NotFoundAppException("Quiz was not found.");
 
         var questions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
-        return QuizManageMapping.ToManageResponse(detail, questions);
+        return await _editRequestService.AttachStateAsync(
+            QuizManageMapping.ToManageResponse(detail, questions),
+            cancellationToken);
     }
 }

@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<IQuizManageService, QuizManageService>();
         services.AddScoped<IQuestionService, QuestionService>();
         services.AddScoped<IQuestionEditRequestService, QuestionEditRequestService>();
+        services.AddScoped<IQuizEditRequestService, QuizEditRequestService>();
         services.AddScoped<IQuizQuestionService, QuizQuestionService>();
         services.AddScoped<IQuizAssignService, QuizAssignService>();
         services.AddScoped<IQuizMonitorService, QuizMonitorService>();

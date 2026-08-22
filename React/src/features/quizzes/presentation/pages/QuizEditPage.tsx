@@ -53,6 +53,8 @@ export function QuizEditPage() {
       quiz.createdBy,
       quiz.lifecycleStatus,
       assignments,
+      quiz.approvalStatus,
+      quiz.hasApprovedEditGrant === true,
     );
 
   if (!editable) {
@@ -60,7 +62,11 @@ export function QuizEditPage() {
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <PageHeader
           title="Quiz is read-only"
-          description="Only the quiz owner or a portal admin can change settings while the quiz is Draft or Published and no assignment has started."
+          description={
+            quiz.hasApprovedEditGrant
+              ? "Your edit request was approved. Saving sends this quiz back to Draft + Pending — resubmit for approval after you edit."
+              : "Only the quiz owner or a portal admin can change settings while the quiz is Draft or Published and no assignment has started. After approval or publish, owners send an edit request first."
+          }
           backTo={`/quizzes/${quizId}`}
           backAriaLabel="Back to quiz"
         />

@@ -7,7 +7,9 @@ import {
   canEditQuizSettings,
   canManageQuizzes,
   canPortalPublishQuiz,
+  canRequestQuizEdit,
   canReviewQuizApproval,
+  canReviewQuizEditRequests,
   canSubmitQuizForReview,
   canViewOrgQuizCatalog,
   defaultQuizListMineOnly,
@@ -141,6 +143,35 @@ describe("canEditQuizSettings", () => {
     expect(canEditQuizSettings("Teacher", 42, "42", "Draft", [])).toBe(true);
   });
 
+  it("locks the owner after school or portal approval until a grant exists", () => {
+    expect(
+      canEditQuizSettings(
+        "Teacher",
+        42,
+        "42",
+        "Draft",
+        [],
+        "SchoolApproved",
+      ),
+    ).toBe(false);
+    expect(
+      canEditQuizSettings("Teacher", 42, "42", "Draft", [], "Approved", true),
+    ).toBe(true);
+  });
+
+  it("locks the owner after publish", () => {
+    expect(
+      canEditQuizSettings(
+        "Teacher",
+        42,
+        "42",
+        "Published",
+        [{ startAt: "2099-01-01T00:00:00Z", attemptCount: 0 }],
+        "Approved",
+      ),
+    ).toBe(false);
+  });
+
   it("denies non-owner school admins", () => {
     expect(
       canEditQuizSettings("SchoolAdmin", 5, "99", "Draft", []),
@@ -153,6 +184,83 @@ describe("canEditQuizSettings", () => {
         { startAt: "2020-01-01T00:00:00Z", attemptCount: 0 },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("canRequestQuizEdit", () => {
+  it("lets the owner request edit after school or portal approval", () => {
+    expect(
+      canRequestQuizEdit({
+        role: "Teacher",
+        userId: 42,
+        createdBy: "42",
+        lifecycleStatus: "Draft",
+        approvalStatus: "SchoolApproved",
+      }),
+    ).toBe(true);
+    expect(
+      canRequestQuizEdit({
+        role: "Parent",
+        userId: 7,
+        createdBy: "7",
+        lifecycleStatus: "Published",
+        approvalStatus: "Approved",
+      }),
+    ).toBe(true);
+  });
+
+  it("hides the request while a grant or pending request exists", () => {
+    expect(
+      canRequestQuizEdit({
+        role: "Teacher",
+        userId: 42,
+        createdBy: "42",
+        lifecycleStatus: "Draft",
+        approvalStatus: "Approved",
+        hasApprovedEditGrant: true,
+      }),
+    ).toBe(false);
+    expect(
+      canRequestQuizEdit({
+        role: "Teacher",
+        userId: 42,
+        createdBy: "42",
+        lifecycleStatus: "Draft",
+        approvalStatus: "Approved",
+        myEditRequestStatus: "Pending",
+      }),
+    ).toBe(false);
+  });
+
+  it("does not let portal admin or non-owners request edit", () => {
+    expect(
+      canRequestQuizEdit({
+        role: "PortalAdmin",
+        userId: 1,
+        createdBy: "42",
+        lifecycleStatus: "Published",
+        approvalStatus: "Approved",
+      }),
+    ).toBe(false);
+    expect(
+      canRequestQuizEdit({
+        role: "SchoolAdmin",
+        userId: 5,
+        createdBy: "42",
+        lifecycleStatus: "Draft",
+        approvalStatus: "SchoolApproved",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("canReviewQuizEditRequests", () => {
+  it("allows portal, school, and campus admins only", () => {
+    expect(canReviewQuizEditRequests("PortalAdmin")).toBe(true);
+    expect(canReviewQuizEditRequests("SchoolAdmin")).toBe(true);
+    expect(canReviewQuizEditRequests("CampusAdmin")).toBe(true);
+    expect(canReviewQuizEditRequests("Teacher")).toBe(false);
+    expect(canReviewQuizEditRequests("Coordinator")).toBe(false);
   });
 });
 

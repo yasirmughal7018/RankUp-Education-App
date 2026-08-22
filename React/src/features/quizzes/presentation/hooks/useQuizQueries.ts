@@ -27,6 +27,56 @@ export function usePendingQuizApprovalsQuery() {
   });
 }
 
+export function usePendingQuizEditRequestsQuery(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.quizEditRequests(),
+    queryFn: () => quizApi.listPendingQuizEditRequests(),
+    staleTime: 30_000,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useRequestQuizEditMutation(quizId: number) {
+  const invalidate = useInvalidateQuizDetail(quizId);
+
+  return useMutation({
+    mutationFn: (reason: string) => quizApi.requestQuizEdit(quizId, reason),
+    onSuccess: () => {
+      invalidate();
+      // list key is length 2 so invalidateQuizListQueries already covers it
+    },
+  });
+}
+
+export function useApproveQuizEditRequestMutation(quizId?: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (requestId: number) => quizApi.approveQuizEditRequest(requestId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.quizEditRequests() });
+      if (quizId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.manageQuiz(quizId) });
+      }
+    },
+  });
+}
+
+export function useRejectQuizEditRequestMutation(quizId?: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ requestId, reason }: { requestId: number; reason: string }) =>
+      quizApi.rejectQuizEditRequest(requestId, reason),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.quizEditRequests() });
+      if (quizId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.manageQuiz(quizId) });
+      }
+    },
+  });
+}
+
 /** Single quiz detail for manage/edit pages. */
 export function useManageQuizQuery(quizId: number, enabled = true) {
   return useQuery({

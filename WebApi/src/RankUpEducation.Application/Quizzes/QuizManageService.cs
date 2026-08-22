@@ -74,6 +74,7 @@ public sealed class QuizManageService : IQuizManageService
     private readonly ICurrentUserService _currentUser;
     private readonly IUserRepository _users;
     private readonly INotificationService _notifications;
+    private readonly IQuizEditRequestService _editRequestService;
     private readonly QuizManageGuard _guard;
 
     public QuizManageService(
@@ -85,7 +86,9 @@ public sealed class QuizManageService : IQuizManageService
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
         IUserRepository users,
-        INotificationService notifications)
+        INotificationService notifications,
+        IQuizEditRequestRepository editRequests,
+        IQuizEditRequestService editRequestService)
     {
         _quizzes = quizzes;
         _quizQuestions = quizQuestions;
@@ -96,7 +99,8 @@ public sealed class QuizManageService : IQuizManageService
         _currentUser = currentUser;
         _users = users;
         _notifications = notifications;
-        _guard = new QuizManageGuard(quizzes, lookups);
+        _editRequestService = editRequestService;
+        _guard = new QuizManageGuard(quizzes, lookups, editRequests);
     }
 
     public async Task<ManageQuizResponse> CreateAsync(CreateQuizRequest request, CancellationToken cancellationToken)
@@ -167,7 +171,8 @@ public sealed class QuizManageService : IQuizManageService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
-        var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+        var editable = await _guard.RequireEditableQuizContextAsync(quizId, scope, cancellationToken);
+        var quiz = editable.Quiz;
 
         QuizQuestionSelection.ValidateRandomQuestionCount(request.RandomQuestionCount, quiz.TotalQuestions);
 
@@ -194,6 +199,11 @@ public sealed class QuizManageService : IQuizManageService
             ?? throw new NotFoundAppException("Quiz was not found.");
         QuizQuestionSelection.ValidateRandomQuestionCount(refreshed.RandomQuestionCount, refreshed.TotalQuestions);
         await RecordTrailEventAsync(quizId, scope, ApprovalAction.Modified, cancellationToken);
+        if (editable.Grant is not null)
+        {
+            await _guard.ConsumeEditGrantAsync(quiz, editable.Grant, cancellationToken);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return await BuildManageResponseAsync(quizId, cancellationToken);
     }
@@ -771,7 +781,9 @@ public sealed class QuizManageService : IQuizManageService
             ?? throw new NotFoundAppException("Quiz was not found.");
 
         var questions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
-        return QuizManageMapping.ToManageResponse(detail, questions);
+        return await _editRequestService.AttachStateAsync(
+            QuizManageMapping.ToManageResponse(detail, questions),
+            cancellationToken);
     }
 
     private async Task<StudentSchoolContext> ResolveSchoolContextAsync(

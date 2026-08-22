@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ISchoolChangeRequestRepository, SchoolChangeRequestRepository>();
         services.AddScoped<IQuestionEditRequestRepository, QuestionEditRequestRepository>();
+        services.AddScoped<IQuizEditRequestRepository, QuizEditRequestRepository>();
         services.AddScoped<IUserRoleRequestRepository, UserRoleRequestRepository>();
         services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();

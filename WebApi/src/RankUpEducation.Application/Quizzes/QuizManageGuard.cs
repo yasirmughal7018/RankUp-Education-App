@@ -19,12 +19,19 @@ internal sealed class QuizManageGuard
 {
     private readonly IQuizRepository _quizzes;
     private readonly ILookupRepository _lookups;
+    private readonly IQuizEditRequestRepository? _editRequests;
 
-    public QuizManageGuard(IQuizRepository quizzes, ILookupRepository lookups)
+    public QuizManageGuard(
+        IQuizRepository quizzes,
+        ILookupRepository lookups,
+        IQuizEditRequestRepository? editRequests = null)
     {
         _quizzes = quizzes;
         _lookups = lookups;
+        _editRequests = editRequests;
     }
+
+    internal sealed record EditableQuiz(Quiz Quiz, QuizEditRequest? Grant);
 
     public async Task<Quiz> RequireOwnedQuizAsync(
         long quizId,
@@ -71,11 +78,59 @@ internal sealed class QuizManageGuard
         long quizId,
         QuizManageScope scope,
         CancellationToken cancellationToken)
+        => (await RequireEditableQuizContextAsync(quizId, scope, cancellationToken)).Quiz;
+
+    public async Task<EditableQuiz> RequireEditableQuizContextAsync(
+        long quizId,
+        QuizManageScope scope,
+        CancellationToken cancellationToken)
     {
         var quiz = await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
-        QuizScopeResolver.EnsureCanEditQuizSettings(quiz, scope);
-        await EnsureEditableLifecycleAsync(quiz, cancellationToken);
-        return quiz;
+        var grant = scope.Role == UserRole.PortalAdmin || _editRequests is null
+            ? null
+            : await _editRequests.GetUnusedGrantAsync(quiz.Id, scope.UserId, cancellationToken);
+
+        if (grant is null)
+        {
+            QuizScopeResolver.EnsureCanEditQuizSettings(quiz, scope);
+        }
+        else if (!QuizScopeResolver.IsQuizOwner(quiz, scope))
+        {
+            throw new ForbiddenAppException("Only the quiz owner can use an approved edit grant.");
+        }
+
+        await EnsureEditableLifecycleAsync(quiz, grant, cancellationToken);
+        await EnsureOwnerEditNotLockedAsync(quiz, scope, grant, cancellationToken);
+        return new EditableQuiz(quiz, grant);
+    }
+
+    public async Task ConsumeEditGrantAsync(
+        Quiz quiz,
+        QuizEditRequest grant,
+        CancellationToken cancellationToken)
+    {
+        if (_editRequests is null)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        grant.MarkEditUsed(now);
+        var pendingApprovalStatusId = await RequireLookupAsync(
+            LookupNames.QuizApprovalStatus,
+            LookupNames.PendingApprovalStatusNames,
+            cancellationToken);
+        var draftLifecycleStatusId = await RequireLookupAsync(
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.DraftLifecycleNames,
+            cancellationToken);
+        quiz.RevertAfterGrantedEdit(draftLifecycleStatusId, pendingApprovalStatusId);
+        await _editRequests.CancelPendingForQuizAsync(
+            quiz.Id,
+            now,
+            grant.Id,
+            "The quiz is no longer approved or published.",
+            cancellationToken);
     }
 
     public async Task EnsureNotArchivedAsync(Quiz quiz, CancellationToken cancellationToken)
@@ -311,7 +366,10 @@ internal sealed class QuizManageGuard
         }
     }
 
-    private async Task EnsureEditableLifecycleAsync(Quiz quiz, CancellationToken cancellationToken)
+    private async Task EnsureEditableLifecycleAsync(
+        Quiz quiz,
+        QuizEditRequest? grant,
+        CancellationToken cancellationToken)
     {
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         if (IsArchivedLifecycle(lifecycleName))
@@ -319,7 +377,8 @@ internal sealed class QuizManageGuard
             throw new BusinessRuleException("Archived quizzes are read-only.");
         }
 
-        if (!IsEditableLifecycle(lifecycleName))
+        if (!IsEditableLifecycle(lifecycleName)
+            && !(grant is not null && IsAssignedLifecycle(lifecycleName)))
         {
             throw new BusinessRuleException("Quiz can only be edited while it is in draft or published state.");
         }
@@ -331,8 +390,32 @@ internal sealed class QuizManageGuard
         }
     }
 
+    private async Task EnsureOwnerEditNotLockedAsync(
+        Quiz quiz,
+        QuizManageScope scope,
+        QuizEditRequest? grant,
+        CancellationToken cancellationToken)
+    {
+        if (scope.Role == UserRole.PortalAdmin || grant is not null)
+        {
+            return;
+        }
+
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        if (QuizEditRequestRules.IsLockedForOwnerEdit(lifecycleName, approvalName))
+        {
+            throw new BusinessRuleException(
+                "Approved or published quizzes can only be edited by Portal Admin. Send an edit request with a reason.");
+        }
+    }
+
     private static bool IsEditableLifecycle(string lifecycleName)
         => IsDraftLifecycle(lifecycleName) || lifecycleName.Equals("Published", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAssignedLifecycle(string lifecycleName)
+        => LookupNames.AssignedLifecycleNames.Any(
+            name => lifecycleName.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsDraftLifecycle(string lifecycleName)
         => LookupNames.DraftLifecycleNames.Any(

@@ -6,11 +6,11 @@ namespace RankUpEducation.Domain.Approvals;
 /// Generic approval queue + trail. Table: app_approval.
 /// <para>
 /// <see cref="EntityType"/> selects how the target is identified:
-/// registration uses <see cref="UserId"/>; question, quiz, school-change, and question-edit
-/// rows use <see cref="RequestId"/>.
+/// registration uses <see cref="UserId"/>; question, quiz, school-change, question-edit,
+/// and quiz-edit rows use <see cref="RequestId"/>.
 /// </para>
 /// <para>
-/// User, SchoolChangeRequest, and QuestionEditRequest rows behave as a <em>queue</em>: one row
+/// User, SchoolChangeRequest, QuestionEditRequest, and QuizEditRequest rows behave as a <em>queue</em>: one row
 /// per eligible approver, pending until decided (<see cref="IsApproved"/> null and
 /// <see cref="ApprovedAt"/> null).
 /// Question and Quiz rows behave as an append-only <em>trail</em>: one row per workflow event,
@@ -128,6 +128,23 @@ public sealed class Approval
             ApprovalEntityType.QuestionEditRequest,
             userId: null,
             requestId: questionEditRequestId,
+            approverUserId,
+            approverRole,
+            action: null,
+            reason: null,
+            createdAt: DateTimeOffset.UtcNow,
+            approvedAt: null,
+            isApproved: null);
+
+    /// <summary>Queues a quiz-edit review row for one eligible approver.</summary>
+    public static Approval CreatePendingQuizEdit(
+        long quizEditRequestId,
+        long approverUserId,
+        UserRole approverRole)
+        => new(
+            ApprovalEntityType.QuizEditRequest,
+            userId: null,
+            requestId: quizEditRequestId,
             approverUserId,
             approverRole,
             action: null,

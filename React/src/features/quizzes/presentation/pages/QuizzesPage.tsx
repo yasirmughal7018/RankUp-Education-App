@@ -26,6 +26,7 @@ import { QuestionCategoryColumn } from "@/features/questions/presentation/compon
 import {
   canAssignAdminAudiences,
   canAuthorQuizzes,
+  canReviewQuizEditRequests,
   canViewOrgQuizCatalog,
   defaultQuizListMineOnly,
   formatQuizDisplayStatusLabel,
@@ -33,7 +34,8 @@ import {
   isUnpublishedQuizDisplayStatus,
   type QuizSummary,
 } from "@/features/quizzes/domain/quizTypes";
-import { useQuizzesQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
+import { useQuizzesQuery, usePendingQuizEditRequestsQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
+import { QuizEditRequestsPanel } from "@/features/quizzes/presentation/components/QuizEditRequestsPanel";
 import { AppCard } from "@/components/ui/app-card";
 import { AppEmptyState } from "@/components/ui/app-empty-state";
 import { AppErrorState } from "@/components/ui/app-error-state";
@@ -170,8 +172,13 @@ export function QuizzesPage() {
     setShowMineOnly(defaultQuizListMineOnly(user?.role));
   }, [user?.role]);
 
-  const { data: quizzes = [], isLoading, error, refetch, isFetching } =
-    useQuizzesQuery();
+  const canReviewEditRequests =
+    user != null && canReviewQuizEditRequests(user.role);
+  const {
+    data: editRequests = [],
+    isLoading: editRequestsLoading,
+    error: editRequestsError,
+  } = usePendingQuizEditRequestsQuery({ enabled: canReviewEditRequests });
 
   const subjectsQuery = useLookups(LOOKUP_TYPES.SUBJECT);
   const classesQuery = useLookups(LOOKUP_TYPES.CLASS);
@@ -470,6 +477,22 @@ export function QuizzesPage() {
           </div>
         }
       />
+
+      {canReviewEditRequests ? (
+        <AppCard padded={false} className="mb-4">
+          <div className="border-b border-border px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-semibold text-foreground">
+              Quiz edit requests
+              {editRequests.length > 0 ? ` (${editRequests.length})` : ""}
+            </h2>
+          </div>
+          <QuizEditRequestsPanel
+            items={editRequests}
+            isLoading={editRequestsLoading}
+            error={editRequestsError instanceof Error ? editRequestsError : null}
+          />
+        </AppCard>
+      ) : null}
 
       <AppCard padded className="space-y-3">
         {hasFilters ? (

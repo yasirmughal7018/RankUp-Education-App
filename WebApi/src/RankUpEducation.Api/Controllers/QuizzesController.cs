@@ -19,19 +19,22 @@ public sealed class QuizzesController : ControllerBase
     private readonly IQuizAssignService _quizAssignService;
     private readonly IQuizMonitorService _quizMonitorService;
     private readonly IQuizReviewService _quizReviewService;
+    private readonly IQuizEditRequestService _quizEditRequests;
 
     public QuizzesController(
         IQuizService quizService,
         IQuizManageService quizManageService,
         IQuizAssignService quizAssignService,
         IQuizMonitorService quizMonitorService,
-        IQuizReviewService quizReviewService)
+        IQuizReviewService quizReviewService,
+        IQuizEditRequestService quizEditRequests)
     {
         _quizService = quizService;
         _quizManageService = quizManageService;
         _quizAssignService = quizAssignService;
         _quizMonitorService = quizMonitorService;
         _quizReviewService = quizReviewService;
+        _quizEditRequests = quizEditRequests;
     }
 
     /// <summary>
@@ -75,6 +78,37 @@ public sealed class QuizzesController : ControllerBase
     {
         var response = await _quizManageService.ListPendingApprovalAsync(cancellationToken);
         return Ok(ApiResponse<PendingQuizApprovalListResponse>.Ok(response));
+    }
+
+    /// <summary>Pending requests to edit approved or published quizzes (queued to the current approver).</summary>
+    [HttpGet("edit-requests")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<QuizEditRequestListResponse>>> ListPendingEditRequestsAsync(
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizEditRequests.ListPendingAsync(cancellationToken);
+        return Ok(ApiResponse<QuizEditRequestListResponse>.Ok(response));
+    }
+
+    [HttpPost("edit-requests/{requestId:long}/approve")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<QuizEditRequestSummary>>> ApproveEditRequestAsync(
+        long requestId,
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizEditRequests.ApproveAsync(requestId, cancellationToken);
+        return Ok(ApiResponse<QuizEditRequestSummary>.Ok(response, "Edit request approved."));
+    }
+
+    [HttpPost("edit-requests/{requestId:long}/reject")]
+    [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]
+    public async Task<ActionResult<ApiResponse<QuizEditRequestSummary>>> RejectEditRequestAsync(
+        long requestId,
+        [FromBody] RejectQuizEditRequestRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizEditRequests.RejectAsync(requestId, request, cancellationToken);
+        return Ok(ApiResponse<QuizEditRequestSummary>.Ok(response, "Edit request rejected."));
     }
 
     /// <summary>Returns quiz instructions, timing, and attempt rules for the current user.</summary>
@@ -204,6 +238,17 @@ public sealed class QuizzesController : ControllerBase
     {
         var response = await _quizManageService.UpdateAsync(quizId, request, cancellationToken);
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Quiz updated."));
+    }
+
+    /// <summary>Owner asks to edit an approved or published quiz. Teacher/Coordinator: school, campus, and portal admins; other owners: PortalAdmin only.</summary>
+    [HttpPost("{quizId:long}/edit-requests")]
+    public async Task<ActionResult<ApiResponse<QuizEditRequestSummary>>> RequestEditAsync(
+        long quizId,
+        [FromBody] CreateQuizEditRequestRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await _quizEditRequests.RequestEditAsync(quizId, request, cancellationToken);
+        return Ok(ApiResponse<QuizEditRequestSummary>.Ok(response, "Edit request sent."));
     }
 
     /// <summary>Permanently deletes a draft quiz with no assignments.</summary>

@@ -83,7 +83,10 @@ public sealed record ManageQuizResponse(
     int? SchoolId,
     int? CampusId,
     IReadOnlyList<ManageQuizQuestionResponse> Questions,
-    IReadOnlyList<QuizApprovalHistoryItem> ApprovalHistory);
+    IReadOnlyList<QuizApprovalHistoryItem> ApprovalHistory,
+    QuizEditRequestSummary? MyEditRequest = null,
+    bool HasApprovedEditGrant = false,
+    IReadOnlyList<QuizEditRequestSummary>? PendingEditRequests = null);
 
 /// <summary>One entry in a quiz's approval trail.</summary>
 public sealed record QuizApprovalHistoryItem(

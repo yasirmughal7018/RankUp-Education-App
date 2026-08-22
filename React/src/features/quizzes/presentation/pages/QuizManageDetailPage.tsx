@@ -17,6 +17,7 @@ import {
   canEditQuizSettings,
   canPortalPublishQuiz,
   canAssignQuiz,
+  canRequestQuizEdit,
   canSubmitQuizForReview,
   formatQuizDisplayStatusLabel,
   formatQuizDuration,
@@ -51,6 +52,9 @@ import {
   useQuizAssignmentsQuery,
   useRejectQuizMutation,
   useRemoveQuizQuestionMutation,
+  useRequestQuizEditMutation,
+  useApproveQuizEditRequestMutation,
+  useRejectQuizEditRequestMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
 function formatDateTime(value: string): string {
@@ -247,6 +251,12 @@ export function QuizManageDetailPage() {
   const [approvalHistoryExpanded, setApprovalHistoryExpanded] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [showRequestEditForm, setShowRequestEditForm] = useState(false);
+  const [requestEditReason, setRequestEditReason] = useState("");
+  const [rejectEditRequestId, setRejectEditRequestId] = useState<number | null>(
+    null,
+  );
+  const [rejectEditReason, setRejectEditReason] = useState("");
 
   const publishQuiz = usePublishQuizMutation(numericQuizId);
   const approveQuiz = useApproveQuizMutation(numericQuizId);
@@ -260,6 +270,9 @@ export function QuizManageDetailPage() {
   const assignQuiz = useAssignQuizMutation(numericQuizId);
   const cancelAssignments = useCancelQuizAssignmentsMutation(numericQuizId);
   const allowRetry = useAllowRetryMutation(numericQuizId);
+  const requestQuizEdit = useRequestQuizEditMutation(numericQuizId);
+  const approveEditRequest = useApproveQuizEditRequestMutation(numericQuizId);
+  const rejectEditRequest = useRejectQuizEditRequestMutation(numericQuizId);
 
   const detailQueriesEnabled =
     !suppressDetailQueries && !deleteQuiz.isPending;
@@ -301,7 +314,10 @@ export function QuizManageDetailPage() {
     attachBankQuestion.isPending ||
     assignQuiz.isPending ||
     cancelAssignments.isPending ||
-    allowRetry.isPending;
+    allowRetry.isPending ||
+    requestQuizEdit.isPending ||
+    approveEditRequest.isPending ||
+    rejectEditRequest.isPending;
 
   async function runAction(action: () => Promise<unknown>, success: string) {
     setActionError(null);
@@ -364,7 +380,21 @@ export function QuizManageDetailPage() {
       quiz.createdBy,
       quiz.lifecycleStatus,
       assignments,
+      quiz.approvalStatus,
+      quiz.hasApprovedEditGrant === true,
     );
+  const canRequestEdit =
+    user != null &&
+    canRequestQuizEdit({
+      role: user.role,
+      userId: user.id,
+      createdBy: quiz.createdBy,
+      lifecycleStatus: quiz.lifecycleStatus,
+      approvalStatus: quiz.approvalStatus,
+      hasApprovedEditGrant: quiz.hasApprovedEditGrant,
+      myEditRequestStatus: quiz.myEditRequest?.status,
+      assignments,
+    });
   const questionsEditable = settingsEditable;
   const submitForReview =
     user != null &&
@@ -495,6 +525,18 @@ export function QuizManageDetailPage() {
                 Edit settings
               </Link>
             ) : null}
+            {canRequestEdit ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRequestEditForm(true);
+                  setActionError(null);
+                }}
+                className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5"
+              >
+                Request edit
+              </button>
+            ) : null}
           </div>
           )
         }
@@ -510,6 +552,158 @@ export function QuizManageDetailPage() {
         <div className="mb-4 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
           {actionError}
         </div>
+      ) : null}
+
+      {quiz.hasApprovedEditGrant ? (
+        <div className="mb-4 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
+          Your edit request was approved. Saving changes returns this quiz to
+          Draft + Pending — resubmit for approval after you edit.
+        </div>
+      ) : null}
+
+      {quiz.myEditRequest?.status === "Pending" ? (
+        <div className="mb-4 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
+          Your edit request is waiting for review. Reason:{" "}
+          {quiz.myEditRequest.reason}
+        </div>
+      ) : null}
+
+      {quiz.myEditRequest?.status === "Rejected" && !quiz.hasApprovedEditGrant ? (
+        <div className="mb-4 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
+          Your last edit request was rejected
+          {quiz.myEditRequest.decisionReason
+            ? `: ${quiz.myEditRequest.decisionReason}`
+            : "."}
+        </div>
+      ) : null}
+
+      {showRequestEditForm ? (
+        <section className="mb-4 rounded-2xl border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-[var(--status-pending-text)]">
+            Request edit
+          </h2>
+          <p className="mt-2 text-sm text-[var(--status-pending-text)]">
+            Explain why this approved or published quiz needs to change (at least
+            10 characters). After someone approves, you may edit once, then
+            resubmit for approval.
+          </p>
+          <textarea
+            value={requestEditReason}
+            onChange={(event) => setRequestEditReason(event.target.value)}
+            className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            rows={3}
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={isSubmitting || requestEditReason.trim().length < 10}
+              onClick={() =>
+                void runAction(async () => {
+                  await requestQuizEdit.mutateAsync(requestEditReason.trim());
+                  setShowRequestEditForm(false);
+                  setRequestEditReason("");
+                }, "Edit request sent.")
+              }
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-70"
+            >
+              Send request
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowRequestEditForm(false)}
+              className="rounded-lg border border-border px-4 py-2 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {(quiz.pendingEditRequests?.length ?? 0) > 0 ? (
+        <section className="mb-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-foreground">
+            Pending edit requests
+          </h2>
+          <ul className="mt-3 space-y-3">
+            {quiz.pendingEditRequests!.map((item) => (
+              <li
+                key={item.requestId}
+                className="rounded-lg border border-border px-4 py-3 text-sm"
+              >
+                <p className="font-medium text-foreground">
+                  {item.requesterName} ({item.requesterRole})
+                </p>
+                <p className="mt-1 text-muted-foreground">{item.reason}</p>
+                {rejectEditRequestId === item.requestId ? (
+                  <div className="mt-3 space-y-2">
+                    <textarea
+                      value={rejectEditReason}
+                      onChange={(event) => setRejectEditReason(event.target.value)}
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      rows={2}
+                      placeholder="Rejection reason (at least 10 characters)"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={
+                          isSubmitting || rejectEditReason.trim().length < 10
+                        }
+                        onClick={() =>
+                          void runAction(
+                            () =>
+                              rejectEditRequest.mutateAsync({
+                                requestId: item.requestId,
+                                reason: rejectEditReason.trim(),
+                              }),
+                            "Edit request rejected.",
+                          )
+                        }
+                        className="rounded-lg border border-[var(--status-rejected-border)] px-3 py-1.5 text-sm text-[var(--status-rejected-text)]"
+                      >
+                        Confirm reject
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRejectEditRequestId(null)}
+                        className="rounded-lg border border-border px-3 py-1.5 text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() =>
+                        void runAction(
+                          () => approveEditRequest.mutateAsync(item.requestId),
+                          "Edit request approved.",
+                        )
+                      }
+                      className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => {
+                        setRejectEditRequestId(item.requestId);
+                        setRejectEditReason("");
+                      }}
+                      className="rounded-lg border border-[var(--status-rejected-border)] px-3 py-1.5 text-sm text-[var(--status-rejected-text)]"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <section className="mb-6 grid gap-4 md:grid-cols-4">

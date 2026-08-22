@@ -25,6 +25,7 @@ const ADMIN_NOTIFICATION_CATEGORIES = new Set([
   "RoleRequest",
   "PasswordResetRequest",
   "QuestionEditRequest",
+  "QuizEditRequest",
 ]);
 
 const QUIZ_NOTIFICATION_CATEGORIES = new Set([
@@ -69,6 +70,10 @@ function isVisibleCategory(category: string, role: UserRole | undefined): boolea
     return true;
   }
 
+  if (category === "QuizEditRequest") {
+    return true;
+  }
+
   // Teachers, Parents, Students: quiz alerts (API already scopes by recipient).
   return isQuiz;
 }
@@ -101,6 +106,15 @@ function hrefForCategory(
     }
 
     return "/questions";
+  }
+
+  if (category === "QuizEditRequest") {
+    const quizMatch = body?.match(/quiz #(\d+)/i);
+    if (quizMatch) {
+      return `/quizzes/${quizMatch[1]}`;
+    }
+
+    return "/quizzes";
   }
 
   if (category === "QuizAssigned" || category === "QuizReviewed") {

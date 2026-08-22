@@ -229,6 +229,19 @@ public sealed class Quiz : SoftDeleteEntity
         LifecycleStatusId = lifecycleStatusId;
     }
 
+    /// <summary>
+    /// After a granted edit is saved: unpublished Draft + Pending so the owner must resubmit
+    /// and the quiz must be approved again.
+    /// </summary>
+    public void RevertAfterGrantedEdit(short draftLifecycleStatusId, short pendingApprovalStatusId)
+    {
+        LifecycleStatusId = draftLifecycleStatusId;
+        ApprovalStatusId = pendingApprovalStatusId;
+        ApprovedBy = null;
+        RejectionReason = null;
+        ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
     /// <summary>School admin approves a teacher quiz awaiting review.</summary>
     public void Approve(short approvalStatusId, string approvedBy)
     {
