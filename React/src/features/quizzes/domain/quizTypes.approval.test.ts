@@ -431,6 +431,26 @@ describe("canApproveQuizOnDetailPage", () => {
     ).toBe(true);
   });
 
+  it("lets school admin review a CampusAdmin-created quiz", () => {
+    expect(
+      canReviewQuizApproval("SchoolAdmin", "Practice", "CampusAdmin"),
+    ).toBe(true);
+    expect(
+      canApproveQuizOnDetailPage(
+        "SchoolAdmin",
+        5,
+        "99",
+        "Practice",
+        "Draft",
+        "Pending",
+        "CampusAdmin",
+      ),
+    ).toBe(true);
+    expect(
+      canReviewQuizApproval("CampusAdmin", "Practice", "CampusAdmin"),
+    ).toBe(false);
+  });
+
   it("blocks school admin from reviewing another SchoolAdmin-created quiz", () => {
     expect(
       canReviewQuizApproval("SchoolAdmin", "Practice", "SchoolAdmin"),

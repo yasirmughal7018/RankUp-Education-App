@@ -59,6 +59,8 @@ public sealed class QuizBusinessScenarioTests
     {
         Assert.True(QuizApprovalRouting.RequiresPortalAdminOnlyReview(UserRole.SchoolAdmin));
         Assert.False(QuizApprovalRouting.SchoolOrCampusMayEndorse(UserRole.SchoolAdmin));
+        Assert.False(QuizApprovalRouting.RequiresPortalAdminOnlyReview(UserRole.CampusAdmin));
+        Assert.True(QuizApprovalRouting.MayEndorse(UserRole.SchoolAdmin, UserRole.CampusAdmin));
         Assert.True(LookupNames.IsPendingApproval(LookupNames.QuizApprovalStatusIds.Pending, "Approval Pending"));
     }
 

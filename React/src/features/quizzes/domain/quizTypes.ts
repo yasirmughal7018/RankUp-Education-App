@@ -327,7 +327,7 @@ export function isParentPrivateQuizType(quizType: string): boolean {
   return normalized === "parentprivate" || normalized === "private";
 }
 
-/** School/Campus admins review teacher/coordinator quizzes only; parent and admin-created quizzes are portal-only. */
+/** SchoolAdmin reviews Teacher/Coordinator/CampusAdmin quizzes; CampusAdmin reviews Teacher/Coordinator only. */
 export function canReviewQuizApproval(
   role: UserRole,
   quizType: string,
@@ -339,6 +339,10 @@ export function canReviewQuizApproval(
 
   if (isParentPrivateQuizType(quizType)) {
     return role === "PortalAdmin";
+  }
+
+  if (createdByRole === "CampusAdmin") {
+    return role === "SchoolAdmin" || role === "PortalAdmin";
   }
 
   if (
@@ -353,7 +357,8 @@ export function canReviewQuizApproval(
 
 /**
  * Approver review mode on /quizzes/:id — show approve/reject only (no edit, assign, publish).
- * School/Campus: Pending teacher/coordinator quizzes in scope, not own quiz.
+ * SchoolAdmin: Pending Teacher/Coordinator/CampusAdmin quizzes in school, not own quiz.
+ * CampusAdmin: Pending Teacher/Coordinator quizzes in campus, not own quiz.
  * Portal: Pending or SchoolApproved (final approve), including SchoolAdmin-created and ParentPrivate when Pending.
  */
 export function canApproveQuizOnDetailPage(
@@ -652,13 +657,12 @@ export function canPortalPublishQuiz(
   );
 }
 
-/** SchoolAdmin / CampusAdmin / Parent / Tutor / PortalAdmin creators skip school endorsement. */
+/** SchoolAdmin / Parent / Tutor / PortalAdmin creators skip school endorsement. CampusAdmin goes to SchoolAdmin first. */
 export function isPortalAdminOnlyQuizCreator(
   role: UserRole | string | null | undefined,
 ): boolean {
   return (
     role === "SchoolAdmin" ||
-    role === "CampusAdmin" ||
     role === "Parent" ||
     role === "Tutor" ||
     role === "PortalAdmin"

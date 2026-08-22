@@ -86,8 +86,9 @@ internal sealed class QuizManageGuard
 
     /// <summary>
     /// Draft quizzes are owner-only until Submit for approval. After submit, PortalAdmin
-    /// may open any pipeline draft; SchoolAdmin/CampusAdmin may open Teacher/Coordinator
-    /// pipeline drafts in their school/campus.
+    /// may open any pipeline draft; SchoolAdmin may open Teacher/Coordinator/CampusAdmin
+    /// pipeline drafts in their school; CampusAdmin may open Teacher/Coordinator pipeline
+    /// drafts in their campus.
     /// </summary>
     public async Task EnsureDraftVisibleAsync(
         Quiz quiz,
@@ -140,7 +141,8 @@ internal sealed class QuizManageGuard
             {
                 var creator = await _users.GetByIdAsync(creatorId, cancellationToken);
                 if (creator is not null
-                    && !QuizApprovalRouting.SchoolOrCampusMayEndorse(
+                    && !QuizApprovalRouting.MayEndorse(
+                        scope.Role,
                         QuizApprovalRouting.ResolveCreatorRole(creator.Roles)))
                 {
                     throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");

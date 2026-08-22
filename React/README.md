@@ -115,7 +115,6 @@ npm run preview
 | `/admin` | PortalAdmin, SchoolAdmin, CampusAdmin | Administration overview |
 | `/admin/registrations` | PortalAdmin, SchoolAdmin, CampusAdmin | Pending account requests |
 | `/admin/directory/role-requests` | PortalAdmin, SchoolAdmin, CampusAdmin | Pending additional Parent/Teacher role requests |
-| `/admin/quiz-approvals` | PortalAdmin, SchoolAdmin, CampusAdmin | Approve teacher quizzes (scoped: portal all, school own school, campus own campus) |
 | `/admin/directory` | PortalAdmin, SchoolAdmin | Directory overview |
 | `/admin/directory/schools` | PortalAdmin, SchoolAdmin | Schools + campuses |
 | `/admin/directory/students` | PortalAdmin, SchoolAdmin | Students search |
@@ -126,7 +125,7 @@ npm run preview
 | `/questions/new` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Create question |
 | `/questions/:id` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Question detail |
 | `/questions/:id/edit` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Edit question |
-| `/quizzes` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Quiz list and management |
+| `/quizzes` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, CampusAdmin, PortalAdmin | Quiz list. Admins open Draft rows on `/quizzes/:id` to approve or reject |
 | `/quizzes/new` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Create quiz |
 | `/quizzes/:id` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Quiz detail, questions, publish, assign |
 | `/quizzes/:id/edit` | Teacher, Parent, Coordinator, Tutor, SchoolAdmin, PortalAdmin | Edit quiz settings |

@@ -9,15 +9,23 @@ public sealed class QuizApprovalRoutingTests
     [Theory]
     [InlineData(UserRole.Teacher, true)]
     [InlineData(UserRole.Coordinator, true)]
+    [InlineData(UserRole.CampusAdmin, true)]
     [InlineData(UserRole.SchoolAdmin, false)]
-    [InlineData(UserRole.CampusAdmin, false)]
     [InlineData(UserRole.Parent, false)]
     [InlineData(UserRole.Tutor, false)]
     [InlineData(UserRole.PortalAdmin, false)]
-    public void SchoolOrCampusMayEndorse_OnlyTeacherCoordinator(UserRole creator, bool expected)
+    public void SchoolOrCampusMayEndorse_IncludesCampusAdminCreators(UserRole creator, bool expected)
     {
         Assert.Equal(expected, QuizApprovalRouting.SchoolOrCampusMayEndorse(creator));
         Assert.Equal(!expected, QuizApprovalRouting.RequiresPortalAdminOnlyReview(creator));
+    }
+
+    [Fact]
+    public void MayEndorse_SchoolAdminReviewsCampusAdminQuiz()
+    {
+        Assert.True(QuizApprovalRouting.MayEndorse(UserRole.SchoolAdmin, UserRole.CampusAdmin));
+        Assert.False(QuizApprovalRouting.MayEndorse(UserRole.CampusAdmin, UserRole.CampusAdmin));
+        Assert.False(QuizApprovalRouting.MayEndorse(UserRole.SchoolAdmin, UserRole.SchoolAdmin));
     }
 
     [Fact]

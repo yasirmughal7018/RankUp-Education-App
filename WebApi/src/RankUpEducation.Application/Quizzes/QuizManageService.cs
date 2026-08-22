@@ -270,6 +270,15 @@ public sealed class QuizManageService : IQuizManageService
                     scope.UserId,
                     cancellationToken);
             }
+            else if (scope.Role == UserRole.CampusAdmin)
+            {
+                await QuizApprovalNotifications.NotifySchoolAdminsOnCampusAdminSubmitAsync(
+                    _notifications,
+                    _users,
+                    quiz,
+                    scope.UserId,
+                    cancellationToken);
+            }
             else
             {
                 await QuizApprovalNotifications.NotifyPortalAdminsOnSubmitForReviewAsync(
@@ -369,7 +378,7 @@ public sealed class QuizManageService : IQuizManageService
 
         var creatorRole = await ResolveQuizCreatorRoleAsync(quiz, cancellationToken);
         if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
-            && !QuizApprovalRouting.SchoolOrCampusMayEndorse(creatorRole))
+            && !QuizApprovalRouting.MayEndorse(scope.Role, creatorRole))
         {
             throw new ForbiddenAppException(QuizApprovalRouting.DescribeSchoolCampusDenied(creatorRole));
         }
@@ -479,7 +488,7 @@ public sealed class QuizManageService : IQuizManageService
 
         var creatorRole = await ResolveQuizCreatorRoleAsync(quiz, cancellationToken);
         if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
-            && !QuizApprovalRouting.SchoolOrCampusMayEndorse(creatorRole))
+            && !QuizApprovalRouting.MayEndorse(scope.Role, creatorRole))
         {
             throw new ForbiddenAppException(QuizApprovalRouting.DescribeSchoolCampusDenied(creatorRole));
         }
@@ -562,7 +571,7 @@ public sealed class QuizManageService : IQuizManageService
 
         if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
-            items = await FilterSchoolCampusPendingQueueAsync(items, cancellationToken);
+            items = await FilterSchoolCampusPendingQueueAsync(items, scope, cancellationToken);
         }
 
         return new PendingQuizApprovalListResponse(
@@ -881,6 +890,7 @@ public sealed class QuizManageService : IQuizManageService
 
     private async Task<IReadOnlyList<PendingQuizApprovalItem>> FilterSchoolCampusPendingQueueAsync(
         IReadOnlyList<PendingQuizApprovalItem> items,
+        QuizManageScope scope,
         CancellationToken cancellationToken)
     {
         if (items.Count == 0)
@@ -892,7 +902,7 @@ public sealed class QuizManageService : IQuizManageService
         foreach (var item in items)
         {
             var creatorRole = await ResolveQuizCreatorRoleAsync(item.CreatedBy, cancellationToken);
-            if (QuizApprovalRouting.SchoolOrCampusMayEndorse(creatorRole))
+            if (QuizApprovalRouting.MayEndorse(scope.Role, creatorRole))
             {
                 allowed.Add(item);
             }

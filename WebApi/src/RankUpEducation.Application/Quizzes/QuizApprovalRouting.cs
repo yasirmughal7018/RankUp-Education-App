@@ -3,23 +3,37 @@ using RankUpEducation.Domain.Auth;
 namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>
-/// Who reviews a submitted quiz, based on the creator's role (mirrors question-bank hierarchy).
+/// Who reviews a submitted quiz, based on the creator's role.
 /// Teacher/Coordinator → SchoolAdmin or CampusAdmin may endorse (Pending → SchoolApproved), then PortalAdmin.
-/// SchoolAdmin, CampusAdmin, Parent, Tutor, and PortalAdmin creators → PortalAdmin only (Pending → Approved).
+/// CampusAdmin → SchoolAdmin may endorse (Pending → SchoolApproved), then PortalAdmin.
+/// SchoolAdmin, Parent, Tutor, and PortalAdmin creators → PortalAdmin only (Pending → Approved).
 /// </summary>
 public static class QuizApprovalRouting
 {
     /// <summary>Creator roles whose quizzes skip school/campus endorsement.</summary>
     public static bool RequiresPortalAdminOnlyReview(UserRole creatorRole)
         => creatorRole is UserRole.SchoolAdmin
-            or UserRole.CampusAdmin
             or UserRole.Parent
             or UserRole.Tutor
             or UserRole.PortalAdmin;
 
-    /// <summary>SchoolAdmin/CampusAdmin may school-approve only Teacher and Coordinator quizzes.</summary>
+    /// <summary>
+    /// Whether this reviewer may school-approve the creator's quiz.
+    /// SchoolAdmin: Teacher, Coordinator, or CampusAdmin. CampusAdmin: Teacher or Coordinator.
+    /// </summary>
+    public static bool MayEndorse(UserRole reviewerRole, UserRole creatorRole)
+        => reviewerRole switch
+        {
+            UserRole.SchoolAdmin => creatorRole is UserRole.Teacher
+                or UserRole.Coordinator
+                or UserRole.CampusAdmin,
+            UserRole.CampusAdmin => creatorRole is UserRole.Teacher or UserRole.Coordinator,
+            _ => false,
+        };
+
+    /// <summary>True when any school/campus reviewer may endorse this creator (not PortalAdmin-only).</summary>
     public static bool SchoolOrCampusMayEndorse(UserRole creatorRole)
-        => creatorRole is UserRole.Teacher or UserRole.Coordinator;
+        => MayEndorse(UserRole.SchoolAdmin, creatorRole);
 
     /// <summary>
     /// Picks the quiz-author role from a user's assignments. Exclusive admin roles win;
@@ -69,7 +83,9 @@ public static class QuizApprovalRouting
         => long.TryParse(createdByName, out userId) && userId > 0;
 
     public static string DescribeSchoolCampusDenied(UserRole creatorRole)
-        => RequiresPortalAdminOnlyReview(creatorRole)
-            ? "Only a portal admin can approve or reject quizzes created by school admins, campus admins, parents, or tutors."
-            : "You do not have permission to approve or reject this quiz.";
+        => creatorRole == UserRole.CampusAdmin
+            ? "Only a school admin or portal admin can approve or reject quizzes created by campus admins."
+            : RequiresPortalAdminOnlyReview(creatorRole)
+                ? "Only a portal admin can approve or reject quizzes created by school admins, parents, or tutors."
+                : "You do not have permission to approve or reject this quiz.";
 }
