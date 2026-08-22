@@ -157,6 +157,10 @@ public sealed class QuizRepository : IQuizRepository
             _dbContext,
             quizzes.Select(quiz => quiz.SchoolId).Distinct(),
             cancellationToken);
+        var submittedQuizIds = await QuizQueryHelper.LoadQuizIdsSubmittedForReviewAsync(
+            _dbContext,
+            quizzes.Select(quiz => quiz.Id),
+            cancellationToken);
 
         var items = new List<QuizListItem>();
         foreach (var quiz in quizzes)
@@ -169,7 +173,8 @@ public sealed class QuizRepository : IQuizRepository
                 bestPercentage: null,
                 lastSubmittedAt: null,
                 quiz.LifecycleStatusId,
-                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"));
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
+                hasSubmittedForReview: submittedQuizIds.Contains(quiz.Id));
             if (QuizQueryHelper.MatchesFilters(item, search, subject, grade))
             {
                 items.Add(item);
@@ -222,6 +227,10 @@ public sealed class QuizRepository : IQuizRepository
             _dbContext,
             quizzes.Select(quiz => quiz.SchoolId).Distinct(),
             cancellationToken);
+        var submittedQuizIds = await QuizQueryHelper.LoadQuizIdsSubmittedForReviewAsync(
+            _dbContext,
+            quizzes.Select(quiz => quiz.Id),
+            cancellationToken);
 
         return quizzes
             .Select(quiz => QuizQueryHelper.MapQuizWithoutAssignment(
@@ -232,7 +241,8 @@ public sealed class QuizRepository : IQuizRepository
                 null,
                 null,
                 quiz.LifecycleStatusId,
-                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown")))
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
+                hasSubmittedForReview: submittedQuizIds.Contains(quiz.Id)))
             .ToArray();
     }
 
@@ -524,6 +534,10 @@ public sealed class QuizRepository : IQuizRepository
             _dbContext,
             quizzes.Select(quiz => quiz.SchoolId).Distinct(),
             cancellationToken);
+        var submittedQuizIds = await QuizQueryHelper.LoadQuizIdsSubmittedForReviewAsync(
+            _dbContext,
+            quizzes.Select(quiz => quiz.Id),
+            cancellationToken);
 
         return quizzes
             .Select(quiz => QuizQueryHelper.MapQuizWithoutAssignment(
@@ -534,7 +548,8 @@ public sealed class QuizRepository : IQuizRepository
                 null,
                 null,
                 quiz.LifecycleStatusId,
-                lifecycleNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown")))
+                lifecycleNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
+                hasSubmittedForReview: submittedQuizIds.Contains(quiz.Id)))
             .Where(item => QuizQueryHelper.MatchesFilters(item, search, subject, grade))
             .ToArray();
     }

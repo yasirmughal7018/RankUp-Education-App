@@ -112,11 +112,7 @@ function hrefForCategory(
   }
 
   if (category === "QuizPendingApproval") {
-    return role === "PortalAdmin" ||
-      role === "SchoolAdmin" ||
-      role === "CampusAdmin"
-      ? "/admin/quiz-approvals"
-      : "/quizzes";
+    return "/quizzes";
   }
 
   if (category === "QuizSubmitted" || category === "QuizAutoSubmitted") {

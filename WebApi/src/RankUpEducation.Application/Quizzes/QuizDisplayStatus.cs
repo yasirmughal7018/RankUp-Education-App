@@ -18,7 +18,8 @@ public static class QuizDisplayStatus
     public static string ResolveStaffListStatus(
         string? lifecycleStatusName,
         string? approvalStatusName,
-        short totalQuestions = 0)
+        short totalQuestions = 0,
+        bool hasSubmittedForReview = false)
     {
         var lifecycle = lifecycleStatusName?.Trim() ?? string.Empty;
         var approval = approvalStatusName?.Trim() ?? string.Empty;
@@ -45,7 +46,7 @@ public static class QuizDisplayStatus
 
         if (LookupNames.IsPendingApprovalName(approval))
         {
-            return totalQuestions > 0 ? ApprovalPending : Draft;
+            return totalQuestions > 0 && hasSubmittedForReview ? ApprovalPending : Draft;
         }
 
         return Draft;

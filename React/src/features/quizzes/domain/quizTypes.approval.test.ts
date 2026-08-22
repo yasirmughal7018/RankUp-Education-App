@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canApproveQuizOnDetailPage,
   canApproveQuizzes,
   canAssignAdminAudiences,
   canDeleteOrArchiveQuiz,
@@ -19,6 +20,7 @@ import {
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
   resolveQuizDisplayStatus,
+  visibleQuizInstructions,
 } from "@/features/quizzes/domain/quizTypes";
 
 describe("quiz list visibility helpers", () => {
@@ -216,6 +218,60 @@ describe("canDeleteOrArchiveQuiz", () => {
   });
 });
 
+describe("canApproveQuizOnDetailPage", () => {
+  it("allows school admin to review pending teacher quiz they did not create", () => {
+    expect(
+      canApproveQuizOnDetailPage(
+        "SchoolAdmin",
+        5,
+        "99",
+        "Practice",
+        "Draft",
+        "Pending",
+      ),
+    ).toBe(true);
+  });
+
+  it("blocks self-approval for school admin", () => {
+    expect(
+      canApproveQuizOnDetailPage(
+        "SchoolAdmin",
+        5,
+        "5",
+        "Practice",
+        "Draft",
+        "Pending",
+      ),
+    ).toBe(false);
+  });
+
+  it("allows portal admin on school-approved drafts", () => {
+    expect(
+      canApproveQuizOnDetailPage(
+        "PortalAdmin",
+        1,
+        "99",
+        "Practice",
+        "Draft",
+        "SchoolApproved",
+      ),
+    ).toBe(true);
+  });
+
+  it("blocks school admin on parent private quizzes", () => {
+    expect(
+      canApproveQuizOnDetailPage(
+        "SchoolAdmin",
+        5,
+        "99",
+        "ParentPrivate",
+        "Draft",
+        "Pending",
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("canReviewQuizApproval", () => {
   it("limits parent private quizzes to portal admin", () => {
     expect(canReviewQuizApproval("PortalAdmin", "ParentPrivate")).toBe(true);
@@ -225,10 +281,23 @@ describe("canReviewQuizApproval", () => {
 });
 
 describe("resolveQuizDisplayStatus", () => {
-  it("shows Approval Pending after submit when draft lifecycle and pending approval", () => {
-    expect(resolveQuizDisplayStatus("Draft", "Pending", 3)).toBe(
-      "Approval Pending",
-    );
+  const submittedHistory = [
+    {
+      approvalId: 1,
+      action: "SubmittedForReview",
+      actorUserId: 42,
+      actorName: "Teacher",
+      actorRole: "Teacher",
+      reason: null,
+      occurredAt: "2026-01-01T00:00:00Z",
+    },
+  ];
+
+  it("shows Approval Pending only after submit when draft lifecycle and pending approval", () => {
+    expect(
+      resolveQuizDisplayStatus("Draft", "Pending", 3, submittedHistory),
+    ).toBe("Approval Pending");
+    expect(resolveQuizDisplayStatus("Draft", "Pending", 3)).toBe("Draft");
     expect(resolveQuizDisplayStatus("Draft", "Pending", 0)).toBe("Draft");
     expect(formatQuizDisplayStatusLabel("approval pending")).toBe(
       "Approval Pending",
@@ -237,24 +306,75 @@ describe("resolveQuizDisplayStatus", () => {
 });
 
 describe("canSubmitQuizForReview", () => {
+  const submittedHistory = [
+    {
+      approvalId: 1,
+      action: "SubmittedForReview",
+      actorUserId: 42,
+      actorName: "Teacher",
+      actorRole: "Teacher",
+      reason: null,
+      occurredAt: "2026-01-01T00:00:00Z",
+    },
+  ];
+
   it("requires draft, questions, editable settings, and ownership", () => {
     expect(
-      canSubmitQuizForReview("Teacher", 42, "42", "Draft", 3, true),
+      canSubmitQuizForReview("Teacher", 42, "42", "Draft", "Pending", 3, true),
     ).toBe(true);
     expect(
-      canSubmitQuizForReview("SchoolAdmin", 42, "42", "Draft", 3, true),
+      canSubmitQuizForReview(
+        "SchoolAdmin",
+        42,
+        "42",
+        "Draft",
+        "Pending",
+        3,
+        true,
+      ),
     ).toBe(true);
     expect(
-      canSubmitQuizForReview("Teacher", 42, "99", "Draft", 3, true),
+      canSubmitQuizForReview("Teacher", 42, "99", "Draft", "Pending", 3, true),
     ).toBe(false);
     expect(
-      canSubmitQuizForReview("CampusAdmin", 42, "42", "Draft", 3, true),
+      canSubmitQuizForReview(
+        "CampusAdmin",
+        42,
+        "42",
+        "Draft",
+        "Pending",
+        3,
+        true,
+      ),
     ).toBe(false);
     expect(
-      canSubmitQuizForReview("Teacher", 42, "42", "Published", 3, true),
+      canSubmitQuizForReview(
+        "Teacher",
+        42,
+        "42",
+        "Published",
+        "Pending",
+        3,
+        true,
+      ),
     ).toBe(false);
     expect(
-      canSubmitQuizForReview("Teacher", 42, "42", "Draft", 0, true),
+      canSubmitQuizForReview("Teacher", 42, "42", "Draft", "Pending", 0, true),
+    ).toBe(false);
+  });
+
+  it("hides submit once the quiz is awaiting approval review", () => {
+    expect(
+      canSubmitQuizForReview(
+        "Teacher",
+        42,
+        "42",
+        "Draft",
+        "Pending",
+        3,
+        true,
+        submittedHistory,
+      ),
     ).toBe(false);
   });
 });
@@ -273,5 +393,16 @@ describe("canPortalPublishQuiz", () => {
     expect(
       canPortalPublishQuiz("PortalAdmin", "Draft", "Pending", "ParentPrivate"),
     ).toBe(true);
+  });
+});
+
+describe("visibleQuizInstructions", () => {
+  it("omits the quiz title so it is not repeated under Instructions", () => {
+    expect(
+      visibleQuizInstructions("Algebra Quiz", [
+        "Algebra Quiz",
+        "Read all questions carefully.",
+      ]),
+    ).toEqual(["Read all questions carefully."]);
   });
 });

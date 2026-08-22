@@ -19,9 +19,10 @@ const adminLinks = [
     requiresQuizApproval: false,
   },
   {
-    title: "Quiz approvals",
-    description: "Approve teacher quizzes submitted for school review.",
-    href: "/admin/quiz-approvals",
+    title: "Quizzes awaiting approval",
+    description:
+      "Open quizzes with Approval Pending status from the Quizzes list to approve or reject.",
+    href: "/quizzes",
     requiresQuizApproval: true,
   },
   {

@@ -1,110 +1,37 @@
-import { useState } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
-import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
-import {
-  canReviewQuizApproval,
-  isQuizOwner,
-  type PendingQuizApproval,
-} from "@/features/quizzes/domain/quizTypes";
+import { usePendingQuizApprovalsQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
-import {
-  useApproveQuizMutation,
-  usePendingQuizApprovalsQuery,
-  useRejectQuizMutation,
-} from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
-/** Admin queue to approve or reject teacher quizzes pending school/portal review. */
+/**
+ * Legacy route — approvals are handled on each quiz's manage detail page (/quizzes/:id).
+ * Lists pending quizzes as links into that review flow.
+ */
 export function AdminQuizApprovalsPage() {
-  const { user } = useAuth();
-  const isPortalAdmin = user?.role === "PortalAdmin";
-  const isCampusAdmin = user?.role === "CampusAdmin";
-  const approvalDescription = isPortalAdmin
-    ? "Review teacher and parent quizzes. Pending teacher items need first-tier or your final approval; SchoolApproved items need portal approval. ParentPrivate quizzes require portal approval only. Rejected quizzes cannot be approved until the creator resubmits."
-    : isCampusAdmin
-      ? "Approve pending teacher quizzes in your campus (first-tier endorsement) or reject with a required reason. Parent quizzes are reviewed by portal admin only."
-      : "Approve pending teacher quizzes in your school (first-tier endorsement) or reject with a required reason. SchoolApproved items await portal final approval.";
-  const { data: quizzes = [], isLoading, error, refetch, isFetching } =
-    usePendingQuizApprovalsQuery();
-  const approveQuiz = useApproveQuizMutation();
-  const rejectQuiz = useRejectQuizMutation();
-
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [rejectingQuizId, setRejectingQuizId] = useState<number | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-
-  const isSubmitting = approveQuiz.isPending || rejectQuiz.isPending;
-
-  async function handleApprove(quiz: PendingQuizApproval) {
-    setActionError(null);
-    setSuccessMessage(null);
-
-    try {
-      await approveQuiz.mutateAsync(quiz.quizId);
-      setSuccessMessage(
-        isPortalAdmin
-          ? `"${quiz.title}" approved.`
-          : `"${quiz.title}" school-approved.`,
-      );
-    } catch (caught) {
-      const apiError = caught as { message?: string };
-      setActionError(apiError.message || "Unable to approve quiz.");
-    }
-  }
-
-  async function handleReject(quiz: PendingQuizApproval) {
-    const reason = rejectReason.trim();
-    if (!reason) {
-      setActionError("Rejection reason is required.");
-      return;
-    }
-
-    setActionError(null);
-    setSuccessMessage(null);
-
-    try {
-      await rejectQuiz.mutateAsync({
-        quizId: quiz.quizId,
-        reason,
-      });
-      setSuccessMessage(`"${quiz.title}" rejected.`);
-      setRejectingQuizId(null);
-      setRejectReason("");
-    } catch (caught) {
-      const apiError = caught as { message?: string };
-      setActionError(apiError.message || "Unable to reject quiz.");
-    }
-  }
+  const { data: quizzes = [], isLoading, error } = usePendingQuizApprovalsQuery();
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
-        title="Quiz approvals"
-        description={approvalDescription}
-        action={
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching || isSubmitting}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-          >
-            Refresh
-          </button>
-        }
+        title="Quizzes awaiting approval"
+        description="Open a quiz to review its details and approve or reject. Approval actions are on the quiz page — not here."
+        backTo="/quizzes"
+        backAriaLabel="Back to quizzes"
       />
 
-      {successMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {successMessage}
-        </div>
-      ) : null}
+      <div className="mb-4 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-4 py-3 text-sm text-[var(--status-pending-text)]">
+        Go to <Link to="/quizzes" className="font-medium underline">Quizzes</Link>, open a
+        quiz with status <strong>Approval Pending</strong>, then use{" "}
+        <strong>School approve</strong> / <strong>Approve</strong> or{" "}
+        <strong>Reject</strong> on that page.
+      </div>
 
-      {error || actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {actionError ?? error?.message}
+      {error ? (
+        <div className="rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
+          {error.message}
         </div>
       ) : null}
 
@@ -118,137 +45,28 @@ export function AdminQuizApprovalsPage() {
             No quizzes waiting for approval.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Quiz
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Created by
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    School
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {quizzes.map((quiz) => {
-                  const canReview = user
-                    ? canReviewQuizApproval(user.role, quiz.quizTypeName)
-                    : false;
-                  const isOwnQuiz = user
-                    ? isQuizOwner(user.id, quiz.createdBy)
-                    : false;
-                  const canActOnQuiz =
-                    canReview && (isPortalAdmin || !isOwnQuiz);
-
-                  return (
-                  <tr key={quiz.quizId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-900">{quiz.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {quiz.subjectName} · {quiz.gradeName} ·{" "}
-                        {quiz.totalQuestions} questions
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{quiz.createdBy}</td>
-                    <td className="px-4 py-3 text-slate-700">{quiz.schoolName}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        label={quiz.approvalStatus || quiz.lifecycleStatus}
-                        tone={getQuestionStatusTone(
-                          quiz.approvalStatus || quiz.lifecycleStatus,
-                          true,
-                        )}
-                      />
-                      {quiz.rejectionReason ? (
-                        <p className="mt-1 max-w-xs text-xs text-red-700">
-                          {quiz.rejectionReason}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {!canReview ? (
-                        <span className="text-xs text-muted-foreground">
-                          Portal admin only
-                        </span>
-                      ) : !canActOnQuiz ? (
-                        <span className="text-xs text-muted-foreground">
-                          Cannot approve your own quiz
-                        </span>
-                      ) : rejectingQuizId === quiz.quizId ? (
-                        <div className="ml-auto flex max-w-xs flex-col items-stretch gap-2">
-                          <input
-                            type="text"
-                            value={rejectReason}
-                            disabled={isSubmitting}
-                            onChange={(event) =>
-                              setRejectReason(event.target.value)
-                            }
-                            placeholder="Rejection reason (required)"
-                            className="rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
-                            required
-                          />
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              disabled={isSubmitting}
-                              onClick={() => {
-                                setRejectingQuizId(null);
-                                setRejectReason("");
-                              }}
-                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isSubmitting || !rejectReason.trim()}
-                              onClick={() => void handleReject(quiz)}
-                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                            >
-                              Confirm reject
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => void handleApprove(quiz)}
-                            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
-                          >
-                            {isPortalAdmin ? "Approve" : "School approve"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => {
-                              setRejectingQuizId(quiz.quizId);
-                              setRejectReason("");
-                            }}
-                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-70"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ul className="divide-y divide-slate-200">
+            {quizzes.map((quiz) => (
+              <li key={quiz.quizId}>
+                <Link
+                  to={`/quizzes/${quiz.quizId}`}
+                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 transition hover:bg-slate-50 sm:px-6"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{quiz.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {quiz.createdBy} · {quiz.schoolName} · {quiz.subjectName} ·{" "}
+                      {quiz.totalQuestions} questions
+                    </p>
+                  </div>
+                  <StatusBadge
+                    label={quiz.approvalStatus || "Pending"}
+                    tone={getQuestionStatusTone(quiz.approvalStatus || "Pending", true)}
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>

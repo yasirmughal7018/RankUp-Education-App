@@ -312,6 +312,46 @@ export function canReviewQuizApproval(
 }
 
 /**
+ * Approver review mode on /quizzes/:id — show approve/reject only (no edit, assign, publish).
+ * School/Campus: Pending teacher/coordinator quizzes in scope, not own quiz.
+ * Portal: Pending or SchoolApproved (final approve), including ParentPrivate when Pending.
+ */
+export function canApproveQuizOnDetailPage(
+  role: UserRole,
+  userId: number | string,
+  createdBy: string,
+  quizType: string,
+  lifecycleStatus: string,
+  approvalStatus: string,
+): boolean {
+  if (!canReviewQuizApproval(role, quizType)) {
+    return false;
+  }
+
+  if (!isDraftQuiz(lifecycleStatus) || isRejectedQuizApprovalStatus(approvalStatus)) {
+    return false;
+  }
+
+  if (role !== "PortalAdmin" && isQuizOwner(userId, createdBy)) {
+    return false;
+  }
+
+  if (role === "PortalAdmin") {
+    return (
+      isPendingQuizApprovalStatus(approvalStatus) ||
+      isSchoolApprovedQuizStatus(approvalStatus)
+    );
+  }
+
+  return isPendingQuizApprovalStatus(approvalStatus);
+}
+
+/** Primary approve button label on quiz detail review mode. */
+export function quizApprovalButtonLabel(role: UserRole): string {
+  return role === "PortalAdmin" ? "Approve" : "School approve";
+}
+
+/**
  * Delete (draft) or archive (published+): portal admin always;
  * parent quizzes portal-only; teacher/coordinator owner when draft or final Approved;
  * published-but-not-approved → portal admin only.
@@ -343,16 +383,62 @@ export function canDeleteOrArchiveQuiz(
   return isFinalApprovedQuizStatus(approvalStatus);
 }
 
+/** True once the owner has submitted the quiz for approval (trail event). */
+export function hasQuizSubmittedForReview(
+  approvalHistory?: QuizApprovalHistoryEntry[],
+): boolean {
+  return (
+    approvalHistory?.some((entry) => entry.action === "SubmittedForReview") ??
+    false
+  );
+}
+
+/** Draft + Pending + questions + submitted — awaiting approver decision. */
+export function isQuizAwaitingApprovalReview(
+  lifecycleStatus: string,
+  approvalStatus: string,
+  questionCount: number,
+  approvalHistory?: QuizApprovalHistoryEntry[],
+): boolean {
+  return (
+    isDraftQuiz(lifecycleStatus) &&
+    isPendingQuizApprovalStatus(approvalStatus) &&
+    questionCount > 0 &&
+    hasQuizSubmittedForReview(approvalHistory)
+  );
+}
+
 /** Creator submits a draft quiz for school/portal review; lifecycle stays Draft. Owner only (plus portal admin). */
 export function canSubmitQuizForReview(
   role: UserRole,
   userId: number | string,
   createdBy: string,
   lifecycleStatus: string,
+  approvalStatus: string,
   questionCount: number,
   settingsEditable: boolean,
+  approvalHistory?: QuizApprovalHistoryEntry[],
 ): boolean {
   if (!settingsEditable || !isDraftQuiz(lifecycleStatus) || questionCount <= 0) {
+    return false;
+  }
+
+  if (
+    isQuizAwaitingApprovalReview(
+      lifecycleStatus,
+      approvalStatus,
+      questionCount,
+      approvalHistory,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    isRejectedQuizApprovalStatus(approvalStatus) ||
+    isSchoolApprovedQuizStatus(approvalStatus) ||
+    isFinalApprovedQuizStatus(approvalStatus)
+  ) {
     return false;
   }
 
@@ -548,11 +634,28 @@ export function assignModesForRole(role: UserRole): Array<{
   ];
 }
 
+/** Instruction lines to show on detail screens — skip the quiz title (already in the page header). */
+export function visibleQuizInstructions(
+  title: string,
+  instructions: string[],
+): string[] {
+  const normalizedTitle = title.trim().toLowerCase();
+  if (!normalizedTitle) {
+    return instructions.filter((line) => line.trim().length > 0);
+  }
+
+  return instructions.filter((line) => {
+    const normalized = line.trim().toLowerCase();
+    return normalized.length > 0 && normalized !== normalizedTitle;
+  });
+}
+
 /** User-facing status combining lifecycle + approval (staff catalog / manage UI). */
 export function resolveQuizDisplayStatus(
   lifecycleStatus: string,
   approvalStatus: string,
   questionCount: number,
+  approvalHistory?: QuizApprovalHistoryEntry[],
 ): string {
   const lifecycle = lifecycleStatus.trim().toLowerCase();
   const approval = approvalStatus.trim().toLowerCase();
@@ -573,8 +676,15 @@ export function resolveQuizDisplayStatus(
     return "Awaiting Publish";
   }
 
-  if (isPendingQuizApprovalStatus(approval)) {
-    return questionCount > 0 ? "Approval Pending" : "Draft";
+  if (
+    isQuizAwaitingApprovalReview(
+      lifecycleStatus,
+      approvalStatus,
+      questionCount,
+      approvalHistory,
+    )
+  ) {
+    return "Approval Pending";
   }
 
   return "Draft";

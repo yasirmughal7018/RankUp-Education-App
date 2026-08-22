@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
@@ -103,7 +104,8 @@ internal static class QuizQueryHelper
         DateTimeOffset? lastSubmittedAt,
         short lifecycleStatusId,
         string lifecycleStatusName,
-        string? approvalStatusName = null)
+        string? approvalStatusName = null,
+        bool hasSubmittedForReview = false)
     {
         return new QuizListItem(
             quiz.Id,
@@ -130,7 +132,32 @@ internal static class QuizQueryHelper
             lastSubmittedAt,
             lifecycleStatusName,
             ApprovalStatusName: approvalStatusName
-                ?? lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"));
+                ?? lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"),
+            HasSubmittedForReview: hasSubmittedForReview);
+    }
+
+    public static async Task<IReadOnlySet<long>> LoadQuizIdsSubmittedForReviewAsync(
+        RankUpDbContext dbContext,
+        IEnumerable<long> quizIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = quizIds.Distinct().ToArray();
+        if (ids.Length == 0)
+        {
+            return new HashSet<long>();
+        }
+
+        var submittedIds = await dbContext.Approvals.AsNoTracking()
+            .Where(approval =>
+                approval.EntityType == ApprovalEntityType.Quiz
+                && approval.RequestId != null
+                && ids.Contains(approval.RequestId.Value)
+                && approval.Action == ApprovalAction.SubmittedForReview)
+            .Select(approval => approval.RequestId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return submittedIds.ToHashSet();
     }
 
     public static QuizDetailItem MapQuizDetail(

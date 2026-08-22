@@ -300,32 +300,49 @@ export function useUpdateQuizMutation(quizId: number) {
 }
 
 /** Admin approve pending quiz. */
-export function useApproveQuizMutation() {
+export function useApproveQuizMutation(quizId?: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (quizId: number) => quizApi.approveQuiz(quizId),
-    onSuccess: () => {
+    mutationFn: (targetQuizId: number) => quizApi.approveQuiz(targetQuizId),
+    onSuccess: (_data, targetQuizId) => {
       invalidateQuizListQueries(queryClient);
       void queryClient.invalidateQueries({
         queryKey: queryKeys.pendingQuizApprovals(),
       });
+      const id = quizId ?? targetQuizId;
+      if (id > 0) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.manageQuiz(id),
+        });
+      }
     },
   });
 }
 
 /** Admin reject pending quiz. */
-export function useRejectQuizMutation() {
+export function useRejectQuizMutation(quizId?: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ quizId, reason }: { quizId: number; reason: string }) =>
-      quizApi.rejectQuiz(quizId, reason),
-    onSuccess: () => {
+    mutationFn: ({
+      quizId: targetQuizId,
+      reason,
+    }: {
+      quizId: number;
+      reason: string;
+    }) => quizApi.rejectQuiz(targetQuizId, reason),
+    onSuccess: (_data, variables) => {
       invalidateQuizListQueries(queryClient);
       void queryClient.invalidateQueries({
         queryKey: queryKeys.pendingQuizApprovals(),
       });
+      const id = quizId ?? variables.quizId;
+      if (id > 0) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.manageQuiz(id),
+        });
+      }
     },
   });
 }

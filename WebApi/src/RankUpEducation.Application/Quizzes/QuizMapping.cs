@@ -12,7 +12,8 @@ internal static class QuizMapping
             ? QuizDisplayStatus.ResolveStaffListStatus(
                 item.LifecycleStatusName,
                 item.ApprovalStatusName,
-                item.TotalQuestions).ToLowerInvariant()
+                item.TotalQuestions,
+                item.HasSubmittedForReview).ToLowerInvariant()
             : QuizStatusCalculator.ResolveListStatus(
                 now,
                 item.StartDateTime,

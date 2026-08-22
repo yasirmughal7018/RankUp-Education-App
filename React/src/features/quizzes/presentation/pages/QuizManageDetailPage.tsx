@@ -12,6 +12,7 @@ import {
 } from "@/features/quizzes/presentation/components/QuizQuestionAnswerAside";
 import {
   canAuthorQuizzes,
+  canApproveQuizOnDetailPage,
   canDeleteOrArchiveQuiz,
   canEditQuizSettings,
   canPortalPublishQuiz,
@@ -23,9 +24,11 @@ import {
   isPublishedQuizLifecycle,
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
+  quizApprovalButtonLabel,
   resolveQuizDisplayStatus,
   sumQuizEstimatedSeconds,
   sumQuizMarks,
+  visibleQuizInstructions,
   type ManageQuiz,
 } from "@/features/quizzes/domain/quizTypes";
 import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
@@ -35,6 +38,7 @@ import {
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
   useAllowRetryMutation,
+  useApproveQuizMutation,
   useArchiveQuizMutation,
   useUnarchiveQuizMutation,
   useAssignQuizMutation,
@@ -45,6 +49,7 @@ import {
   useManageQuizQuery,
   usePublishQuizMutation,
   useQuizAssignmentsQuery,
+  useRejectQuizMutation,
   useRemoveQuizQuestionMutation,
 } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 
@@ -240,8 +245,12 @@ export function QuizManageDetailPage() {
   const [showBankDialog, setShowBankDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [approvalHistoryExpanded, setApprovalHistoryExpanded] = useState(false);
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   const publishQuiz = usePublishQuizMutation(numericQuizId);
+  const approveQuiz = useApproveQuizMutation(numericQuizId);
+  const rejectQuiz = useRejectQuizMutation(numericQuizId);
   const deleteQuiz = useDeleteQuizMutation(numericQuizId);
   const duplicateQuiz = useDuplicateQuizMutation(numericQuizId);
   const archiveQuiz = useArchiveQuizMutation(numericQuizId);
@@ -282,6 +291,8 @@ export function QuizManageDetailPage() {
 
   const isSubmitting =
     publishQuiz.isPending ||
+    approveQuiz.isPending ||
+    rejectQuiz.isPending ||
     deleteQuiz.isPending ||
     duplicateQuiz.isPending ||
     archiveQuiz.isPending ||
@@ -362,8 +373,10 @@ export function QuizManageDetailPage() {
       user.id,
       quiz.createdBy,
       quiz.lifecycleStatus,
+      quiz.approvalStatus,
       quiz.questionCount,
       settingsEditable,
+      quiz.approvalHistory,
     );
   const portalCanPublish =
     user != null &&
@@ -396,8 +409,65 @@ export function QuizManageDetailPage() {
     quiz.lifecycleStatus,
     quiz.approvalStatus,
     quiz.questionCount,
+    quiz.approvalHistory,
   );
+  const instructionLines = visibleQuizInstructions(
+    quiz.title,
+    quiz.instructions,
+  );
+  const descriptionText = quiz.description.trim();
+  const showDescription =
+    descriptionText.length > 0 &&
+    descriptionText.toLowerCase() !== quiz.title.trim().toLowerCase();
+  const approvalReviewMode =
+    user != null &&
+    canApproveQuizOnDetailPage(
+      user.role,
+      user.id,
+      quiz.createdBy,
+      quiz.quizType,
+      quiz.lifecycleStatus,
+      quiz.approvalStatus,
+    );
   const quizScopeRows = resolveQuizScopeRows(quiz, scopeCampusName);
+
+  async function handleApproveQuiz() {
+    setActionError(null);
+    setSuccessMessage(null);
+    try {
+      await approveQuiz.mutateAsync(numericQuizId);
+      setShowRejectForm(false);
+      setRejectReason("");
+      setSuccessMessage(
+        user?.role === "PortalAdmin"
+          ? "Quiz approved."
+          : "Quiz school-approved.",
+      );
+    } catch (caught) {
+      const apiError = caught as { message?: string };
+      setActionError(apiError.message || "Unable to approve quiz.");
+    }
+  }
+
+  async function handleRejectQuiz() {
+    const reason = rejectReason.trim();
+    if (!reason) {
+      setActionError("Rejection reason is required.");
+      return;
+    }
+
+    setActionError(null);
+    setSuccessMessage(null);
+    try {
+      await rejectQuiz.mutateAsync({ quizId: numericQuizId, reason });
+      setShowRejectForm(false);
+      setRejectReason("");
+      setSuccessMessage("Quiz rejected.");
+    } catch (caught) {
+      const apiError = caught as { message?: string };
+      setActionError(apiError.message || "Unable to reject quiz.");
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -407,6 +477,7 @@ export function QuizManageDetailPage() {
         backTo="/quizzes"
         backAriaLabel="Back to quizzes"
         action={
+          approvalReviewMode ? null : (
           <div className="flex gap-2">
             {!draft ? (
               <Link
@@ -425,17 +496,18 @@ export function QuizManageDetailPage() {
               </Link>
             ) : null}
           </div>
+          )
         }
       />
 
       {successMessage ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div className="mb-4 rounded-lg border border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] px-4 py-3 text-sm text-[var(--status-approved-text)]">
           {successMessage}
         </div>
       ) : null}
 
       {actionError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-4 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
           {actionError}
         </div>
       ) : null}
@@ -477,15 +549,15 @@ export function QuizManageDetailPage() {
 
       <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         {approvalRejected && quiz.rejectionReason ? (
-          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="mb-3 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
             Rejected: {quiz.rejectionReason}
           </div>
         ) : approvalRejected ? (
-          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="mb-3 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
             This quiz was rejected and cannot be approved until you resubmit it.
           </div>
         ) : schoolApproved ? (
-          <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <div className="mb-3 rounded-lg border border-[var(--status-active-border)] bg-[var(--status-active-bg)] px-4 py-3 text-sm text-[var(--status-active-text)]">
             School-approved — waiting for portal admin final approval before
             assignment.
           </div>
@@ -511,18 +583,22 @@ export function QuizManageDetailPage() {
               <StatusBadge label={quiz.quizType} />
             </div>
 
-            <h3 className="mt-2 text-sm font-medium text-slate-900">
-              Instructions
-            </h3>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-600">
-              {quiz.instructions.map((instruction) => (
-                <li key={instruction}>{instruction}</li>
-              ))}
-            </ul>
+            {instructionLines.length > 0 ? (
+              <>
+                <h3 className="mt-2 text-sm font-medium text-slate-900">
+                  Instructions
+                </h3>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-600">
+                  {instructionLines.map((instruction) => (
+                    <li key={instruction}>{instruction}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
 
-            {quiz.description.trim() ? (
+            {showDescription ? (
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {quiz.description}
+                {descriptionText}
               </p>
             ) : null}
           </div>
@@ -547,6 +623,81 @@ export function QuizManageDetailPage() {
         </div>
       </section>
 
+      {approvalReviewMode && user ? (
+        <section className="mb-6 rounded-2xl border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-[var(--status-pending-text)]">
+            Approval review
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--status-pending-text)]">
+            Review the quiz details and questions below. Approve to endorse this quiz
+            {user.role === "PortalAdmin"
+              ? schoolApproved
+                ? " with final portal approval."
+                : " (portal final approval)."
+              : " for your school or campus (does not publish)."}{" "}
+            Reject requires a reason — the creator must fix and resubmit.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {!showRejectForm ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => void handleApproveQuiz()}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
+                >
+                  {quizApprovalButtonLabel(user.role)}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    setShowRejectForm(true);
+                    setActionError(null);
+                  }}
+                  className="rounded-lg border border-[var(--status-rejected-border)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:bg-[var(--status-rejected-bg)] disabled:opacity-70"
+                >
+                  Reject
+                </button>
+              </>
+            ) : (
+              <div className="w-full max-w-md space-y-3">
+                <input
+                  type="text"
+                  value={rejectReason}
+                  disabled={isSubmitting}
+                  onChange={(event) => setRejectReason(event.target.value)}
+                  placeholder="Rejection reason (required)"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={isSubmitting || !rejectReason.trim()}
+                    onClick={() => void handleRejectQuiz()}
+                    className="rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-2 text-sm font-medium text-[var(--status-rejected-text)] transition hover:opacity-90 disabled:opacity-70"
+                  >
+                    Confirm reject
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      setShowRejectForm(false);
+                      setRejectReason("");
+                    }}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {!approvalReviewMode ? (
       <section className="mb-6 flex flex-wrap gap-2">
         {questionsEditable ? (
           <>
@@ -653,7 +804,7 @@ export function QuizManageDetailPage() {
         ) : null}
 
         {published && !canAssign ? (
-          <p className="w-full basis-full text-sm text-amber-800">
+          <p className="w-full basis-full text-sm text-[var(--status-pending-text)]">
             This quiz is published but not yet approved for assignment.
             {schoolApproved
               ? " A portal admin must give final approval before you can assign."
@@ -745,6 +896,7 @@ export function QuizManageDetailPage() {
           </>
         ) : null}
       </section>
+      ) : null}
 
       <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
@@ -780,7 +932,7 @@ export function QuizManageDetailPage() {
                 Time sec
               </p>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Actions
+                {approvalReviewMode ? "—" : "Actions"}
               </p>
             </div>
 
@@ -826,7 +978,7 @@ export function QuizManageDetailPage() {
                         {timeLabel}
                       </p>
                       <div className="col-span-2 flex min-w-0 flex-wrap gap-2 sm:col-span-1">
-                        {questionsEditable ? (
+                        {questionsEditable && !approvalReviewMode ? (
                           <button
                             type="button"
                             disabled={isSubmitting}
