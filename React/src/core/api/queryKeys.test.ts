@@ -11,6 +11,10 @@ describe("queryKeys", () => {
       "questions",
       "edit-requests",
     ]);
+    expect(queryKeys.pendingQuizApprovals()).toEqual([
+      "quizzes",
+      "pending-approval",
+    ]);
     expect(queryKeys.quizEditRequests()).toEqual([
       "quizzes",
       "edit-requests",

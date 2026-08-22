@@ -7,6 +7,7 @@ export const queryKeys = {
   scopeCampuses: (schoolId: number) =>
     ["scope", "schools", schoolId, "campuses"] as const,
   quizzes: (search?: string) => ["quizzes", search ?? ""] as const,
+  pendingQuizApprovals: () => ["quizzes", "pending-approval"] as const,
   quizEditRequests: () => ["quizzes", "edit-requests"] as const,
   manageQuiz: (quizId: number) => ["quizzes", "manage", quizId] as const,
   quizAssignments: (quizId: number) => ["quizzes", quizId, "assignments"] as const,
