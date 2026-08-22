@@ -102,6 +102,8 @@ export interface ManageQuiz {
   navigationMode: QuizNavigationMode;
   reviewDisplayMode: QuizReviewDisplayMode;
   createdBy: string;
+  createdByDisplayName?: string;
+  createdAt?: string;
   schoolName: string;
   schoolId?: number | null;
   campusId?: number | null;

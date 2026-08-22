@@ -19,7 +19,9 @@ import {
   isSchoolApprovedQuizStatus,
   sumQuizEstimatedSeconds,
   sumQuizMarks,
+  type ManageQuiz,
 } from "@/features/quizzes/domain/quizTypes";
+import { useDirectoryCampusesQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import {
   getQuestionStatusTone,
   StatusBadge,
@@ -112,6 +114,85 @@ function formatHistoryDate(occurredAt: string): string {
     : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function resolveQuizCreatorLabel(quiz: {
+  createdBy: string;
+  createdByDisplayName?: string;
+  approvalHistory?: Array<{ action: string; actorName: string }>;
+}): string {
+  if (quiz.createdByDisplayName?.trim()) {
+    return quiz.createdByDisplayName.trim();
+  }
+
+  const createdEvent = quiz.approvalHistory?.find(
+    (entry) => entry.action === "Created",
+  );
+  if (createdEvent?.actorName?.trim()) {
+    return createdEvent.actorName.trim();
+  }
+
+  return quiz.createdBy?.trim() || "Unknown";
+}
+
+function resolveQuizCreatedLabel(quiz: {
+  createdAt?: string;
+  approvalHistory?: Array<{ action: string; occurredAt: string }>;
+}): string {
+  if (quiz.createdAt) {
+    return formatDateTime(quiz.createdAt);
+  }
+
+  const createdEvent = quiz.approvalHistory?.find(
+    (entry) => entry.action === "Created",
+  );
+  if (createdEvent?.occurredAt) {
+    return formatHistoryDate(createdEvent.occurredAt);
+  }
+
+  return "—";
+}
+
+function MetaInlineRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-end gap-x-2 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function resolveQuizScopeRows(
+  quiz: ManageQuiz,
+  campusName?: string | null,
+): Array<{ label: string; value: string }> {
+  const created = quiz.approvalHistory?.find((entry) => entry.action === "Created");
+  const creatorRole = created?.actorRole ?? "";
+  const rows: Array<{ label: string; value: string }> = [];
+
+  const showSchool =
+    (creatorRole === "SchoolAdmin" || creatorRole === "PortalAdmin") &&
+    quiz.schoolId != null &&
+    quiz.schoolId > 0 &&
+    Boolean(quiz.schoolName?.trim());
+
+  const showCampus =
+    (creatorRole === "CampusAdmin" ||
+      creatorRole === "SchoolAdmin" ||
+      creatorRole === "PortalAdmin") &&
+    quiz.campusId != null &&
+    quiz.campusId > 0 &&
+    Boolean(campusName?.trim());
+
+  if (showSchool) {
+    rows.push({ label: "School", value: quiz.schoolName.trim() });
+  }
+
+  if (showCampus) {
+    rows.push({ label: "Campus", value: campusName!.trim() });
+  }
+
+  return rows;
+}
+
 function canAllowRetry(assignment: {
   isReviewDone: boolean;
   attemptCount: number;
@@ -165,6 +246,15 @@ export function QuizManageDetailPage() {
     numericQuizId,
     detailQueriesEnabled && quizLoaded,
   );
+
+  const scopeSchoolId = quiz?.schoolId ?? 0;
+  const scopeCampusId = quiz?.campusId ?? 0;
+  const { data: scopeCampuses = [] } = useDirectoryCampusesQuery(
+    scopeSchoolId,
+    detailQueriesEnabled && scopeSchoolId > 0 && scopeCampusId > 0,
+  );
+  const scopeCampusName =
+    scopeCampuses.find((campus) => campus.id === scopeCampusId)?.name ?? null;
 
   const isSubmitting =
     publishQuiz.isPending ||
@@ -237,6 +327,7 @@ export function QuizManageDetailPage() {
     canAuthor &&
     isQuizMetadataEditable(quiz.lifecycleStatus, assignments);
   const questionsEditable = settingsEditable;
+  const quizScopeRows = resolveQuizScopeRows(quiz, scopeCampusName);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -315,42 +406,68 @@ export function QuizManageDetailPage() {
       </section>
 
       <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <StatusBadge
-            label={quiz.lifecycleStatus}
-            tone={getQuestionStatusTone(quiz.lifecycleStatus, true)}
-          />
-          <StatusBadge
-            label={quiz.approvalStatus}
-            tone={getQuestionStatusTone(quiz.approvalStatus, true)}
-          />
-          <StatusBadge label={quiz.quizType} />
-        </div>
-
         {approvalRejected && quiz.rejectionReason ? (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             Rejected: {quiz.rejectionReason}
           </div>
         ) : approvalRejected ? (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             This quiz was rejected and cannot be approved until you resubmit it.
           </div>
         ) : schoolApproved ? (
-          <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
             School-approved — waiting for portal admin final approval before
             assignment.
           </div>
         ) : null}
 
-        <p className="text-sm leading-6 text-slate-700">{quiz.description}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge
+                label={quiz.lifecycleStatus}
+                tone={getQuestionStatusTone(quiz.lifecycleStatus, true)}
+              />
+              <StatusBadge
+                label={quiz.approvalStatus}
+                tone={getQuestionStatusTone(quiz.approvalStatus, true)}
+              />
+              <StatusBadge label={quiz.quizType} />
+            </div>
 
-        <div className="mt-4">
-          <h3 className="text-sm font-medium text-slate-900">Instructions</h3>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
-            {quiz.instructions.map((instruction) => (
-              <li key={instruction}>{instruction}</li>
+            <h3 className="mt-2 text-sm font-medium text-slate-900">
+              Instructions
+            </h3>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-600">
+              {quiz.instructions.map((instruction) => (
+                <li key={instruction}>{instruction}</li>
+              ))}
+            </ul>
+
+            {quiz.description.trim() ? (
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {quiz.description}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex shrink-0 flex-col gap-0.5 text-right">
+            <MetaInlineRow
+              label="Created by"
+              value={resolveQuizCreatorLabel(quiz)}
+            />
+            <MetaInlineRow
+              label="Created"
+              value={resolveQuizCreatedLabel(quiz)}
+            />
+            {quizScopeRows.map((row) => (
+              <MetaInlineRow
+                key={row.label}
+                label={row.label}
+                value={row.value}
+              />
             ))}
-          </ul>
+          </div>
         </div>
       </section>
 
@@ -786,6 +903,7 @@ export function QuizManageDetailPage() {
       {showBankDialog ? (
         <AttachBankQuestionsDialog
           subjectId={quiz.subjectId}
+          classId={quiz.classId}
           excludeQuestionIds={quiz.questions.map((item) => item.questionId)}
           isSubmitting={attachBankQuestion.isPending}
           onClose={() => setShowBankDialog(false)}

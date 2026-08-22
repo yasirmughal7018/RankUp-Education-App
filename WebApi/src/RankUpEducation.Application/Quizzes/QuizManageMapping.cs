@@ -1,6 +1,7 @@
 using RankUpEducation.Application.QuizQuestions;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Contracts.Quizzes;
+using RankUpEducation.Domain.Approvals;
 
 namespace RankUpEducation.Application.Quizzes;
 
@@ -38,6 +39,8 @@ internal static class QuizManageMapping
             detail.ReviewDisplayMode,
             detail.RandomQuestionCount,
             detail.CreatedByName,
+            ResolveCreatorDisplayName(detail),
+            ResolveCreatedAt(detail),
             detail.SchoolName,
             detail.SchoolId,
             detail.CampusId,
@@ -52,6 +55,35 @@ internal static class QuizManageMapping
                     entry.Reason,
                     entry.OccurredAt))
                 .ToArray());
+    }
+
+    private static string ResolveCreatorDisplayName(QuizDetailItem detail)
+    {
+        if (!string.IsNullOrWhiteSpace(detail.CreatorDisplayName))
+        {
+            return detail.CreatorDisplayName.Trim();
+        }
+
+        var createdEvent = detail.ApprovalHistory?
+            .FirstOrDefault(entry => entry.Action == ApprovalAction.Created);
+        if (!string.IsNullOrWhiteSpace(createdEvent?.ActorName))
+        {
+            return createdEvent.ActorName.Trim();
+        }
+
+        return detail.CreatedByName.Trim();
+    }
+
+    private static DateTimeOffset ResolveCreatedAt(QuizDetailItem detail)
+    {
+        if (detail.CreatedAt is not null)
+        {
+            return detail.CreatedAt.Value;
+        }
+
+        var createdEvent = detail.ApprovalHistory?
+            .FirstOrDefault(entry => entry.Action == ApprovalAction.Created);
+        return createdEvent?.OccurredAt ?? DateTimeOffset.UtcNow;
     }
 
     public static QuizAssignmentResponse ToAssignmentResponse(QuizAssignmentListItem item)

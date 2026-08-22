@@ -14,6 +14,8 @@ import {
 interface AttachBankQuestionsDialogProps {
   isSubmitting: boolean;
   subjectId?: number;
+  /** Quiz class/grade — used as the default bank filter when set. */
+  classId?: number;
   excludeQuestionIds?: number[];
   onClose: () => void;
   onAttach: (inputs: AttachBankQuestionInput[]) => Promise<void>;
@@ -30,12 +32,16 @@ function resolveEstimatedTimeSeconds(
 export function AttachBankQuestionsDialog({
   isSubmitting,
   subjectId,
+  classId,
   excludeQuestionIds = [],
   onClose,
   onAttach,
 }: AttachBankQuestionsDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [bankSearch, setBankSearch] = useState("");
+  const [gradeFilter, setGradeFilter] = useState<number | "">(() =>
+    classId && classId > 0 ? classId : "",
+  );
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [difficultyFilter, setDifficultyFilter] = useState<number | "">("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
@@ -63,11 +69,10 @@ export function AttachBankQuestionsDialog({
       pendingOnly: false,
       activeFilter: "true" as const,
       subjectId: subjectId && subjectId > 0 ? subjectId : ("" as const),
-      // Grade/class is optional for bank browse — only subject must match the quiz.
-      classId: "" as const,
+      classId: gradeFilter === "" ? ("" as const) : gradeFilter,
       eligibleForQuizOnly: true,
     }),
-    [subjectId],
+    [gradeFilter, subjectId],
   );
 
   const {
@@ -237,9 +242,13 @@ export function AttachBankQuestionsDialog({
               </h2>
               <p className="mt-1 text-sm text-slate-600">
                 Select quiz-ready Public questions
-                {subjectId
-                  ? " matching this quiz subject."
-                  : "."}
+                {subjectId && gradeFilter !== ""
+                  ? " for this quiz's subject and grade."
+                  : subjectId
+                    ? " for this quiz's subject."
+                    : gradeFilter !== ""
+                      ? " for the selected grade."
+                      : "."}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 sm:min-w-[320px]">
@@ -287,7 +296,7 @@ export function AttachBankQuestionsDialog({
               </div>
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,0.8fr))_auto]">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,0.75fr))_auto]">
               <AppSearchInput
                 value={bankSearch}
                 disabled={isSubmitting}
@@ -295,6 +304,26 @@ export function AttachBankQuestionsDialog({
                 placeholder="Search questions…"
                 aria-label="Search bank questions"
               />
+              <select
+                value={gradeFilter === "" ? "" : String(gradeFilter)}
+                disabled={isSubmitting}
+                onChange={(event) =>
+                  setGradeFilter(
+                    event.target.value === ""
+                      ? ""
+                      : Number(event.target.value),
+                  )
+                }
+                className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
+                aria-label="Filter by grade"
+              >
+                <option value="">All grades</option>
+                {classes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
               <select
                 value={typeFilter}
                 disabled={isSubmitting}

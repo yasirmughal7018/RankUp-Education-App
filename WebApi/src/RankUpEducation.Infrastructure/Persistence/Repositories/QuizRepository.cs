@@ -586,6 +586,12 @@ public sealed class QuizRepository : IQuizRepository
                 approval.CreatedAt)
         ).ToListAsync(cancellationToken);
 
+        var creatorDisplayName = await ResolveCreatorDisplayNameAsync(
+            quiz.CreatedByName,
+            approvalHistory,
+            cancellationToken);
+        var createdAt = ResolveCreatedAt(quiz, approvalHistory);
+
         return new QuizDetailItem(
             quiz.Id,
             null,
@@ -624,7 +630,50 @@ public sealed class QuizRepository : IQuizRepository
             ApprovalHistory: approvalHistory,
             SchoolId: quiz.SchoolId,
             CampusId: quiz.SchoolCampusId,
-            RandomQuestionCount: quiz.RandomQuestionCount);
+            RandomQuestionCount: quiz.RandomQuestionCount,
+            CreatorDisplayName: creatorDisplayName,
+            CreatedAt: createdAt);
+    }
+
+    private async Task<string> ResolveCreatorDisplayNameAsync(
+        string createdByName,
+        IReadOnlyList<QuizApprovalEventItem> approvalHistory,
+        CancellationToken cancellationToken)
+    {
+        if (long.TryParse(createdByName, out var creatorUserId) && creatorUserId > 0)
+        {
+            var fullName = await _dbContext.Users.AsNoTracking()
+                .Where(user => user.Id == creatorUserId)
+                .Select(user => user.FullName)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                return fullName.Trim();
+            }
+        }
+
+        var createdEvent = approvalHistory.FirstOrDefault(entry => entry.Action == ApprovalAction.Created);
+        if (!string.IsNullOrWhiteSpace(createdEvent?.ActorName))
+        {
+            return createdEvent.ActorName.Trim();
+        }
+
+        return createdByName.Trim();
+    }
+
+    private static DateTimeOffset ResolveCreatedAt(
+        Quiz quiz,
+        IReadOnlyList<QuizApprovalEventItem> approvalHistory)
+    {
+        var createdEvent = approvalHistory.FirstOrDefault(entry => entry.Action == ApprovalAction.Created);
+        if (createdEvent is not null)
+        {
+            return createdEvent.OccurredAt;
+        }
+
+        return new DateTimeOffset(
+            quiz.CreatedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+            TimeSpan.Zero);
     }
 
     public async Task AddApprovalEventAsync(Approval approval, CancellationToken cancellationToken)

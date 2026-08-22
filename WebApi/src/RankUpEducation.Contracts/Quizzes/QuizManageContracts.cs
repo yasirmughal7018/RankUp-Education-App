@@ -77,6 +77,8 @@ public sealed record ManageQuizResponse(
     string ReviewDisplayMode,
     short? RandomQuestionCount,
     string CreatedBy,
+    string CreatedByDisplayName,
+    DateTimeOffset CreatedAt,
     string SchoolName,
     int? SchoolId,
     int? CampusId,

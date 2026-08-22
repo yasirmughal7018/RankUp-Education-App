@@ -85,7 +85,9 @@ public sealed record QuizDetailItem(
     IReadOnlyList<QuizApprovalEventItem>? ApprovalHistory = null,
     int? SchoolId = null,
     int? CampusId = null,
-    short? RandomQuestionCount = null);
+    short? RandomQuestionCount = null,
+    string CreatorDisplayName = "",
+    DateTimeOffset? CreatedAt = null);
 
 /// <summary>One quiz workflow event projected from app_approval.</summary>
 public sealed record QuizApprovalEventItem(
