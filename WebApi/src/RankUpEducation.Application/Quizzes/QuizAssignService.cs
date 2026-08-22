@@ -329,7 +329,8 @@ public sealed class QuizAssignService : IQuizAssignService
 
         if (!IsAssignableLifecycle(lifecycleName))
         {
-            throw new BusinessRuleException("Quiz must be published or assigned before it can be assigned to students.");
+            throw new BusinessRuleException(
+                "Quiz must be published before it can be assigned to students. Wait for portal admin to publish.");
         }
 
         if (quiz.TotalQuestions <= 0)

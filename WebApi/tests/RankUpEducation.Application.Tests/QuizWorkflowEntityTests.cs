@@ -3,29 +3,29 @@ using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Tests;
 
-/// <summary>Domain lifecycle tests for publish → approve/reject workflow.</summary>
+/// <summary>Domain lifecycle tests for submit → approve → portal publish workflow.</summary>
 public sealed class QuizWorkflowEntityTests
 {
     [Fact]
-    public void SubmitForApproval_RequiresAtLeastOneQuestion()
+    public void SubmitForReview_RequiresAtLeastOneQuestion()
     {
         var quiz = CreateQuiz(totalQuestions: 0);
 
         var ex = Assert.Throws<BusinessRuleException>(() =>
-            quiz.SubmitForApproval(61, 40));
+            quiz.SubmitForReview(40));
 
         Assert.Contains("at least one question", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void SubmitForApproval_ClearsRejectionAndQueuesPending()
+    public void SubmitForReview_KeepsDraftLifecycleAndQueuesPending()
     {
         var quiz = CreateQuiz();
         quiz.Reject(43, "Needs more questions");
 
-        quiz.SubmitForApproval(61, 40);
+        quiz.SubmitForReview(40);
 
-        Assert.Equal((short)61, quiz.LifecycleStatusId);
+        Assert.Equal((short)60, quiz.LifecycleStatusId);
         Assert.Equal((short)40, quiz.ApprovalStatusId);
         Assert.Null(quiz.ApprovedBy);
         Assert.Null(quiz.RejectionReason);
@@ -35,24 +35,27 @@ public sealed class QuizWorkflowEntityTests
     public void Approve_SchoolTier_SetsApprovedByAndClearsRejection()
     {
         var quiz = CreateQuiz();
-        quiz.SubmitForApproval(61, 40);
+        quiz.SubmitForReview(40);
 
         quiz.Approve(41, "8");
 
+        Assert.Equal((short)60, quiz.LifecycleStatusId);
         Assert.Equal((short)41, quiz.ApprovalStatusId);
         Assert.Equal("8", quiz.ApprovedBy);
         Assert.Null(quiz.RejectionReason);
     }
 
     [Fact]
-    public void Approve_PortalFinal_SetsApprovedStatus()
+    public void Publish_Portal_SetsLifecycleAndApprovalTogether()
     {
         var quiz = CreateQuiz();
         quiz.Approve(41, "8");
-        quiz.Approve(42, "1");
 
+        quiz.Publish(61, 42, "3");
+
+        Assert.Equal((short)61, quiz.LifecycleStatusId);
         Assert.Equal((short)42, quiz.ApprovalStatusId);
-        Assert.Equal("1", quiz.ApprovedBy);
+        Assert.Equal("3", quiz.ApprovedBy);
     }
 
     [Fact]
@@ -74,18 +77,6 @@ public sealed class QuizWorkflowEntityTests
         Assert.NotNull(quiz.RejectionReason);
         Assert.Equal(1000, quiz.RejectionReason!.Length);
         Assert.Null(quiz.ApprovedBy);
-    }
-
-    [Fact]
-    public void Publish_ParentOrPortal_SetsLifecycleAndApprovalTogether()
-    {
-        var quiz = CreateQuiz();
-
-        quiz.Publish(61, 42, "3");
-
-        Assert.Equal((short)61, quiz.LifecycleStatusId);
-        Assert.Equal((short)42, quiz.ApprovalStatusId);
-        Assert.Equal("3", quiz.ApprovedBy);
     }
 
     private static Quiz CreateQuiz(short totalQuestions = 2)

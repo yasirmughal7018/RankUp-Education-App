@@ -5,6 +5,7 @@
 import {
   startTransition,
   useDeferredValue,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -25,6 +26,8 @@ import { QuestionCategoryColumn } from "@/features/questions/presentation/compon
 import {
   canAssignAdminAudiences,
   canAuthorQuizzes,
+  canViewOrgQuizCatalog,
+  defaultQuizListMineOnly,
   isDraftQuiz,
   type QuizSummary,
 } from "@/features/quizzes/domain/quizTypes";
@@ -160,6 +163,7 @@ export function QuizzesPage() {
   const { user } = useAuth();
   const isAdminAssigner = user != null && canAssignAdminAudiences(user.role);
   const canAuthor = user != null && canAuthorQuizzes(user.role);
+  const orgCatalogViewer = user != null && canViewOrgQuizCatalog(user.role);
 
   const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [subjectId, setSubjectId] = useState<number | "">("");
@@ -167,8 +171,12 @@ export function QuizzesPage() {
   const [difficultyId, setDifficultyId] = useState<number | "">("");
   const [categoryExpanded, setCategoryExpanded] = useState(false);
   const [search, setSearch] = useState("");
-  const [showMineOnly, setShowMineOnly] = useState(!isAdminAssigner);
+  const [showMineOnly, setShowMineOnly] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+
+  useEffect(() => {
+    setShowMineOnly(defaultQuizListMineOnly(user?.role));
+  }, [user?.role]);
 
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     useQuizzesQuery();
@@ -216,12 +224,12 @@ export function QuizzesPage() {
   }, [difficultiesQuery.data]);
 
   const scopedQuizzes = useMemo(() => {
-    if (!showMineOnly || !canAuthor) {
+    if (!showMineOnly || orgCatalogViewer || !canAuthor || !user) {
       return quizzes;
     }
-    const mineKey = String(user?.id ?? "");
+    const mineKey = String(user.id);
     return quizzes.filter((quiz) => quiz.createdBy === mineKey);
-  }, [quizzes, showMineOnly, canAuthor, user?.id]);
+  }, [quizzes, showMineOnly, orgCatalogViewer, canAuthor, user]);
 
   const bankStats = useMemo(() => {
     let draft = 0;
@@ -386,9 +394,11 @@ export function QuizzesPage() {
       setClassId("");
       setDifficultyId("");
       setSearch("");
-      setShowMineOnly(!isAdminAssigner);
+      setShowMineOnly(defaultQuizListMineOnly(user?.role));
     });
   }
+
+  const defaultMineOnly = defaultQuizListMineOnly(user?.role);
 
   const hasFilters =
     listFilter !== "all" ||
@@ -396,7 +406,7 @@ export function QuizzesPage() {
     classId !== "" ||
     difficultyId !== "" ||
     Boolean(search.trim()) ||
-    (canAuthor && showMineOnly !== !isAdminAssigner);
+    (canAuthor && showMineOnly !== defaultMineOnly);
 
   const activeCategoryFilters = [
     subjectId !== "",

@@ -9,6 +9,39 @@ namespace RankUpEducation.Application.Tests;
 public sealed class QuizScopeResolverTests
 {
     [Fact]
+    public void RequireManageScope_AllowsCampusAdminWithCampusContext()
+    {
+        var scope = QuizScopeResolver.RequireManageScope(
+            new TestCurrentUser("CampusAdmin", userId: 7, schoolId: 1, campusId: 10));
+
+        Assert.Equal(UserRole.CampusAdmin, scope.Role);
+        Assert.Equal(1, scope.SchoolId);
+        Assert.Equal(10, scope.CampusId);
+    }
+
+    [Fact]
+    public void ResolveOwnerListFilter_SchoolAdmin_UsesSchoolNotCreator()
+    {
+        var scope = new QuizManageScope(UserRole.SchoolAdmin, 5, 5, 2, null);
+
+        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+
+        Assert.Null(creatorUserId);
+        Assert.Equal(2, schoolId);
+    }
+
+    [Fact]
+    public void ResolveOwnerListFilter_CampusAdmin_UsesSchoolNotCreator()
+    {
+        var scope = new QuizManageScope(UserRole.CampusAdmin, 7, 7, 1, 10);
+
+        var (creatorUserId, schoolId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+
+        Assert.Null(creatorUserId);
+        Assert.Equal(1, schoolId);
+    }
+
+    [Fact]
     public void RequireApprovalScope_AllowsCampusAdminWithCampusContext()
     {
         var scope = QuizScopeResolver.RequireApprovalScope(

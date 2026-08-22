@@ -202,21 +202,31 @@ public sealed class Quiz : SoftDeleteEntity
     }
 
     /// <summary>
-    /// Teacher publish: moves to Published lifecycle and (re)queues approval as Pending.
+    /// Queues approval review while the quiz stays unpublished (Draft lifecycle).
     /// Clears prior rejection so the quiz reappears in the admin approval queue.
     /// </summary>
-    public void SubmitForApproval(short lifecycleStatusId, short pendingApprovalStatusId)
+    public void SubmitForReview(short pendingApprovalStatusId)
     {
         if (TotalQuestions <= 0)
         {
             throw new BusinessRuleException("Quiz must contain at least one question.");
         }
 
-        LifecycleStatusId = lifecycleStatusId;
         ApprovalStatusId = pendingApprovalStatusId;
         ApprovedBy = null;
         RejectionReason = null;
         ModifiedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Teacher publish: moves to Published lifecycle and (re)queues approval as Pending.
+    /// Clears prior rejection so the quiz reappears in the admin approval queue.
+    /// </summary>
+    [Obsolete("Use SubmitForReview to keep the quiz in Draft until portal admin publishes.")]
+    public void SubmitForApproval(short lifecycleStatusId, short pendingApprovalStatusId)
+    {
+        SubmitForReview(pendingApprovalStatusId);
+        LifecycleStatusId = lifecycleStatusId;
     }
 
     /// <summary>School admin approves a teacher quiz awaiting review.</summary>

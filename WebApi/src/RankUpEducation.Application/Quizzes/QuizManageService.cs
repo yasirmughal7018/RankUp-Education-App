@@ -28,7 +28,7 @@ public interface IQuizManageService
     Task DeleteAsync(long quizId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Publishes the quiz. Teachers submit for approval; parents self-approve on publish.
+    /// Teachers/parents submit draft quizzes for approval; portal admin publishes to the catalog.
     /// </summary>
     Task<ManageQuizResponse> PublishAsync(long quizId, CancellationToken cancellationToken);
 
@@ -227,89 +227,99 @@ public sealed class QuizManageService : IQuizManageService
     public async Task<ManageQuizResponse> PublishAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
-        var quiz = await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz was not found.");
 
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        if (!IsDraftLifecycle(lifecycleName))
+        {
+            throw new BusinessRuleException("Quiz is already published.");
+        }
+
+        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
+
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent or UserRole.Tutor)
+        {
+            await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
+
+            var pendingApprovalStatusId = await _guard.RequireLookupAsync(
+                LookupNames.QuizApprovalStatus,
+                LookupNames.PendingApprovalStatusNames,
+                cancellationToken);
+            quiz.SubmitForReview(pendingApprovalStatusId);
+            await RecordTrailEventAsync(quizId, scope, ApprovalAction.SubmittedForReview, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
+            {
+                await QuizApprovalNotifications.NotifyApproversOnTeacherPublishAsync(
+                    _notifications,
+                    _users,
+                    quiz,
+                    scope.UserId,
+                    cancellationToken);
+            }
+            else
+            {
+                await QuizApprovalNotifications.NotifyPortalAdminsOnParentPublishAsync(
+                    _notifications,
+                    _users,
+                    quiz,
+                    scope.UserId,
+                    cancellationToken);
+            }
+
+            return await BuildManageResponseAsync(quizId, cancellationToken);
+        }
+
+        if (scope.Role != UserRole.PortalAdmin)
+        {
+            throw new ForbiddenAppException(
+                "Only a portal admin can publish quizzes. School and campus admins approve; they do not publish.");
+        }
+
+        await _guard.RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+
+        if (quiz.TotalQuestions <= 0)
+        {
+            throw new BusinessRuleException("Quiz must contain at least one question before publish.");
+        }
+
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
         var publishedStatusId = await _guard.RequireLookupAsync(
             LookupNames.QuizLifecycleStatus,
             LookupNames.PublishedLifecycleNames,
             cancellationToken);
+        var approvedStatusId = await _guard.RequireLookupAsync(
+            LookupNames.QuizApprovalStatus,
+            LookupNames.ApprovedStatusNames,
+            cancellationToken);
 
-        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
+        if (isParentPrivate)
         {
-            // Teacher publish (re)queues Pending approval — also recovers Rejected quizzes.
-            var pendingApprovalStatusId = await _guard.RequireLookupAsync(
-                LookupNames.QuizApprovalStatus,
-                LookupNames.PendingApprovalStatusNames,
-                cancellationToken);
-            quiz.SubmitForApproval(publishedStatusId, pendingApprovalStatusId);
-            await RecordTrailEventAsync(quizId, scope, ApprovalAction.SubmittedForReview, cancellationToken);
+            if (!LookupNames.IsPendingApprovalName(approvalName)
+                && !LookupNames.IsFinalApprovedName(approvalName))
+            {
+                throw new BusinessRuleException(
+                    "Parent quizzes must be pending portal review before publish.");
+            }
         }
-        else if (scope.Role is UserRole.Parent or UserRole.Tutor)
+        else if (!LookupNames.IsSchoolApprovedName(approvalName)
+            && !LookupNames.IsFinalApprovedName(approvalName))
         {
-            var pendingApprovalStatusId = await _guard.RequireLookupAsync(
-                LookupNames.QuizApprovalStatus,
-                LookupNames.PendingApprovalStatusNames,
-                cancellationToken);
-            quiz.SubmitForApproval(publishedStatusId, pendingApprovalStatusId);
-            await RecordTrailEventAsync(quizId, scope, ApprovalAction.SubmittedForReview, cancellationToken);
-        }
-        else if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
-        {
-            var schoolApprovedStatusId = await _guard.RequireLookupAsync(
-                LookupNames.QuizApprovalStatus,
-                LookupNames.SchoolApprovedStatusNames,
-                cancellationToken);
-            quiz.Publish(publishedStatusId, schoolApprovedStatusId, scope.UserId.ToString());
-            await RecordTrailEventAsync(quizId, scope, ApprovalAction.Endorsed, cancellationToken);
-        }
-        else
-        {
-            // PortalAdmin: final Approved on publish.
-            var approvedStatusId = await _guard.RequireLookupAsync(
-                LookupNames.QuizApprovalStatus,
-                LookupNames.ApprovedStatusNames,
-                cancellationToken);
-            quiz.Publish(publishedStatusId, approvedStatusId, scope.UserId.ToString());
-            await RecordTrailEventAsync(quizId, scope, ApprovalAction.Approved, cancellationToken);
+            throw new BusinessRuleException(
+                "Teacher quizzes must be school-approved before portal publish.");
         }
 
+        quiz.Publish(publishedStatusId, approvedStatusId, scope.UserId.ToString());
+        await RecordTrailEventAsync(quizId, scope, ApprovalAction.Approved, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
-        {
-            await QuizApprovalNotifications.NotifyApproversOnTeacherPublishAsync(
-                _notifications,
-                _users,
-                quiz,
-                scope.UserId,
-                cancellationToken);
-        }
-        else if (scope.Role is UserRole.Parent or UserRole.Tutor)
-        {
-            await QuizApprovalNotifications.NotifyPortalAdminsOnParentPublishAsync(
-                _notifications,
-                _users,
-                quiz,
-                scope.UserId,
-                cancellationToken);
-        }
-        else if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
-        {
-            await QuizApprovalNotifications.NotifyPortalAdminsOnSchoolApprovedAsync(
-                _notifications,
-                _users,
-                quiz,
-                scope.UserId,
-                cancellationToken);
-        }
-        else
-        {
-            await QuizApprovalNotifications.NotifyCreatorOnFinalApprovedAsync(
-                _notifications,
-                quiz,
-                scope.UserId,
-                cancellationToken);
-        }
+        await QuizApprovalNotifications.NotifyCreatorOnFinalApprovedAsync(
+            _notifications,
+            quiz,
+            scope.UserId,
+            cancellationToken);
 
         return await BuildManageResponseAsync(quizId, cancellationToken);
     }

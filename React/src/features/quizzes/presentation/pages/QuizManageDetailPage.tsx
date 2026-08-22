@@ -14,8 +14,11 @@ import {
   canAuthorQuizzes,
   canDeleteOrArchiveQuiz,
   canEditQuizSettings,
+  canPortalPublishQuiz,
+  canSubmitQuizForReview,
   formatQuizDuration,
   isDraftQuiz,
+  isPublishedQuizLifecycle,
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
   sumQuizEstimatedSeconds,
@@ -336,9 +339,7 @@ export function QuizManageDetailPage() {
 
   const draft = isDraftQuiz(quiz.lifecycleStatus);
   const archived = quiz.lifecycleStatus.trim().toLowerCase() === "archived";
-  const published =
-    quiz.lifecycleStatus.toLowerCase() === "published" ||
-    quiz.lifecycleStatus.toLowerCase() === "assigned";
+  const published = isPublishedQuizLifecycle(quiz.lifecycleStatus);
   const approvalRejected = isRejectedQuizApprovalStatus(quiz.approvalStatus);
   const schoolApproved = isSchoolApprovedQuizStatus(quiz.approvalStatus);
   const settingsEditable =
@@ -351,6 +352,19 @@ export function QuizManageDetailPage() {
       assignments,
     );
   const questionsEditable = settingsEditable;
+  const submitForReview = canSubmitQuizForReview(
+    quiz.lifecycleStatus,
+    quiz.questionCount,
+    settingsEditable,
+  );
+  const portalCanPublish =
+    user != null &&
+    canPortalPublishQuiz(
+      user.role,
+      quiz.lifecycleStatus,
+      quiz.approvalStatus,
+      quiz.quizType,
+    );
   const canRemoveQuiz =
     user != null &&
     canDeleteOrArchiveQuiz(
@@ -516,20 +530,20 @@ export function QuizManageDetailPage() {
             >
               Add from bank
             </button>
-            {draft ? (
+            {submitForReview ? (
               <>
                 <button
                   type="button"
-                  disabled={isSubmitting || quiz.questionCount === 0}
+                  disabled={isSubmitting}
                   onClick={() =>
                     void runAction(
                       () => publishQuiz.mutateAsync(),
-                      "Quiz submitted for approval.",
+                      "Submitted for approval. The quiz stays unpublished until a portal admin publishes it.",
                     )
                   }
                   className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:opacity-70"
                 >
-                  Publish
+                  Submit for approval
                 </button>
                 {canRemoveQuiz ? (
                   <button
@@ -556,6 +570,21 @@ export function QuizManageDetailPage() {
                   </button>
                 ) : null}
               </>
+            ) : null}
+            {portalCanPublish ? (
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() =>
+                  void runAction(
+                    () => publishQuiz.mutateAsync(),
+                    "Quiz published and available to assign.",
+                  )
+                }
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
+              >
+                Publish quiz
+              </button>
             ) : null}
             {approvalRejected && canAuthor ? (
               <button
@@ -586,6 +615,13 @@ export function QuizManageDetailPage() {
           >
             Unarchive
           </button>
+        ) : null}
+
+        {draft && !published ? (
+          <p className="w-full basis-full text-sm text-muted-foreground">
+            This quiz is not published yet. Only you and portal admins can see it.
+            Assign to students after a portal admin publishes it.
+          </p>
         ) : null}
 
         {published ? (

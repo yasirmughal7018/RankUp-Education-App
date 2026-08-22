@@ -226,7 +226,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response));
     }
 
-    /// <summary>Publishes quiz (teacher → pending approval; parent → approved).</summary>
+    /// <summary>Submit draft for approval (teacher/parent) or portal publish after endorsements.</summary>
     [HttpPost("{quizId:long}/publish")]
     public async Task<ActionResult<ApiResponse<ManageQuizResponse>>> PublishAsync(
         long quizId,

@@ -1379,7 +1379,19 @@ public sealed class QuizService : IQuizService
         CancellationToken cancellationToken)
     {
         var tutorUserId = _currentUser.UserId ?? throw new ForbiddenAppException("Tutor account was not found.");
-        return await _quizzes.ListForCreatorAsync(tutorUserId, search, subject, grade, cancellationToken);
+        var profileId = _currentUser.ProfileId ?? tutorUserId;
+
+        var studentIds = await _studentScope.GetTutorLinkedStudentIdsAsync(profileId, cancellationToken);
+        var assignedItems = studentIds.Count > 0
+            ? await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken)
+            : Array.Empty<QuizListItem>();
+        var createdItems = await _quizzes.ListForCreatorAsync(tutorUserId, search, subject, grade, cancellationToken);
+
+        return assignedItems
+            .Concat(createdItems.Where(created => assignedItems.All(assigned => assigned.QuizId != created.QuizId)))
+            .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
+            .ThenByDescending(item => item.QuizId)
+            .ToArray();
     }
 
     private async Task<IReadOnlyList<QuizListItem>> ListForTeacherAsync(
@@ -1392,18 +1404,10 @@ public sealed class QuizService : IQuizService
         var schoolId = _currentUser.SchoolId ?? throw new ForbiddenAppException("Teacher school context was not found.");
         var campusId = _currentUser.CampusId ?? throw new ForbiddenAppException("Teacher campus context was not found.");
 
-        var schoolItems = await _quizzes.ListForTeacherAsync(
-            teacherUserId,
+        // Published quizzes in the caller's school/campus (any creator) plus own drafts.
+        return await _quizzes.ListForSchoolAsync(
             schoolId,
             campusId,
-            search,
-            subject,
-            grade,
-            cancellationToken);
-        var createdItems = await _quizzes.ListForCreatorAsync(teacherUserId, search, subject, grade, cancellationToken);
-        var publicItems = await _quizzes.ListForSchoolAsync(
-            schoolId: null,
-            campusId: null,
             viewerUserId: teacherUserId,
             includeAllDrafts: false,
             includeAllSchools: false,
@@ -1411,15 +1415,6 @@ public sealed class QuizService : IQuizService
             subject,
             grade,
             cancellationToken);
-
-        return schoolItems
-            .Concat(createdItems.Where(created => schoolItems.All(item => item.QuizId != created.QuizId)))
-            .Concat(publicItems.Where(item =>
-                schoolItems.All(existing => existing.QuizId != item.QuizId)
-                && createdItems.All(existing => existing.QuizId != item.QuizId)))
-            .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
-            .ThenByDescending(item => item.QuizId)
-            .ToArray();
     }
 
     private static readonly TimeSpan OfflineSubmitGrace = TimeSpan.FromMinutes(30);

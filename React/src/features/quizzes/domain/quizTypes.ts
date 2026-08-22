@@ -225,6 +225,7 @@ export const QUIZ_MANAGER_ROLES: UserRole[] = [
   "Parent",
   "Coordinator",
   "Tutor",
+  "CampusAdmin",
   "SchoolAdmin",
   "PortalAdmin",
 ];
@@ -252,6 +253,23 @@ export function canAuthorQuizzes(role: UserRole): boolean {
 /** True for SchoolAdmin or PortalAdmin school/platform assign modes. */
 export function canAssignAdminAudiences(role: UserRole): boolean {
   return role === "SchoolAdmin" || role === "PortalAdmin";
+}
+
+/** School/campus/platform admins see the full scoped catalog, not only quizzes they created. */
+export function canViewOrgQuizCatalog(role: UserRole): boolean {
+  return (
+    role === "PortalAdmin" ||
+    role === "SchoolAdmin" ||
+    role === "CampusAdmin"
+  );
+}
+
+/** Default for the optional "Mine only" list filter on the quizzes dashboard. */
+export function defaultQuizListMineOnly(role: UserRole | undefined): boolean {
+  if (!role || !canAuthorQuizzes(role)) {
+    return false;
+  }
+  return !canViewOrgQuizCatalog(role);
 }
 
 /** True for roles that may approve/reject teacher quizzes. */
@@ -326,6 +344,43 @@ export function canDeleteOrArchiveQuiz(
   }
 
   return isFinalApprovedQuizStatus(approvalStatus);
+}
+
+/** Creator submits a draft quiz for school/portal review; lifecycle stays Draft. */
+export function canSubmitQuizForReview(
+  lifecycleStatus: string,
+  questionCount: number,
+  settingsEditable: boolean,
+): boolean {
+  return (
+    settingsEditable &&
+    isDraftQuiz(lifecycleStatus) &&
+    questionCount > 0
+  );
+}
+
+/** Portal admin publishes an approved draft quiz to the catalog (lifecycle → Published). */
+export function canPortalPublishQuiz(
+  role: UserRole,
+  lifecycleStatus: string,
+  approvalStatus: string,
+  quizType: string,
+): boolean {
+  if (role !== "PortalAdmin" || !isDraftQuiz(lifecycleStatus)) {
+    return false;
+  }
+
+  if (isParentPrivateQuizType(quizType)) {
+    return (
+      isPendingQuizApprovalStatus(approvalStatus) ||
+      isFinalApprovedQuizStatus(approvalStatus)
+    );
+  }
+
+  return (
+    isSchoolApprovedQuizStatus(approvalStatus) ||
+    isFinalApprovedQuizStatus(approvalStatus)
+  );
 }
 
 /** Single rejection status (legacy Cancelled/Declined map here). */
@@ -422,6 +477,17 @@ export function assignModesForRole(role: UserRole): Array<{
 export function isDraftQuiz(status: string): boolean {
   const normalized = status.trim().toLowerCase();
   return normalized === "draft" || normalized === "not assigned";
+}
+
+/** Published or assigned — required before students can be assigned. */
+export function isPublishedQuizLifecycle(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return normalized === "published" || normalized === "assigned";
+}
+
+export function isPendingQuizApprovalStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return normalized === "pending" || normalized === "draft";
 }
 
 /** True when an assignment window has opened or any attempt exists (mirrors API HasStartedAssignments). */

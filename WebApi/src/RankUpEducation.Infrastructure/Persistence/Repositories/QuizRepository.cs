@@ -143,11 +143,10 @@ public sealed class QuizRepository : IQuizRepository
         string? grade,
         CancellationToken cancellationToken)
     {
-        var creatorKey = teacherUserId.ToString();
+        // Legacy path: scope by school/campus, not creator. Prefer ListForSchoolAsync from the service layer.
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => quiz.SchoolId == schoolId
                 && quiz.SchoolCampusId == campusId
-                && quiz.CreatedByName == creatorKey
                 && quiz.IsActive
                 && !quiz.IsDeleted);
 
@@ -212,7 +211,9 @@ public sealed class QuizRepository : IQuizRepository
                     || includeAllSchools
                     || (schoolId != null
                         && quiz.SchoolId == schoolId
-                        && (campusId == null || quiz.SchoolCampusId == campusId)))));
+                        && (campusId == null
+                            || quiz.SchoolCampusId == null
+                            || quiz.SchoolCampusId == campusId)))));
 
         query = QuizQueryHelper.ApplyQuizFilters(query, search, subject, grade);
         var quizzes = await query.ToListAsync(cancellationToken);
@@ -271,6 +272,16 @@ public sealed class QuizRepository : IQuizRepository
                 quiz.IsActive &&
                 !quiz.IsDeleted &&
                 approvalQueueIds.Contains(quiz.ApprovalStatusId));
+
+        var draftLifecycleIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+            _dbContext,
+            LookupNames.QuizLifecycleStatus,
+            LookupNames.DraftLifecycleNames,
+            cancellationToken);
+        if (draftLifecycleIds.Count > 0)
+        {
+            query = query.Where(quiz => draftLifecycleIds.Contains(quiz.LifecycleStatusId));
+        }
 
         if (schoolId is not null)
         {

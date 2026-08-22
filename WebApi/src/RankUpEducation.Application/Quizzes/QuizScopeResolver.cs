@@ -30,7 +30,8 @@ public static class QuizScopeResolver
     public static QuizManageScope RequireManageScope(ICurrentUserService currentUser)
     {
         var role = ParseRole(currentUser.Role);
-        if (role is not (UserRole.Parent or UserRole.Tutor or UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin or UserRole.PortalAdmin))
+        if (role is not (UserRole.Parent or UserRole.Tutor or UserRole.Teacher or UserRole.Coordinator
+                or UserRole.CampusAdmin or UserRole.SchoolAdmin or UserRole.PortalAdmin))
         {
             throw new ForbiddenAppException("Your role cannot manage quizzes.");
         }
@@ -55,6 +56,15 @@ public static class QuizScopeResolver
             var schoolId = currentUser.SchoolId
                 ?? throw new ForbiddenAppException("School admin school context was not found.");
             return new QuizManageScope(role, userId, profileId, schoolId, currentUser.CampusId);
+        }
+
+        if (role == UserRole.CampusAdmin)
+        {
+            var schoolId = currentUser.SchoolId
+                ?? throw new ForbiddenAppException("Campus admin school context was not found.");
+            var campusId = currentUser.CampusId
+                ?? throw new ForbiddenAppException("Campus admin campus context was not found.");
+            return new QuizManageScope(role, userId, profileId, schoolId, campusId);
         }
 
         if (role == UserRole.PortalAdmin)
@@ -196,6 +206,7 @@ public static class QuizScopeResolver
         return scope.Role switch
         {
             UserRole.SchoolAdmin => (null, scope.SchoolId),
+            UserRole.CampusAdmin => (null, scope.SchoolId),
             UserRole.PortalAdmin => (null, null),
             _ => (scope.UserId, null),
         };

@@ -5,7 +5,11 @@ import {
   canDeleteOrArchiveQuiz,
   canEditQuizSettings,
   canManageQuizzes,
+  canPortalPublishQuiz,
   canReviewQuizApproval,
+  canSubmitQuizForReview,
+  canViewOrgQuizCatalog,
+  defaultQuizListMineOnly,
   hasQuizAssignmentStarted,
   isFinalApprovedQuizStatus,
   isParentPrivateQuizType,
@@ -14,6 +18,24 @@ import {
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
 } from "@/features/quizzes/domain/quizTypes";
+
+describe("quiz list visibility helpers", () => {
+  it("org admins see the full scoped catalog", () => {
+    expect(canViewOrgQuizCatalog("PortalAdmin")).toBe(true);
+    expect(canViewOrgQuizCatalog("SchoolAdmin")).toBe(true);
+    expect(canViewOrgQuizCatalog("CampusAdmin")).toBe(true);
+    expect(canViewOrgQuizCatalog("Teacher")).toBe(false);
+  });
+
+  it("defaults mine-only off for org admins and on for individual authors", () => {
+    expect(defaultQuizListMineOnly("SchoolAdmin")).toBe(false);
+    expect(defaultQuizListMineOnly("PortalAdmin")).toBe(false);
+    expect(defaultQuizListMineOnly("CampusAdmin")).toBe(false);
+    expect(defaultQuizListMineOnly("Teacher")).toBe(true);
+    expect(defaultQuizListMineOnly("Coordinator")).toBe(true);
+    expect(defaultQuizListMineOnly(undefined)).toBe(false);
+  });
+});
 
 describe("canApproveQuizzes", () => {
   it("allows school, campus, and portal admins", () => {
@@ -37,7 +59,7 @@ describe("canManageQuizzes", () => {
   });
 
   it("excludes campus admin from manage hub", () => {
-    expect(canManageQuizzes("CampusAdmin")).toBe(false);
+    expect(canManageQuizzes("CampusAdmin")).toBe(true);
   });
 });
 
@@ -197,5 +219,30 @@ describe("canReviewQuizApproval", () => {
     expect(canReviewQuizApproval("PortalAdmin", "ParentPrivate")).toBe(true);
     expect(canReviewQuizApproval("SchoolAdmin", "ParentPrivate")).toBe(false);
     expect(canReviewQuizApproval("SchoolAdmin", "Practice")).toBe(true);
+  });
+});
+
+describe("canSubmitQuizForReview", () => {
+  it("requires draft lifecycle and editable settings", () => {
+    expect(canSubmitQuizForReview("Draft", 3, true)).toBe(true);
+    expect(canSubmitQuizForReview("Published", 3, true)).toBe(false);
+    expect(canSubmitQuizForReview("Draft", 0, true)).toBe(false);
+  });
+});
+
+describe("canPortalPublishQuiz", () => {
+  it("allows portal admin to publish school-approved teacher drafts", () => {
+    expect(
+      canPortalPublishQuiz("PortalAdmin", "Draft", "SchoolApproved", "Practice"),
+    ).toBe(true);
+    expect(
+      canPortalPublishQuiz("PortalAdmin", "Draft", "Pending", "Practice"),
+    ).toBe(false);
+  });
+
+  it("allows portal admin to publish pending parent private drafts", () => {
+    expect(
+      canPortalPublishQuiz("PortalAdmin", "Draft", "Pending", "ParentPrivate"),
+    ).toBe(true);
   });
 });
