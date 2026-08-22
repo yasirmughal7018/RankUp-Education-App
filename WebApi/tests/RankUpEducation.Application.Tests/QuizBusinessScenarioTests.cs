@@ -63,7 +63,20 @@ public sealed class QuizBusinessScenarioTests
     }
 
     [Fact]
-    public void QZ23_CampusAdminCannotAssignAtSchoolApproved()
+    public void QZ22_PublishedSchoolQuizzesAreVisibleToAllStaff()
+    {
+        Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.SchoolAdmin));
+        Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.CampusAdmin));
+        Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Teacher));
+        Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Coordinator));
+        Assert.True(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.PortalAdmin));
+        Assert.False(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Parent));
+        Assert.False(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Tutor));
+        Assert.False(QuizScopeResolver.CanViewPublishedSchoolCatalog(UserRole.Student));
+    }
+
+    [Fact]
+    public void QZ02_CampusAdminCannotAssignUntilPortalApproved()
     {
         Assert.False(QuizAssignRules.CanAssignWithApproval(UserRole.CampusAdmin, "SchoolApproved"));
         Assert.True(QuizAssignRules.CanAssignWithApproval(UserRole.CampusAdmin, "Approved"));

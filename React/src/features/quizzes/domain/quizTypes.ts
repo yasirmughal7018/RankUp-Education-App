@@ -282,12 +282,14 @@ export function canAssignAdminAudiences(role: UserRole): boolean {
   return role === "SchoolAdmin" || role === "PortalAdmin";
 }
 
-/** School/campus/platform admins see the full scoped catalog, not only quizzes they created. */
+/** School/campus/platform staff see the shared published school-quiz catalog, not only quizzes they created. */
 export function canViewOrgQuizCatalog(role: UserRole): boolean {
   return (
     role === "PortalAdmin" ||
     role === "SchoolAdmin" ||
-    role === "CampusAdmin"
+    role === "CampusAdmin" ||
+    role === "Teacher" ||
+    role === "Coordinator"
   );
 }
 
@@ -528,6 +530,41 @@ export function canAssignQuiz(
     return (
       isFinalApprovedQuizStatus(approvalStatus) ||
       isSchoolApprovedQuizStatus(approvalStatus)
+    );
+  }
+
+  return false;
+}
+
+/**
+ * Published school quizzes are viewable by all staff. Assign / duplicate / archive
+ * stay school (SchoolAdmin) or campus (CampusAdmin / Teacher / Coordinator).
+ */
+export function isQuizInManageOrgScope(
+  role: UserRole,
+  callerSchoolId: number | null | undefined,
+  callerCampusId: number | null | undefined,
+  quizSchoolId: number | null | undefined,
+  quizCampusId: number | null | undefined,
+): boolean {
+  if (role === "PortalAdmin") {
+    return true;
+  }
+
+  if (role === "Parent" || role === "Tutor") {
+    return true;
+  }
+
+  if (role === "SchoolAdmin") {
+    return quizSchoolId != null && quizSchoolId === callerSchoolId;
+  }
+
+  if (role === "CampusAdmin" || role === "Teacher" || role === "Coordinator") {
+    return (
+      quizSchoolId != null &&
+      quizSchoolId === callerSchoolId &&
+      quizCampusId != null &&
+      quizCampusId === callerCampusId
     );
   }
 

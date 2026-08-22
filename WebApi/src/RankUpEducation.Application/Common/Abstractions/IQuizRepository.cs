@@ -39,6 +39,8 @@ public interface IQuizRepository
     /// School/campus/portal catalog. When <paramref name="includeAllDrafts"/> is true (PortalAdmin),
     /// other authors' Draft quizzes are included only if they are in the approval pipeline
     /// (submitted Pending, SchoolApproved, Approved, Rejected). Unsubmitted WIP stays owner-only.
+    /// When <paramref name="includePublishedFromAllSchools"/> is true, Published/Assigned/Archived
+    /// school-type quizzes (not ParentPrivate) are visible regardless of school or creator.
     /// </summary>
     Task<IReadOnlyList<QuizListItem>> ListForSchoolAsync(
         int? schoolId,
@@ -49,7 +51,8 @@ public interface IQuizRepository
         string? search,
         string? subject,
         string? grade,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool includePublishedFromAllSchools = false);
 
     Task<IReadOnlyList<PendingQuizApprovalItem>> ListPendingApprovalAsync(
         int? schoolId,

@@ -55,6 +55,33 @@ internal sealed class QuizManageGuard
     }
 
     /// <summary>
+    /// List/manage GET: published school-type quizzes are visible to all catalog staff.
+    /// Drafts stay owner-only (PortalAdmin after submit).
+    /// </summary>
+    public async Task<Quiz> RequireViewableQuizAsync(
+        long quizId,
+        QuizManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        if (quizId <= 0)
+        {
+            throw new NotFoundAppException("Quiz was not found.");
+        }
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        if (quiz is null)
+        {
+            throw new NotFoundAppException($"Quiz #{quizId} was not found.");
+        }
+
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
+        QuizScopeResolver.EnsureCanViewQuiz(quiz, scope, IsDraftLifecycle(lifecycleName), isParentPrivate);
+        await EnsureDraftVisibleAsync(quiz, scope, cancellationToken);
+        return quiz;
+    }
+
+    /// <summary>
     /// Draft quizzes are owner-only until Submit for approval. PortalAdmin may then open
     /// pipeline drafts (submitted Pending, SchoolApproved, Approved, Rejected).
     /// </summary>

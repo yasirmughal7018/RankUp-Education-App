@@ -23,6 +23,7 @@ import {
   formatQuizDuration,
   isDraftQuiz,
   isPublishedQuizLifecycle,
+  isQuizInManageOrgScope,
   isRejectedQuizApprovalStatus,
   isSchoolApprovedQuizStatus,
   quizApprovalButtonLabel,
@@ -427,8 +428,18 @@ export function QuizManageDetailPage() {
       quiz.approvalStatus,
       quiz.quizType,
     );
+  const inManageOrgScope =
+    user != null &&
+    isQuizInManageOrgScope(
+      user.role,
+      user.schoolId,
+      user.campusId,
+      quiz.schoolId,
+      quiz.campusId,
+    );
   const canAssign =
     user != null &&
+    inManageOrgScope &&
     canAssignQuiz(
       user.role,
       quiz.lifecycleStatus,
@@ -999,7 +1010,7 @@ export function QuizManageDetailPage() {
           </p>
         ) : null}
 
-        {published && !canAssign ? (
+        {published && !canAssign && inManageOrgScope ? (
           <p className="w-full basis-full text-sm text-[var(--status-pending-text)]">
             This quiz is published but not yet approved for assignment.
             {schoolApproved

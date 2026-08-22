@@ -350,7 +350,7 @@ public sealed class QuizManageService : IQuizManageService
     public async Task<ManageQuizResponse> GetManageDetailAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(GetCurrentUser());
-        await _guard.RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+        await _guard.RequireViewableQuizAsync(quizId, scope, cancellationToken);
         return await BuildManageResponseAsync(quizId, cancellationToken);
     }
 

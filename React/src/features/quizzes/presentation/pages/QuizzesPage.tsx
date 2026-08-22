@@ -30,7 +30,6 @@ import {
   canAssignAdminAudiences,
   canAuthorQuizzes,
   canReviewQuizEditRequests,
-  canViewOrgQuizCatalog,
   defaultQuizListMineOnly,
   formatQuizDisplayStatusLabel,
   isDraftQuiz,
@@ -167,7 +166,6 @@ export function QuizzesPage() {
   const { user } = useAuth();
   const isAdminAssigner = user != null && canAssignAdminAudiences(user.role);
   const canAuthor = user != null && canAuthorQuizzes(user.role);
-  const orgCatalogViewer = user != null && canViewOrgQuizCatalog(user.role);
 
   const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [subjectId, setSubjectId] = useState<number | "">("");
@@ -278,12 +276,12 @@ export function QuizzesPage() {
   }, [difficultiesQuery.data]);
 
   const scopedQuizzes = useMemo(() => {
-    if (!showMineOnly || orgCatalogViewer || !canAuthor || !user) {
+    if (!showMineOnly || !canAuthor || !user) {
       return quizzes;
     }
     const mineKey = String(user.id);
     return quizzes.filter((quiz) => quiz.createdBy === mineKey);
-  }, [quizzes, showMineOnly, orgCatalogViewer, canAuthor, user]);
+  }, [quizzes, showMineOnly, canAuthor, user]);
 
   const bankStats = useMemo(() => {
     let draft = 0;

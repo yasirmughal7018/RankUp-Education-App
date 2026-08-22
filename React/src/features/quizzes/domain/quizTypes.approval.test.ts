@@ -17,6 +17,7 @@ import {
   hasQuizAssignmentStarted,
   isFinalApprovedQuizStatus,
   isParentPrivateQuizType,
+  isQuizInManageOrgScope,
   isQuizMetadataEditable,
   isQuizOwner,
   isRejectedQuizApprovalStatus,
@@ -26,11 +27,14 @@ import {
 } from "@/features/quizzes/domain/quizTypes";
 
 describe("quiz list visibility helpers", () => {
-  it("org admins see the full scoped catalog", () => {
+  it("staff see the shared published school-quiz catalog", () => {
     expect(canViewOrgQuizCatalog("PortalAdmin")).toBe(true);
     expect(canViewOrgQuizCatalog("SchoolAdmin")).toBe(true);
     expect(canViewOrgQuizCatalog("CampusAdmin")).toBe(true);
-    expect(canViewOrgQuizCatalog("Teacher")).toBe(false);
+    expect(canViewOrgQuizCatalog("Teacher")).toBe(true);
+    expect(canViewOrgQuizCatalog("Coordinator")).toBe(true);
+    expect(canViewOrgQuizCatalog("Parent")).toBe(false);
+    expect(canViewOrgQuizCatalog("Student")).toBe(false);
   });
 
   it("defaults mine-only off for all roles (optional filter)", () => {
@@ -66,6 +70,20 @@ describe("canManageQuizzes", () => {
 
   it("excludes campus admin from manage hub", () => {
     expect(canManageQuizzes("CampusAdmin")).toBe(true);
+  });
+});
+
+describe("isQuizInManageOrgScope", () => {
+  it("lets ISL school admin view but not mutate AES quizzes", () => {
+    expect(
+      isQuizInManageOrgScope("SchoolAdmin", 2, null, 1, 10),
+    ).toBe(false);
+    expect(
+      isQuizInManageOrgScope("SchoolAdmin", 1, null, 1, 10),
+    ).toBe(true);
+    expect(
+      isQuizInManageOrgScope("PortalAdmin", null, null, 1, 10),
+    ).toBe(true);
   });
 });
 

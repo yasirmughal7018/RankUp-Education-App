@@ -162,7 +162,8 @@ public sealed class QuizService : IQuizService
                 search,
                 subject,
                 grade,
-                cancellationToken),
+                cancellationToken,
+                includePublishedFromAllSchools: true),
             UserRole.CampusAdmin => await _quizzes.ListForSchoolAsync(
                 _currentUser.SchoolId,
                 _currentUser.CampusId,
@@ -172,7 +173,8 @@ public sealed class QuizService : IQuizService
                 search,
                 subject,
                 grade,
-                cancellationToken),
+                cancellationToken,
+                includePublishedFromAllSchools: true),
             UserRole.PortalAdmin => await _quizzes.ListForSchoolAsync(
                 schoolId: null,
                 campusId: null,
@@ -1404,7 +1406,7 @@ public sealed class QuizService : IQuizService
         var schoolId = _currentUser.SchoolId ?? throw new ForbiddenAppException("Teacher school context was not found.");
         var campusId = _currentUser.CampusId ?? throw new ForbiddenAppException("Teacher campus context was not found.");
 
-        // Published quizzes in the caller's school/campus (any creator) plus own drafts.
+        // Published school-type quizzes (any school / creator) plus own drafts.
         return await _quizzes.ListForSchoolAsync(
             schoolId,
             campusId,
@@ -1414,7 +1416,8 @@ public sealed class QuizService : IQuizService
             search,
             subject,
             grade,
-            cancellationToken);
+            cancellationToken,
+            includePublishedFromAllSchools: true);
     }
 
     private static readonly TimeSpan OfflineSubmitGrace = TimeSpan.FromMinutes(30);

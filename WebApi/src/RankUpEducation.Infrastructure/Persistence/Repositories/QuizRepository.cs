@@ -193,7 +193,8 @@ public sealed class QuizRepository : IQuizRepository
         string? search,
         string? subject,
         string? grade,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool includePublishedFromAllSchools = false)
     {
         var draftIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
@@ -219,13 +220,21 @@ public sealed class QuizRepository : IQuizRepository
             .ToArray();
         var viewerKey = viewerUserId?.ToString();
         var submittedQuizIdQuery = QuizQueryHelper.SubmittedForReviewQuizIds(_dbContext);
+        var schoolQuizTypeIds = includePublishedFromAllSchools
+            ? await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+                _dbContext,
+                LookupNames.QuizType,
+                LookupNames.SchoolQuizTypeNames,
+                cancellationToken)
+            : Array.Empty<short>();
 
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => !quiz.IsDeleted);
 
         // Draft: owner always. PortalAdmin also sees pipeline drafts (submitted / school-approved /
         // approved / rejected). Unsubmitted WIP is owner-only.
-        // Published / Assigned / Archived: school/campus scope, or Public (everyone).
+        // Published / Assigned / Archived: all staff see school-type quizzes from any school/creator;
+        // ParentPrivate stays school/Public/portal scoped.
         query = query.Where(quiz =>
             (draftIds.Contains(quiz.LifecycleStatusId)
                 && (
@@ -238,6 +247,8 @@ public sealed class QuizRepository : IQuizRepository
             || (!draftIds.Contains(quiz.LifecycleStatusId)
                 && (quiz.AudienceScope == "Public"
                     || includeAllSchools
+                    || (includePublishedFromAllSchools
+                        && schoolQuizTypeIds.Contains(quiz.QuizTypeId))
                     || (schoolId != null
                         && quiz.SchoolId == schoolId
                         && (campusId == null

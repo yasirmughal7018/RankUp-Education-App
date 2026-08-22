@@ -150,6 +150,40 @@ public static class QuizScopeResolver
         return new QuizManageScope(role, userId, profileId, currentUser.SchoolId, currentUser.CampusId);
     }
 
+    /// <summary>
+    /// Staff catalog of Published/Assigned/Archived school-type quizzes is platform-wide
+    /// (any school, any creator). ParentPrivate and Draft stay scoped.
+    /// </summary>
+    public static bool CanViewPublishedSchoolCatalog(UserRole role)
+        => role is UserRole.PortalAdmin
+            or UserRole.SchoolAdmin
+            or UserRole.CampusAdmin
+            or UserRole.Teacher
+            or UserRole.Coordinator;
+
+    /// <summary>
+    /// View (list/manage GET) for a published school-type quiz is allowed to all catalog staff.
+    /// Mutations still use <see cref="EnsureOwnsQuiz"/>.
+    /// </summary>
+    public static void EnsureCanViewQuiz(
+        Quiz quiz,
+        QuizManageScope scope,
+        bool isDraftLifecycle,
+        bool isParentPrivate)
+    {
+        if (scope.Role == UserRole.PortalAdmin || IsQuizOwner(quiz, scope))
+        {
+            return;
+        }
+
+        if (!isDraftLifecycle && !isParentPrivate && CanViewPublishedSchoolCatalog(scope.Role))
+        {
+            return;
+        }
+
+        EnsureOwnsQuiz(quiz, scope);
+    }
+
     /// <summary>Verifies creator ownership and, for teachers, matching school/campus on the quiz row.</summary>
     public static void EnsureOwnsQuiz(Quiz quiz, QuizManageScope scope)
     {
