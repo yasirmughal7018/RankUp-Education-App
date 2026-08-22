@@ -308,12 +308,12 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
         UPDATE public.app_approval
         SET user_id = NULL
-        WHERE entity_type IN (2102, 2103, 2104, 2105)
+        WHERE entity_type IN (2102, 2103, 2104, 2105, 2106)
           AND user_id IS NOT NULL;
 
         -- Drop orphan trail/queue rows that have no target after backfill.
         DELETE FROM public.app_approval
-        WHERE entity_type IN (2102, 2103, 2104, 2105)
+        WHERE entity_type IN (2102, 2103, 2104, 2105, 2106)
           AND request_id IS NULL;
 
         -- Registration rows must have user_id; drop impossible orphans.
@@ -325,7 +325,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_approval
             ADD CONSTRAINT chk_app_approval_target CHECK (
                 (entity_type = 2101 AND user_id IS NOT NULL AND request_id IS NULL)
-                OR (entity_type IN (2102, 2103, 2104, 2105) AND request_id IS NOT NULL AND user_id IS NULL)
+                OR (entity_type IN (2102, 2103, 2104, 2105, 2106) AND request_id IS NOT NULL AND user_id IS NULL)
             );
 
         -- Drop legacy typed FKs + columns (request_id is polymorphic — no single FK).
@@ -367,8 +367,9 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
     /// <summary>
     /// Active-question edit requests (app_question_edit_request) plus app_approval queue
-    /// rows (entity_type 2105). Must run after ApprovalRequestIdUnificationSupportSql so
-    /// chk_app_approval_target can include 2105.
+    /// rows (entity_type 2105). Must run after ApprovalRequestIdUnificationSupportSql.
+    /// Recreates chk_app_approval_target with 2105 and 2106 so existing QuizEditRequest
+    /// rows are not rejected on subsequent startups.
     /// </summary>
     private const string QuestionEditRequestSupportSql = """
         CREATE TABLE IF NOT EXISTS public.app_question_edit_request (
@@ -411,7 +412,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         ALTER TABLE public.app_approval
             ADD CONSTRAINT chk_app_approval_target CHECK (
                 (entity_type = 2101 AND user_id IS NOT NULL AND request_id IS NULL)
-                OR (entity_type IN (2102, 2103, 2104, 2105) AND request_id IS NOT NULL AND user_id IS NULL)
+                OR (entity_type IN (2102, 2103, 2104, 2105, 2106) AND request_id IS NOT NULL AND user_id IS NULL)
             );
 
         CREATE UNIQUE INDEX IF NOT EXISTS ix_app_approval_question_edit_approver_role
