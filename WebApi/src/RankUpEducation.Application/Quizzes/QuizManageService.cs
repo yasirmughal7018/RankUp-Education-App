@@ -944,10 +944,12 @@ public sealed class QuizManageService : IQuizManageService
             return context;
         }
 
-        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.CampusAdmin)
         {
-            var schoolId = scope.SchoolId ?? throw new ForbiddenAppException("Teacher school context was not found.");
-            var campusId = scope.CampusId ?? throw new ForbiddenAppException("Teacher campus context was not found.");
+            var schoolId = scope.SchoolId
+                ?? throw new ForbiddenAppException($"{scope.Role} school context was not found.");
+            var campusId = scope.CampusId
+                ?? throw new ForbiddenAppException($"{scope.Role} campus context was not found.");
 
             return new StudentSchoolContext(schoolId, campusId, 0);
         }

@@ -132,15 +132,15 @@ const assignmentStatusConflicts = [
 ];
 
 const quizTypes = [
-  ["1", "Practice", "Teacher / Coordinator", "Learning-oriented school quiz. Admin approval before assign. Intended: flexible attempts / optional time / answers may show after submit (type-specific UX still soft)."],
-  ["2", "Assessment", "Teacher / Coordinator", "Assigned assessment with due window; may have limited time; visible to selected audience after assign. Admin approval before assign."],
-  ["3", "Competition", "Teacher / Coordinator", "Class/school/inter-school competition intent: fixed schedule, strict attempts. Device lock (all quiz types) + FocusLoss≥5 / Paste≥3 draft lockout (all types). Admin approval before assign."],
-  ["4", "Surprise", "Teacher / Coordinator", "Hidden from students until StartDateTime (no advance notice); availability window ≤24h; StartAt ≤ now+24h; ≤1 attempt. Assign notifications deferred until the window opens. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
+  ["1", "Practice", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin", "Learning-oriented school quiz. Admin approval before assign. Intended: flexible attempts / optional time / answers may show after submit (type-specific UX still soft)."],
+  ["2", "Assessment", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin", "Assigned assessment with due window; may have limited time; visible to selected audience after assign. Admin approval before assign."],
+  ["3", "Competition", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin", "Class/school/inter-school competition intent: fixed schedule, strict attempts. Device lock (all quiz types) + FocusLoss≥5 / Paste≥3 draft lockout (all types). Admin approval before assign."],
+  ["4", "Surprise", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin", "Hidden from students until StartDateTime (no advance notice); availability window ≤24h; StartAt ≤ now+24h; ≤1 attempt. Assign notifications deferred until the window opens. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
   ["5", "ParentPrivate (PrivateParent)", "Parent / Tutor", "Private family quiz for linked children. Lookup ID 5; aliases Parent Private / Private. Create forces this type for Parent and Tutor. Submit → Pending; PortalAdmin approves and publishes before assign. PortalAdmin-only delete/archive. Assign only to linked children (Parent) or tutor-linked students (Tutor)."],
 ];
 
 const lifecycle = [
-  ["Create (any authorized role)", "Draft + Pending", "Approval always starts Pending. Lifecycle Draft. Parent/Tutor create forces QuizType ParentPrivate (PrivateParent). Teacher/coordinator: school types. School/Campus from auth token. Not assignable."],
+  ["Create (any authorized role)", "Draft + Pending", "Approval always starts Pending. Lifecycle Draft. Parent/Tutor create forces QuizType ParentPrivate (PrivateParent). Teacher/Coordinator/SchoolAdmin/CampusAdmin/PortalAdmin: school types. CampusAdmin stamps school+campus from the auth token. Not assignable."],
   ["Update metadata / questions", "Unchanged until granted edit", "Draft + Pending or Rejected: owner or PortalAdmin may edit (no started assignment). After SchoolApproved, Approved, Published, or Assigned: owner needs an approved edit request; PortalAdmin may edit directly. Using the grant → Draft + Pending; owner must resubmit."],
   ["Submit for approval (Teacher / Coordinator / SchoolAdmin / CampusAdmin / Parent / Tutor)", "Draft + Pending", "Owner action only (publish endpoint for non–PortalAdmin). PortalAdmin never submits or resubmits another author’s quiz. Lifecycle stays Draft. ≥1 question. Teacher/Coordinator notify school+campus+portal. SchoolAdmin/CampusAdmin/Parent/Tutor notify PortalAdmin only. Not assignable."],
   ["Approve (SchoolAdmin)", "Draft + SchoolApproved", "Teacher/Coordinator quizzes only. Pending → SchoolApproved in own school. Cannot school-approve another SchoolAdmin or CampusAdmin quiz. Does not publish. Creator cannot self-approve."],
@@ -175,7 +175,7 @@ const quizEditRequestRules = [
 ];
 
 const permissions = [
-  ["Create / duplicate own quizzes", "Yes", "Yes", "No*", "Own", "Own", "Own", "No"],
+  ["Create / duplicate own quizzes", "Yes", "Yes (own, school types)", "Yes (own, school types)", "Own", "Own", "Own (ParentPrivate)", "No"],
   ["Edit quiz settings / questions", "Yes (any, no request)", "Owner until approved/published; then edit request to PortalAdmin", "Owner until approved/published; then edit request to PortalAdmin", "Owner until approved/published; then edit request to School/Campus/Portal (any one)", "Owner until approved/published; then edit request to School/Campus/Portal (any one)", "Owner until approved/published; then edit request to PortalAdmin", "No"],
   ["Review quiz edit requests", "Yes (all)", "Teacher/Coordinator in school (any one may grant)", "Teacher/Coordinator in campus (any one may grant)", "No", "No", "No", "No"],
   ["Submit / resubmit for approval (owner)", "No — reviews only; does not submit or resubmit another author’s quiz", "Yes (own)", "Yes (own)", "Yes (own)", "Yes (own)", "Yes (own)", "No"],
@@ -461,7 +461,7 @@ const reviewRules = [
 
 const apiMap = [
   ["GET /api/quizzes", "Role-scoped list. Student: assigned ∪ Public audience. Parent: linked assignments ∪ own. Tutor: linked assignments ∪ own. Teacher/Coordinator/SchoolAdmin/CampusAdmin: all Published/Assigned/Archived school-type quizzes (any school, any creator) ∪ own drafts. PortalAdmin: all published/assigned/archived plus pipeline drafts. ParentPrivate is not in the shared staff catalog (owner + PortalAdmin). Unsubmitted WIP drafts: owner only."],
-  ["POST /api/quizzes", "Create Draft + Pending. Parent and Tutor: QuizType forced to ParentPrivate (PrivateParent). Teacher/coordinator: school types. School/Campus from auth token."],
+  ["POST /api/quizzes", "Create Draft + Pending. Parent and Tutor: QuizType forced to ParentPrivate (PrivateParent). Teacher/Coordinator/SchoolAdmin/CampusAdmin/PortalAdmin: school types. CampusAdmin school+campus from auth token. SchoolAdmin school from token (campus optional). PortalAdmin school/campus optional."],
   ["PUT /api/quizzes/{id}", "Update metadata while editable. Owner: Draft+Pending/Rejected, or unused edit grant. PortalAdmin: Draft/Published (no started assignment). Granted edit → Draft + Pending; resubmit required."],
   ["DELETE /api/quizzes/{id}", "Hard-delete Draft with no assignments/attempts."],
   ["GET /api/quizzes/{id}/manage", "Manage view with questions. Published/Assigned/Archived school-type quizzes: any Teacher/Coordinator/SchoolAdmin/CampusAdmin/PortalAdmin. Draft: owner, or PortalAdmin after submit for approval. ParentPrivate: owner + PortalAdmin. Unsubmitted Draft hidden from non-owner including PortalAdmin."],
@@ -691,8 +691,8 @@ const checklist = [
   "Cancel removes only future assignments and restores Assigned or Published (never Cancelled lifecycle).",
   "Archive of Published or Assigned quizzes (including any student/child assignment) is PortalAdmin only. Other roles cannot archive those quizzes. No assignments → hard delete; has assignments → Archived + Inactive. Draft must be deleted by the owner.",
   "Duplicate creates Draft + Pending copy with questions.",
-  "CampusAdmin may school-approve/reject campus Pending quizzes, list campus-scoped catalog (+ Public), and open /quizzes manage routes.",
-  "SchoolAdmin/PortalAdmin may create quizzes; SchoolAdmin submit → PortalAdmin approve (not school-approve). Teacher/Coordinator: School/Campus publish → SchoolApproved; Portal approve → Approved.",
+  "CampusAdmin may create school-type quizzes (submit → PortalAdmin only), school-approve/reject campus Pending teacher/coordinator quizzes, list the shared published catalog, and open /quizzes manage routes.",
+  "SchoolAdmin, CampusAdmin, and PortalAdmin may create school-type quizzes; SchoolAdmin/CampusAdmin submit → PortalAdmin approve (not school-approve). Teacher/Coordinator: School/Campus approve → SchoolApproved; Portal approve → Approved.",
   "Rejected cannot be approved by anyone until teacher re-publish resets to Pending. Reject reason required.",
   "Teacher/Coordinator list API returns all published quizzes in campus scope (any creator) plus own drafts; client Mine only toggle optional.",
   "Staff list/manage UI display status: Draft+Pending+questions → Approval Pending; Draft+SchoolApproved → School Approved; Draft+Approved → Awaiting Publish; Draft+Pending+0 questions → Draft.",
@@ -836,8 +836,8 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
     permissions,
   )}
   <p><em>Teacher and Coordinator</em> share the same campus-scoped author workflow (school quiz types, submit for approval, assign/monitor in campus). They also see the shared published school-type catalog. See §6b for Coordinator specifics.</p>
-  <p><em>*CampusAdmin:</em> may approve/reject Pending teacher/coordinator quizzes in campus (→ SchoolApproved, does not publish), list the shared published school-type catalog (any school/creator), and open /quizzes manage routes. Cannot publish. Assign stays campus-scoped.</p>
-  <p><em>*Admin create:</em> SchoolAdmin/PortalAdmin may create quizzes (starts Pending). SchoolAdmin submit is reviewed by PortalAdmin only (Pending → Approved) — other SchoolAdmins cannot school-approve it. Coordinator creates school quiz types like Teacher. School/Campus admins may school-approve Teacher/Coordinator quizzes in scope; only PortalAdmin publishes.</p>
+  <p><em>*CampusAdmin:</em> may create school-type quizzes (Practice, Assessment, Competition, Surprise; starts Pending; submit → PortalAdmin only). May approve/reject Pending teacher/coordinator quizzes in campus (→ SchoolApproved, does not publish), list the shared published school-type catalog (any school/creator), and open /quizzes manage routes. Cannot publish. Assign stays campus-scoped.</p>
+  <p><em>*Admin create:</em> SchoolAdmin, CampusAdmin, and PortalAdmin may create school-type quizzes (starts Pending). SchoolAdmin/CampusAdmin submit is reviewed by PortalAdmin only (Pending → Approved) — other SchoolAdmins/CampusAdmins cannot school-approve it. Coordinator creates school quiz types like Teacher. School/Campus admins may school-approve Teacher/Coordinator quizzes in scope; only PortalAdmin publishes.</p>
   <div class="note"><strong>Ownership / scope:</strong> Creator cannot self-approve. Unsubmitted <strong>Draft</strong> is owner-only. After Submit for approval, PortalAdmin may see the pipeline draft. <strong>Published</strong> school-type quizzes are visible to all staff (ISL Admin sees AES and Portal published quizzes). Assign/edit/delete stay org/owner scoped. Edit settings: owner or PortalAdmin only.</div>
 
   <h2>6b. Coordinator role (quiz module)</h2>
@@ -1112,7 +1112,7 @@ const docChildren = [
     "Teacher and Coordinator share the same campus-scoped author workflow (school quiz types, submit for approval, assign/monitor in campus). They also see the shared published school-type catalog. See §6b for Coordinator specifics.",
   ),
   docParagraph(
-    "CampusAdmin: approve/reject Pending teacher/coordinator quizzes in campus (→ SchoolApproved, does not publish), list the shared published school-type catalog (any school/creator), open /quizzes manage routes. Cannot publish. Cannot approve SchoolAdmin-created quizzes. Assign stays campus-scoped. Admin create: SchoolAdmin/PortalAdmin may create (starts Pending); SchoolAdmin submit → PortalAdmin only. Coordinator creates school quiz types like Teacher.",
+    "CampusAdmin: may create school-type quizzes (starts Pending; submit → PortalAdmin only). Approve/reject Pending teacher/coordinator quizzes in campus (→ SchoolApproved, does not publish), list the shared published school-type catalog (any school/creator), open /quizzes manage routes. Cannot publish. Cannot approve SchoolAdmin-created quizzes. Assign stays campus-scoped. Coordinator creates school quiz types like Teacher.",
   ),
   docParagraph(
     "Ownership / scope: Creator cannot self-approve. Unsubmitted Draft is owner-only. After Submit for approval, PortalAdmin may see the pipeline draft. Published school-type quizzes are a shared staff catalog (any school, any creator). Assign/edit/delete stay org/owner scoped. Owner edits after approval/publish require an edit grant; PortalAdmin may edit in place.",

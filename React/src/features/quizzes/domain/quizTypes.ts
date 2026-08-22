@@ -257,12 +257,13 @@ export const QUIZ_MANAGER_ROLES: UserRole[] = [
   "PortalAdmin",
 ];
 
-/** Roles that author/create quizzes (Teacher, Parent, Coordinator, and school/platform admins). */
+/** Roles that author/create quizzes (Teacher, Parent, Coordinator, CampusAdmin, and school/platform admins). */
 export const QUIZ_AUTHOR_ROLES: UserRole[] = [
   "Teacher",
   "Parent",
   "Coordinator",
   "Tutor",
+  "CampusAdmin",
   "SchoolAdmin",
   "PortalAdmin",
 ];
@@ -272,7 +273,7 @@ export function canManageQuizzes(role: UserRole): boolean {
   return QUIZ_MANAGER_ROLES.includes(role);
 }
 
-/** True for roles that may create / edit / publish quizzes. */
+/** True for roles that may create / edit quizzes (includes CampusAdmin). */
 export function canAuthorQuizzes(role: UserRole): boolean {
   return QUIZ_AUTHOR_ROLES.includes(role);
 }
@@ -592,7 +593,7 @@ export function isQuizInManageOrgScope(
   return false;
 }
 
-/** Quiz types shown on create — Parent/Tutor → ParentPrivate only; Teacher/Coordinator → school types only. */
+/** Quiz types shown on create — Parent/Tutor → ParentPrivate only; school staff → school types only. */
 export function quizTypesForRole(
   role: UserRole | undefined,
   allTypes: Array<{ id: number; name: string }>,
@@ -605,7 +606,13 @@ export function quizTypesForRole(
     return allTypes.filter((type) => isParentPrivateQuizType(type.name));
   }
 
-  if (role === "Teacher" || role === "Coordinator") {
+  if (
+    role === "Teacher" ||
+    role === "Coordinator" ||
+    role === "SchoolAdmin" ||
+    role === "CampusAdmin" ||
+    role === "PortalAdmin"
+  ) {
     return allTypes.filter((type) => !isParentPrivateQuizType(type.name));
   }
 

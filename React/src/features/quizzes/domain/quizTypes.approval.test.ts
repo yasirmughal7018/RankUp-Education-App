@@ -3,6 +3,7 @@ import {
   canApproveQuizOnDetailPage,
   canApproveQuizzes,
   canAssignAdminAudiences,
+  canAuthorQuizzes,
   canDeleteOrArchiveQuiz,
   canEditQuizSettings,
   canManageQuizzes,
@@ -69,8 +70,17 @@ describe("canManageQuizzes", () => {
     expect(canManageQuizzes("Parent")).toBe(true);
   });
 
-  it("excludes campus admin from manage hub", () => {
+  it("includes campus admin in the manage hub", () => {
     expect(canManageQuizzes("CampusAdmin")).toBe(true);
+  });
+});
+
+describe("canAuthorQuizzes", () => {
+  it("lets campus admin create school-type quizzes", () => {
+    expect(canAuthorQuizzes("CampusAdmin")).toBe(true);
+    expect(canAuthorQuizzes("SchoolAdmin")).toBe(true);
+    expect(canAuthorQuizzes("Teacher")).toBe(true);
+    expect(canAuthorQuizzes("Student")).toBe(false);
   });
 });
 

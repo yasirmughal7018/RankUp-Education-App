@@ -44,6 +44,7 @@ const roleModules: Record<UserRole, string[]> = {
   CampusAdmin: [
     "Approve account requests",
     "Manage campus directory (students, teachers, parents)",
+    "Create and assign campus quizzes",
     "Approve teacher quizzes",
   ],
   Teacher: [
@@ -94,6 +95,7 @@ function quickLinksForRole(
     return [
       { label: "Registrations", href: "/admin/registrations", icon: ShieldCheck, hint: "Approve access" },
       { label: "Directory", href: "/admin/directory", icon: School, hint: "Campus people" },
+      { label: "Quizzes", href: "/quizzes", icon: ClipboardList, hint: "Create & assign" },
       { label: "Question bank", href: "/questions", icon: BookOpenCheck, hint: "Assessments" },
     ];
   }
