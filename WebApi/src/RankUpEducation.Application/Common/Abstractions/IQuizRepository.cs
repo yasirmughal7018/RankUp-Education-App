@@ -35,6 +35,11 @@ public interface IQuizRepository
         string? grade,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// School/campus/portal catalog. When <paramref name="includeAllDrafts"/> is true (PortalAdmin),
+    /// other authors' Draft quizzes are included only if they are in the approval pipeline
+    /// (submitted Pending, SchoolApproved, Approved, Rejected). Unsubmitted WIP stays owner-only.
+    /// </summary>
     Task<IReadOnlyList<QuizListItem>> ListForSchoolAsync(
         int? schoolId,
         int? campusId,
@@ -74,6 +79,8 @@ public interface IQuizRepository
     Task<bool> HasAnyAssignmentsAsync(long quizId, CancellationToken cancellationToken);
 
     Task<bool> HasAnyAttemptsAsync(long quizId, CancellationToken cancellationToken);
+
+    Task<bool> HasSubmittedForReviewAsync(long quizId, CancellationToken cancellationToken);
 
     Task<bool> IsParentPrivateQuizTypeAsync(short quizTypeId, CancellationToken cancellationToken);
 }

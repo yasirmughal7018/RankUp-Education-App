@@ -54,7 +54,10 @@ internal sealed class QuizManageGuard
         return quiz;
     }
 
-    /// <summary>Draft quizzes are visible only to the owner and PortalAdmin.</summary>
+    /// <summary>
+    /// Draft quizzes are owner-only until Submit for approval. PortalAdmin may then open
+    /// pipeline drafts (submitted Pending, SchoolApproved, Approved, Rejected).
+    /// </summary>
     public async Task EnsureDraftVisibleAsync(
         Quiz quiz,
         QuizManageScope scope,
@@ -66,7 +69,19 @@ internal sealed class QuizManageGuard
             return;
         }
 
-        if (scope.Role == UserRole.PortalAdmin || QuizScopeResolver.IsQuizOwner(quiz, scope))
+        if (QuizScopeResolver.IsQuizOwner(quiz, scope))
+        {
+            return;
+        }
+
+        if (scope.Role != UserRole.PortalAdmin)
+        {
+            throw new NotFoundAppException($"Quiz #{quiz.Id} was not found.");
+        }
+
+        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        var hasSubmitted = await _quizzes.HasSubmittedForReviewAsync(quiz.Id, cancellationToken);
+        if (QuizDraftVisibility.IsVisibleToNonOwner(approvalName, hasSubmitted))
         {
             return;
         }

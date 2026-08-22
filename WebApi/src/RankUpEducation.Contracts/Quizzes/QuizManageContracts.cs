@@ -86,7 +86,8 @@ public sealed record ManageQuizResponse(
     IReadOnlyList<QuizApprovalHistoryItem> ApprovalHistory,
     QuizEditRequestSummary? MyEditRequest = null,
     bool HasApprovedEditGrant = false,
-    IReadOnlyList<QuizEditRequestSummary>? PendingEditRequests = null);
+    IReadOnlyList<QuizEditRequestSummary>? PendingEditRequests = null,
+    string? CreatedByRole = null);
 
 /// <summary>One entry in a quiz's approval trail.</summary>
 public sealed record QuizApprovalHistoryItem(

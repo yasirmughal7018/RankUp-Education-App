@@ -55,6 +55,14 @@ public sealed class QuizBusinessScenarioTests
     }
 
     [Fact]
+    public void QZ26_SchoolAdminCreatedQuizIsPortalAdminOnly()
+    {
+        Assert.True(QuizApprovalRouting.RequiresPortalAdminOnlyReview(UserRole.SchoolAdmin));
+        Assert.False(QuizApprovalRouting.SchoolOrCampusMayEndorse(UserRole.SchoolAdmin));
+        Assert.True(LookupNames.IsPendingApproval(LookupNames.QuizApprovalStatusIds.Pending, "Approval Pending"));
+    }
+
+    [Fact]
     public void QZ23_CampusAdminCannotAssignAtSchoolApproved()
     {
         Assert.False(QuizAssignRules.CanAssignWithApproval(UserRole.CampusAdmin, "SchoolApproved"));

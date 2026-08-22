@@ -177,7 +177,7 @@ public sealed class QuizService : IQuizService
                 schoolId: null,
                 campusId: null,
                 viewerUserId: _currentUser.UserId,
-                includeAllDrafts: true,
+                includeAllDrafts: true, // pipeline drafts only — not unsubmitted WIP
                 includeAllSchools: true,
                 search,
                 subject,

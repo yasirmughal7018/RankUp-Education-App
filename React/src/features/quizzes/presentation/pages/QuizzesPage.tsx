@@ -9,7 +9,10 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/core/api/queryKeys";
+import * as notificationsApi from "@/features/notifications/data/notificationsApi";
 import {
   ChevronDown,
   ClipboardList,
@@ -52,7 +55,8 @@ type ListFilter =
   | "draft"
   | "published"
   | "assigned"
-  | "archived";
+  | "archived"
+  | "edit-requests";
 
 function normalizeStatus(status: string): string {
   return status.trim().toLowerCase();
@@ -88,6 +92,8 @@ function matchesListFilter(quiz: QuizSummary, filter: ListFilter): boolean {
       return isAssignedLikeStatus(status);
     case "archived":
       return status === "archived";
+    case "edit-requests":
+      return false;
     default:
       return true;
   }
@@ -103,6 +109,8 @@ function listFilterLabel(filter: ListFilter): string {
       return "Assigned";
     case "archived":
       return "Archived";
+    case "edit-requests":
+      return "edit requests";
     default:
       return "all";
   }
@@ -154,6 +162,8 @@ function countByLookupId(
 
 export function QuizzesPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const isAdminAssigner = user != null && canAssignAdminAudiences(user.role);
   const canAuthor = user != null && canAuthorQuizzes(user.role);
@@ -172,13 +182,58 @@ export function QuizzesPage() {
     setShowMineOnly(defaultQuizListMineOnly(user?.role));
   }, [user?.role]);
 
+  const {
+    data: quizzes = [],
+    isLoading: quizzesLoading,
+    isFetching: quizzesFetching,
+    error: quizzesError,
+    refetch: refetchQuizzes,
+  } = useQuizzesQuery();
+
   const canReviewEditRequests =
     user != null && canReviewQuizEditRequests(user.role);
   const {
     data: editRequests = [],
     isLoading: editRequestsLoading,
+    isFetching: editRequestsFetching,
     error: editRequestsError,
+    refetch: refetchEditRequests,
   } = usePendingQuizEditRequestsQuery({ enabled: canReviewEditRequests });
+
+  const isLoading =
+    quizzesLoading || (canReviewEditRequests && editRequestsLoading);
+  const error =
+    quizzesError ?? (canReviewEditRequests ? editRequestsError : undefined);
+  const isFetching =
+    quizzesFetching || (canReviewEditRequests && editRequestsFetching);
+
+  useEffect(() => {
+    if (searchParams.get("view") === "edit-requests" && canReviewEditRequests) {
+      startTransition(() => setListFilter("edit-requests"));
+    }
+  }, [searchParams, canReviewEditRequests]);
+
+  useEffect(() => {
+    if (listFilter !== "edit-requests" || !canReviewEditRequests) {
+      return;
+    }
+
+    void notificationsApi
+      .markNotificationCategoryRead("QuizEditRequest")
+      .then(() =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications() }),
+      )
+      .catch(() => {
+        // Non-blocking when marking read fails.
+      });
+  }, [listFilter, canReviewEditRequests, queryClient]);
+
+  function refetch() {
+    void refetchQuizzes();
+    if (canReviewEditRequests) {
+      void refetchEditRequests();
+    }
+  }
 
   const subjectsQuery = useLookups(LOOKUP_TYPES.SUBJECT);
   const classesQuery = useLookups(LOOKUP_TYPES.CLASS);
@@ -382,7 +437,13 @@ export function QuizzesPage() {
 
   function selectListFilter(next: ListFilter) {
     startTransition(() => {
-      setListFilter((current) => (current === next ? "all" : next));
+      const nextFilter = listFilter === next ? "all" : next;
+      setListFilter(nextFilter);
+      if (nextFilter === "edit-requests" && canReviewEditRequests) {
+        setSearchParams({ view: "edit-requests" }, { replace: true });
+      } else if (searchParams.has("view")) {
+        setSearchParams({}, { replace: true });
+      }
     });
   }
 
@@ -394,6 +455,9 @@ export function QuizzesPage() {
       setDifficultyId("");
       setSearch("");
       setShowMineOnly(defaultQuizListMineOnly(user?.role));
+      if (searchParams.has("view")) {
+        setSearchParams({}, { replace: true });
+      }
     });
   }
 
@@ -478,22 +542,6 @@ export function QuizzesPage() {
         }
       />
 
-      {canReviewEditRequests ? (
-        <AppCard padded={false} className="mb-4">
-          <div className="border-b border-border px-4 py-3 sm:px-5">
-            <h2 className="text-sm font-semibold text-foreground">
-              Quiz edit requests
-              {editRequests.length > 0 ? ` (${editRequests.length})` : ""}
-            </h2>
-          </div>
-          <QuizEditRequestsPanel
-            items={editRequests}
-            isLoading={editRequestsLoading}
-            error={editRequestsError instanceof Error ? editRequestsError : null}
-          />
-        </AppCard>
-      ) : null}
-
       <AppCard padded className="space-y-3">
         {hasFilters ? (
           <div className="flex items-center justify-end">
@@ -508,7 +556,12 @@ export function QuizzesPage() {
             </Button>
           </div>
         ) : null}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-2.5">
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5",
+            canReviewEditRequests ? "lg:grid-cols-6" : "lg:grid-cols-5",
+          )}
+        >
           <QuestionBankStatTile
             label="Total"
             value={bankStats.total}
@@ -544,9 +597,19 @@ export function QuizzesPage() {
             active={listFilter === "archived"}
             onClick={() => selectListFilter("archived")}
           />
+          {canReviewEditRequests ? (
+            <QuestionBankStatTile
+              label="Edit requests"
+              value={editRequests.length}
+              status="locked"
+              active={listFilter === "edit-requests"}
+              onClick={() => selectListFilter("edit-requests")}
+            />
+          ) : null}
         </div>
       </AppCard>
 
+      {listFilter !== "edit-requests" ? (
       <AppCard padded className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
@@ -644,6 +707,7 @@ export function QuizzesPage() {
           </div>
         ) : null}
       </AppCard>
+      ) : null}
 
       {error ? (
         <AppErrorState
@@ -655,16 +719,33 @@ export function QuizzesPage() {
       <AppCard padded={false} className="overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
           <p className="text-sm font-medium text-foreground">
-            {tableRows.length} quiz{tableRows.length === 1 ? "" : "zes"}
-            {listFilter !== "all" ? (
-              <span className="ml-2 font-normal text-muted-foreground">
-                · {lensSummary}
-              </span>
-            ) : null}
+            {listFilter === "edit-requests" ? (
+              <>
+                {editRequests.length} edit request
+                {editRequests.length === 1 ? "" : "s"}
+              </>
+            ) : (
+              <>
+                {tableRows.length} quiz{tableRows.length === 1 ? "" : "zes"}
+                {listFilter !== "all" ? (
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    · {lensSummary}
+                  </span>
+                ) : null}
+              </>
+            )}
           </p>
         </div>
 
-        {isLoading ? (
+        {listFilter === "edit-requests" ? (
+          <QuizEditRequestsPanel
+            items={editRequests}
+            isLoading={editRequestsLoading}
+            error={
+              editRequestsError instanceof Error ? editRequestsError : null
+            }
+          />
+        ) : isLoading ? (
           <div className="p-4 sm:p-5">
             <AppLoadingSkeleton variant="table" count={5} />
           </div>

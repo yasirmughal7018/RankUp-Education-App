@@ -24,32 +24,33 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const lifecycleStatuses = [
-  ["60", "Draft", "Unpublished. Lifecycle stays Draft until PortalAdmin publishes. Includes Pending Approval and post-approval (Approved/SchoolApproved) waiting for publish. Visible only to owner + PortalAdmin in manage lists. Owner may edit while Pending/Rejected; after SchoolApproved or Approved they must send an edit request (see §5b). Duplicate/delete still follow ownership rules. Not assignable; students cannot attempt."],
+  ["60", "Draft", "Unpublished. Lifecycle stays Draft until PortalAdmin publishes. Includes WIP (not yet submitted), Pending Approval, and post-approval waiting for publish. WIP is owner-only; after Submit for approval, PortalAdmin and the approver queue may see it. Owner may edit while Pending/Rejected; after SchoolApproved or Approved they must send an edit request (see §5b). Duplicate/delete still follow ownership rules. Not assignable; students cannot attempt."],
   ["61", "Published", "PortalAdmin publish step only. Set when lifecycle moves Draft → Published after approval gates are satisfied. Visible to staff by school/campus scope (or Public). Students receive it via assignment or Public catalog only after this step."],
   ["62", "Assigned", "At least one assignment row exists. Assigned students can take the quiz. Further assigns allowed; owner may monitor/review/cancel upcoming/archive."],
   ["63", "Archived", "Soft-retired when assignments exist (IsActive=false). Same school/campus/portal visibility rules as Published. Hard-deleted instead when there are no assignments."],
 ];
 
 const approvalStatuses = [
-  ["40", "Pending", "Every newly created quiz starts here (create, duplicate, resubmit after reject, or after a granted edit is saved). Awaiting review. Lifecycle remains Draft. Not assignable; students cannot attempt. Owner may edit without an edit request."],
-  ["41", "SchoolApproved", "SchoolAdmin or CampusAdmin approved a Teacher/Coordinator quiz (Pending → SchoolApproved). Does not publish — lifecycle stays Draft. Owner cannot edit in place; they send an edit request. Not assignable until PortalAdmin publishes. PortalAdmin queue may include SchoolApproved rows."],
-  ["42", "Approved", "PortalAdmin final approval (from Pending or SchoolApproved). Does not by itself publish — lifecycle stays Draft until PortalAdmin runs publish. Owner cannot edit in place; they send an edit request. Required before publish for teacher/coordinator quizzes. ParentPrivate: portal approve + publish may occur together via publish endpoint."],
+  ["40", "Pending", "Every newly created quiz starts here (create, duplicate, resubmit after reject, or after a granted edit is saved). Not in the approver queue until the owner clicks Submit for approval. Lifecycle remains Draft. Not assignable; students cannot attempt. Owner may edit without an edit request."],
+  ["41", "SchoolApproved", "SchoolAdmin or CampusAdmin approved a Teacher/Coordinator quiz (Pending → SchoolApproved). Does not apply to SchoolAdmin/CampusAdmin/Parent/Tutor created quizzes (those skip this step). Does not publish — lifecycle stays Draft. Owner cannot edit in place; they send an edit request. Not assignable until PortalAdmin publishes. PortalAdmin queue may include SchoolApproved rows."],
+  ["42", "Approved", "PortalAdmin final approval. Teacher/Coordinator: from Pending or SchoolApproved. SchoolAdmin/CampusAdmin/Parent/Tutor created: from Pending directly. Does not by itself publish — lifecycle stays Draft until PortalAdmin runs publish. Owner cannot edit in place; they send an edit request. ParentPrivate: portal approve + publish may occur together via publish endpoint."],
   ["43", "Rejected", "Denied by SchoolAdmin, CampusAdmin, or PortalAdmin (in scope). Rejection reason required. Lifecycle stays Draft. Creator must fix and resubmit to Pending. Cannot be approved until resubmitted."],
 ];
 
 const approvalVsPublishRules = [
   "Approval and publishing are separate permissions. Approval changes ApprovalStatus only; publishing changes LifecycleStatus to Published.",
-  "Every newly created quiz starts with Approval=Pending and Lifecycle=Draft.",
+  "Every newly created quiz starts with Approval=Pending and Lifecycle=Draft. It is owner-only until the owner clicks Submit for approval; then it appears in the approver queue (and PortalAdmin catalog).",
   "While Pending (or Rejected) and Lifecycle still Draft: cannot assign; students cannot attempt; owner may edit per ownership rules.",
   "Once the quiz is SchoolApproved, Approved, Published, or Assigned, the owner cannot edit in place. They send an edit request (reason min 10 chars). Teacher/Coordinator requests go to SchoolAdmin, CampusAdmin, and PortalAdmin — any one approval grants a one-time edit. SchoolAdmin, CampusAdmin, Parent, and Tutor requests go to PortalAdmin only. PortalAdmin may still edit directly.",
   "Using an approved edit grant saves the change, returns the quiz to Draft + Pending, and the owner must resubmit for approval (then reapproval / republish as usual). No edit after an assignment has started.",
-  "Teacher / Coordinator created quiz: own SchoolAdmin may approve (Pending → SchoolApproved); own CampusAdmin may approve (Pending → SchoolApproved); PortalAdmin may approve (→ Approved) and is the only role that publishes (Draft → Published).",
-  "SchoolAdmin and CampusAdmin approval never auto-publishes. After they approve, the quiz remains Draft and unavailable for assignment until PortalAdmin publishes.",
+  "Teacher / Coordinator created quiz: own SchoolAdmin may approve (Pending → SchoolApproved); own CampusAdmin may approve (Pending → SchoolApproved); PortalAdmin may approve (Pending or SchoolApproved → Approved) and is the only role that publishes (Draft → Published).",
+  "SchoolAdmin or CampusAdmin created quiz: PortalAdmin only (Pending → Approved). No SchoolApproved step. Other SchoolAdmins/CampusAdmins cannot endorse it. Same pattern as Parent/Tutor ParentPrivate.",
+  "SchoolAdmin and CampusAdmin approval never auto-publishes. After they approve a Teacher/Coordinator quiz, it remains Draft until PortalAdmin publishes.",
   "PortalAdmin has final publishing authority: approve, publish, edit, and manage any quiz platform-wide.",
   "The quiz creator cannot approve their own quiz (self-approval forbidden).",
   "Approver scope: SchoolAdmin → own school; CampusAdmin → own campus; PortalAdmin → all schools/campuses. Approver must match quiz school/campus except PortalAdmin.",
   "Only Lifecycle=Published (or Assigned) quizzes may be assigned to students/children. Approval=Approved alone is insufficient if lifecycle is still Draft.",
-  "Other authorized creators (Parent, Tutor, SchoolAdmin, PortalAdmin) follow the applicable workflow for their role. ParentPrivate (PrivateParent) quizzes: Parent or Tutor create; PortalAdmin approve + publish before assign.",
+  "Other authorized creators: SchoolAdmin and CampusAdmin create school quiz types and submit to PortalAdmin only (Pending → Approved, then PortalAdmin publishes). ParentPrivate (PrivateParent): Parent or Tutor create; PortalAdmin approve + publish before assign.",
   "Preserve published catalog visibility: role + school/campus scope — not CreatedBy alone (see §6a).",
 ];
 
@@ -134,13 +135,13 @@ const quizTypes = [
 const lifecycle = [
   ["Create (any authorized role)", "Draft + Pending", "Approval always starts Pending. Lifecycle Draft. Parent/Tutor create forces QuizType ParentPrivate (PrivateParent). Teacher/coordinator: school types. School/Campus from auth token. Not assignable."],
   ["Update metadata / questions", "Unchanged until granted edit", "Draft + Pending or Rejected: owner or PortalAdmin may edit (no started assignment). After SchoolApproved, Approved, Published, or Assigned: owner needs an approved edit request; PortalAdmin may edit directly. Using the grant → Draft + Pending; owner must resubmit."],
-  ["Submit for approval (Teacher / Coordinator / Parent / Tutor)", "Draft + Pending", "Owner action (publish endpoint for non–PortalAdmin). Lifecycle stays Draft. ≥1 question. Notifies approvers. Not assignable."],
-  ["Approve (SchoolAdmin)", "Draft + SchoolApproved", "Teacher/Coordinator quizzes only. Pending → SchoolApproved in own school. Does not publish. Creator cannot self-approve."],
-  ["Approve (CampusAdmin)", "Draft + SchoolApproved", "Teacher/Coordinator quizzes only. Pending → SchoolApproved in own campus. Does not publish. Creator cannot self-approve."],
-  ["Approve (PortalAdmin)", "Draft + Approved", "From Pending or SchoolApproved. Does not publish by itself — lifecycle stays Draft until publish step."],
-  ["Publish (PortalAdmin only)", "Published + Approved", "Draft → Published. Teacher quiz: requires Approved (or SchoolApproved per policy) while Draft. ParentPrivate (Parent/Tutor): portal may approve+publish in one publish action. Only then assignable."],
+  ["Submit for approval (Teacher / Coordinator / SchoolAdmin / CampusAdmin / Parent / Tutor)", "Draft + Pending", "Owner action (publish endpoint for non–PortalAdmin). Lifecycle stays Draft. ≥1 question. Teacher/Coordinator notify school+campus+portal. SchoolAdmin/CampusAdmin/Parent/Tutor notify PortalAdmin only. Not assignable."],
+  ["Approve (SchoolAdmin)", "Draft + SchoolApproved", "Teacher/Coordinator quizzes only. Pending → SchoolApproved in own school. Cannot school-approve another SchoolAdmin or CampusAdmin quiz. Does not publish. Creator cannot self-approve."],
+  ["Approve (CampusAdmin)", "Draft + SchoolApproved", "Teacher/Coordinator quizzes only. Pending → SchoolApproved in own campus. Cannot school-approve SchoolAdmin/CampusAdmin/Parent/Tutor quizzes. Does not publish. Creator cannot self-approve."],
+  ["Approve (PortalAdmin)", "Draft + Approved", "From Pending (including SchoolAdmin-created) or SchoolApproved. Does not publish by itself — lifecycle stays Draft until publish step."],
+  ["Publish (PortalAdmin only)", "Published + Approved", "Draft → Published. Teacher/Coordinator quiz: requires Approved or SchoolApproved while Draft. SchoolAdmin/CampusAdmin/Parent/Tutor created (and ParentPrivate): portal may approve from Pending, or approve+publish in one publish action. Only then assignable."],
   ["Publish (SchoolAdmin / CampusAdmin / Teacher / Coordinator / Parent / Tutor)", "—", "Not allowed. Approve (where permitted) or submit for approval only; PortalAdmin publishes."],
-  ["Reject (SchoolAdmin / CampusAdmin / PortalAdmin)", "Draft + Rejected", "In-scope only. Reason required. School/Campus: Pending teacher quizzes. Portal: Pending, SchoolApproved, or ParentPrivate (Parent/Tutor) queue. Creator must resubmit."],
+  ["Reject (SchoolAdmin / CampusAdmin / PortalAdmin)", "Draft + Rejected", "In-scope only. Reason required. School/Campus: Pending Teacher/Coordinator quizzes only. Portal: Pending (including SchoolAdmin-created), SchoolApproved, or ParentPrivate queue. Creator must resubmit."],
   ["Assign", "Assigned", "Requires Lifecycle Published or Assigned; not Draft. Teacher quizzes: Approval=Approved. ParentPrivate: Published + Approved; assign to linked children (Parent) or tutor-linked students (Tutor). ≥1 question."],
   ["Cancel upcoming", "Assigned or Published", "Deletes only assignments with StartDateTime > now. Restores Assigned if rows remain, else Published. Never uses Cancelled lifecycle."],
   ["Archive / Delete", "Deleted or Archived", "PortalAdmin always. Teacher/coordinator owner when Draft or final Approved. Published-but-not-approved → PortalAdmin only. ParentPrivate → PortalAdmin only. No assignments → hard delete; else soft Archive."],
@@ -170,15 +171,16 @@ const permissions = [
   ["Create / duplicate own quizzes", "Yes", "Yes", "No*", "Own", "Own", "Own", "No"],
   ["Edit quiz settings / questions", "Yes (any, no request)", "Owner until approved/published; then edit request to PortalAdmin", "Owner until approved/published; then edit request to PortalAdmin", "Owner until approved/published; then edit request to School/Campus/Portal (any one)", "Owner until approved/published; then edit request to School/Campus/Portal (any one)", "Owner until approved/published; then edit request to PortalAdmin", "No"],
   ["Review quiz edit requests", "Yes (all)", "Teacher/Coordinator in school (any one may grant)", "Teacher/Coordinator in campus (any one may grant)", "No", "No", "No", "No"],
-  ["Submit for approval (owner)", "N/A", "N/A", "N/A", "Yes", "Yes", "Yes", "No"],
+  ["Submit for approval (owner)", "N/A", "Yes (own)", "Yes (own)", "Yes", "Yes", "Yes", "No"],
   ["Approve teacher/coordinator quizzes", "Yes (→ Approved)", "Yes (→ SchoolApproved, own school)", "Yes (→ SchoolApproved, own campus)", "No (no self-approve)", "No (no self-approve)", "No", "No"],
+  ["Approve SchoolAdmin/CampusAdmin-created quizzes", "Yes (Pending → Approved)", "No (PortalAdmin only)", "No (PortalAdmin only)", "No", "No", "No", "No"],
   ["Reject quizzes (in scope)", "Yes", "Yes (own school)", "Yes (own campus)", "No", "No", "No", "No"],
   ["Publish (lifecycle → Published)", "Yes (final authority)", "No", "No", "No", "No", "No", "No"],
   ["Delete / archive / unarchive", "Yes (all)", "No*", "No", "Own when Draft or Approved*", "Own when Draft or Approved*", "Portal only (ParentPrivate)", "No"],
   ["Assign / cancel / allow-retry / monitor / review", "Yes", "School (Published only)", "Campus (Published only)*", "Own + campus (Published)", "Own + campus (Published)", "Own (Published ParentPrivate)", "No"],
   ["Approve / reject ParentPrivate (PrivateParent) quizzes", "Yes (only)", "No", "No", "No", "No", "No (Parent/Tutor creators)", "No"],
-  ["List pending-approval queue", "Yes (+ SchoolApproved + ParentPrivate)", "Pending in school", "Pending in campus", "No", "No", "No", "No"],
-  ["List / view Draft (unpublished) quizzes", "All", "Own drafts only", "Own drafts only", "Own", "Own", "Own (Parent/Tutor)", "No"],
+  ["List pending-approval queue", "Yes (Teacher/Coordinator Pending + SchoolApproved + SchoolAdmin/CampusAdmin/ParentPrivate Pending)", "Pending Teacher/Coordinator in school", "Pending Teacher/Coordinator in campus", "No", "No", "No", "No"],
+  ["List / view Draft (unpublished) quizzes", "Own WIP; others only after submit for approval", "Own drafts only", "Own drafts only", "Own", "Own", "Own (Parent/Tutor)", "No"],
   ["List / view Published quizzes (manage catalog)", "All", "School scope (any creator)", "Campus + school-wide in campus", "Campus scope (any creator)", "Campus scope (any creator)", "Own + linked assignments (Parent/Tutor)", "No"],
   ["Take attempts / save draft / submit", "No", "No", "No", "No", "No", "No", "Yes"],
   ["View attempt result", "No", "No", "No", "No", "No", "Linked child / student", "Own"],
@@ -294,15 +296,15 @@ const assignmentModes = [
 
 const quizListVisibilityRules = [
   "Published / Assigned / Archived quizzes are listed by role + schoolId + campusId + assignment scope — not by CreatedBy alone.",
-  "PortalAdmin → all quizzes (includeAllDrafts). Drafts from any creator visible only here.",
+  "PortalAdmin → all published/assigned/archived quizzes (includeAllSchools). Drafts: own WIP, plus other authors only after Submit for approval (Pending submitted, SchoolApproved, Approved, Rejected).",
   "SchoolAdmin → all non-draft quizzes where quiz.SchoolId matches the admin's school (any creator), plus own Draft rows, plus AudienceScope=Public.",
   "CampusAdmin → non-draft quizzes in the admin's campus (quiz.SchoolCampusId matches OR is null within the same school), plus own Draft rows, plus Public.",
   "Teacher / Coordinator → non-draft quizzes in their school+campus (any creator), plus own Draft rows, plus Public.",
   "Tutor → own quizzes plus quizzes assigned to linked students (same merge pattern as Parent).",
   "Parent → own quizzes plus quizzes assigned to linked children.",
   "Student → assignment rows for self plus Public catalog within audience window.",
-  "Draft (unpublished): visible only to quiz owner and PortalAdmin. Not assignable; not in student catalogs.",
-  "Manage detail (GET /manage): SchoolAdmin/CampusAdmin may open any Published/Assigned quiz in scope; Draft hidden unless owner or PortalAdmin.",
+  "Draft (unpublished): owner-only until the owner submits for approval. After a Teacher/Coordinator submits, PortalAdmin and the school/campus queue may see it. After a SchoolAdmin/CampusAdmin submits, only PortalAdmin reviews it. Not assignable; not in student catalogs.",
+  "Manage detail (GET /manage): SchoolAdmin/CampusAdmin may open any Published/Assigned quiz in scope; Draft hidden unless owner, or PortalAdmin after the quiz has been submitted for approval (or is SchoolApproved/Approved/Rejected).",
   "Edit settings / questions: PortalAdmin may edit any in place. Owner may edit only while Draft + Pending/Rejected, or with an unused approved edit grant (see §5b). School/campus admins may monitor/assign but not edit another author's quiz.",
   "Web /quizzes list: org admins (Portal/School/Campus) default to full scoped catalog; Teacher/Parent/Coordinator/Tutor may toggle Mine only (optional client filter on top of API scope).",
   "Portal-created quizzes must carry the target schoolId (API) for school-scoped staff visibility; null schoolId limits visibility to PortalAdmin and Public audience until scoped.",
@@ -450,13 +452,13 @@ const reviewRules = [
 ];
 
 const apiMap = [
-  ["GET /api/quizzes", "Role-scoped list. Student: assigned ∪ Public. Parent: linked assignments ∪ own. Tutor: linked assignments ∪ own. Teacher/Coordinator: campus scope (any creator) ∪ own drafts ∪ Public. SchoolAdmin: school scope (any creator) ∪ own drafts ∪ Public. CampusAdmin: campus scope ∪ own drafts ∪ Public. PortalAdmin: all. Drafts: owner + PortalAdmin only."],
+  ["GET /api/quizzes", "Role-scoped list. Student: assigned ∪ Public. Parent: linked assignments ∪ own. Tutor: linked assignments ∪ own. Teacher/Coordinator: campus scope (any creator) ∪ own drafts ∪ Public. SchoolAdmin: school scope (any creator) ∪ own drafts ∪ Public. CampusAdmin: campus scope ∪ own drafts ∪ Public. PortalAdmin: all published/assigned/archived; drafts = own WIP or submitted/in-approval pipeline. Unsubmitted WIP drafts: owner only."],
   ["POST /api/quizzes", "Create Draft + Pending. Parent and Tutor: QuizType forced to ParentPrivate (PrivateParent). Teacher/coordinator: school types. School/Campus from auth token."],
   ["PUT /api/quizzes/{id}", "Update metadata while editable. Owner: Draft+Pending/Rejected, or unused edit grant. PortalAdmin: Draft/Published (no started assignment). Granted edit → Draft + Pending; resubmit required."],
   ["DELETE /api/quizzes/{id}", "Hard-delete Draft with no assignments/attempts."],
-  ["GET /api/quizzes/{id}/manage", "Manage view with questions. Scope: PortalAdmin any; SchoolAdmin/CampusAdmin same school/campus; Teacher/Coordinator/Parent/Tutor owner (+ campus for teacher/coordinator). Draft hidden from non-owner except PortalAdmin."],
-  ["POST /api/quizzes/{id}/publish", "Non–PortalAdmin: submit for approval (Draft+Pending). PortalAdmin: publish (Draft→Published) when approval gates met; may set Approved in same flow for ParentPrivate (Parent/Tutor)."],
-  ["POST /api/quizzes/{id}/approve", "SchoolAdmin/CampusAdmin: Pending→SchoolApproved (teacher/coordinator, in scope, not own quiz). PortalAdmin: Pending or SchoolApproved→Approved. Does not publish."],
+  ["GET /api/quizzes/{id}/manage", "Manage view with questions. Scope: PortalAdmin any published/pipeline draft; SchoolAdmin/CampusAdmin same school/campus; Teacher/Coordinator/Parent/Tutor owner (+ campus for teacher/coordinator). Unsubmitted Draft hidden from non-owner including PortalAdmin."],
+  ["POST /api/quizzes/{id}/publish", "Non–PortalAdmin: submit for approval (Draft+Pending). Teacher/Coordinator notify school+campus+portal; SchoolAdmin/CampusAdmin/Parent/Tutor notify PortalAdmin only. PortalAdmin: publish (Draft→Published) when approval gates met; may set Approved in same flow for ParentPrivate and for SchoolAdmin/CampusAdmin-created quizzes still Pending."],
+  ["POST /api/quizzes/{id}/approve", "SchoolAdmin/CampusAdmin: Pending→SchoolApproved (teacher/coordinator only, in scope, not own quiz). Cannot approve SchoolAdmin/CampusAdmin/Parent/Tutor created quizzes. PortalAdmin: Pending or SchoolApproved→Approved, including SchoolAdmin-created Pending. Does not publish."],
   ["POST /api/quizzes/{id}/reject", "In-scope reject; reason required; stays Draft+Rejected."],
   ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published or Assigned (not Draft). Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle→Assigned."],
   ["POST /api/quizzes/{id}/cancel", "Remove upcoming assignments; restore Assigned or Published."],
@@ -473,7 +475,7 @@ const apiMap = [
   ["GET .../attempts/{id}/result", "Student own or Parent linked child; same mask rule as submit."],
   ["GET .../monitoring", "Owner progress board (incl. integrity signals where available)."],
   ["GET/PUT .../review|answers + finalize-review", "Subjective marking and release."],
-  ["GET /api/quizzes/pending-approval", "SchoolAdmin/CampusAdmin/PortalAdmin queue."],
+  ["GET /api/quizzes/pending-approval", "SchoolAdmin/CampusAdmin/PortalAdmin queue. Pending rows require a Submit for approval trail event (WIP drafts are excluded). School/Campus queues are Teacher/Coordinator created only. PortalAdmin also includes SchoolApproved and SchoolAdmin/CampusAdmin/ParentPrivate Pending."],
   ["POST /api/quizzes/{id}/edit-requests", "Owner requests edit of SchoolApproved/Approved/Published/Assigned quiz (reason ≥10 chars). Teacher/Coordinator: queue SchoolAdmin + CampusAdmin + PortalAdmin. SchoolAdmin/CampusAdmin/Parent/Tutor: PortalAdmin only. Decisions in app_approval (entity_type QuizEditRequest = 2106); request row in app_quiz_edit_request."],
   ["GET /api/quizzes/edit-requests", "Pending edit requests queued to the current SchoolAdmin/CampusAdmin/PortalAdmin."],
   ["POST /api/quizzes/edit-requests/{id}/approve|reject", "Any queued approver may grant or reject. Approve = one-time edit grant. Reject reason ≥10 chars."],
@@ -585,6 +587,18 @@ const scenarios = [
     "Owner cannot PUT until a grant exists. After save, quiz is Draft + Pending. Owner must Submit for approval again (then reapproval / republish). Assignment-started quizzes cannot be edited or requested.",
   ],
   [
+    "QZ-25",
+    "Unsubmitted draft is owner-only",
+    "SchoolAdmin (or Teacher) creates a quiz and does not click Submit for approval. PortalAdmin opens /quizzes.",
+    "The draft is absent from PortalAdmin catalog, pending-approval queue, and GET /manage. After a Teacher submits, PortalAdmin and the in-scope school/campus queue may see it. After a SchoolAdmin submits, only PortalAdmin (not other SchoolAdmins) may approve.",
+  ],
+  [
+    "QZ-26",
+    "SchoolAdmin-created quiz is PortalAdmin-only",
+    "SchoolAdmin creates a Practice quiz, adds questions, submits for approval. Status shows Approval Pending. PortalAdmin clicks Approve. Another SchoolAdmin opens the pending-approval queue.",
+    "PortalAdmin Approve succeeds: Pending → Approved (lifecycle stays Draft). No SchoolApproved step. The other SchoolAdmin does not see this quiz in their pending queue and cannot school-approve it. PortalAdmin then publishes separately (Draft → Published).",
+  ],
+  [
     "QZ-16",
     "Student only sees permitted audience",
     "Student A is assigned (or Public catalog in window); Student B is neither assigned nor Public-eligible.",
@@ -618,7 +632,7 @@ const scenarios = [
     "QZ-22",
     "School-scoped published visibility (not creator-only)",
     "PortalAdmin creates Quiz A and B for AES school; AES SchoolAdmin creates Quiz C; all three are published. Repeat with ISL school admin when ISL has its own published quizzes.",
-    "PortalAdmin sees A, B, C. AES SchoolAdmin sees all published AES quizzes (A, B, C) regardless of creator. ISL SchoolAdmin sees published ISL quizzes only (even when created by PortalAdmin or another ISL user). Users outside school/campus scope cannot see those quizzes. Draft quizzes remain owner + PortalAdmin only.",
+    "PortalAdmin sees published A, B, C. AES SchoolAdmin sees all published AES quizzes (A, B, C) regardless of creator. ISL SchoolAdmin sees published ISL quizzes only. Unsubmitted Draft quizzes are owner-only — PortalAdmin does not see them until Submit for approval.",
   ],
   [
     "QZ-21",
@@ -630,13 +644,15 @@ const scenarios = [
 
 const checklist = [
   "Every create/duplicate starts Draft + Pending Approval.",
-  "Approval and publish are separate: School/Campus approve → SchoolApproved (Draft); Portal approve → Approved (Draft); Portal publish → Published.",
+  "Approval and publish are separate: School/Campus approve Teacher/Coordinator quizzes → SchoolApproved (Draft); Portal approve → Approved (Draft); Portal publish → Published.",
+  "SchoolAdmin/CampusAdmin-created quizzes skip SchoolApproved: submit → PortalAdmin Approve (Pending → Approved) → PortalAdmin Publish.",
   "Pending Approval quizzes: not assignable; students cannot attempt; owner may edit without an edit request.",
   "SchoolAdmin/CampusAdmin approval never auto-publishes. After approve, quiz stays Draft until PortalAdmin publishes.",
   "Only PortalAdmin may publish (lifecycle Draft → Published).",
   "Only Published (or Assigned) quizzes may be assigned. Approved-but-unpublished (Draft) is blocked.",
   "Creator cannot approve own quiz. Approver must be in school/campus scope (PortalAdmin excepted).",
   "Teacher/Coordinator: own SchoolAdmin and CampusAdmin may approve; PortalAdmin approves and publishes.",
+  "SchoolAdmin/CampusAdmin created: PortalAdmin only (Pending → Approved). School/Campus queues exclude those quizzes.",
   "ParentPrivate (PrivateParent): Parent or Tutor may create; PortalAdmin approve + publish before assign.",
   "Unpublished (Draft lifecycle): visible to creator + PortalAdmin only in manage catalog.",
   "Published quizzes: visible to staff by school/campus scope (any creator), not CreatedBy alone.",
@@ -651,7 +667,7 @@ const checklist = [
   "QuizResultStatus is per student (Up Coming / Not Attempted / In Progress / Under Review / Expired / Completed) — student list prefers DB name over calculator.",
   "Assign with StartAt > now writes Up Coming; overdue job promotes Upcoming → Not Attempted and expires past-window rows / InProgress attempts.",
   "Owner may edit freely only while Draft + Pending or Rejected (and no started assignment). After SchoolApproved, Approved, Published, or Assigned: owner uses Request edit; PortalAdmin may still edit in place.",
-  "Draft visibility: owner + PortalAdmin only. SchoolAdmin sees school Published/Assigned/Archived from any creator (+ Public); CampusAdmin sees campus scope from any creator (+ Public).",
+  "Draft visibility: unsubmitted WIP is owner-only. After Submit for approval, PortalAdmin sees the pipeline draft. SchoolAdmin/CampusAdmin pending queues show Teacher/Coordinator submitted quizzes in scope — not SchoolAdmin/CampusAdmin/Parent/Tutor created quizzes.",
   "Bank attach requires Public + Active + Approved + ApprovedBy + class/subject match.",
   "Inline questions are Approved+Campus+Active and usable on that quiz only for bank eligibility rules.",
   "Descriptive (104), Matching (106), and Ordering (107) authoring enabled on web and mobile (bank + quiz inline). File Upload (105) and Media (108) are hidden on every create path; existing rows still work on attempts.",
@@ -667,7 +683,7 @@ const checklist = [
   "Archive: no assignments → hard delete; has assignments → Archived + Inactive. Draft must be deleted.",
   "Duplicate creates Draft + Pending copy with questions.",
   "CampusAdmin may school-approve/reject campus Pending quizzes, list campus-scoped catalog (+ Public), and open /quizzes manage routes.",
-  "SchoolAdmin/PortalAdmin may create quizzes; School/Campus publish → SchoolApproved; Portal publish → Approved.",
+  "SchoolAdmin/PortalAdmin may create quizzes; SchoolAdmin submit → PortalAdmin approve (not school-approve). Teacher/Coordinator: School/Campus publish → SchoolApproved; Portal approve → Approved.",
   "Rejected cannot be approved by anyone until teacher re-publish resets to Pending. Reject reason required.",
   "Teacher/Coordinator list API returns all published quizzes in campus scope (any creator) plus own drafts; client Mine only toggle optional.",
   "Staff list/manage UI display status: Draft+Pending+questions → Approval Pending; Draft+SchoolApproved → School Approved; Draft+Approved → Awaiting Publish; Draft+Pending+0 questions → Draft.",
@@ -684,7 +700,7 @@ const knownGaps = [
   "File Upload (105) and Media (108) remain hidden on every create path; attempts accept binary upload (wwwroot) or pasted URL in SubmittedText. Dedicated review download UX is not built yet.",
   "Practice post-submit teaching UX remains soft (type defaults only; no Practice-specific post-submit flow).",
   "Surprise PortalAdmin/AI-only authorship is future policy — teachers may still create Surprise quizzes today.",
-  "Automated QZ-01–QZ-24 full-stack E2E (Playwright + test DB) is not built — workflow rules are covered by unit/scenario tests only.",
+  "Automated QZ-01–QZ-26 full-stack E2E (Playwright + test DB) is not built — workflow rules are covered by unit/scenario tests only.",
   "Mobile quiz manage still needs the Request edit / grant UI; the API already rejects owner edits after approval or publish.",
   "AI review uses OpenAI when configured; otherwise heuristic fallback (not a required OpenAI path).",
 ];
@@ -799,7 +815,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   <h2>5b. Quiz edit requests</h2>
   ${htmlTable(["Requester", "Queued to", "Grant rule"], quizEditRequestRouting)}
   ${htmlList(quizEditRequestRules)}
-  <div class="note"><strong>UI:</strong> owner uses Request edit on <code>/quizzes/:id</code>. SchoolAdmin / CampusAdmin / PortalAdmin see a Quiz edit requests card on <code>/quizzes</code> and can approve/reject inline (reject reason ≥10 chars). Notifications category <code>QuizEditRequest</code> deep-link to the quiz.</div>
+  <div class="note"><strong>UI:</strong> owner uses Request edit on <code>/quizzes/:id</code>. SchoolAdmin / CampusAdmin / PortalAdmin see an <strong>Edit requests</strong> tile on <code>/quizzes</code> (same row as Total / Draft / Published). Clicking it filters the list to queued requests; approve/reject inline (reject reason ≥10 chars). Notifications category <code>QuizEditRequest</code> open that tile for reviewers and the quiz for the owner.</div>
 
   <h2>6. Role permissions</h2>
   ${htmlTable(
@@ -808,8 +824,8 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   )}
   <p><em>Teacher and Coordinator</em> share the same campus-scoped author workflow (school quiz types, submit for approval, assign/monitor own published quizzes). See §6b for Coordinator specifics.</p>
   <p><em>*CampusAdmin:</em> may approve/reject Pending teacher/coordinator quizzes in campus (→ SchoolApproved, does not publish), list campus-scoped published catalog, and open /quizzes manage routes. Cannot publish.</p>
-  <p><em>*Admin create:</em> SchoolAdmin/PortalAdmin may create quizzes (starts Pending). Coordinator creates school quiz types like Teacher. School/Campus admins may approve in scope; only PortalAdmin publishes.</p>
-  <div class="note"><strong>Ownership / scope:</strong> Creator cannot self-approve. <strong>Draft</strong> (unpublished) visible only to owner + PortalAdmin. <strong>Published</strong> catalog uses school/campus scope — not creator-only. Edit settings: owner or PortalAdmin only.</div>
+  <p><em>*Admin create:</em> SchoolAdmin/PortalAdmin may create quizzes (starts Pending). SchoolAdmin submit is reviewed by PortalAdmin only (Pending → Approved) — other SchoolAdmins cannot school-approve it. Coordinator creates school quiz types like Teacher. School/Campus admins may school-approve Teacher/Coordinator quizzes in scope; only PortalAdmin publishes.</p>
+  <div class="note"><strong>Ownership / scope:</strong> Creator cannot self-approve. Unsubmitted <strong>Draft</strong> is owner-only. After Submit for approval, PortalAdmin may see the pipeline draft. <strong>Published</strong> catalog uses school/campus scope — not creator-only. Edit settings: owner or PortalAdmin only.</div>
 
   <h2>6b. Coordinator role (quiz module)</h2>
   ${htmlList(coordinatorRoleSummary)}
@@ -915,7 +931,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
 
   <h2>15. UI routes</h2>
   ${htmlList([
-    "/quizzes — manage catalog; New, Assignments, Pending reviews. Portal/School/Campus Admin also see Quiz edit requests. Parent and Tutor create ParentPrivate (PrivateParent).",
+    "/quizzes — manage catalog; New, Assignments, Pending reviews. Portal/School/Campus Admin: Edit requests tile filters the queued grant requests. Parent and Tutor create ParentPrivate (PrivateParent).",
     "/quizzes/new — create form (school/campus not collected; token sets context).",
     "/quizzes/:id/edit — owner (Draft + Pending/Rejected, or unused edit grant) or PortalAdmin.",
     "/quizzes/:id — manage: add Q / publish / delete (Draft); Request edit after approval/publish; assign / duplicate / archive / unarchive / cancel / retry / monitor (Published/Assigned).",
@@ -1066,7 +1082,7 @@ const docChildren = [
   docTable(["Requester", "Queued to", "Grant rule"], quizEditRequestRouting),
   ...quizEditRequestRules.map(docBullet),
   docParagraph(
-    "UI: Request edit on /quizzes/:id. SchoolAdmin / CampusAdmin / PortalAdmin review on /quizzes. Decisions in app_approval (entity_type 2106); request row in app_quiz_edit_request.",
+    "UI: Request edit on /quizzes/:id. SchoolAdmin / CampusAdmin / PortalAdmin use the Edit requests tile on /quizzes. Decisions in app_approval (entity_type 2106); request row in app_quiz_edit_request.",
   ),
 
   docHeading("6. Role permissions"),
@@ -1078,10 +1094,10 @@ const docChildren = [
     "Teacher and Coordinator share the same campus-scoped author workflow (school quiz types, submit for approval, assign/monitor own published quizzes). See §6b for Coordinator specifics.",
   ),
   docParagraph(
-    "CampusAdmin: approve/reject Pending teacher/coordinator quizzes in campus (→ SchoolApproved, does not publish), list campus-scoped published catalog, open /quizzes manage routes. Cannot publish. Admin create: SchoolAdmin/PortalAdmin may create (starts Pending). Coordinator creates school quiz types like Teacher.",
+    "CampusAdmin: approve/reject Pending teacher/coordinator quizzes in campus (→ SchoolApproved, does not publish), list campus-scoped published catalog, open /quizzes manage routes. Cannot publish. Cannot approve SchoolAdmin-created quizzes. Admin create: SchoolAdmin/PortalAdmin may create (starts Pending); SchoolAdmin submit → PortalAdmin only. Coordinator creates school quiz types like Teacher.",
   ),
   docParagraph(
-    "Ownership / scope: Creator cannot self-approve. Draft (unpublished) visible only to owner + PortalAdmin. Published catalog uses school/campus scope — not creator-only. Owner edits after approval/publish require an edit grant; PortalAdmin may edit in place.",
+    "Ownership / scope: Creator cannot self-approve. Unsubmitted Draft is owner-only. After Submit for approval, PortalAdmin may see the pipeline draft. Published catalog uses school/campus scope — not creator-only. Owner edits after approval/publish require an edit grant; PortalAdmin may edit in place.",
     { run: { bold: true, color: "92400E" } },
   ),
 

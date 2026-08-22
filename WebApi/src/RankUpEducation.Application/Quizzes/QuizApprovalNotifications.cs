@@ -33,12 +33,42 @@ public static class QuizApprovalNotifications
         Quiz quiz,
         long publisherUserId,
         CancellationToken cancellationToken)
-        => NotifyScopedApproversAsync(
+        => NotifyPortalAdminsOnSubmitForReviewAsync(
             notifications,
             users,
             quiz,
             publisherUserId,
             title: "Parent quiz pending approval",
+            cancellationToken);
+
+    /// <summary>SchoolAdmin/CampusAdmin/Parent/Tutor submit — PortalAdmin queue only.</summary>
+    public static Task NotifyPortalAdminsOnSubmitForReviewAsync(
+        INotificationService notifications,
+        IUserRepository users,
+        Quiz quiz,
+        long publisherUserId,
+        CancellationToken cancellationToken)
+        => NotifyPortalAdminsOnSubmitForReviewAsync(
+            notifications,
+            users,
+            quiz,
+            publisherUserId,
+            title: "Quiz pending approval",
+            cancellationToken);
+
+    private static Task NotifyPortalAdminsOnSubmitForReviewAsync(
+        INotificationService notifications,
+        IUserRepository users,
+        Quiz quiz,
+        long publisherUserId,
+        string title,
+        CancellationToken cancellationToken)
+        => NotifyScopedApproversAsync(
+            notifications,
+            users,
+            quiz,
+            publisherUserId,
+            title,
             body: $"\"{quiz.QuizTitle}\" was submitted for portal review.",
             QuizNotificationCategories.QuizPendingApproval,
             includePortalAdmins: true,

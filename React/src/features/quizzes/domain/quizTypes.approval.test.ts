@@ -366,6 +366,37 @@ describe("canApproveQuizOnDetailPage", () => {
     ).toBe(true);
   });
 
+  it("blocks school admin from reviewing another SchoolAdmin-created quiz", () => {
+    expect(
+      canReviewQuizApproval("SchoolAdmin", "Practice", "SchoolAdmin"),
+    ).toBe(false);
+    expect(
+      canApproveQuizOnDetailPage(
+        "SchoolAdmin",
+        5,
+        "99",
+        "Practice",
+        "Draft",
+        "Pending",
+        "SchoolAdmin",
+      ),
+    ).toBe(false);
+  });
+
+  it("allows portal admin to approve a pending SchoolAdmin-created quiz", () => {
+    expect(
+      canApproveQuizOnDetailPage(
+        "PortalAdmin",
+        1,
+        "99",
+        "Practice",
+        "Draft",
+        "Pending",
+        "SchoolAdmin",
+      ),
+    ).toBe(true);
+  });
+
   it("blocks school admin on parent private quizzes", () => {
     expect(
       canApproveQuizOnDetailPage(
@@ -385,6 +416,9 @@ describe("canReviewQuizApproval", () => {
     expect(canReviewQuizApproval("PortalAdmin", "ParentPrivate")).toBe(true);
     expect(canReviewQuizApproval("SchoolAdmin", "ParentPrivate")).toBe(false);
     expect(canReviewQuizApproval("SchoolAdmin", "Practice")).toBe(true);
+    expect(canReviewQuizApproval("SchoolAdmin", "Practice", "SchoolAdmin")).toBe(
+      false,
+    );
   });
 });
 
@@ -454,7 +488,7 @@ describe("canSubmitQuizForReview", () => {
         3,
         true,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canSubmitQuizForReview(
         "Teacher",
@@ -497,9 +531,15 @@ describe("canPortalPublishQuiz", () => {
     ).toBe(false);
   });
 
-  it("allows portal admin to publish pending parent private drafts", () => {
+  it("allows portal admin to publish pending SchoolAdmin-created drafts", () => {
     expect(
-      canPortalPublishQuiz("PortalAdmin", "Draft", "Pending", "ParentPrivate"),
+      canPortalPublishQuiz(
+        "PortalAdmin",
+        "Draft",
+        "Pending",
+        "Practice",
+        "SchoolAdmin",
+      ),
     ).toBe(true);
   });
 });

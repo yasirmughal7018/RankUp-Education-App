@@ -8,11 +8,21 @@ public sealed class QuizApprovalLookupTests
     [Theory]
     [InlineData("Pending", true)]
     [InlineData("Under Review", true)]
+    [InlineData("Approval Pending", true)]
+    [InlineData("Pending Approval", true)]
+    [InlineData(" Approval Pending ", true)]
     [InlineData("SchoolApproved", false)]
     [InlineData("Approved", false)]
     public void IsPendingApprovalName_RecognizesQueueStates(string name, bool expected)
     {
         Assert.Equal(expected, LookupNames.IsPendingApprovalName(name));
+    }
+
+    [Fact]
+    public void IsPendingApproval_RecognizesCanonicalIdEvenWhenNameIsUnknown()
+    {
+        Assert.True(LookupNames.IsPendingApproval(LookupNames.QuizApprovalStatusIds.Pending, "Unknown"));
+        Assert.False(LookupNames.IsPendingApproval(LookupNames.QuizApprovalStatusIds.Approved, "Unknown"));
     }
 
     [Theory]

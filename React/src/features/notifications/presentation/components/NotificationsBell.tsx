@@ -109,6 +109,14 @@ function hrefForCategory(
   }
 
   if (category === "QuizEditRequest") {
+    if (
+      role === "PortalAdmin" ||
+      role === "SchoolAdmin" ||
+      role === "CampusAdmin"
+    ) {
+      return "/quizzes?view=edit-requests";
+    }
+
     const quizMatch = body?.match(/quiz #(\d+)/i);
     if (quizMatch) {
       return `/quizzes/${quizMatch[1]}`;

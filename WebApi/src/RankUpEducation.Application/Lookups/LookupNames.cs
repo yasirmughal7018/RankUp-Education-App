@@ -30,7 +30,7 @@ public static class LookupNames
     {
         /// <summary>Awaiting school/campus review.</summary>
         public const short Pending = 40;
-        /// <summary>School or campus admin endorsed; awaiting portal final approval.</summary>
+        /// <summary>School or campus admin endorsed a Teacher/Coordinator quiz; awaiting portal final approval.</summary>
         public const short SchoolApproved = 41;
         public const short Approved = 42;
         public const short Rejected = 43;
@@ -109,7 +109,8 @@ public static class LookupNames
 
     public static readonly string[] ParentPrivateQuizTypeNames = ["ParentPrivate", "Parent Private", "Private"];
     public static readonly string[] SchoolQuizTypeNames = ["Practice", "Assessment", "Competition", "Surprise"];
-    public static readonly string[] PendingApprovalStatusNames = ["Pending", "Draft", "Under Review"];
+    public static readonly string[] PendingApprovalStatusNames =
+        ["Pending", "Draft", "Under Review", "Approval Pending", "Pending Approval"];
     public static readonly string[] SchoolApprovedStatusNames = ["SchoolApproved", "School Approved"];
     /// <summary>Initial editable lifecycle (DB may still say "Not Assigned" until initializer renames).</summary>
     public static readonly string[] DraftLifecycleNames = ["Draft", "Not Assigned", "DRAFT"];
@@ -124,20 +125,35 @@ public static class LookupNames
         ["Rejected", "Declined", "Cancelled", "REJECTED"];
 
     public static bool IsPendingApprovalName(string? name)
-        => !string.IsNullOrWhiteSpace(name)
-           && PendingApprovalStatusNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+        => MatchesAnyName(name, PendingApprovalStatusNames);
 
     public static bool IsSchoolApprovedName(string? name)
-        => !string.IsNullOrWhiteSpace(name)
-           && SchoolApprovedStatusNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+        => MatchesAnyName(name, SchoolApprovedStatusNames);
 
     public static bool IsFinalApprovedName(string? name)
-        => !string.IsNullOrWhiteSpace(name)
-           && ApprovedStatusNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+        => MatchesAnyName(name, ApprovedStatusNames);
 
     public static bool IsRejectedApprovalName(string? name)
-        => !string.IsNullOrWhiteSpace(name)
-           && RejectedApprovalAliasNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+        => MatchesAnyName(name, RejectedApprovalAliasNames);
+
+    /// <summary>True when the row is awaiting first-tier or portal review (canonical id 40 or pending aliases).</summary>
+    public static bool IsPendingApproval(short approvalStatusId, string? name)
+        => approvalStatusId == QuizApprovalStatusIds.Pending || IsPendingApprovalName(name);
+
+    /// <summary>True when school/campus has endorsed (canonical id 41 or aliases).</summary>
+    public static bool IsSchoolApproved(short approvalStatusId, string? name)
+        => approvalStatusId == QuizApprovalStatusIds.SchoolApproved || IsSchoolApprovedName(name);
+
+    /// <summary>True when portal has given final approval (canonical id 42 or aliases).</summary>
+    public static bool IsFinalApproved(short approvalStatusId, string? name)
+        => approvalStatusId == QuizApprovalStatusIds.Approved || IsFinalApprovedName(name);
+
+    private static bool MatchesAnyName(string? name, IReadOnlyList<string> names)
+    {
+        var trimmed = name?.Trim();
+        return !string.IsNullOrWhiteSpace(trimmed)
+               && names.Any(candidate => candidate.Equals(trimmed, StringComparison.OrdinalIgnoreCase));
+    }
     public static readonly string[] AssignedResultNames =
         ["Not Attempted", "Assigned", "Not Started", "Pending"];
 

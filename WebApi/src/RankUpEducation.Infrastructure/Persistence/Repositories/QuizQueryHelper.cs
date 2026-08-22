@@ -136,6 +136,14 @@ internal static class QuizQueryHelper
             HasSubmittedForReview: hasSubmittedForReview);
     }
 
+    public static IQueryable<long> SubmittedForReviewQuizIds(RankUpDbContext dbContext)
+        => dbContext.Approvals.AsNoTracking()
+            .Where(approval =>
+                approval.EntityType == ApprovalEntityType.Quiz
+                && approval.RequestId != null
+                && approval.Action == ApprovalAction.SubmittedForReview)
+            .Select(approval => approval.RequestId!.Value);
+
     public static async Task<IReadOnlySet<long>> LoadQuizIdsSubmittedForReviewAsync(
         RankUpDbContext dbContext,
         IEnumerable<long> quizIds,

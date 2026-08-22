@@ -249,7 +249,7 @@ public sealed class QuizManageService : IQuizManageService
         var isParentPrivate = await _quizzes.IsParentPrivateQuizTypeAsync(quiz.QuizTypeId, cancellationToken);
 
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.Parent
-            or UserRole.Tutor or UserRole.SchoolAdmin)
+            or UserRole.Tutor or UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
             await _guard.RequireEditableQuizAsync(quizId, scope, cancellationToken);
 
@@ -261,7 +261,7 @@ public sealed class QuizManageService : IQuizManageService
             await RecordTrailEventAsync(quizId, scope, ApprovalAction.SubmittedForReview, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            if (scope.Role is UserRole.Teacher or UserRole.Coordinator or UserRole.SchoolAdmin)
+            if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
             {
                 await QuizApprovalNotifications.NotifyApproversOnTeacherPublishAsync(
                     _notifications,
@@ -272,7 +272,7 @@ public sealed class QuizManageService : IQuizManageService
             }
             else
             {
-                await QuizApprovalNotifications.NotifyPortalAdminsOnParentPublishAsync(
+                await QuizApprovalNotifications.NotifyPortalAdminsOnSubmitForReviewAsync(
                     _notifications,
                     _users,
                     quiz,
@@ -296,7 +296,7 @@ public sealed class QuizManageService : IQuizManageService
             throw new BusinessRuleException("Quiz must contain at least one question before publish.");
         }
 
-        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        var approvalName = await GetQuizApprovalNameAsync(quiz.ApprovalStatusId, cancellationToken);
         var publishedStatusId = await _guard.RequireLookupAsync(
             LookupNames.QuizLifecycleStatus,
             LookupNames.PublishedLifecycleNames,
@@ -306,17 +306,22 @@ public sealed class QuizManageService : IQuizManageService
             LookupNames.ApprovedStatusNames,
             cancellationToken);
 
-        if (isParentPrivate)
+        var creatorRole = await ResolveQuizCreatorRoleAsync(quiz, cancellationToken);
+        var portalOnlyCreator = QuizApprovalRouting.RequiresPortalAdminOnlyReview(creatorRole);
+
+        if (isParentPrivate || portalOnlyCreator)
         {
-            if (!LookupNames.IsPendingApprovalName(approvalName)
-                && !LookupNames.IsFinalApprovedName(approvalName))
+            if (!LookupNames.IsPendingApproval(quiz.ApprovalStatusId, approvalName)
+                && !LookupNames.IsFinalApproved(quiz.ApprovalStatusId, approvalName))
             {
                 throw new BusinessRuleException(
-                    "Parent quizzes must be pending portal review before publish.");
+                    isParentPrivate
+                        ? "Parent quizzes must be pending portal review before publish."
+                        : "This quiz must be pending portal review or already approved before publish.");
             }
         }
-        else if (!LookupNames.IsSchoolApprovedName(approvalName)
-            && !LookupNames.IsFinalApprovedName(approvalName))
+        else if (!LookupNames.IsSchoolApproved(quiz.ApprovalStatusId, approvalName)
+            && !LookupNames.IsFinalApproved(quiz.ApprovalStatusId, approvalName))
         {
             throw new BusinessRuleException(
                 "Teacher quizzes must be school-approved before portal publish.");
@@ -355,18 +360,31 @@ public sealed class QuizManageService : IQuizManageService
 
         QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope);
 
-        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        var creatorRole = await ResolveQuizCreatorRoleAsync(quiz, cancellationToken);
+        if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
+            && !QuizApprovalRouting.SchoolOrCampusMayEndorse(creatorRole))
+        {
+            throw new ForbiddenAppException(QuizApprovalRouting.DescribeSchoolCampusDenied(creatorRole));
+        }
+
+        var approvalName = await GetQuizApprovalNameAsync(quiz.ApprovalStatusId, cancellationToken);
         if (LookupNames.IsRejectedApprovalName(approvalName))
         {
             throw new BusinessRuleException(
                 "Rejected quizzes cannot be approved. The teacher must resubmit the quiz first.");
         }
 
+        if (LookupNames.IsPendingApproval(quiz.ApprovalStatusId, approvalName)
+            && !await _quizzes.HasSubmittedForReviewAsync(quizId, cancellationToken))
+        {
+            throw new BusinessRuleException("This quiz has not been submitted for approval.");
+        }
+
         short nextStatusId;
         string nextStatusName;
         if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
         {
-            if (!LookupNames.IsPendingApprovalName(approvalName))
+            if (!LookupNames.IsPendingApproval(quiz.ApprovalStatusId, approvalName))
             {
                 throw new BusinessRuleException("Only pending quizzes can be school-approved.");
             }
@@ -379,8 +397,8 @@ public sealed class QuizManageService : IQuizManageService
         }
         else
         {
-            if (!LookupNames.IsPendingApprovalName(approvalName)
-                && !LookupNames.IsSchoolApprovedName(approvalName))
+            if (!LookupNames.IsPendingApproval(quiz.ApprovalStatusId, approvalName)
+                && !LookupNames.IsSchoolApproved(quiz.ApprovalStatusId, approvalName))
             {
                 throw new BusinessRuleException(
                     "Only pending or school-approved quizzes can be approved by portal admin.");
@@ -444,26 +462,39 @@ public sealed class QuizManageService : IQuizManageService
 
         QuizScopeResolver.EnsureCanApproveOrRejectQuiz(quiz, scope);
 
+        var creatorRole = await ResolveQuizCreatorRoleAsync(quiz, cancellationToken);
+        if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
+            && !QuizApprovalRouting.SchoolOrCampusMayEndorse(creatorRole))
+        {
+            throw new ForbiddenAppException(QuizApprovalRouting.DescribeSchoolCampusDenied(creatorRole));
+        }
+
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
             throw new ValidationAppException(["Rejection reason is required."]);
         }
 
-        var approvalName = await _lookups.GetLookupNameAsync(quiz.ApprovalStatusId, cancellationToken);
+        var approvalName = await GetQuizApprovalNameAsync(quiz.ApprovalStatusId, cancellationToken);
         if (LookupNames.IsRejectedApprovalName(approvalName))
         {
             throw new BusinessRuleException("Quiz is already rejected.");
         }
 
-        if (LookupNames.IsFinalApprovedName(approvalName))
+        if (LookupNames.IsFinalApproved(quiz.ApprovalStatusId, approvalName))
         {
             throw new BusinessRuleException("Fully approved quizzes cannot be rejected.");
         }
 
-        if (!LookupNames.IsPendingApprovalName(approvalName)
-            && !LookupNames.IsSchoolApprovedName(approvalName))
+        if (!LookupNames.IsPendingApproval(quiz.ApprovalStatusId, approvalName)
+            && !LookupNames.IsSchoolApproved(quiz.ApprovalStatusId, approvalName))
         {
             throw new BusinessRuleException("Only pending or school-approved quizzes can be rejected.");
+        }
+
+        if (LookupNames.IsPendingApproval(quiz.ApprovalStatusId, approvalName)
+            && !await _quizzes.HasSubmittedForReviewAsync(quizId, cancellationToken))
+        {
+            throw new BusinessRuleException("This quiz has not been submitted for approval.");
         }
 
         var rejectedStatusId = await _guard.RequireLookupAsync(
@@ -496,8 +527,8 @@ public sealed class QuizManageService : IQuizManageService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireApprovalScope(GetCurrentUser());
-        // PortalAdmin: all schools; Pending + SchoolApproved. SchoolAdmin: own school; Pending only.
-        // CampusAdmin: own campus; Pending only.
+        // PortalAdmin: all schools; submitted Pending + SchoolApproved (includes SchoolAdmin-created).
+        // SchoolAdmin/CampusAdmin: Teacher/Coordinator submitted Pending in scope only.
         var schoolId = scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin
             ? scope.SchoolId
             : null;
@@ -508,6 +539,12 @@ public sealed class QuizManageService : IQuizManageService
             campusId,
             includeSchoolApproved,
             cancellationToken);
+
+        if (scope.Role is UserRole.SchoolAdmin or UserRole.CampusAdmin)
+        {
+            items = await FilterSchoolCampusPendingQueueAsync(items, cancellationToken);
+        }
+
         return new PendingQuizApprovalListResponse(
             items.Select(item => new PendingQuizApprovalItemResponse(
                 item.QuizId,
@@ -781,9 +818,67 @@ public sealed class QuizManageService : IQuizManageService
             ?? throw new NotFoundAppException("Quiz was not found.");
 
         var questions = await _quizQuestions.GetQuizQuestionsAsync(quizId, cancellationToken, includeInactive: true);
+        var creatorRole = await ResolveQuizCreatorRoleAsync(detail.CreatedByName, cancellationToken);
         return await _editRequestService.AttachStateAsync(
-            QuizManageMapping.ToManageResponse(detail, questions),
+            QuizManageMapping.ToManageResponse(detail, questions, createdByRole: creatorRole.ToString()),
             cancellationToken);
+    }
+
+    private async Task<string> GetQuizApprovalNameAsync(short approvalStatusId, CancellationToken cancellationToken)
+    {
+        var typed = await _lookups.GetByIdAndTypeAsync(
+            approvalStatusId,
+            LookupNames.QuizApprovalStatus,
+            cancellationToken);
+        if (typed is not null)
+        {
+            return typed.Name;
+        }
+
+        return await _lookups.GetLookupNameAsync(approvalStatusId, cancellationToken);
+    }
+
+    private Task<UserRole> ResolveQuizCreatorRoleAsync(Quiz quiz, CancellationToken cancellationToken)
+        => ResolveQuizCreatorRoleAsync(quiz.CreatedByName, cancellationToken);
+
+    private async Task<UserRole> ResolveQuizCreatorRoleAsync(
+        string? createdByName,
+        CancellationToken cancellationToken)
+    {
+        if (!QuizApprovalRouting.TryParseCreatorUserId(createdByName, out var creatorId))
+        {
+            return UserRole.Teacher;
+        }
+
+        var creator = await _users.GetByIdAsync(creatorId, cancellationToken);
+        if (creator is null)
+        {
+            return UserRole.Teacher;
+        }
+
+        return QuizApprovalRouting.ResolveCreatorRole(creator.Roles);
+    }
+
+    private async Task<IReadOnlyList<PendingQuizApprovalItem>> FilterSchoolCampusPendingQueueAsync(
+        IReadOnlyList<PendingQuizApprovalItem> items,
+        CancellationToken cancellationToken)
+    {
+        if (items.Count == 0)
+        {
+            return items;
+        }
+
+        var allowed = new List<PendingQuizApprovalItem>(items.Count);
+        foreach (var item in items)
+        {
+            var creatorRole = await ResolveQuizCreatorRoleAsync(item.CreatedBy, cancellationToken);
+            if (QuizApprovalRouting.SchoolOrCampusMayEndorse(creatorRole))
+            {
+                allowed.Add(item);
+            }
+        }
+
+        return allowed;
     }
 
     private async Task<StudentSchoolContext> ResolveSchoolContextAsync(

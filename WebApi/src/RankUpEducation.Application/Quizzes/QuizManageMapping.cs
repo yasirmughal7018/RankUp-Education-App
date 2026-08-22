@@ -12,7 +12,8 @@ internal static class QuizManageMapping
         IReadOnlyList<QuizQuestionItem> questions,
         QuizEditRequestSummary? myEditRequest = null,
         bool hasApprovedEditGrant = false,
-        IReadOnlyList<QuizEditRequestSummary>? pendingEditRequests = null)
+        IReadOnlyList<QuizEditRequestSummary>? pendingEditRequests = null,
+        string? createdByRole = null)
     {
         return new ManageQuizResponse(
             detail.QuizId,
@@ -60,7 +61,8 @@ internal static class QuizManageMapping
                 .ToArray(),
             myEditRequest,
             hasApprovedEditGrant,
-            pendingEditRequests);
+            pendingEditRequests,
+            createdByRole);
     }
 
     private static string ResolveCreatorDisplayName(QuizDetailItem detail)

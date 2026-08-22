@@ -200,17 +200,41 @@ public sealed class QuizRepository : IQuizRepository
             LookupNames.QuizLifecycleStatus,
             LookupNames.DraftLifecycleNames,
             cancellationToken);
+        var pendingApprovalIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+            _dbContext,
+            LookupNames.QuizApprovalStatus,
+            LookupNames.PendingApprovalStatusNames,
+            cancellationToken);
+        var pipelineApprovalIds = (
+            await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
+                _dbContext,
+                LookupNames.QuizApprovalStatus,
+                LookupNames.SchoolApprovedStatusNames
+                    .Concat(LookupNames.ApprovedStatusNames)
+                    .Concat(LookupNames.RejectedApprovalStatusNames)
+                    .Distinct()
+                    .ToArray(),
+                cancellationToken))
+            .Where(id => !pendingApprovalIds.Contains(id))
+            .ToArray();
         var viewerKey = viewerUserId?.ToString();
+        var submittedQuizIdQuery = QuizQueryHelper.SubmittedForReviewQuizIds(_dbContext);
 
         var query = _dbContext.Quizzes.AsNoTracking()
             .Where(quiz => !quiz.IsDeleted);
 
-        // Draft: owner + PortalAdmin only.
+        // Draft: owner always. PortalAdmin also sees pipeline drafts (submitted / school-approved /
+        // approved / rejected). Unsubmitted WIP is owner-only.
         // Published / Assigned / Archived: school/campus scope, or Public (everyone).
         query = query.Where(quiz =>
             (draftIds.Contains(quiz.LifecycleStatusId)
-                && (includeAllDrafts
-                    || (viewerKey != null && quiz.CreatedByName == viewerKey)))
+                && (
+                    (viewerKey != null && quiz.CreatedByName == viewerKey)
+                    || (includeAllDrafts
+                        && (
+                            pipelineApprovalIds.Contains(quiz.ApprovalStatusId)
+                            || (pendingApprovalIds.Contains(quiz.ApprovalStatusId)
+                                && submittedQuizIdQuery.Contains(quiz.Id))))))
             || (!draftIds.Contains(quiz.LifecycleStatusId)
                 && (quiz.AudienceScope == "Public"
                     || includeAllSchools
@@ -282,6 +306,12 @@ public sealed class QuizRepository : IQuizRepository
                 quiz.IsActive &&
                 !quiz.IsDeleted &&
                 approvalQueueIds.Contains(quiz.ApprovalStatusId));
+
+        var submittedQuizIds = QuizQueryHelper.SubmittedForReviewQuizIds(_dbContext);
+        query = query.Where(quiz =>
+            schoolApprovedIds.Contains(quiz.ApprovalStatusId)
+            || (pendingIds.Contains(quiz.ApprovalStatusId)
+                && submittedQuizIds.Contains(quiz.Id)));
 
         var draftLifecycleIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
             _dbContext,
@@ -505,6 +535,12 @@ public sealed class QuizRepository : IQuizRepository
     {
         return _dbContext.QuizAttempts.AsNoTracking()
             .AnyAsync(attempt => attempt.QuizId == quizId, cancellationToken);
+    }
+
+    public Task<bool> HasSubmittedForReviewAsync(long quizId, CancellationToken cancellationToken)
+    {
+        return QuizQueryHelper.SubmittedForReviewQuizIds(_dbContext)
+            .AnyAsync(id => id == quizId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<QuizListItem>> ListForCreatorAsync(

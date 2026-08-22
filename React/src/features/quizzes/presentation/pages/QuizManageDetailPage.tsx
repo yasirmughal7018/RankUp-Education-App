@@ -415,6 +415,7 @@ export function QuizManageDetailPage() {
       quiz.lifecycleStatus,
       quiz.approvalStatus,
       quiz.quizType,
+      quiz.createdByRole,
     );
   const canRemoveQuiz =
     user != null &&
@@ -458,6 +459,7 @@ export function QuizManageDetailPage() {
       quiz.quizType,
       quiz.lifecycleStatus,
       quiz.approvalStatus,
+      quiz.createdByRole,
     );
   const quizScopeRows = resolveQuizScopeRows(quiz, scopeCampusName);
 
