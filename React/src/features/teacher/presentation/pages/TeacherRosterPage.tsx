@@ -3,11 +3,10 @@ import {
   useEffect,
   useMemo,
   useState,
-  type FormEvent,
   type ReactNode,
 } from "react";
 import { Plus, RefreshCw, Search, Users } from "lucide-react";
-import type { ApiError } from "@/core/api/types";
+import { StudentGroupsWorkspace } from "@/components/groups/StudentGroupsWorkspace";
 import { AppEmptyState } from "@/components/ui/app-empty-state";
 import { AppErrorState } from "@/components/ui/app-error-state";
 import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
@@ -17,9 +16,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   buildRosterGradeBuckets,
-  formatRosterStudent,
   rosterStudentMatchesQuery,
-  type TeacherGroup,
   type TeacherRosterStudent,
 } from "@/features/teacher/domain/teacherTypes";
 import {
@@ -30,6 +27,7 @@ import {
   useRemoveTeacherGroupMemberMutation,
   useTeacherGroupsQuery,
   useTeacherRosterQuery,
+  useUpdateTeacherGroupMutation,
 } from "@/features/teacher/presentation/hooks/useTeacherQueries";
 import { AddStudentDialog } from "@/features/teacher/presentation/components/AddStudentDialog";
 
@@ -39,6 +37,7 @@ export function TeacherRosterPage() {
   const rosterQuery = useTeacherRosterQuery(true);
   const groupsQuery = useTeacherGroupsQuery(true);
   const createGroupMutation = useCreateTeacherGroupMutation();
+  const updateGroupMutation = useUpdateTeacherGroupMutation();
   const addStudentMutation = useAddMyStudentMutation();
   const deleteGroupMutation = useDeleteTeacherGroupMutation();
   const addMemberMutation = useAddTeacherGroupMemberMutation();
@@ -49,10 +48,6 @@ export function TeacherRosterPage() {
   const [search, setSearch] = useState("");
   const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [groupName, setGroupName] = useState("");
-  const [groupDescription, setGroupDescription] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
-  const [memberQuery, setMemberQuery] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,10 +108,6 @@ export function TeacherRosterPage() {
   }, [deferredSearch, students]);
 
   const visibleStudents = selectedSectionBucket?.students ?? [];
-  const selectedGroup = useMemo(
-    () => groups.find((group) => group.groupId === selectedGroupId) ?? null,
-    [groups, selectedGroupId],
-  );
 
   function selectGrade(grade: number) {
     const bucket = gradeBuckets.find((item) => item.grade === grade);
@@ -130,29 +121,6 @@ export function TeacherRosterPage() {
   function clearMessages() {
     setError(null);
     setMessage(null);
-  }
-
-  async function handleCreateGroup(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    clearMessages();
-    const trimmed = groupName.trim();
-    if (!trimmed) {
-      setError("Enter a group name.");
-      return;
-    }
-
-    try {
-      const group = await createGroupMutation.mutateAsync({
-        groupName: trimmed,
-        description: groupDescription.trim(),
-      });
-      setGroupName("");
-      setGroupDescription("");
-      setSelectedGroupId(group.groupId);
-      setMessage(`Created “${group.groupName}”.`);
-    } catch (err) {
-      setError((err as ApiError).message ?? "Unable to create group.");
-    }
   }
 
   return (
@@ -372,67 +340,30 @@ export function TeacherRosterPage() {
           </div>
         )
       ) : (
-        <GroupsPanel
+        <StudentGroupsWorkspace
+          peopleNoun="student"
+          poolHint="your classes"
           groups={groups}
-          students={students}
-          selectedGroup={selectedGroup}
-          groupName={groupName}
-          groupDescription={groupDescription}
-          memberQuery={memberQuery}
+          people={students}
+          loading={groupsQuery.isLoading}
           creating={createGroupMutation.isPending}
+          updating={updateGroupMutation.isPending}
+          deleting={deleteGroupMutation.isPending}
           adding={addMemberMutation.isPending}
           removing={removeMemberMutation.isPending}
-          deleting={deleteGroupMutation.isPending}
-          loading={groupsQuery.isLoading}
-          onGroupNameChange={setGroupName}
-          onGroupDescriptionChange={setGroupDescription}
-          onMemberQueryChange={setMemberQuery}
-          onSelectGroup={setSelectedGroupId}
-          onCreateGroup={(event) => void handleCreateGroup(event)}
-          onDeleteGroup={async (group) => {
-            clearMessages();
-            try {
-              await deleteGroupMutation.mutateAsync(group.groupId);
-              if (selectedGroupId === group.groupId) {
-                setSelectedGroupId(null);
-              }
-              setMessage(`Removed “${group.groupName}”.`);
-            } catch (err) {
-              setError((err as ApiError).message ?? "Unable to remove group.");
+          onCreate={(input) => createGroupMutation.mutateAsync(input)}
+          onUpdate={async (groupId, input) => {
+            await updateGroupMutation.mutateAsync({ groupId, ...input });
+          }}
+          onDelete={(group) => deleteGroupMutation.mutateAsync(group.groupId)}
+          onAddMembers={async (groupId, studentIds) => {
+            for (const studentId of studentIds) {
+              await addMemberMutation.mutateAsync({ groupId, studentId });
             }
           }}
-          onAddMember={async (studentId) => {
-            if (!selectedGroupId) {
-              return;
-            }
-            clearMessages();
-            try {
-              await addMemberMutation.mutateAsync({
-                groupId: selectedGroupId,
-                studentId,
-              });
-              setMessage("Student added to the group.");
-            } catch (err) {
-              setError((err as ApiError).message ?? "Unable to add student.");
-            }
-          }}
-          onRemoveMember={async (studentId) => {
-            if (!selectedGroupId) {
-              return;
-            }
-            clearMessages();
-            try {
-              await removeMemberMutation.mutateAsync({
-                groupId: selectedGroupId,
-                studentId,
-              });
-              setMessage("Student removed from group.");
-            } catch (err) {
-              setError(
-                (err as ApiError).message ?? "Unable to remove student.",
-              );
-            }
-          }}
+          onRemoveMember={(groupId, studentId) =>
+            removeMemberMutation.mutateAsync({ groupId, studentId })
+          }
         />
       )}
 
@@ -618,245 +549,6 @@ function StudentAvatar({ name }: { name: string }) {
     <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/25 text-xs font-bold tracking-wide text-primary">
       {initialsFromName(name)}
     </span>
-  );
-}
-
-function GroupsPanel({
-  groups,
-  students,
-  selectedGroup,
-  groupName,
-  groupDescription,
-  memberQuery,
-  creating,
-  adding,
-  removing,
-  deleting,
-  loading,
-  onGroupNameChange,
-  onGroupDescriptionChange,
-  onMemberQueryChange,
-  onSelectGroup,
-  onCreateGroup,
-  onDeleteGroup,
-  onAddMember,
-  onRemoveMember,
-}: {
-  groups: TeacherGroup[];
-  students: TeacherRosterStudent[];
-  selectedGroup: TeacherGroup | null;
-  groupName: string;
-  groupDescription: string;
-  memberQuery: string;
-  creating: boolean;
-  adding: boolean;
-  removing: boolean;
-  deleting: boolean;
-  loading: boolean;
-  onGroupNameChange: (value: string) => void;
-  onGroupDescriptionChange: (value: string) => void;
-  onMemberQueryChange: (value: string) => void;
-  onSelectGroup: (groupId: number) => void;
-  onCreateGroup: (event: FormEvent<HTMLFormElement>) => void;
-  onDeleteGroup: (group: TeacherGroup) => Promise<void>;
-  onAddMember: (studentId: number) => Promise<void>;
-  onRemoveMember: (studentId: number) => Promise<void>;
-}) {
-  const memberIds = new Set(
-    (selectedGroup?.members ?? []).map((member) => member.studentId),
-  );
-  const availableMembers = students.filter((student) => {
-    if (memberIds.has(student.studentId)) {
-      return false;
-    }
-    return rosterStudentMatchesQuery(student, memberQuery);
-  });
-
-  return (
-    <section className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-      <div className="overflow-hidden rounded-2xl border border-border/80 bg-card">
-        <div className="border-b border-border/70 px-5 py-4">
-          <h2 className="text-base font-semibold text-foreground">
-            Student groups
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Mix students from any of your classes — for example a Math set or extra support.
-          </p>
-        </div>
-
-        <form
-          className="space-y-3 border-b border-border/70 px-5 py-4"
-          onSubmit={onCreateGroup}
-        >
-          <input
-            type="text"
-            value={groupName}
-            onChange={(event) => onGroupNameChange(event.target.value)}
-            placeholder="Group name"
-            className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm"
-            disabled={creating}
-          />
-          <input
-            type="text"
-            value={groupDescription}
-            onChange={(event) => onGroupDescriptionChange(event.target.value)}
-            placeholder="Description (optional)"
-            className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm"
-            disabled={creating}
-          />
-          <Button type="submit" size="sm" disabled={creating}>
-            {creating ? "Creating…" : "Create group"}
-          </Button>
-        </form>
-
-        {loading ? (
-          <p className="px-5 py-6 text-sm text-muted-foreground">
-            Loading groups…
-          </p>
-        ) : groups.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-muted-foreground">
-            No groups yet.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border/70">
-            {groups.map((group) => {
-              const selected = selectedGroup?.groupId === group.groupId;
-              return (
-                <li
-                  key={group.groupId}
-                  className={cn(
-                    "flex items-center justify-between gap-3 px-5 py-3",
-                    selected && "bg-primary/5",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onSelectGroup(group.groupId)}
-                    className="min-w-0 text-left"
-                  >
-                    <p className="font-medium text-foreground">
-                      {group.groupName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {group.memberCount} member
-                      {group.memberCount === 1 ? "" : "s"}
-                      {group.description ? ` · ${group.description}` : ""}
-                    </p>
-                  </button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={deleting}
-                    onClick={() => void onDeleteGroup(group)}
-                  >
-                    Delete
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-border/80 bg-card">
-        <div className="border-b border-border/70 px-5 py-4">
-          <h2 className="text-base font-semibold text-foreground">
-            Group members
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {selectedGroup
-              ? `Search your roster and add students to “${selectedGroup.groupName}”.`
-              : "Select a group to add or remove students."}
-          </p>
-        </div>
-
-        {!selectedGroup ? (
-          <p className="px-5 py-8 text-sm text-muted-foreground">
-            Choose a group on the left.
-          </p>
-        ) : (
-          <>
-            <div className="border-b border-border/70 px-5 py-4">
-              <AppSearchInput
-                value={memberQuery}
-                onChange={(event) => onMemberQueryChange(event.target.value)}
-                placeholder="Find a roster student to add"
-                aria-label="Search roster to add to group"
-              />
-              <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto">
-                {availableMembers.length === 0 ? (
-                  <li className="px-1 py-2 text-sm text-muted-foreground">
-                    {memberQuery.trim()
-                      ? "No matching students left to add."
-                      : "Every matching student is already in this group."}
-                  </li>
-                ) : (
-                  availableMembers.slice(0, 20).map((student) => (
-                    <li
-                      key={student.studentId}
-                      className="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 hover:bg-muted/60"
-                    >
-                      <p className="min-w-0 truncate text-sm text-foreground">
-                        {formatRosterStudent(student)}
-                      </p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={adding}
-                        onClick={() => void onAddMember(student.studentId)}
-                      >
-                        Add
-                      </Button>
-                    </li>
-                  ))
-                )}
-              </ul>
-              {availableMembers.length > 20 ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Showing 20 of {availableMembers.length}. Type more of the name
-                  to narrow the list.
-                </p>
-              ) : null}
-            </div>
-
-            {selectedGroup.members.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-muted-foreground">
-                No members in this group yet.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border/70">
-                {selectedGroup.members.map((member) => (
-                  <li
-                    key={member.studentId}
-                    className="flex items-center justify-between gap-3 px-5 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">
-                        {formatRosterStudent(member as TeacherRosterStudent)}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {member.username}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={removing}
-                      onClick={() => void onRemoveMember(member.studentId)}
-                    >
-                      Remove
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </div>
-    </section>
   );
 }
 
