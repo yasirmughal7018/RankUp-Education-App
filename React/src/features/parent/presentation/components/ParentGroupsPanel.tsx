@@ -121,14 +121,7 @@ export function ParentGroupsPanel({ students }: ParentGroupsPanelProps) {
   }
 
   return (
-    <section className="mt-8 space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Child groups</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Group linked children so you can assign a quiz to several of them at once.
-        </p>
-      </div>
-
+    <section className="space-y-4">
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}

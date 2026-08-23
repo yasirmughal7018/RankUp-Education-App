@@ -97,7 +97,7 @@ const parentChildGroups = [
   ["DELETE /parents/me/groups/{groupId}", "Deactivate (soft-remove) the parent’s group."],
   ["POST /parents/me/groups/{groupId}/members", "Add a linked child only. Unlinked student → validation error."],
   ["DELETE /parents/me/groups/{groupId}/members/{studentId}", "Remove a child from that group."],
-  ["Web UI", "/parent/children — linked children list plus Child groups panel (create, pick group, add/remove members)."],
+  ["Web UI", "/parent/children — tabs like My students: Children and Groups (create, pick group, add/remove members)."],
   ["Mobile UI", "My children → Groups tab: create group, add/remove linked children, delete group."],
   ["Quiz assign", "Parent assign mode group picks a group from this list (dropdown by name). Only members who are still linked children are assigned. See Quizzes QA §8."],
 ];
@@ -152,7 +152,7 @@ const webRoutes = [
   ["/student/rankings", "Class / school peer rankings"],
   ["/admin/directory/students", "Admin directory (not student session)"],
   ["/request-access", "Public register (grade+section for Student)"],
-  ["/parent/children", "Parent: linked children + Child groups panel"],
+  ["/parent/children", "Parent: Children and Groups tabs"],
 ];
 
 const mobileRoutes = [

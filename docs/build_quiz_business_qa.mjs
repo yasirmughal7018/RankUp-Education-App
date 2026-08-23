@@ -249,7 +249,7 @@ const quizAudiences = [
     "Group of students",
     "Teacher / Coordinator / Parent",
     "Now",
-    "Expands student_group_members for a group owned by the assigner. Parent groups are created on My children (web /parent/children Child groups panel; mobile Groups tab) via GET/POST/PUT/DELETE /parents/me/groups and member add/remove. Storage: student_groups.creator_role=Parent. Assign UI lists those groups by name. API mode: group.",
+    "Expands student_group_members for a group owned by the assigner. Parent groups are created on My children (web Children/Groups tabs; mobile Groups tab) via GET/POST/PUT/DELETE /parents/me/groups and member add/remove. Storage: student_groups.creator_role=Parent. Assign UI lists those groups by name. API mode: group.",
   ],
   [
     "Parent’s child’s linked student",
@@ -686,7 +686,7 @@ const checklist = [
   "SchoolAdmin/CampusAdmin/PortalAdmin approve or reject on /quizzes/:id detail (review mode): Approve + Reject with reason only; quiz metadata and questions read-only. Open the quiz from the Draft tile on /quizzes — no separate approval page.",
   "Edit settings/questions: quiz owner while Draft + Pending/Rejected, or with an unused edit grant after SchoolApproved/Approved/Published; PortalAdmin may edit in place. After a granted save, quiz returns to Draft + Pending — resubmit required. Teacher/Coordinator edit requests: SchoolAdmin, CampusAdmin, or PortalAdmin (any one). SchoolAdmin/CampusAdmin/Parent edit requests: PortalAdmin only.",
   "Teacher/Coordinator/Parent assign of a published school-type catalog quiz requires Lifecycle Published or Assigned and Approval=Approved. Parent school-type assign still requires Published + Approved and linked children/students only.",
-  "Parent child groups: create/manage on My children (web Child groups panel / mobile Groups tab). APIs /parents/me/groups*. Assign mode=group uses those groups; members must be linked children.",
+  "Parent child groups: create/manage on My children (web Children/Groups tabs; mobile Groups tab). APIs /parents/me/groups*. Assign mode=group uses those groups; members must be linked children.",
   "Student sees assigned quizzes and Public catalog only; school/section/multi never set AudienceScope=Public.",
   "Supported audiences: one, selected, group, class (allInGrade), section, school, multi-school, public (PortalAdmin), parent child / allLinked.",
   "QuizAssignment is one row per student with AssignedById, optional StudentGroupId, window, AllowedAttempts, QuizResultStatus, IsReviewDone.",
