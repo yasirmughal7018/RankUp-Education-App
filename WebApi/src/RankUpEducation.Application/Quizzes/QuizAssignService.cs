@@ -381,63 +381,65 @@ public sealed class QuizAssignService : IQuizAssignService
         CancellationToken cancellationToken)
     {
         var mode = request.Mode.AsLowercase();
-
-        if (scope.Role == UserRole.Parent)
+        if (!QuizAssignRules.IsSupportedMode(scope.Role, mode))
         {
-            return mode switch
-            {
-                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
-                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
-                "alllinked" => await _studentScope.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken),
-                "group" => await ResolveGroupStudentsAsync(scope, request, UserRole.Parent, cancellationToken),
-                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported."])
-            };
-        }
-
-        if (scope.Role == UserRole.SchoolAdmin)
-        {
-            return mode switch
-            {
-                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
-                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
-                "allinschool" => await ResolveAllInSchoolStudentsAsync(scope, request, cancellationToken),
-                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for school admins."])
-            };
-        }
-
-        if (scope.Role == UserRole.CampusAdmin)
-        {
-            return mode switch
-            {
-                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
-                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
-                "allingrade" => await ResolveAllInGradeStudentsAsync(scope, request, cancellationToken),
-                "allinsection" => await ResolveAllInSectionStudentsAsync(scope, request, cancellationToken),
-                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for campus admins."])
-            };
-        }
-
-        if (scope.Role == UserRole.PortalAdmin)
-        {
-            return mode switch
-            {
-                "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
-                "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
-                "allinschool" => await ResolveAllInSchoolStudentsAsync(scope, request, cancellationToken),
-                "multischool" => await ResolveMultiSchoolStudentsAsync(request, cancellationToken),
-                _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for portal admins."])
-            };
+            throw new ValidationAppException(
+                [$"Assignment mode '{request.Mode}' is not supported for {scope.Role}."]);
         }
 
         return mode switch
         {
             "one" => await ResolveOneStudentAsync(scope, request, cancellationToken),
             "selected" => await ResolveSelectedStudentsAsync(scope, request, cancellationToken),
-            "group" => await ResolveGroupStudentsAsync(scope, request, UserRole.Teacher, cancellationToken),
+            "group" => await ResolveGroupStudentsAsync(scope, request, scope.Role, cancellationToken),
+            "alllinked" => await _studentScope.GetLinkedStudentIdsAsync(scope.ParentId, cancellationToken),
+            "allattached" => await ResolveAllAttachedStudentsAsync(scope, cancellationToken),
+            "allincampus" => await ResolveAllInCampusStudentsAsync(scope, request, cancellationToken),
             "allingrade" => await ResolveAllInGradeStudentsAsync(scope, request, cancellationToken),
             "allinsection" => await ResolveAllInSectionStudentsAsync(scope, request, cancellationToken),
-            _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported for teachers."])
+            "allinschool" => await ResolveAllInSchoolStudentsAsync(scope, request, cancellationToken),
+            "multischool" => await ResolveMultiSchoolStudentsAsync(request, cancellationToken),
+            _ => throw new ValidationAppException([$"Assignment mode '{request.Mode}' is not supported."])
         };
+    }
+
+    private async Task<IReadOnlyList<long>> ResolveAllAttachedStudentsAsync(
+        QuizManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        if (scope.Role is not (UserRole.Teacher or UserRole.Coordinator))
+        {
+            throw new ValidationAppException(["All attached classes is only available to teachers and coordinators."]);
+        }
+
+        var studentIds = await _studentScope.GetRosterStudentIdsAsync(
+            scope.ProfileId,
+            scope.SchoolId!.Value,
+            scope.CampusId!.Value,
+            scope.Role,
+            cancellationToken);
+
+        if (studentIds.Count == 0)
+        {
+            throw new ValidationAppException([
+                scope.Role == UserRole.Coordinator
+                    ? "No students were found in your attached classes."
+                    : "No students were found in your assigned classes."]);
+        }
+
+        return studentIds;
+    }
+
+    private async Task<IReadOnlyList<long>> ResolveAllInCampusStudentsAsync(
+        QuizManageScope scope,
+        AssignQuizRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (schoolId, campusId) = ResolveAudienceLocation(scope, request, campusRequired: true);
+        return await _studentScope.GetStudentIdsInSchoolAsync(
+            schoolId,
+            cancellationToken,
+            campusId);
     }
 
     private async Task<IReadOnlyList<long>> ResolveAllInSectionStudentsAsync(
@@ -455,9 +457,10 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["Section is required for allInSection assignment."]);
         }
 
+        var (schoolId, campusId) = ResolveAudienceLocation(scope, request, campusRequired: true);
         var studentIds = await _studentScope.GetStudentIdsInCampusByGradeAndSectionAsync(
-            scope.SchoolId!.Value,
-            scope.CampusId!.Value,
+            schoolId,
+            campusId!.Value,
             request.GradeId.Value,
             request.Section,
             cancellationToken);
@@ -467,7 +470,7 @@ public sealed class QuizAssignService : IQuizAssignService
             return studentIds;
         }
 
-        return await FilterToTeacherRosterAsync(scope, studentIds, cancellationToken);
+        return await FilterToRosterAsync(scope, studentIds, cancellationToken);
     }
 
     private async Task<IReadOnlyList<long>> ResolveAllInSchoolStudentsAsync(
@@ -598,32 +601,82 @@ public sealed class QuizAssignService : IQuizAssignService
             throw new ValidationAppException(["Grade id is required for allInGrade assignment."]);
         }
 
-        var studentIds = await _studentScope.GetStudentIdsInSchoolByGradeAsync(
-            scope.SchoolId!.Value,
-            scope.CampusId!.Value,
-            request.GradeId.Value,
-            cancellationToken);
+        var (schoolId, campusId) = ResolveAudienceLocation(scope, request, campusRequired: false);
+        IReadOnlyList<long> studentIds;
+        if (campusId is > 0)
+        {
+            studentIds = await _studentScope.GetStudentIdsInSchoolByGradeAsync(
+                schoolId,
+                campusId.Value,
+                request.GradeId.Value,
+                cancellationToken);
+        }
+        else
+        {
+            studentIds = await _studentScope.GetStudentIdsInSchoolAsync(
+                schoolId,
+                cancellationToken,
+                gradeId: request.GradeId);
+        }
 
         if (scope.Role is not (UserRole.Teacher or UserRole.Coordinator))
         {
             return studentIds;
         }
 
-        return await FilterToTeacherRosterAsync(scope, studentIds, cancellationToken);
+        return await FilterToRosterAsync(scope, studentIds, cancellationToken);
     }
 
-    private async Task<IReadOnlyList<long>> FilterToTeacherRosterAsync(
+    private async Task<IReadOnlyList<long>> FilterToRosterAsync(
         QuizManageScope scope,
         IReadOnlyList<long> studentIds,
         CancellationToken cancellationToken)
     {
-        var rosterIds = await _studentScope.GetTeacherRosterStudentIdsAsync(
+        var rosterIds = await _studentScope.GetRosterStudentIdsAsync(
             scope.ProfileId,
             scope.SchoolId!.Value,
             scope.CampusId!.Value,
+            scope.Role,
             cancellationToken);
         var rosterSet = rosterIds.ToHashSet();
         return studentIds.Where(rosterSet.Contains).ToArray();
+    }
+
+    private static (int SchoolId, int? CampusId) ResolveAudienceLocation(
+        QuizManageScope scope,
+        AssignQuizRequest request,
+        bool campusRequired)
+    {
+        var schoolId = scope.SchoolId
+            ?? request.SchoolIds?.FirstOrDefault()
+            ?? throw new ValidationAppException(["School id is required for this assignment mode."]);
+
+        if (scope.Role == UserRole.SchoolAdmin && scope.SchoolId != schoolId)
+        {
+            throw new ForbiddenAppException("You can only assign within your school.");
+        }
+
+        var campusId = request.CampusId is > 0
+            ? request.CampusId
+            : scope.CampusId;
+
+        if (scope.Role == UserRole.CampusAdmin)
+        {
+            campusId = scope.CampusId;
+        }
+
+        if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
+        {
+            schoolId = scope.SchoolId!.Value;
+            campusId = scope.CampusId;
+        }
+
+        if (campusRequired && campusId is not > 0)
+        {
+            throw new ValidationAppException(["Campus is required for this assignment mode."]);
+        }
+
+        return (schoolId, campusId);
     }
 
     private static bool IsAssignableLifecycle(string lifecycleName)

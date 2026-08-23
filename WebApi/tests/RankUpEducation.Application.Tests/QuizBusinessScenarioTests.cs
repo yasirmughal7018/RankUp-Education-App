@@ -82,4 +82,20 @@ public sealed class QuizBusinessScenarioTests
         Assert.False(QuizAssignRules.CanAssignWithApproval(UserRole.CampusAdmin, "SchoolApproved"));
         Assert.True(QuizAssignRules.CanAssignWithApproval(UserRole.CampusAdmin, "Approved"));
     }
+
+    [Fact]
+    public void AssignModes_MatchRoleScopes()
+    {
+        Assert.Contains("alllinked", QuizAssignRules.ModesForRole(UserRole.Parent));
+        Assert.Contains("allattached", QuizAssignRules.ModesForRole(UserRole.Teacher));
+        Assert.Contains("allattached", QuizAssignRules.ModesForRole(UserRole.Coordinator));
+        Assert.Contains("allincampus", QuizAssignRules.ModesForRole(UserRole.CampusAdmin));
+        Assert.Contains("allinschool", QuizAssignRules.ModesForRole(UserRole.SchoolAdmin));
+        Assert.Contains("group", QuizAssignRules.ModesForRole(UserRole.SchoolAdmin));
+        Assert.Contains("group", QuizAssignRules.ModesForRole(UserRole.PortalAdmin));
+        Assert.Contains("public", QuizAssignRules.ModesForRole(UserRole.PortalAdmin));
+        Assert.False(QuizAssignRules.IsSupportedMode(UserRole.CampusAdmin, "allinschool"));
+        Assert.False(QuizAssignRules.IsSupportedMode(UserRole.Teacher, "public"));
+        Assert.True(QuizAssignRules.IsSupportedMode(UserRole.Coordinator, "group"));
+    }
 }

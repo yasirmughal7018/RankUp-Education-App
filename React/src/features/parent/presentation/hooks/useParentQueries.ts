@@ -32,6 +32,80 @@ export function useChildQuizHistoryQuery(studentId: number, enabled = true) {
   });
 }
 
+export function useParentGroupsQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.parentGroups(),
+    queryFn: () => parentApi.listMyGroups(),
+    enabled,
+  });
+}
+
+function invalidateParentChildrenData(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.linkedStudents() });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.parentGroups() });
+}
+
+export function useCreateParentGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: parentApi.createGroup,
+    onSuccess: () => invalidateParentChildrenData(queryClient),
+  });
+}
+
+export function useUpdateParentGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      groupId,
+      ...input
+    }: {
+      groupId: number;
+      groupName: string;
+      description?: string;
+    }) => parentApi.updateGroup(groupId, input),
+    onSuccess: () => invalidateParentChildrenData(queryClient),
+  });
+}
+
+export function useDeleteParentGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: parentApi.deleteGroup,
+    onSuccess: () => invalidateParentChildrenData(queryClient),
+  });
+}
+
+export function useAddParentGroupMemberMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      groupId,
+      studentId,
+    }: {
+      groupId: number;
+      studentId: number;
+    }) => parentApi.addGroupMember(groupId, studentId),
+    onSuccess: () => invalidateParentChildrenData(queryClient),
+  });
+}
+
+export function useRemoveParentGroupMemberMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      groupId,
+      studentId,
+    }: {
+      groupId: number;
+      studentId: number;
+    }) => parentApi.removeGroupMember(groupId, studentId),
+    onSuccess: () => invalidateParentChildrenData(queryClient),
+  });
+}
+
 export function useParentChildResultQuery(
   quizId: number,
   attemptId: number,

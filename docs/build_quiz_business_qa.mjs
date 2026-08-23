@@ -249,13 +249,13 @@ const quizAudiences = [
     "Group of students",
     "Teacher / Coordinator / Parent",
     "Now",
-    "Expands student_group_members for a group owned by the assigner. API mode: group.",
+    "Expands student_group_members for a group owned by the assigner. Parent groups are created on My children (web /parent/children Child groups panel; mobile Groups tab) via GET/POST/PUT/DELETE /parents/me/groups and member add/remove. Storage: student_groups.creator_role=Parent. Assign UI lists those groups by name. API mode: group.",
   ],
   [
     "Parent’s child’s linked student",
     "Parent",
     "Now",
-    "Parent: one linked child, selected linked children, all linked children, or a parent-owned child group. school-type quizzes cannot target unrelated students, whole school, multi-school, or public. API modes: one / selected / allLinked / group.",
+    "Parent: one linked child, selected linked children, all linked children, or a parent-owned child group created on My children. school-type quizzes cannot target unrelated students, whole school, multi-school, or public. API modes: one / selected / allLinked / group.",
   ],
   [
     "Class",
@@ -292,7 +292,7 @@ const quizAudiences = [
 const assignmentModes = [
   ["one", "Teacher / Coordinator / Parent / Admin", "Audience: One student / Parent’s child."],
   ["selected", "Teacher / Coordinator / Parent / Admin", "Audience: selected students or selected parent children; out-of-scope IDs skipped."],
-  ["group", "Teacher / Coordinator / Parent", "Audience: Group of students / parent child group owned by the assigner."],
+  ["group", "Teacher / Coordinator / Parent", "Audience: Group of students / parent child group owned by the assigner. Parent picks a group created on My children (not a raw group id)."],
   ["allInGrade", "Teacher / Coordinator", "Audience: Class (campus + grade). UI: allingrade."],
   ["allInSection", "Teacher / Coordinator", "Audience: Section (campus + grade + section)."],
   ["allInSchool", "SchoolAdmin / PortalAdmin", "Audience: School — materializes rows; does not open catalog."],
@@ -320,7 +320,8 @@ const audienceVisibilityRules = [
   "A student may see (1) quizzes with a quiz_assignment row for them, and/or (2) quizzes with AudienceScope=Public in the open catalog.",
   "School / multi-school / section / class assign create materialized rows and keep AudienceScope=Assigned. Only Public is open-catalog — prevents school-audience leakage into the student catalog.",
   "school-type quizzes may only target the creator’s linked children — never unrelated students, whole school, multi-school, or public.",
-  "Teacher assign is campus-scoped (grade/section/group/selected). Coordinator: same campus assign modes as Teacher. School-wide is SchoolAdmin/PortalAdmin; multi-school and public are PortalAdmin.",
+  "Assign scopes: Parent = linked children + selected + group (parent-owned child groups from /parents/me/groups). Teacher = assigned classes (allAttached) + selected + group + grade/section. Coordinator = attached classes + selected + group + grade/section. CampusAdmin = whole campus + selected + group + grade/section. SchoolAdmin = whole school + campus/class + selected + group. PortalAdmin = all of those plus multi-school and public catalog.",
+  "Parent child groups: create/manage on web /parent/children and mobile My children → Groups. Members must be linked children. Same student_groups / student_group_members tables as Teacher/Coordinator (creator_role=Parent). See Students QA §4.1.",
   "Student list filters Public catalog with AudienceScope == \"Public\" and now within [AudienceStartAt, AudienceEndAt]; SetAudienceAccess maps any non-Public scope to Assigned.",
 ];
 
@@ -467,7 +468,10 @@ const apiMap = [
   ["POST /api/quizzes/{id}/publish", "Non–PortalAdmin: submit for approval (Draft+Pending). Teacher/Coordinator notify school+campus+portal; CampusAdmin notify SchoolAdmin + PortalAdmin; SchoolAdmin/Parent notify PortalAdmin only. PortalAdmin: publish (Draft→Published) when approval gates met; may set Approved in same flow for school-type and for SchoolAdmin-created quizzes still Pending."],
   ["POST /api/quizzes/{id}/approve", "SchoolAdmin: Pending→SchoolApproved for Teacher/Coordinator/CampusAdmin quizzes in own school (not own quiz). CampusAdmin: Pending→SchoolApproved for Teacher/Coordinator in own campus. Cannot approve SchoolAdmin/Parent created quizzes. PortalAdmin: Pending or SchoolApproved→Approved, including SchoolAdmin-created Pending. Does not publish."],
   ["POST /api/quizzes/{id}/reject", "In-scope reject; reason required; stays Draft+Rejected."],
-  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published or Assigned (not Draft). Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle→Assigned."],
+  ["GET/POST /api/parents/me/groups", "Parent-only child groups (list/create). Used by My children and Parent assign mode=group."],
+  ["PUT/DELETE /api/parents/me/groups/{groupId}", "Parent update or deactivate own group."],
+  ["POST/DELETE /api/parents/me/groups/{groupId}/members", "Add/remove linked children only."],
+  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published or Assigned (not Draft). Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle→Assigned. Parent mode=group uses a parent-owned group id."],
   ["POST /api/quizzes/{id}/cancel", "Remove upcoming assignments; restore Assigned or Published."],
   ["POST /api/quizzes/{id}/archive", "PortalAdmin only when lifecycle is Published or Assigned (any student/child assignment). Other roles: own Draft delete only. No assignments → hard delete; else Archived + Inactive."],
   ["POST /api/quizzes/{id}/unarchive", "PortalAdmin only. Restore Published or Assigned."],
@@ -653,6 +657,12 @@ const scenarios = [
     "Client creates a Practice quiz with ShuffleQuestions=false while type default is also false/true variants.",
     "ApplyCreateDefaults never OR’s bools with type defaults — explicit client bools win; only nullables (attempts/nav) fall back; TimeLimitMinutes stays null until questions; ReviewDisplayMode always Full.",
   ],
+  [
+    "QZ-23",
+    "Parent assigns published quiz to a child group",
+    "Parent creates a group on My children, adds two linked children, then assigns a published school-type quiz with mode=group and that group selected.",
+    "Assignments created only for linked members of that parent-owned group. Unlinked IDs skipped. Assign dialog lists groups by name from GET /parents/me/groups (no raw group id).",
+  ],
 ];
 
 const checklist = [
@@ -676,6 +686,7 @@ const checklist = [
   "SchoolAdmin/CampusAdmin/PortalAdmin approve or reject on /quizzes/:id detail (review mode): Approve + Reject with reason only; quiz metadata and questions read-only. Open the quiz from the Draft tile on /quizzes — no separate approval page.",
   "Edit settings/questions: quiz owner while Draft + Pending/Rejected, or with an unused edit grant after SchoolApproved/Approved/Published; PortalAdmin may edit in place. After a granted save, quiz returns to Draft + Pending — resubmit required. Teacher/Coordinator edit requests: SchoolAdmin, CampusAdmin, or PortalAdmin (any one). SchoolAdmin/CampusAdmin/Parent edit requests: PortalAdmin only.",
   "Teacher/Coordinator/Parent assign of a published school-type catalog quiz requires Lifecycle Published or Assigned and Approval=Approved. Parent school-type assign still requires Published + Approved and linked children/students only.",
+  "Parent child groups: create/manage on My children (web Child groups panel / mobile Groups tab). APIs /parents/me/groups*. Assign mode=group uses those groups; members must be linked children.",
   "Student sees assigned quizzes and Public catalog only; school/section/multi never set AudienceScope=Public.",
   "Supported audiences: one, selected, group, class (allInGrade), section, school, multi-school, public (PortalAdmin), parent child / allLinked.",
   "QuizAssignment is one row per student with AssignedById, optional StudentGroupId, window, AllowedAttempts, QuizResultStatus, IsReviewDone.",
@@ -880,6 +891,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
     "Existing (quiz, student) assignment → skip; if all skipped → validation error.",
     "Cancel: hard-delete future assignments only; restore lifecycle Assigned or Published (never Cancelled).",
     "Allow retry: review must be finalized; attempt count ≥ allowed; ExtraAttempts += 1 (default); IsReviewDone=false. Archived blocked.",
+    "Parent group assign: groups come from /parents/me/groups (created on My children). Dropdown by group name; members must be linked children.",
   ])}
   <h3>QuizAssignment table</h3>
   <p>Each assignment grants one student access to one quiz within a window and attempt limit. Group/class audiences expand into many rows.</p>
@@ -961,6 +973,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
     "/student/quizzes* — detail, attempt (timer auto-submit), result.",
     "/student/history — student self quiz history (Reports API; History self only — not full analytics).",
     "/parent/quiz-dashboard, children history/result — parent flows.",
+    "/parent/children — create and manage parent child groups for assign mode=group.",
     "/reports — Teacher / Coordinator (own) / SchoolAdmin (school) / PortalAdmin (all) analytics.",
     "Mobile /quizzes (Teacher/Coordinator/Parent) — create (Parent → school-type), manage, submit for approval, assign (campus or linked audiences), duplicate/cancel/allow-retry, pending reviews, mark + finalize. Archive of Published/Assigned is PortalAdmin only (hidden for other roles).",
     "Mobile /quizzes/approvals — SchoolAdmin/PortalAdmin pending quiz approvals.",
@@ -1243,6 +1256,7 @@ const docChildren = [
     "/student/quizzes* for attempts and results.",
     "/student/history for student self quiz history (History self).",
     "/parent/quiz-dashboard and child history/result.",
+    "/parent/children — create and manage parent child groups for assign mode=group.",
     "/reports for Teacher/Coordinator (own) / SchoolAdmin / PortalAdmin analytics.",
     "Mobile /quizzes (Teacher/Coordinator/Parent): create, manage, submit for approval, campus or linked assign modes, duplicate/cancel/allow-retry, pending reviews, mark + finalize. Archive of Published/Assigned is PortalAdmin only.",
     "Mobile /quizzes/approvals and /quizzes/monitoring/:quizId for admin approval and monitoring.",

@@ -7,6 +7,7 @@ import {
   formatStudentLabel,
 } from "@/features/parent/domain/parentTypes";
 import { AddChildDialog } from "@/features/parent/presentation/components/AddChildDialog";
+import { ParentGroupsPanel } from "@/features/parent/presentation/components/ParentGroupsPanel";
 import {
   useLinkMyChildMutation,
   useLinkedStudentsQuery,
@@ -20,10 +21,10 @@ export function ParentChildrenPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <PageHeader
         title="My children"
-        description="Add children by CNIC or username, then monitor quiz history and progress."
+        description="Add children by CNIC or username, group them, then assign quizzes and monitor progress."
         action={
           <div className="flex gap-2">
             <button
@@ -151,6 +152,8 @@ export function ParentChildrenPage() {
           </div>
         )}
       </div>
+
+      <ParentGroupsPanel students={students} />
 
       {showAddChild ? (
         <AddChildDialog

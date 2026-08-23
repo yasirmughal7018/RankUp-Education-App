@@ -3,6 +3,7 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Directory;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Auth;
+using RankUpEducation.Domain.Coordinators;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
 
@@ -256,15 +257,16 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
         UserRole creatorRole,
         CancellationToken cancellationToken)
     {
-        var groupExists = await _dbContext.StudentGroups.AsNoTracking()
-            .AnyAsync(
-                group => group.Id == groupId
-                    && group.ReferralId == ownerUserId
-                    && group.CreatorRole == creatorRole
-                    && group.IsActive,
-                cancellationToken);
+        var groups = _dbContext.StudentGroups.AsNoTracking()
+            .Where(group => group.Id == groupId && group.IsActive);
 
-        if (!groupExists)
+        if (creatorRole is not (UserRole.PortalAdmin or UserRole.SchoolAdmin or UserRole.CampusAdmin))
+        {
+            groups = groups.Where(group =>
+                group.ReferralId == ownerUserId && group.CreatorRole == creatorRole);
+        }
+
+        if (!await groups.AnyAsync(cancellationToken))
         {
             return Array.Empty<long>();
         }
@@ -281,8 +283,32 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
         int campusId,
         CancellationToken cancellationToken)
     {
+        return await GetRosterStudentIdsAsync(
+            teacherId,
+            schoolId,
+            campusId,
+            UserRole.Teacher,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<long>> GetRosterStudentIdsAsync(
+        long profileId,
+        int schoolId,
+        int campusId,
+        UserRole role,
+        CancellationToken cancellationToken)
+    {
+        if (role == UserRole.Coordinator)
+        {
+            return await GetCoordinatorRosterStudentIdsAsync(
+                profileId,
+                schoolId,
+                campusId,
+                cancellationToken);
+        }
+
         var assignments = await _dbContext.TeacherClassSections.AsNoTracking()
-            .Where(item => item.TeacherId == teacherId && item.IsActive)
+            .Where(item => item.TeacherId == profileId && item.IsActive)
             .Select(item => new { item.Grade, item.Section })
             .ToListAsync(cancellationToken);
 
@@ -322,11 +348,74 @@ public sealed class StudentScopeRepository : IStudentScopeRepository
         int campusId,
         CancellationToken cancellationToken)
     {
-        var roster = await GetTeacherRosterStudentIdsAsync(
+        return await IsStudentInRosterAsync(
             teacherId,
+            studentId,
             schoolId,
             campusId,
+            UserRole.Teacher,
+            cancellationToken);
+    }
+
+    public async Task<bool> IsStudentInRosterAsync(
+        long profileId,
+        long studentId,
+        int schoolId,
+        int campusId,
+        UserRole role,
+        CancellationToken cancellationToken)
+    {
+        var roster = await GetRosterStudentIdsAsync(
+            profileId,
+            schoolId,
+            campusId,
+            role,
             cancellationToken);
         return roster.Contains(studentId);
+    }
+
+    private async Task<IReadOnlyList<long>> GetCoordinatorRosterStudentIdsAsync(
+        long coordinatorUserId,
+        int schoolId,
+        int campusId,
+        CancellationToken cancellationToken)
+    {
+        var assignments = await _dbContext.CoordinatorClassSections.AsNoTracking()
+            .Where(item => item.CoordinatorUserId == coordinatorUserId && item.IsActive)
+            .Select(item => new { item.Grade, item.Section })
+            .ToListAsync(cancellationToken);
+
+        if (assignments.Count == 0)
+        {
+            return Array.Empty<long>();
+        }
+
+        var fullClassGrades = assignments
+            .Where(item => CoordinatorClassSection.IsFullClassSection(item.Section))
+            .Select(item => item.Grade)
+            .ToHashSet();
+        var sectionPairs = assignments
+            .Where(item => !CoordinatorClassSection.IsFullClassSection(item.Section))
+            .Select(item => (item.Grade, Section: item.Section.ToLowerInvariant()))
+            .ToHashSet();
+        var grades = assignments.Select(item => item.Grade).Distinct().ToArray();
+
+        var candidates = await (
+            from student in _dbContext.Students.AsNoTracking()
+            join user in _dbContext.Users.AsNoTracking() on student.Id equals user.Id
+            where user.SchoolId == schoolId
+                && user.CampusId == campusId
+                && user.RoleAssignments.Any(assignment => assignment.Role == UserRole.Student)
+                && grades.Contains(student.Grade)
+            select new { student.Id, student.Grade, student.Section })
+            .ToListAsync(cancellationToken);
+
+        return candidates
+            .Where(row =>
+                fullClassGrades.Contains(row.Grade)
+                || sectionPairs.Contains((row.Grade, row.Section.ToLowerInvariant())))
+            .Select(row => row.Id)
+            .Distinct()
+            .ToArray();
     }
 }

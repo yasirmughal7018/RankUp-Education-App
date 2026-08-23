@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
 import 'package:rankup_education/features/parent/data/models/linked_student.dart';
+import 'package:rankup_education/features/parent/presentation/pages/parent_groups_section.dart';
 import 'package:rankup_education/features/parent/presentation/providers/parent_providers.dart';
 
 /// Linked children list for the signed-in Parent.
@@ -27,7 +28,9 @@ class _ParentChildrenPageState extends ConsumerState<ParentChildrenPage> {
       return;
     }
 
-    ref.invalidate(linkedStudentsProvider);
+    ref
+      ..invalidate(linkedStudentsProvider)
+      ..invalidate(parentGroupsProvider);
     setState(() {
       _successMessage = result.alreadyLinked
           ? '${result.fullName} was already linked to your account.'
@@ -39,147 +42,180 @@ class _ParentChildrenPageState extends ConsumerState<ParentChildrenPage> {
   Widget build(BuildContext context) {
     final studentsAsync = ref.watch(linkedStudentsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
         title: const Text('My children'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(linkedStudentsProvider),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddChild,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Add child'),
-      ),
-      body: studentsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            AppEmptyState(
-              icon: Icons.error_outline,
-              title: 'Unable to load children',
-              message: error.toString(),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => ref.invalidate(linkedStudentsProvider),
-              child: const Text('Retry'),
+        bottom: const TabBar(
+          tabs: [
+            Tab(text: 'Children'),
+            Tab(text: 'Groups'),
+          ],
+        ),
+          actions: [
+            IconButton(
+              tooltip: 'Refresh',
+            onPressed: () {
+              ref
+                ..invalidate(linkedStudentsProvider)
+                ..invalidate(parentGroupsProvider);
+            },
+              icon: const Icon(Icons.refresh),
             ),
           ],
         ),
-        data: (students) {
-          if (students.isEmpty) {
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _openAddChild,
+          icon: const Icon(Icons.person_add_alt_1),
+          label: const Text('Add child'),
+        ),
+        body: studentsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              AppEmptyState(
+                icon: Icons.error_outline,
+                title: 'Unable to load children',
+                message: error.toString(),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => ref.invalidate(linkedStudentsProvider),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+          data: (students) {
+            return TabBarView(
               children: [
-                if (_successMessage != null) ...[
-                  _SuccessBanner(message: _successMessage!),
-                  const SizedBox(height: 16),
-                ],
-                AppEmptyState(
-                  icon: Icons.family_restroom_outlined,
-                  title: 'No linked children',
-                  message:
-                      'Add a child using their CNIC or username. School admins can also link students for you.',
+                _ChildrenTab(
+                  students: students,
+                  successMessage: _successMessage,
+                  onAddChild: _openAddChild,
                 ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: _openAddChild,
-                  icon: const Icon(Icons.person_add_alt_1),
-                  label: const Text('Add child'),
-                ),
+                ParentGroupsSection(students: students),
               ],
             );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ChildrenTab extends ConsumerWidget {
+  const _ChildrenTab({
+    required this.students,
+    required this.successMessage,
+    required this.onAddChild,
+  });
+
+  final List<LinkedStudent> students;
+  final String? successMessage;
+  final VoidCallback onAddChild;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (students.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
+        children: [
+          if (successMessage != null) ...[
+            _SuccessBanner(message: successMessage!),
+            const SizedBox(height: 16),
+          ],
+          const AppEmptyState(
+            icon: Icons.family_restroom_outlined,
+            title: 'No linked children',
+            message:
+                'Add a child using their CNIC or username. School admins can also link students for you.',
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onAddChild,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text('Add child'),
+          ),
+        ],
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(linkedStudentsProvider);
+        await ref.read(linkedStudentsProvider.future);
+      },
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+        itemCount: students.length + (successMessage != null ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          if (successMessage != null && index == 0) {
+            return _SuccessBanner(message: successMessage!);
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(linkedStudentsProvider);
-              await ref.read(linkedStudentsProvider.future);
-            },
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-              itemCount: students.length + (_successMessage != null ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                if (_successMessage != null && index == 0) {
-                  return _SuccessBanner(message: _successMessage!);
-                }
-
-                final student =
-                    students[_successMessage != null ? index - 1 : index];
-                final theme = Theme.of(context);
-                return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Text(
-                        student.fullName.isNotEmpty
-                            ? student.fullName[0].toUpperCase()
-                            : '?',
-                      ),
-                    ),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            student.label,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Chip(
-                          label: Text(
-                            student.statusLabel,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          padding: EdgeInsets.zero,
-                          labelPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Chip(
-                          label: Text(
-                            student.relationship.trim().isEmpty
-                                ? 'Guardian'
-                                : student.relationship.trim(),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          padding: EdgeInsets.zero,
-                          labelPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                          ),
-                          backgroundColor: theme.colorScheme.primaryContainer,
-                          side: BorderSide.none,
-                        ),
-                      ],
-                    ),
-                    subtitle: Text(
-                      '${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}\n${student.placementLabel}',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(
-                      '/parent/children/${student.studentId}/history',
+          final student =
+              students[successMessage != null ? index - 1 : index];
+          final theme = Theme.of(context);
+          return Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                child: Text(
+                  student.fullName.isNotEmpty
+                      ? student.fullName[0].toUpperCase()
+                      : '?',
+                ),
+              ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      student.label,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                );
-              },
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text(
+                      student.statusLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: EdgeInsets.zero,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text(
+                      student.relationship.trim().isEmpty
+                          ? 'Guardian'
+                          : student.relationship.trim(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: EdgeInsets.zero,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    side: BorderSide.none,
+                  ),
+                ],
+              ),
+              subtitle: Text(
+                '${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}\n${student.placementLabel}',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(
+                '/parent/children/${student.studentId}/history',
+              ),
             ),
           );
         },

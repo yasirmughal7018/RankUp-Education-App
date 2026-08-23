@@ -73,11 +73,31 @@ public interface IStudentScopeRepository
         int campusId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Teacher: assigned class/section pairs. Coordinator: attached grades
+    /// (full class) and any explicit sections.
+    /// </summary>
+    Task<IReadOnlyList<long>> GetRosterStudentIdsAsync(
+        long profileId,
+        int schoolId,
+        int campusId,
+        UserRole role,
+        CancellationToken cancellationToken);
+
     /// <summary>True when the student is on the teacher's class/section roster.</summary>
     Task<bool> IsStudentInTeacherRosterAsync(
         long teacherId,
         long studentId,
         int schoolId,
         int campusId,
+        CancellationToken cancellationToken);
+
+    /// <summary>True when the student is on the Teacher or Coordinator roster.</summary>
+    Task<bool> IsStudentInRosterAsync(
+        long profileId,
+        long studentId,
+        int schoolId,
+        int campusId,
+        UserRole role,
         CancellationToken cancellationToken);
 }

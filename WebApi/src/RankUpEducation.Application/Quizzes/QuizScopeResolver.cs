@@ -292,15 +292,18 @@ public static class QuizScopeResolver
 
         if (scope.Role is UserRole.Teacher or UserRole.Coordinator)
         {
-            if (!await studentScope.IsStudentInTeacherRosterAsync(
+            if (!await studentScope.IsStudentInRosterAsync(
                     scope.ProfileId,
                     studentId,
                     scope.SchoolId!.Value,
                     scope.CampusId!.Value,
+                    scope.Role,
                     cancellationToken))
             {
                 throw new ForbiddenAppException(
-                    "You can only assign quizzes to students in your assigned classes and sections.");
+                    scope.Role == UserRole.Coordinator
+                        ? "You can only assign quizzes to students in your attached classes."
+                        : "You can only assign quizzes to students in your assigned classes and sections.");
             }
 
             return;

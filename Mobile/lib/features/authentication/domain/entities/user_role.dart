@@ -95,29 +95,56 @@ List<({String value, String label})> assignModesForRole(UserRole role) {
     (value: 'one', label: 'One student'),
     (value: 'selected', label: 'Selected students'),
   ];
+  const groupMode = (value: 'group', label: 'Group of students');
+  const classModes = [
+    (value: 'allingrade', label: 'All in grade'),
+    (value: 'allinsection', label: 'All in section / class'),
+  ];
 
   return switch (role) {
     UserRole.parent => [
         ...studentModes,
-        (value: 'group', label: 'Group'),
+        groupMode,
         (value: 'alllinked', label: 'All linked children'),
+      ],
+    UserRole.teacher => [
+        ...studentModes,
+        groupMode,
+        (value: 'allattached', label: 'All assigned classes'),
+        ...classModes,
+      ],
+    UserRole.coordinator => [
+        ...studentModes,
+        groupMode,
+        (value: 'allattached', label: 'All attached classes'),
+        ...classModes,
+      ],
+    UserRole.campusAdmin => [
+        ...studentModes,
+        groupMode,
+        (value: 'allincampus', label: 'All in campus'),
+        ...classModes,
       ],
     UserRole.schoolAdmin => [
         ...studentModes,
+        groupMode,
+        (value: 'allincampus', label: 'All in campus'),
+        ...classModes,
         (value: 'allinschool', label: 'All in school'),
-        (value: 'public', label: 'Public (catalog)'),
       ],
     UserRole.portalAdmin => [
         ...studentModes,
+        groupMode,
+        (value: 'allincampus', label: 'All in campus'),
+        ...classModes,
         (value: 'allinschool', label: 'All in school'),
         (value: 'multischool', label: 'Multiple schools'),
         (value: 'public', label: 'Public (catalog)'),
       ],
     _ => [
         ...studentModes,
-        (value: 'group', label: 'Group'),
-        (value: 'allingrade', label: 'All in grade'),
-        (value: 'allinsection', label: 'All in section'),
+        groupMode,
+        ...classModes,
       ],
   };
 }
@@ -125,8 +152,11 @@ List<({String value, String label})> assignModesForRole(UserRole role) {
 /// Default assign mode in the assign sheet (mirrors web AssignQuizDialog).
 String defaultAssignModeForRole(UserRole role) {
   return switch (role) {
+    UserRole.parent => 'alllinked',
+    UserRole.teacher || UserRole.coordinator => 'allattached',
+    UserRole.campusAdmin => 'allincampus',
     UserRole.schoolAdmin => 'allinschool',
-    UserRole.portalAdmin => 'public',
+    UserRole.portalAdmin => 'selected',
     _ => assignModesForRole(role).first.value,
   };
 }

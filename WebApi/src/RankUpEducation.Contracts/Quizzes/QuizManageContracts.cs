@@ -103,8 +103,10 @@ public sealed record QuizApprovalHistoryItem(
     DateTimeOffset OccurredAt);
 
 /// <summary>
-/// Assignment request. Modes: one, selected, group, allLinked (parent), allInGrade / allInSection (teacher),
-/// allInSchool (school admin), multiSchool / public (portal admin).
+/// Assignment request. Modes: one, selected, group, allLinked (parent),
+/// allAttached (teacher/coordinator roster), allInGrade / allInSection,
+/// allInCampus (campus/school/portal), allInSchool (school/portal),
+/// multiSchool / public (portal admin).
 /// </summary>
 public sealed record AssignQuizRequest(
     string Mode,

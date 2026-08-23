@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankup_education/core/api/api_client.dart';
 import 'package:rankup_education/features/parent/data/datasources/parent_remote_datasource.dart';
 import 'package:rankup_education/features/parent/data/models/linked_student.dart';
+import 'package:rankup_education/features/parent/data/models/parent_group.dart';
 import 'package:rankup_education/features/reports/data/models/student_quiz_history_models.dart';
 import 'package:rankup_education/features/reports/presentation/providers/report_providers.dart';
 
@@ -13,6 +14,12 @@ final parentRemoteDataSourceProvider = Provider<ParentRemoteDataSource>((ref) {
 final linkedStudentsProvider =
     FutureProvider.autoDispose<List<LinkedStudent>>((ref) async {
   return ref.watch(parentRemoteDataSourceProvider).listLinkedStudents();
+});
+
+/// Groups of linked children owned by the signed-in Parent.
+final parentGroupsProvider =
+    FutureProvider.autoDispose<List<ParentGroup>>((ref) async {
+  return ref.watch(parentRemoteDataSourceProvider).listMyGroups();
 });
 
 /// Quiz history for a linked child (Parent scope).

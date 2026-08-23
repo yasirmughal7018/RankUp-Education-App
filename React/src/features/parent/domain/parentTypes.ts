@@ -39,12 +39,45 @@ export interface ChildQuizHistory {
   items: ChildQuizHistoryItem[];
 }
 
-export function formatStudentLabel(student: LinkedStudent): string {
+export interface ParentGroupMember {
+  studentId: number;
+  fullName: string;
+  username: string;
+  rollNumber: string;
+  grade: number;
+  section: string;
+}
+
+export interface ParentGroup {
+  groupId: number;
+  groupName: string;
+  description: string;
+  isActive: boolean;
+  memberCount: number;
+  members: ParentGroupMember[];
+}
+
+export function formatStudentLabel(
+  student: LinkedStudent | ParentGroupMember,
+): string {
   const section = student.section?.trim();
   const classPart = section
     ? `Grade ${student.grade} · ${section}`
     : `Grade ${student.grade}`;
   return `${student.fullName} (${classPart})`;
+}
+
+export function childMatchesQuery(
+  student: LinkedStudent | ParentGroupMember,
+  query: string,
+): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return true;
+  }
+  const haystack =
+    `${student.fullName} ${student.username} ${student.rollNumber} grade ${student.grade}${student.section}`.toLowerCase();
+  return haystack.includes(needle);
 }
 
 export function formatStudentPlacement(student: LinkedStudent): string {

@@ -863,6 +863,7 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
   final _groupController = TextEditingController();
   final _sectionController = TextEditingController();
   final _schoolIdsController = TextEditingController();
+  int? _parentGroupId;
   final Set<String> _selectedIds = {};
   late DateTime _startAt;
   late DateTime _endAt;
@@ -918,9 +919,15 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
       setState(() => _error = 'Could not determine grade from quiz.');
       return;
     }
-    final groupId = int.tryParse(_groupController.text.trim());
+    final groupId = widget.role == UserRole.parent
+        ? _parentGroupId
+        : int.tryParse(_groupController.text.trim());
     if (_mode == 'group' && groupId == null) {
-      setState(() => _error = 'Enter a valid group ID.');
+      setState(
+        () => _error = widget.role == UserRole.parent
+            ? 'Select a child group.'
+            : 'Enter a valid group ID.',
+      );
       return;
     }
     if (_mode == 'allinsection' && _sectionController.text.trim().isEmpty) {
@@ -1090,11 +1097,17 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                       ),
               ),
             ] else if (_mode == 'group')
-              TextField(
-                controller: _groupController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Group ID'),
-              )
+              widget.role == UserRole.parent
+                  ? _ParentGroupDropdown(
+                      value: _parentGroupId,
+                      onChanged: (value) =>
+                          setState(() => _parentGroupId = value),
+                    )
+                  : TextField(
+                      controller: _groupController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Group ID'),
+                    )
             else if (_mode == 'allinsection') ...[
               Text(
                 'Grade is taken from ${widget.defaultGradeLabel}.',
@@ -1121,6 +1134,10 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                 switch (_mode) {
                   'allinschool' =>
                     'Assigns to all active students in your school.',
+                  'allincampus' =>
+                    'Assigns to all active students in your campus.',
+                  'allattached' =>
+                    'Assigns to every student in your assigned or attached classes.',
                   'public' => 'Publishes this quiz to the public catalog.',
                   'alllinked' =>
                     'Assigns to all children linked to your account.',
@@ -1179,6 +1196,55 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ParentGroupDropdown extends ConsumerWidget {
+  const _ParentGroupDropdown({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final int? value;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groupsAsync = ref.watch(parentGroupsProvider);
+    return groupsAsync.when(
+      loading: () => const InputDecorator(
+        decoration: InputDecoration(labelText: 'Student group'),
+        child: Text('Loading groups…'),
+      ),
+      error: (error, _) => InputDecorator(
+        decoration: const InputDecoration(labelText: 'Student group'),
+        child: Text(error.toString()),
+      ),
+      data: (groups) {
+        if (groups.isEmpty) {
+          return const InputDecorator(
+            decoration: InputDecoration(labelText: 'Student group'),
+            child: Text('Create a group on My children first.'),
+          );
+        }
+
+        return DropdownButtonFormField<int>(
+          key: ValueKey(value),
+          initialValue: groups.any((group) => group.groupId == value)
+              ? value
+              : null,
+          decoration: const InputDecoration(labelText: 'Student group'),
+          items: [
+            for (final group in groups)
+              DropdownMenuItem(
+                value: group.groupId,
+                child: Text('${group.groupName} (${group.memberCount})'),
+              ),
+          ],
+          onChanged: onChanged,
+        );
+      },
     );
   }
 }

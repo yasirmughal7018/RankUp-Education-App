@@ -657,32 +657,89 @@ export function isRejectedQuizApprovalStatus(status: string): boolean {
   );
 }
 
+const STUDENT_ASSIGN_MODES = [
+  { value: "one", label: "One student", group: "Students" },
+  { value: "selected", label: "Selected students", group: "Students" },
+];
+
+const GROUP_ASSIGN_MODE = {
+  value: "group",
+  label: "Group of students",
+  group: "Groups",
+};
+
+const CLASS_ASSIGN_MODES = [
+  { value: "allingrade", label: "All in grade", group: "Class" },
+  { value: "allinsection", label: "All in section / class", group: "Class" },
+];
+
 /** Assign modes supported by API for the given role (canonical source for Assign dialog). */
 export function assignModesForRole(role: UserRole): Array<{
   value: string;
   label: string;
   group: string;
 }> {
-  const studentModes = [
-    { value: "one", label: "One student", group: "Students" },
-    { value: "selected", label: "Selected students", group: "Students" },
-  ];
-
   if (role === "Parent") {
     return [
-      ...studentModes,
-      { value: "group", label: "Group", group: "Groups" },
+      ...STUDENT_ASSIGN_MODES,
+      GROUP_ASSIGN_MODE,
       {
         value: "alllinked",
         label: "All linked children",
-        group: "Parent",
+        group: "Children",
       },
+    ];
+  }
+
+  if (role === "Teacher") {
+    return [
+      ...STUDENT_ASSIGN_MODES,
+      GROUP_ASSIGN_MODE,
+      {
+        value: "allattached",
+        label: "All assigned classes",
+        group: "Class",
+      },
+      ...CLASS_ASSIGN_MODES,
+    ];
+  }
+
+  if (role === "Coordinator") {
+    return [
+      ...STUDENT_ASSIGN_MODES,
+      GROUP_ASSIGN_MODE,
+      {
+        value: "allattached",
+        label: "All attached classes",
+        group: "Class",
+      },
+      ...CLASS_ASSIGN_MODES,
+    ];
+  }
+
+  if (role === "CampusAdmin") {
+    return [
+      ...STUDENT_ASSIGN_MODES,
+      GROUP_ASSIGN_MODE,
+      {
+        value: "allincampus",
+        label: "All in campus",
+        group: "Campus",
+      },
+      ...CLASS_ASSIGN_MODES,
     ];
   }
 
   if (role === "SchoolAdmin") {
     return [
-      ...studentModes,
+      ...STUDENT_ASSIGN_MODES,
+      GROUP_ASSIGN_MODE,
+      {
+        value: "allincampus",
+        label: "All in campus",
+        group: "Campus",
+      },
+      ...CLASS_ASSIGN_MODES,
       {
         value: "allinschool",
         label: "All in school",
@@ -691,17 +748,16 @@ export function assignModesForRole(role: UserRole): Array<{
     ];
   }
 
-  if (role === "CampusAdmin") {
-    return [
-      ...studentModes,
-      { value: "allingrade", label: "All in grade", group: "Class" },
-      { value: "allinsection", label: "All in section", group: "Class" },
-    ];
-  }
-
   if (role === "PortalAdmin") {
     return [
-      ...studentModes,
+      ...STUDENT_ASSIGN_MODES,
+      GROUP_ASSIGN_MODE,
+      {
+        value: "allincampus",
+        label: "All in campus",
+        group: "Campus",
+      },
+      ...CLASS_ASSIGN_MODES,
       {
         value: "allinschool",
         label: "All in school",
@@ -720,13 +776,27 @@ export function assignModesForRole(role: UserRole): Array<{
     ];
   }
 
-  // Teacher (default)
-  return [
-    ...studentModes,
-    { value: "group", label: "Group", group: "Groups" },
-    { value: "allingrade", label: "All in grade", group: "Class" },
-    { value: "allinsection", label: "All in section", group: "Class" },
-  ];
+  return [...STUDENT_ASSIGN_MODES, GROUP_ASSIGN_MODE, ...CLASS_ASSIGN_MODES];
+}
+
+/** Default assign mode after opening the dialog. */
+export function defaultAssignModeForRole(role: UserRole): string {
+  if (role === "PortalAdmin") {
+    return "selected";
+  }
+  if (role === "SchoolAdmin") {
+    return "allinschool";
+  }
+  if (role === "CampusAdmin") {
+    return "allincampus";
+  }
+  if (role === "Parent") {
+    return "alllinked";
+  }
+  if (role === "Teacher" || role === "Coordinator") {
+    return "allattached";
+  }
+  return "selected";
 }
 
 /** Instruction lines to show on detail screens — skip the quiz title (already in the page header). */

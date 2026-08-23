@@ -35,3 +35,31 @@ public sealed record LinkMyChildResponse(
     string AccountStatus,
     bool AlreadyLinked);
 
+public sealed record ParentGroupMemberResponse(
+    long StudentId,
+    string FullName,
+    string Username,
+    string RollNumber,
+    short Grade,
+    string Section);
+
+public sealed record ParentGroupResponse(
+    long GroupId,
+    string GroupName,
+    string Description,
+    bool IsActive,
+    int MemberCount,
+    IReadOnlyList<ParentGroupMemberResponse> Members);
+
+public sealed record ParentGroupListResponse(IReadOnlyList<ParentGroupResponse> Items);
+
+public sealed record CreateParentGroupRequest(
+    string GroupName,
+    string? Description = null);
+
+public sealed record UpdateParentGroupRequest(
+    string GroupName,
+    string? Description = null);
+
+public sealed record AddParentGroupMemberRequest(long StudentId);
+

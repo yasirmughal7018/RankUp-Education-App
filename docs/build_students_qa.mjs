@@ -25,10 +25,10 @@ import {
 } from "docx";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DOC_DATE = "16 Aug 2026";
+const DOC_DATE = "23 Aug 2026";
 const DOC_TITLE = "RankUp Education — Students Business & QA Guide";
 const DOC_SUBTITLE =
-  "Student identity, registration, directory, quizzes, rankings, dashboards, school change, parent links, and known gaps — as implemented.";
+  "Student identity, registration, directory, quizzes, rankings, dashboards, school change, parent links, parent child groups, and known gaps — as implemented.";
 
 const identityRules = [
   ["Role exclusivity", "Student cannot combine with any other role (UserRoleRules). Adding Student when another role exists, or adding any role when Student exists, fails. Parent/Teacher/Coordinator are combinable with each other but never with Student."],
@@ -89,6 +89,19 @@ const parentLinking = [
   ["Student “my parents”", "Not implemented — no student-facing parents list API/UI"],
 ];
 
+const parentChildGroups = [
+  ["Storage", "Reuse student_groups + student_group_members. creator_role = Parent (2013). referral_id = parent user id. Do not add a separate parent_group table."],
+  ["GET /parents/me/groups", "Parent-only: active groups owned by the signed-in parent, with members."],
+  ["POST /parents/me/groups", "Create group (name required ≤50 chars; description optional ≤200)."],
+  ["PUT /parents/me/groups/{groupId}", "Rename / update description for a group the parent owns."],
+  ["DELETE /parents/me/groups/{groupId}", "Deactivate (soft-remove) the parent’s group."],
+  ["POST /parents/me/groups/{groupId}/members", "Add a linked child only. Unlinked student → validation error."],
+  ["DELETE /parents/me/groups/{groupId}/members/{studentId}", "Remove a child from that group."],
+  ["Web UI", "/parent/children — linked children list plus Child groups panel (create, pick group, add/remove members)."],
+  ["Mobile UI", "My children → Groups tab: create group, add/remove linked children, delete group."],
+  ["Quiz assign", "Parent assign mode group picks a group from this list (dropdown by name). Only members who are still linked children are assigned. See Quizzes QA §8."],
+];
+
 const quizStudentApis = [
   ["GET /quizzes", "Assigned quizzes for the student"],
   ["GET /quizzes/{quizId}", "Detail if assigned"],
@@ -139,6 +152,7 @@ const webRoutes = [
   ["/student/rankings", "Class / school peer rankings"],
   ["/admin/directory/students", "Admin directory (not student session)"],
   ["/request-access", "Public register (grade+section for Student)"],
+  ["/parent/children", "Parent: linked children + Child groups panel"],
 ];
 
 const mobileRoutes = [
@@ -149,6 +163,7 @@ const mobileRoutes = [
   ["/ai-assistant", "Static AI preview (no backend)"],
   ["/profile, /settings, /notifications", "Profile/settings real; notifications API"],
   ["/messages, /worksheets, /discussions", "Stub / placeholder"],
+  ["/parent/children", "Parent: linked children + Groups tab"],
 ];
 
 const webNav = [
@@ -186,6 +201,8 @@ const scenarios = [
   ["STU-12", "Dashboard honesty", "Open Web and Mobile student home with no fabricated APIs.", "No fake rank/AI/weak-topic cards; quiz stats from assigned quizzes only."],
   ["STU-13", "Parent link invisible to student", "Admin links parent↔student; student opens profile/home.", "No “my parents” list for the student."],
   ["STU-14", "Role exclusivity", "Try grant Teacher onto a Student account (or reverse).", "Business rule: Student accounts cannot be combined with other roles."],
+  ["STU-15", "Parent creates a child group", "Parent on /parent/children (or mobile Groups tab) creates “Weekend practice” and adds two linked children.", "Group stored on student_groups with creator_role=Parent. GET /parents/me/groups returns the group and both members."],
+  ["STU-16", "Parent group members must be linked", "Parent tries to add a student who is not linked to their account.", "Validation: only linked children can be group members."],
 ];
 
 const checklist = [
@@ -204,6 +221,8 @@ const checklist = [
   "Student school-change fully locks the account; Parent cannot request school change.",
   "Student cannot combine roles or self-remove Student.",
   "No student-facing my-parents API.",
+  "Parent can create/manage child groups on /parent/children (web) and My children → Groups (mobile).",
+  "Parent group members must be linked children; storage is student_groups (creator_role=Parent), not a new table.",
 ];
 
 function esc(text) {
@@ -270,6 +289,7 @@ const html = `<!doctype html>
       <span class="chip">${esc(DOC_DATE)}</span>
       <span class="chip">Exclusive Student role</span>
       <span class="chip">Parent links</span>
+      <span class="chip">Child groups</span>
       <span class="chip">Honest dashboards</span>
       <span class="chip">Peer rankings</span>
     </div>
@@ -299,6 +319,9 @@ const html = `<!doctype html>
 
   <h2>4. Parent linking</h2>
   ${htmlTable(["Endpoint / topic", "Rule"], parentLinking)}
+  <h3>4.1 Parent child groups</h3>
+  <p>Parents can group linked children and later assign a published quiz to the whole group. Same <code>student_groups</code> model as Teacher/Coordinator groups.</p>
+  ${htmlTable(["Endpoint / topic", "Rule"], parentChildGroups)}
 
   <h2>5. Quizzes (student take flow)</h2>
   <h3>5.1 Student-callable APIs</h3>
@@ -424,6 +447,11 @@ const docChildren = [
 
   docHeading("4. Parent linking"),
   docTable(["Endpoint / topic", "Rule"], parentLinking),
+  docHeading("4.1 Parent child groups", HeadingLevel.HEADING_2),
+  docParagraph(
+    "Parents can group linked children and later assign a published quiz to the whole group. Same student_groups model as Teacher/Coordinator groups.",
+  ),
+  docTable(["Endpoint / topic", "Rule"], parentChildGroups),
 
   docHeading("5. Quizzes (student take flow)"),
   docHeading("5.1 Student-callable APIs", HeadingLevel.HEADING_2),

@@ -9,10 +9,19 @@ import {
   useDirectorySchoolsQuery,
   useDirectoryStudentsQuery,
 } from "@/features/directory/presentation/hooks/useDirectoryQueries";
-import { useTeacherRosterQuery } from "@/features/teacher/presentation/hooks/useTeacherQueries";
-import { useLinkedStudentsQuery } from "@/features/parent/presentation/hooks/useParentQueries";
+import {
+  useTeacherGroupsQuery,
+  useTeacherRosterQuery,
+} from "@/features/teacher/presentation/hooks/useTeacherQueries";
+import {
+  useLinkedStudentsQuery,
+  useParentGroupsQuery,
+} from "@/features/parent/presentation/hooks/useParentQueries";
 import type { AssignQuizInput } from "@/features/quizzes/domain/quizTypes";
-import { assignModesForRole } from "@/features/quizzes/domain/quizTypes";
+import {
+  assignModesForRole,
+  defaultAssignModeForRole,
+} from "@/features/quizzes/domain/quizTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
 interface AssignQuizDialogProps {
@@ -38,6 +47,9 @@ const SCOPED_AUDIENCE_MODES = new Set([
   "selected",
   "group",
   "allinschool",
+  "allincampus",
+  "allingrade",
+  "allinsection",
 ]);
 
 function defaultDateTime(offsetHours: number): string {
@@ -84,10 +96,11 @@ export function AssignQuizDialog({
   const { user } = useAuth();
   const isSchoolAdmin = user?.role === "SchoolAdmin";
   const isPortalAdmin = user?.role === "PortalAdmin";
+  const isCampusAdmin = user?.role === "CampusAdmin";
   const isTeacher =
     user?.role === "Teacher" || user?.role === "Coordinator";
   const isLinkedAssigner = user?.role === "Parent";
-  const isAdminAssigner = isSchoolAdmin || isPortalAdmin;
+  const isAdminAssigner = isSchoolAdmin || isPortalAdmin || isCampusAdmin;
   const surprise = isSurpriseQuizType(quizType);
   const modeOptions = useMemo(
     () => (user ? assignModesForRole(user.role) : assignModesForRole("Teacher")),
@@ -103,18 +116,9 @@ export function AssignQuizDialog({
     return [...groups.entries()];
   }, [modeOptions]);
 
-  const [mode, setMode] = useState(() => {
-    if (user?.role === "PortalAdmin") {
-      return "public";
-    }
-    if (user?.role === "SchoolAdmin") {
-      return "allinschool";
-    }
-    if (user?.role === "Parent") {
-      return "alllinked";
-    }
-    return "selected";
-  });
+  const [mode, setMode] = useState(() =>
+    user ? defaultAssignModeForRole(user.role) : "selected",
+  );
 
   const lockedSchoolId =
     user?.role === "PortalAdmin"
@@ -153,7 +157,8 @@ export function AssignQuizDialog({
   );
   const [error, setError] = useState<string | null>(null);
 
-  const showAudienceScope = SCOPED_AUDIENCE_MODES.has(mode) && !isLinkedAssigner;
+  const showAudienceScope =
+    SCOPED_AUDIENCE_MODES.has(mode) && !isLinkedAssigner && !isTeacher;
   const showStudentPicker = mode === "selected" || mode === "one";
   const canPickSchool = isPortalAdmin;
   const canPickCampus =
@@ -228,7 +233,13 @@ export function AssignQuizDialog({
     },
     showStudentPicker && !isTeacher && !isLinkedAssigner,
   );
-  const rosterQuery = useTeacherRosterQuery(showStudentPicker && isTeacher);
+  const rosterQuery = useTeacherRosterQuery(
+    (showStudentPicker || mode === "allattached") && isTeacher,
+  );
+  const groupsQuery = useTeacherGroupsQuery(mode === "group" && isTeacher);
+  const parentGroupsQuery = useParentGroupsQuery(
+    mode === "group" && isLinkedAssigner,
+  );
   const parentLinkedQuery = useLinkedStudentsQuery(
     showStudentPicker && user?.role === "Parent",
   );
@@ -360,6 +371,11 @@ export function AssignQuizDialog({
       }
     }
 
+    if (mode === "allincampus" && !selectedCampusId) {
+      setError("Campus is required for all-in-campus assignment.");
+      return;
+    }
+
     if (mode === "multischool" && !schoolIdsText.trim()) {
       setError("Enter at least one school id for multi-school assignment.");
       return;
@@ -423,7 +439,10 @@ export function AssignQuizDialog({
             : null,
         section: mode === "allinsection" ? section.trim() : null,
         schoolIds,
-        campusId: showAudienceScope ? selectedCampusId : null,
+        campusId:
+          showAudienceScope || mode === "allincampus"
+            ? selectedCampusId
+            : null,
       });
     } catch (caught) {
       const apiError = caught as ApiError;
@@ -531,7 +550,12 @@ export function AssignQuizDialog({
                 </div>
 
                 <div>
-                  <FieldLabel htmlFor="assignCampus">Campus</FieldLabel>
+                  <FieldLabel
+                    htmlFor="assignCampus"
+                    required={mode === "allincampus"}
+                  >
+                    Campus
+                  </FieldLabel>
                   {canPickCampus ? (
                     <select
                       id="assignCampus"
@@ -617,7 +641,7 @@ export function AssignQuizDialog({
               ) : null}
 
               <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
-                {!selectedSchoolId ? (
+                {!selectedSchoolId && !isTeacher && !isLinkedAssigner ? (
                   <p className="px-3 py-4 text-sm text-muted-foreground">
                     Select a school to load students.
                   </p>
@@ -670,19 +694,56 @@ export function AssignQuizDialog({
           {mode === "group" ? (
             <div>
               <FieldLabel htmlFor="groupId" required>
-                Group ID
+                Student group
               </FieldLabel>
-              <input
-                id="groupId"
-                type="number"
-                value={groupId}
-                disabled={isSubmitting}
-                onChange={(event) => setGroupId(event.target.value)}
-                className={inputClassName}
-                min={1}
-              />
+              {isTeacher || isLinkedAssigner ? (
+                <select
+                  id="groupId"
+                  value={groupId}
+                  disabled={
+                    isSubmitting ||
+                    (isTeacher
+                      ? groupsQuery.isLoading
+                      : parentGroupsQuery.isLoading)
+                  }
+                  onChange={(event) => setGroupId(event.target.value)}
+                  className={inputClassName}
+                  required
+                >
+                  <option value="">
+                    {(isTeacher
+                      ? groupsQuery.isLoading
+                      : parentGroupsQuery.isLoading)
+                      ? "Loading groups..."
+                      : "Select a group..."}
+                  </option>
+                  {(isTeacher
+                    ? (groupsQuery.data ?? [])
+                    : (parentGroupsQuery.data ?? [])
+                  ).map((group) => (
+                    <option key={group.groupId} value={group.groupId}>
+                      {group.groupName} ({group.memberCount})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="groupId"
+                  type="number"
+                  value={groupId}
+                  disabled={isSubmitting}
+                  onChange={(event) => setGroupId(event.target.value)}
+                  className={inputClassName}
+                  min={1}
+                  required
+                />
+              )}
               <p className="mt-1 text-xs text-muted-foreground">
-                Enter the student group ID to assign (scoped by filters above).
+                {isTeacher
+                  ? "Groups from My students. Only members in your classes are assigned."
+                  : isLinkedAssigner
+                    ? "Groups from My children. Only linked children in the group are assigned."
+                    : "Enter a student group ID. Only members in your scope are assigned."}
               </p>
             </div>
           ) : null}
@@ -725,6 +786,26 @@ export function AssignQuizDialog({
                 />
               </div>
             </div>
+          ) : null}
+
+          {mode === "allattached" ? (
+            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
+              {user?.role === "Coordinator"
+                ? "Assigns to every student in your attached classes."
+                : "Assigns to every student in your assigned classes and sections."}
+              {(rosterQuery.data?.students.length ?? 0) > 0
+                ? ` ${rosterQuery.data?.students.length} student${
+                    rosterQuery.data?.students.length === 1 ? "" : "s"
+                  } on your roster.`
+                : ""}
+            </p>
+          ) : null}
+
+          {mode === "allincampus" ? (
+            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
+              Assigns to all active students in
+              {selectedCampusId ? " the selected campus" : " your campus"}.
+            </p>
           ) : null}
 
           {mode === "allinschool" ? (
