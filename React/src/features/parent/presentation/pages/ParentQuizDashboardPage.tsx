@@ -171,7 +171,7 @@ export function ParentQuizDashboardPage() {
                 <div className="flex items-center gap-3">
                   <AppStatusBadge status={normalizeQuizStatus(quiz.status)} />
                   <Button variant="outline" size="sm" asChild>
-                    <Link to={`/quizzes/${quiz.id}`}>Open</Link>
+                    <Link to={`/quizzes/${quiz.id}`}>View details</Link>
                   </Button>
                 </div>
               </AppCard>

@@ -6,6 +6,7 @@ import {
   mapManageQuizToForm,
 } from "@/features/quizzes/domain/quizTypes";
 import { QuizForm } from "@/features/quizzes/presentation/components/QuizForm";
+import { QuizSettingsOverview } from "@/features/quizzes/presentation/components/QuizSettingsOverview";
 import {
   useManageQuizQuery,
   useQuizAssignmentsQuery,
@@ -65,11 +66,14 @@ export function QuizEditPage() {
           description={
             quiz.hasApprovedEditGrant
               ? "Your edit request was approved. Saving sends this quiz back to Draft + Pending — resubmit for approval after you edit."
-              : "Only the quiz owner or a portal admin can change settings while the quiz is Draft or Published and no assignment has started. After approval or publish, owners send an edit request first."
+              : "Settings cannot be changed on this published quiz until an edit request is approved. You can still review every setting below."
           }
           backTo={`/quizzes/${quizId}`}
           backAriaLabel="Back to quiz"
         />
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <QuizSettingsOverview quiz={quiz} />
+        </section>
       </div>
     );
   }

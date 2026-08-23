@@ -6,6 +6,7 @@ import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { AttachBankQuestionsDialog } from "@/features/quizzes/presentation/components/AttachBankQuestionsDialog";
 import { AssignQuizDialog } from "@/features/quizzes/presentation/components/AssignQuizDialog";
+import { QuizSettingsDialog } from "@/features/quizzes/presentation/components/QuizSettingsOverview";
 import {
   answersFromQuizQuestion,
   QuizQuestionAnswerAside,
@@ -257,6 +258,7 @@ export function QuizManageDetailPage() {
     null,
   );
   const [rejectEditReason, setRejectEditReason] = useState("");
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
 
   const publishQuiz = usePublishQuizMutation(numericQuizId);
   const approveQuiz = useApproveQuizMutation(numericQuizId);
@@ -534,38 +536,47 @@ export function QuizManageDetailPage() {
         backTo="/quizzes"
         backAriaLabel="Back to quizzes"
         action={
-          approvalReviewMode ? null : (
-          <div className="flex gap-2">
-            {!draft ? (
-              <Link
-                to={`/quizzes/${numericQuizId}/monitoring`}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                Monitor
-              </Link>
-            ) : null}
-            {settingsEditable ? (
-              <Link
-                to={`/quizzes/${numericQuizId}/edit`}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                Edit settings
-              </Link>
-            ) : null}
-            {canRequestEdit ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRequestEditForm(true);
-                  setActionError(null);
-                }}
-                className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5"
-              >
-                Request edit
-              </button>
-            ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowSettingsDialog(true)}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              View settings
+            </button>
+            {approvalReviewMode ? null : (
+              <>
+                {!draft ? (
+                  <Link
+                    to={`/quizzes/${numericQuizId}/monitoring`}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Monitor
+                  </Link>
+                ) : null}
+                {settingsEditable ? (
+                  <Link
+                    to={`/quizzes/${numericQuizId}/edit`}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Edit settings
+                  </Link>
+                ) : null}
+                {canRequestEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRequestEditForm(true);
+                      setActionError(null);
+                    }}
+                    className="rounded-lg border border-primary/30 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5"
+                  >
+                    Request edit
+                  </button>
+                ) : null}
+              </>
+            )}
           </div>
-          )
         }
       />
 
@@ -1414,6 +1425,12 @@ export function QuizManageDetailPage() {
           }}
         />
       ) : null}
+
+      <QuizSettingsDialog
+        open={showSettingsDialog}
+        quiz={quiz}
+        onOpenChange={setShowSettingsDialog}
+      />
 
       {showAssignDialog ? (
         <AssignQuizDialog

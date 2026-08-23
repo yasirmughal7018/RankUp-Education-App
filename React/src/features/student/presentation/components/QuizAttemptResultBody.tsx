@@ -1,3 +1,4 @@
+import { AppCard } from "@/components/ui/app-card";
 import {
   getQuestionStatusTone,
   StatusBadge,
@@ -5,6 +6,7 @@ import {
 import { QuizAnswerDisplay } from "@/features/quizzes/presentation/components/QuizAnswerDisplay";
 import type { QuizAttemptResult } from "@/features/student/domain/studentQuizTypes";
 import { resolveQuizResultDisplay } from "@/features/student/domain/quizResultDisplay";
+import { cn } from "@/lib/utils";
 
 interface QuizAttemptResultBodyProps {
   result: QuizAttemptResult;
@@ -21,41 +23,45 @@ export function QuizAttemptResultBody({
   return (
     <>
       <section className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Score</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
+        <AppCard>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Score
+          </p>
+          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-foreground">
             {display.showScore
               ? `${result.obtainedMarks}/${result.totalMarks}`
               : "—"}
           </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-500">
+        </AppCard>
+        <AppCard>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Percentage
           </p>
-          <p className="mt-2 text-2xl font-semibold text-brand-700">
+          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-primary">
             {display.showScore ? `${result.percentage}%` : "—"}
           </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Status</p>
+        </AppCard>
+        <AppCard>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Status
+          </p>
           <div className="mt-2">
             <StatusBadge
               label={result.resultStatus}
               tone={getQuestionStatusTone(result.resultStatus, true)}
             />
           </div>
-        </div>
+        </AppCard>
       </section>
 
       {display.modeNote ? (
         <div
-          className={[
-            "mb-6 rounded-lg px-4 py-3 text-sm",
+          className={cn(
+            "mb-6 rounded-xl border px-4 py-3 text-sm",
             display.reviewPending
-              ? "border border-amber-200 bg-amber-50 text-amber-800"
-              : "border border-slate-200 bg-slate-50 text-slate-600",
-          ].join(" ")}
+              ? "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]"
+              : "border-border bg-muted/70 text-muted-foreground",
+          )}
         >
           {display.modeNote}
         </div>
@@ -63,32 +69,35 @@ export function QuizAttemptResultBody({
 
       <div className="space-y-4">
         {result.questions.map((question, index) => (
-          <section
-            key={question.id}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <div className="mb-2 flex items-start justify-between gap-3">
-              <h2 className="text-sm font-semibold text-slate-900">
-                Q{index + 1}. {question.text}
-              </h2>
+          <AppCard key={question.id}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 font-display text-sm font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <h2 className="font-display text-sm font-semibold leading-6 text-foreground sm:text-base">
+                  {question.text}
+                </h2>
+              </div>
               {display.showScore ? (
                 display.showCorrectness ? (
                   <span
-                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${
+                    className={cn(
+                      "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold",
                       question.isCorrect
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-red-50 text-red-700"
-                    }`}
+                        ? "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] text-[var(--status-approved-text)]"
+                        : "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] text-[var(--status-rejected-text)]",
+                    )}
                   >
                     {question.awardedMarks}/{question.marks}
                   </span>
                 ) : (
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                  <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                     {question.awardedMarks}/{question.marks}
                   </span>
                 )
               ) : (
-                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
+                <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                   Pending
                 </span>
               )}
@@ -115,9 +124,11 @@ export function QuizAttemptResultBody({
             />
 
             {display.showExplanations && question.explanation ? (
-              <p className="mt-2 text-sm text-slate-600">{question.explanation}</p>
+              <p className="mt-3 rounded-xl border border-border/80 bg-muted/50 px-3 py-2 text-sm leading-6 text-muted-foreground">
+                {question.explanation}
+              </p>
             ) : null}
-          </section>
+          </AppCard>
         ))}
       </div>
     </>

@@ -1,6 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Flag,
+  Save,
+} from "lucide-react";
 import { PageHeader } from "@/core/components/PageHeader";
+import { AppCard } from "@/components/ui/app-card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import type {
   QuizNavigationMode,
   SavedQuizAnswer,
@@ -241,6 +252,44 @@ function formatCountdown(totalSeconds: number): string {
   const minutes = Math.floor(safe / 60);
   const seconds = safe % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function ExamAlert({
+  tone,
+  children,
+  onDismiss,
+}: {
+  tone: "warning" | "danger" | "info";
+  children: ReactNode;
+  onDismiss?: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm",
+        tone === "warning" &&
+          "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]",
+        tone === "danger" &&
+          "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] text-[var(--status-rejected-text)]",
+        tone === "info" && "border-border bg-muted/70 text-muted-foreground",
+      )}
+    >
+      <div className="min-w-0">{children}</div>
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 text-xs font-semibold underline-offset-2 hover:underline"
+        >
+          Dismiss
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function optionLetter(index: number): string {
+  return String.fromCharCode(65 + index);
 }
 
 function isAnswered(answer: AnswerState | undefined): boolean {
@@ -877,7 +926,7 @@ export function StudentQuizAttemptPage() {
 
   if (!attempt) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <div className="mx-auto max-w-3xl">
         <PageHeader
           title="Attempt not found"
           description="Start the quiz again from the quiz details page. In-progress attempts are restored from this browser session when available."
@@ -912,6 +961,17 @@ export function StudentQuizAttemptPage() {
     (currentQuestion?.estimatedTimeSeconds ?? 0) > 0 &&
     (expiredQuestionIds.has(currentQuestion!.id) ||
       (questionRemainingSeconds != null && questionRemainingSeconds <= 0)));
+
+  const answeredCount = orderedQuestions.filter((question) =>
+    isAnswered(answers[question.id]),
+  ).length;
+  const reviewCount = orderedQuestions.filter((question) =>
+    Boolean(markedForReview[question.id]),
+  ).length;
+  const progressPct =
+    orderedQuestions.length > 0
+      ? Math.round((answeredCount / orderedQuestions.length) * 100)
+      : 0;
 
   function updateCurrentAnswer(next: AnswerState) {
     if (!currentQuestion || currentQuestionLocked) {
@@ -954,74 +1014,89 @@ export function StudentQuizAttemptPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title={`Attempt #${attempt.attemptNumber}`}
-        description={
-          attempt.resumed
-            ? "Continuing your in-progress attempt."
-            : attempt.timeLimitMinutes
-              ? `${attempt.timeLimitMinutes} minute time limit`
-              : "Answer all questions and submit when ready."
-        }
-        action={
-          <div className="flex flex-col items-end gap-1">
+    <div className="mx-auto max-w-4xl space-y-5">
+      <AppCard padded={false} className="overflow-hidden">
+        <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+              Quiz attempt
+            </p>
+            <h1 className="mt-1 font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+              Attempt #{attempt.attemptNumber}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {attempt.resumed
+                ? "Continuing your in-progress attempt."
+                : attempt.timeLimitMinutes
+                  ? `${attempt.timeLimitMinutes} minute time limit`
+                  : "Answer all questions and submit when ready."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {remainingSeconds != null ? (
               <div
-                className={`rounded-lg px-4 py-2 text-sm font-semibold tabular-nums ${
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold tabular-nums",
                   timerUrgent
-                    ? "bg-red-50 text-red-700"
-                    : "bg-slate-100 text-slate-800"
-                }`}
+                    ? "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] text-[var(--status-rejected-text)]"
+                    : "border-primary/20 bg-primary/10 text-primary",
+                )}
               >
-                {formatCountdown(remainingSeconds)}
+                <Clock className="h-4 w-4 shrink-0" aria-hidden />
+                <span>{formatCountdown(remainingSeconds)}</span>
               </div>
             ) : null}
             {questionRemainingSeconds != null ? (
               <div
-                className={`rounded-md px-2.5 py-1 text-xs font-medium tabular-nums ${
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold tabular-nums",
                   questionTimerUrgent
-                    ? "bg-amber-50 text-amber-800"
-                    : "bg-slate-50 text-slate-600"
-                }`}
+                    ? "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]"
+                    : "border-border bg-muted text-muted-foreground",
+                )}
               >
                 Question {formatCountdown(questionRemainingSeconds)}
               </div>
             ) : null}
-            {showIntegrity ? (
-              <p className="text-[11px] text-slate-400">
-                Focus leaves {focusLossCount}
-                {clipboardPasteCount > 0
-                  ? ` · Pastes ${clipboardPasteCount}`
-                  : ""}
-              </p>
-            ) : null}
           </div>
-        }
-      />
+        </div>
+        <div className="border-t border-border/80 px-4 py-3 sm:px-5">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>
+              Question {currentIndex + 1} of {orderedQuestions.length}
+              {currentQuestion ? ` · ${currentQuestion.marks} marks` : ""}
+            </span>
+            <span>
+              {answeredCount} answered
+              {reviewCount > 0 ? ` · ${reviewCount} for review` : ""}
+              {draftStatus ? ` · ${draftStatus}` : ""}
+            </span>
+          </div>
+          <Progress value={progressPct} className="h-2" />
+          {showIntegrity ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Focus leaves {focusLossCount}
+              {clipboardPasteCount > 0 ? ` · Pastes ${clipboardPasteCount}` : ""}
+            </p>
+          ) : null}
+        </div>
+      </AppCard>
 
       {integrityLocked ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <ExamAlert tone="danger">
           Integrity limit exceeded (too many focus losses or paste events).
           Answers are locked — submit your attempt now.
-        </div>
+        </ExamAlert>
       ) : null}
 
       {timeWarning ? (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <span>{timeWarning}</span>
-          <button
-            type="button"
-            onClick={() => setTimeWarning(null)}
-            className="shrink-0 text-xs font-medium text-amber-800 hover:text-amber-950"
-          >
-            Dismiss
-          </button>
-        </div>
+        <ExamAlert tone="warning" onDismiss={() => setTimeWarning(null)}>
+          {timeWarning}
+        </ExamAlert>
       ) : null}
 
       <Dialog open={showLowTimeDialog} onOpenChange={setShowLowTimeDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md rounded-2xl border-border/80">
           <DialogHeader>
             <DialogTitle>Less than one minute left</DialogTitle>
             <DialogDescription>
@@ -1029,96 +1104,120 @@ export function StudentQuizAttemptPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setShowLowTimeDialog(false)}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
+            <Button type="button" onClick={() => setShowLowTimeDialog(false)}>
               Continue
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {submitAttempt.error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {submitAttempt.error.message}
-        </div>
-      ) : null}
-
-      {draftStatus ? (
-        <div className="mb-4 text-xs text-slate-500">{draftStatus}</div>
+        <ExamAlert tone="danger">{submitAttempt.error.message}</ExamAlert>
       ) : null}
 
       {isOffline || pendingOfflineCount > 0 || offlineSubmitQueued ? (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <ExamAlert tone="warning">
           {offlineSubmitQueued
             ? "Submit is queued on this device. It will sync automatically when you are back online."
             : isOffline
               ? "You are offline. Answers are saved on this device and will sync when the connection returns."
               : `${pendingOfflineCount} change(s) waiting to sync.`}
-        </div>
+        </ExamAlert>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {orderedQuestions.map((question, index) => {
-          const answered = isAnswered(answers[question.id]);
-          const flagged = Boolean(markedForReview[question.id]);
-          const active = index === currentIndex;
-          const jumpDisabled = !canJumpByNumber && !active;
+      <AppCard>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+          Questions
+        </p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {orderedQuestions.map((question, index) => {
+            const answered = isAnswered(answers[question.id]);
+            const flagged = Boolean(markedForReview[question.id]);
+            const active = index === currentIndex;
+            const jumpDisabled = !canJumpByNumber && !active;
 
-          return (
-            <button
-              key={question.id}
-              type="button"
-              disabled={jumpDisabled}
-              onClick={() => {
-                if (canJumpByNumber) {
-                  setCurrentIndex(index);
-                }
-              }}
-              className={`h-9 min-w-9 rounded-lg border px-2 text-xs font-medium transition ${
-                active
-                  ? "border-brand-600 bg-brand-600 text-white"
-                  : flagged
-                    ? "border-amber-300 bg-amber-50 text-amber-800"
-                    : answered
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white`}
-            >
-              {index + 1}
-            </button>
-          );
-        })}
-      </div>
+            return (
+              <button
+                key={question.id}
+                type="button"
+                disabled={jumpDisabled}
+                aria-current={active ? "true" : undefined}
+                aria-label={`Question ${index + 1}${answered ? ", answered" : ""}${flagged ? ", marked for review" : ""}`}
+                onClick={() => {
+                  if (canJumpByNumber) {
+                    setCurrentIndex(index);
+                  }
+                }}
+                className={cn(
+                  "h-10 min-w-10 rounded-xl border px-2.5 text-sm font-semibold transition",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                    : flagged
+                      ? "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]"
+                      : answered
+                        ? "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] text-[var(--status-approved-text)]"
+                        : "border-border bg-card text-foreground hover:border-primary/35 hover:bg-muted",
+                  "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-card",
+                )}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-primary" /> Current
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-[var(--status-approved-border)]" />{" "}
+            Answered
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-[var(--status-pending-border)]" />{" "}
+            Review
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm border border-border bg-card" />{" "}
+            Unanswered
+          </span>
+        </div>
+      </AppCard>
 
       {currentQuestion ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Q{currentIndex + 1}. {currentQuestion.text}
-            </h2>
-            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+        <AppCard>
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 font-display text-sm font-semibold text-primary">
+                {currentIndex + 1}
+              </span>
+              <h2 className="font-display text-base font-semibold leading-6 tracking-tight text-foreground sm:text-lg">
+                {currentQuestion.text}
+              </h2>
+            </div>
+            <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
               {currentQuestion.marks} marks
             </span>
           </div>
 
           {currentQuestion.hint ? (
-            <p className="mb-3 text-xs text-slate-500">
-              Hint: {currentQuestion.hint}
+            <p className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">
+              <span className="font-semibold text-primary">Hint: </span>
+              {currentQuestion.hint}
             </p>
           ) : null}
 
           {currentQuestionLocked ? (
-            <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Time is up for this question. Your last in-time answer is locked.
-            </p>
+            <div className="mb-4">
+              <ExamAlert tone="warning">
+                Time is up for this question. Your last in-time answer is locked.
+              </ExamAlert>
+            </div>
           ) : null}
 
           {isFileUploadQuestionType(currentQuestion.questionType) ? (
             <div className="space-y-3">
-              <label className="block text-sm text-slate-700">
+              <label className="block text-sm text-foreground">
                 <span className="mb-1 block font-medium">Upload file</span>
                 <input
                   type="file"
@@ -1127,17 +1226,17 @@ export function StudentQuizAttemptPage() {
                     void handleFileUploadSelected(event.target.files?.[0] ?? null);
                     event.target.value = "";
                   }}
-                  className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700"
+                  className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary"
                 />
               </label>
               {fileUploadBusy ? (
-                <p className="text-xs text-slate-500">Uploading…</p>
+                <p className="text-xs text-muted-foreground">Uploading…</p>
               ) : null}
               {fileUploadError ? (
-                <p className="text-xs text-red-600">{fileUploadError}</p>
+                <p className="text-xs text-destructive">{fileUploadError}</p>
               ) : null}
               {currentAnswer?.submittedText?.trim() ? (
-                <p className="text-xs text-emerald-700">
+                <p className="text-xs font-medium text-[hsl(var(--success))]">
                   Attached:{" "}
                   <a
                     href={currentAnswer.submittedText}
@@ -1150,7 +1249,7 @@ export function StudentQuizAttemptPage() {
                 </p>
               ) : null}
               <div>
-                <p className="mb-1 text-xs text-slate-500">
+                <p className="mb-1 text-xs text-muted-foreground">
                   Or paste a file link (Drive, OneDrive, etc.)
                 </p>
                 <input
@@ -1194,7 +1293,7 @@ export function StudentQuizAttemptPage() {
               const selectedIds = currentAnswer?.selectedOptionIds ?? [];
               return (
                 <div className="space-y-3">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Match each left item to a right item.
                   </p>
                   {lefts.map((left, index) => {
@@ -1208,9 +1307,9 @@ export function StudentQuizAttemptPage() {
                     return (
                       <div
                         key={left.id}
-                        className="flex flex-col gap-2 rounded-lg border border-slate-200 px-3 py-2 sm:flex-row sm:items-center"
+                        className="flex flex-col gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 py-2.5 sm:flex-row sm:items-center"
                       >
-                        <span className="min-w-0 flex-1 text-sm font-medium text-slate-800">
+                        <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
                           {left.text}
                         </span>
                         <select
@@ -1265,7 +1364,7 @@ export function StudentQuizAttemptPage() {
               const byId = new Map(options.map((option) => [option.id, option]));
               return (
                 <div className="space-y-2">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Arrange items in the correct order (top = first).
                   </p>
                   {orderedIds.map((optionId, index) => {
@@ -1276,18 +1375,19 @@ export function StudentQuizAttemptPage() {
                     return (
                       <div
                         key={optionId}
-                        className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
+                        className="flex items-center gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 py-2.5"
                       >
-                        <span className="w-6 text-xs font-semibold text-slate-500">
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
                           {index + 1}
                         </span>
-                        <span className="min-w-0 flex-1 text-sm text-slate-700">
+                        <span className="min-w-0 flex-1 text-sm text-foreground">
                           {option.text}
                         </span>
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           disabled={currentQuestionLocked || index === 0}
-                          className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40"
                           onClick={() => {
                             if (currentQuestionLocked || index === 0) {
                               return;
@@ -1305,14 +1405,15 @@ export function StudentQuizAttemptPage() {
                           }}
                         >
                           Up
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           disabled={
                             currentQuestionLocked ||
                             index === orderedIds.length - 1
                           }
-                          className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40"
                           onClick={() => {
                             if (
                               currentQuestionLocked ||
@@ -1333,7 +1434,7 @@ export function StudentQuizAttemptPage() {
                           }}
                         >
                           Down
-                        </button>
+                        </Button>
                       </div>
                     );
                   })}
@@ -1341,8 +1442,8 @@ export function StudentQuizAttemptPage() {
               );
             })()
           ) : (
-            <div className="space-y-2">
-              {currentQuestion.options.map((option) => {
+            <div className="space-y-2.5">
+              {currentQuestion.options.map((option, optionIndex) => {
                 const multiSelect = isMultiSelectQuestionType(
                   currentQuestion.questionType,
                 );
@@ -1354,11 +1455,15 @@ export function StudentQuizAttemptPage() {
                 return (
                   <label
                     key={option.id}
-                    className={`flex items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 ${
+                    className={cn(
+                      "flex items-start gap-3 rounded-xl border px-4 py-3.5 transition",
+                      checked
+                        ? "border-primary/40 bg-primary/10 ring-2 ring-primary/15"
+                        : "border-border/80 bg-card hover:border-primary/30 hover:bg-muted/50",
                       currentQuestionLocked
                         ? "cursor-not-allowed opacity-70"
-                        : "cursor-pointer hover:bg-slate-50"
-                    }`}
+                        : "cursor-pointer",
+                    )}
                   >
                     <input
                       type={multiSelect ? "checkbox" : "radio"}
@@ -1390,15 +1495,25 @@ export function StudentQuizAttemptPage() {
                           submittedText: "",
                         });
                       }}
-                      className="mt-1"
+                      className="mt-1.5 accent-primary"
                     />
-                    <span className="flex-1 text-sm text-slate-700">
+                    <span
+                      className={cn(
+                        "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold",
+                        checked
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {optionLetter(optionIndex)}
+                    </span>
+                    <span className="flex-1 text-sm leading-6 text-foreground">
                       {option.text}
                       {option.imageUrl ? (
                         <img
                           src={option.imageUrl}
                           alt=""
-                          className="mt-2 max-h-40 rounded-lg border border-slate-200 object-contain"
+                          className="mt-2 max-h-40 rounded-xl border border-border object-contain"
                         />
                       ) : null}
                     </span>
@@ -1408,9 +1523,11 @@ export function StudentQuizAttemptPage() {
             </div>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <button
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-4">
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               disabled={currentQuestionLocked}
               onClick={() => {
                 if (currentQuestionLocked) {
@@ -1423,74 +1540,80 @@ export function StudentQuizAttemptPage() {
                 }));
                 markDirty();
               }}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                markedForReview[currentQuestion.id]
-                  ? "border-amber-300 bg-amber-50 text-amber-800"
-                  : "border-slate-300 text-slate-700 hover:bg-slate-50"
-              }`}
+              className={cn(
+                markedForReview[currentQuestion.id] &&
+                  "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)] hover:bg-[var(--status-pending-bg)]",
+              )}
             >
+              <Flag className="h-4 w-4" aria-hidden />
               {markedForReview[currentQuestion.id]
                 ? "Marked for review"
                 : "Mark for review"}
-            </button>
+            </Button>
 
             <div className="flex gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 disabled={!canGoPrevious}
                 onClick={() =>
                   setCurrentIndex((value) => Math.max(0, value - 1))
                 }
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
+                <ChevronLeft className="h-4 w-4" aria-hidden />
                 Previous
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 disabled={!canGoNext}
                 onClick={() =>
                   setCurrentIndex((value) =>
                     Math.min(orderedQuestions.length - 1, value + 1),
                   )
                 }
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 Next
-              </button>
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </Button>
             </div>
           </div>
-        </section>
+        </AppCard>
       ) : null}
 
-      <div className="mt-8 flex gap-3">
-        <button
+      <div className="sticky bottom-24 z-10 flex flex-wrap gap-3 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:bottom-4">
+        <Button
           type="button"
           disabled={submitAttempt.isPending}
           onClick={() => void handleSubmit(false)}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+          className="flex-1 sm:flex-none"
         >
           {submitAttempt.isPending ? "Submitting..." : "Submit quiz"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
           disabled={isDraftSaving || submitAttempt.isPending}
           onClick={() => void persistDraft(true)}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
         >
+          <Save className="h-4 w-4" aria-hidden />
           {isDraftSaving ? "Saving..." : "Save now"}
-        </button>
-        <Link
-          to={`/student/quizzes/${quizId}`}
-          onClick={(event) => {
-            event.preventDefault();
-            void persistDraft(true).finally(() => {
-              navigate(`/student/quizzes/${quizId}`);
-            });
-          }}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-        >
-          Cancel
-        </Link>
+        </Button>
+        <Button variant="ghost" asChild>
+          <Link
+            to={`/student/quizzes/${quizId}`}
+            onClick={(event) => {
+              event.preventDefault();
+              void persistDraft(true).finally(() => {
+                navigate(`/student/quizzes/${quizId}`);
+              });
+            }}
+          >
+            Save and exit
+          </Link>
+        </Button>
       </div>
     </div>
   );

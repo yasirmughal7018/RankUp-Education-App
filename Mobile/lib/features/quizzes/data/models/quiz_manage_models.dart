@@ -29,6 +29,7 @@ class ManageQuiz {
     this.rejectionReason,
     this.timeLimitMinutes,
     this.allowedAttempts,
+    this.randomQuestionCount,
   });
 
   factory ManageQuiz.fromJson(Map<String, dynamic> json) {
@@ -53,6 +54,7 @@ class ManageQuiz {
       totalMarks: _asInt(json['totalMarks']),
       timeLimitMinutes: _asNullableInt(json['timeLimitMinutes']),
       allowedAttempts: _asNullableInt(json['allowedAttempts']),
+      randomQuestionCount: _asNullableInt(json['randomQuestionCount']),
       instructions: _asStringList(json['instructions']),
       shuffleQuestions: json['shuffleQuestions'] == true,
       shuffleOptions: json['shuffleOptions'] == true,
@@ -90,6 +92,7 @@ class ManageQuiz {
   final int totalMarks;
   final int? timeLimitMinutes;
   final int? allowedAttempts;
+  final int? randomQuestionCount;
   final List<String> instructions;
   final bool shuffleQuestions;
   final bool shuffleOptions;

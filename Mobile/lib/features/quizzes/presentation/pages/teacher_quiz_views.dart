@@ -478,6 +478,11 @@ class TeacherQuizManageView extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              OutlinedButton.icon(
+                onPressed: () => showQuizSettingsSheet(context, quiz),
+                icon: const Icon(Icons.tune_outlined),
+                label: const Text('View settings'),
+              ),
               if (canPublish)
                 FilledButton.icon(
                   onPressed: state.isSaving ? null : onPublish,
@@ -798,6 +803,203 @@ class TeacherAttemptReviewView extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+String _quizYesNo(bool value) => value ? 'Yes' : 'No';
+
+String _quizDash(String value) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? '—' : trimmed;
+}
+
+String _quizNavigationLabel(String mode) {
+  switch (mode.trim().toLowerCase()) {
+    case 'sequential':
+      return 'Sequential — previous/next only';
+    case 'locked':
+      return 'Locked — next after answering';
+    default:
+      return 'Free — jump to any question';
+  }
+}
+
+String _quizReviewDisplayLabel(String mode) {
+  switch (mode.trim().toLowerCase()) {
+    case 'correctanswers':
+      return 'Correct answers';
+    case 'scoreonly':
+      return 'Score only';
+    case 'withheld':
+      return 'Withheld';
+    default:
+      return 'Full results';
+  }
+}
+
+/// Read-only sheet of every manage-quiz setting.
+Future<void> showQuizSettingsSheet(BuildContext context, ManageQuiz quiz) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) {
+      return DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.78,
+        minChildSize: 0.45,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) {
+          return _QuizSettingsSheet(
+            quiz: quiz,
+            scrollController: scrollController,
+          );
+        },
+      );
+    },
+  );
+}
+
+class _QuizSettingsSheet extends StatelessWidget {
+  const _QuizSettingsSheet({
+    required this.quiz,
+    required this.scrollController,
+  });
+
+  final ManageQuiz quiz;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    final randomCount = quiz.randomQuestionCount;
+    final rows = <(String, String)>[
+      ('Title', _quizDash(quiz.title)),
+      ('Description', _quizDash(quiz.description)),
+      ('Quiz type', _quizDash(quiz.quizType)),
+      ('Class', _quizDash(quiz.grade)),
+      ('Subject', _quizDash(quiz.subject)),
+      ('Topic', _quizDash(quiz.topic)),
+      ('Difficulty', _quizDash(quiz.difficulty)),
+      ('School', _quizDash(quiz.schoolName)),
+      (
+        'Time limit',
+        quiz.timeLimitMinutes != null && quiz.timeLimitMinutes! > 0
+            ? '${quiz.timeLimitMinutes} min'
+            : 'No limit',
+      ),
+      (
+        'Allowed attempts',
+        quiz.allowedAttempts != null && quiz.allowedAttempts! > 0
+            ? '${quiz.allowedAttempts}'
+            : '—',
+      ),
+      (
+        'Random questions per attempt',
+        randomCount != null && randomCount > 0
+            ? '$randomCount'
+            : 'All questions',
+      ),
+      ('Shuffle questions', _quizYesNo(quiz.shuffleQuestions)),
+      ('Shuffle options', _quizYesNo(quiz.shuffleOptions)),
+      ('Navigation mode', _quizNavigationLabel(quiz.navigationMode)),
+      ('Review required', _quizYesNo(quiz.isReviewRequired)),
+      ('Student result view', _quizReviewDisplayLabel(quiz.reviewDisplayMode)),
+      ('Lifecycle', _quizDash(quiz.lifecycleStatus)),
+      ('Approval', _quizDash(quiz.approvalStatus)),
+      ('Questions', '${quiz.questionCount}'),
+      ('Total marks', '${quiz.totalMarks}'),
+      ('Created by', _quizDash(quiz.createdBy)),
+    ];
+    final instructions = quiz.instructions
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    return Material(
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Quiz settings',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              children: [
+                for (final row in rows)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 150,
+                          child: Text(
+                            row.$1,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            row.$2,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'Instructions',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                if (instructions.isEmpty)
+                  const Text('—')
+                else
+                  ...instructions.map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text('• $line'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

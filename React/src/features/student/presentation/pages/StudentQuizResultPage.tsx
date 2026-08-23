@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
-import { PageHeader } from "@/core/components/PageHeader";
+import { AppPageHeader } from "@/components/ui/app-page-header";
+import { Button } from "@/components/ui/button";
 import { QuizAttemptResultBody } from "@/features/student/presentation/components/QuizAttemptResultBody";
 import { useStudentQuizResultQuery } from "@/features/student/presentation/hooks/useStudentQuizQueries";
 
@@ -15,18 +16,17 @@ export function StudentQuizResultPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 text-sm text-slate-600 sm:px-6">
-        Loading result...
-      </div>
+      <div className="text-sm text-muted-foreground">Loading result...</div>
     );
   }
 
   if (!result) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-        <PageHeader
+      <div className="mx-auto max-w-3xl">
+        <AppPageHeader
+          studentFacing
           title="Result unavailable"
-          description={error?.message ?? "Unable to load attempt result."}
+          subtitle={error?.message ?? "Unable to load attempt result."}
           backTo="/student/quizzes"
           backAriaLabel="Back to quizzes"
         />
@@ -35,19 +35,17 @@ export function StudentQuizResultPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <PageHeader
+    <div className="mx-auto max-w-3xl space-y-6">
+      <AppPageHeader
+        studentFacing
         title={result.quizTitle}
-        description={`Attempt #${result.attemptNumber} · ${result.timeSpentSeconds}s spent`}
+        subtitle={`Attempt #${result.attemptNumber} · ${result.timeSpentSeconds}s spent`}
         backTo={`/student/quizzes/${quizId}`}
         backAriaLabel="Back to quiz"
         action={
-          <Link
-            to="/student/quizzes"
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            All quizzes
-          </Link>
+          <Button variant="outline" asChild>
+            <Link to="/student/quizzes">All quizzes</Link>
+          </Button>
         }
       />
 
