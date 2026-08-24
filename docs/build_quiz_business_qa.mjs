@@ -77,8 +77,8 @@ const attemptStatuses = [
 
 const resultStatuses = [
   ["20", "Expired", "Written when EndDateTime passed with no completed attempt (unattempted or overdue InProgress). ExpireOverdue runs on student list and assign list."],
-  ["21", "Completed", "Written on submit when review is not pending (no subjective / review already done)."],
-  ["22", "Under Review", "Written on submit when IsReviewRequired and subjective answers exist (IsReviewDone=false)."],
+  ["21", "Completed", "Written on submit when review is not pending (no subjective / review already done). Student UI may still show Results pending until the 1-hour auto-graded delay elapses."],
+  ["22", "Under Review", "Written on submit when subjective teacher-review answers remain (IsReviewDone=false). Student UI overlays Results pending / Partial results from resultAnnouncedPercent until 100% is announced."],
   ["23", "In Progress", "Written when the student starts an attempt that is not yet submitted."],
   ["24", "Not Attempted", "Initial assignment result when StartAt ≤ now and the student has not started. Also promoted from Up Coming when the window opens."],
   ["25", "Up Coming", "Written on assign when StartAt > now. Promoted to Not Attempted when StartAt arrives (no attempt yet)."],
@@ -103,9 +103,9 @@ const assignmentResultMeanings = [
   ["Up Coming (25)", "StartDateTime is in the future for this student."],
   ["Not Attempted (24)", "Window is open (or ready) and this student has not started. Prefer this name over “Not Started”."],
   ["In Progress (23)", "This student has an InProgress attempt."],
-  ["Under Review (22)", "This student’s attempt is Submitted and subjective review is pending (IsReviewDone=false)."],
+  ["Under Review (22)", "This student’s attempt is Submitted and subjective review is pending (IsReviewDone=false). Student list/detail overlay this with Results pending or Partial results until announced percent is 100."],
   ["Expired (20)", "EndDateTime passed without a completed attempt for this student."],
-  ["Completed (21)", "This student’s attempt cycle is done (submitted and, if required, reviewed)."],
+  ["Completed (21)", "This student’s attempt cycle is done (submitted and, if required, reviewed). Student UI uses this label at 100% announced (or Reviewed after finalize)."],
 ];
 
 const assignmentStatusConflicts = [
@@ -342,7 +342,7 @@ const studentAttemptFlow = [
   ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83) → Reviewed (85) after finalize. Expired (84) via overdue job."],
   ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse first option; Multiple exact set; Fill accepted-answer rules."],
   ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive: AI suggestion on submit + teacher finalize when answered. File Upload (link/path) requires teacher review. Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic)."],
-  ["15", "Student sees the permitted review screen", "Covered", "Full results after submit (or after teacher review when IsReviewRequired). ReviewDisplayMode modes are retired."],
+  ["15", "Student sees the permitted review screen", "Covered", "Auto-graded questions (known correct answer already on the item) announce 1 hour after quiz completion (later of submit and assignment EndDateTime). Teacher-review questions stay pending until finalize. List/detail/result show resultAnnouncedPercent. ReviewDisplayMode modes are retired."],
   ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true. AI suggests; teacher confirms when required."],
   ["17", "Student views own quiz history", "Covered", "/student/history (web) and Mobile /reports or Quizzes history; GET /reports/students/{id}/quiz-history scoped to own profileId (History self — not full analytics)."],
 ];
@@ -454,7 +454,12 @@ const reviewRules = [
   "RequiresReview per question: Descriptive OR File Upload OR (Fill + AllowTeacherReview + submitted text).",
   "Mark answers: awarded marks in [0, MaxMarks]; not if already finalized.",
   "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true.",
-  "Score masking uses QuizReviewDisplay.Resolve on submit and get-result (Full when review is done / not required; hidden while IsReviewRequired and not IsReviewDone).",
+  "Quiz completion = later of student SubmittedAt and assignment EndDateTime. Auto-graded questions (known correct answer already on the item: MCQ, T/F, multi-select, matching, ordering, media, fill-blank) announce 1 hour after that (QuizReviewDisplay.ObjectiveAnnouncementDelayHours = 1). Early submitters do not see answers while the window is still open.",
+  "Teacher-review questions (Descriptive, File Upload) stay pending until finalize (IsReviewDone). The 1-hour delay does not announce them.",
+  "Announced percent = marks of announced questions / total marks (not the student’s score %). Exposed as resultAnnouncedPercent on list, detail, and attempt result. Show it with the quiz (e.g. 70% results announced).",
+  "Student-facing status overlay: 0% → Results pending; 1–99% → Partial results; 100% → Completed or Reviewed. Stored QuizResultStatus on submit remains Under Review or Completed.",
+  "Per-question ResultPending hides marks, correctness, correct answers, and explanations until that question is announced. List/detail hide resultPercent until announced percent is 100.",
+  "QuizReviewDisplay.Resolve applies on submit, get-result, list, and detail. It replaces the old all-or-nothing hide of every score while IsReviewRequired.",
   "ReviewDisplayMode modes are retired; create/update always persist Full. Bools never OR’d with type defaults.",
   "AI review: Descriptive always; Fill when AllowAiReview. OpenAI when configured, else heuristic. AI comment shown on teacher review screen; teacher still finalizes when required.",
 ];
@@ -481,9 +486,9 @@ const apiMap = [
   ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove; TimeLimitMinutes recalculated from EstimatedTimeSeconds."],
   ["POST .../attempts", "Student start/resume; instructions ack gate when Instructions set."],
   ["PUT .../attempts/{id}/draft", "Student save draft answers (+ mark-for-review / per-question time)."],
-  ["POST .../attempts/{id}/submit", "Student submit + auto-score; IsAutoSubmit → AutoSubmitted; shared Full / review-pending mask."],
+  ["POST .../attempts/{id}/submit", "Student submit + auto-score; IsAutoSubmit → AutoSubmitted; delayed auto-graded announcement (1 hour after completion) + per-question ResultPending."],
   ["POST .../attempts/{id}/sync", "Offline queue replay (ClientSyncId idempotency)."],
-  ["GET .../attempts/{id}/result", "Student own or Parent linked child; same mask rule as submit."],
+  ["GET .../attempts/{id}/result", "Student own or Parent linked child; same announcement rule as submit (resultAnnouncedPercent, resultsAnnounceAt, ResultPending)."],
   ["GET .../monitoring", "Owner progress board (incl. integrity signals where available)."],
   ["GET/PUT .../review|answers + finalize-review", "Subjective marking and release."],
   ["GET /api/quizzes/pending-approval", "API queue still exists for clients. Web UI does not use a separate approvals page — SchoolAdmin/CampusAdmin/PortalAdmin open submitted drafts from the /quizzes Draft tile. Pending rows require Submit for approval. SchoolAdmin queue: Teacher/Coordinator/CampusAdmin created. CampusAdmin queue: Teacher/Coordinator created only. PortalAdmin also includes SchoolApproved and SchoolAdmin/school-type Pending."],
@@ -545,15 +550,15 @@ const scenarios = [
   ],
   [
     "QZ-09",
-    "Auto-score objective + mask subjective",
-    "Quiz IsReviewRequired with Fill(AllowTeacherReview) answers; student submits then reloads result.",
-    "Objective items scored; submit and get-result both use QuizReviewDisplay.Resolve — Pending Review until finalize when IsReviewRequired.",
+    "Auto-score objective + delayed announce; subjective stays pending",
+    "Quiz with auto-graded items plus Descriptive/File Upload; student submits then reloads result before and after the delay.",
+    "Until 1 hour after quiz completion (later of submit and EndDateTime), announced percent is 0 and all results stay pending. After the delay, auto-graded questions announce; teacher-review questions stay ResultPending until finalize. List/detail show resultAnnouncedPercent; full resultPercent stays hidden until 100%.",
   ],
   [
     "QZ-10",
     "Finalize review releases results",
     "Teacher marks all RequiresReview items and finalizes.",
-    "Attempt→Reviewed; IsReviewDone=true; student/parent see full scores/answers once review is done.",
+    "Attempt→Reviewed; IsReviewDone=true; announced percent becomes 100%; student/parent see full scores/answers including previously pending teacher-review questions.",
   ],
   [
     "QZ-11",
@@ -663,6 +668,12 @@ const scenarios = [
     "Parent creates a group on My children, adds two linked children, then assigns a published school-type quiz with mode=group and that group selected.",
     "Assignments created only for linked members of that parent-owned group. Unlinked IDs skipped. Assign dialog lists groups by name from GET /parents/me/groups (no raw group id).",
   ],
+  [
+    "QZ-24",
+    "Early submit waits for window end plus 1 hour",
+    "Student submits a mixed quiz 30 minutes before assignment EndDateTime, then opens the result immediately and again after EndDateTime + 1 hour (review not finalized).",
+    "Immediate result: Results pending, 0% announced, no correct answers. After End + 1 hour: auto-graded share announces (Partial results if subjective marks remain); descriptive/file stay pending; student score still hidden until 100% announced or teacher finalize.",
+  ],
 ];
 
 const checklist = [
@@ -690,7 +701,7 @@ const checklist = [
   "Student sees assigned quizzes and Public catalog only; school/section/multi never set AudienceScope=Public.",
   "Supported audiences: one, selected, group, class (allInGrade), section, school, multi-school, public (PortalAdmin), parent child / allLinked.",
   "QuizAssignment is one row per student with AssignedById, optional StudentGroupId, window, AllowedAttempts, QuizResultStatus, IsReviewDone.",
-  "QuizResultStatus is per student (Up Coming / Not Attempted / In Progress / Under Review / Expired / Completed) — student list prefers DB name over calculator.",
+  "QuizResultStatus is per student (Up Coming / Not Attempted / In Progress / Under Review / Expired / Completed). Student list/detail overlay Results pending / Partial results from resultAnnouncedPercent until 100% is announced.",
   "Assign with StartAt > now writes Up Coming; overdue job promotes Upcoming → Not Attempted and expires past-window rows / InProgress attempts.",
   "Owner may edit freely only while Draft + Pending or Rejected (and no started assignment). After SchoolApproved, Approved, Published, or Assigned: owner uses Request edit; PortalAdmin may still edit in place.",
   "Draft visibility: unsubmitted WIP is owner-only. After Submit for approval, PortalAdmin sees the pipeline draft. SchoolAdmin sees Teacher/Coordinator/CampusAdmin submitted quizzes in school on the Draft tile. CampusAdmin sees Teacher/Coordinator submitted quizzes in campus. SchoolAdmin-created and Parent quizzes stay PortalAdmin-only.",
@@ -702,7 +713,7 @@ const checklist = [
   "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time banner (≤5m) + modal/audio at ≤60s (web + mobile).",
   "On attempt start, QuizAttemptQuestion freezes text/marks/options/order; answers store per attempt.",
   "Scoring: single/TF one correct; multi exact set; Fill accepted-answer rules.",
-  "Shared Full / review-pending mask on submit and get-result until finalize when required.",
+  "After submit, auto-graded results announce 1 hour after quiz completion (later of submit and assignment end). Teacher-review questions stay pending until finalize. Show resultAnnouncedPercent with the quiz.",
   "ApplyCreateDefaults: nullable fallbacks only; bools never OR’d.",
   "Allow-retry only after IsReviewDone; adds ExtraAttempts.",
   "Cancel removes only future assignments and restores Assigned or Published (never Cancelled lifecycle).",
@@ -940,7 +951,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
     "Parent list = shared published catalog ∪ assignments of linked children ∪ quizzes they created (including school-type / PrivateParent).",
     "Parent may review/finalize only their own quizzes and may view linked-child results.",
     "Student sees assigned quizzes plus Public catalog (AudienceScope=Public and within audience window). School/section/multi assign stay Assigned — see §8.",
-    "Results masked while review is pending (IsReviewRequired and not done); otherwise Full.",
+    "Student/parent results: auto-graded questions announce 1 hour after quiz completion; teacher-review questions stay pending until finalize. Show resultAnnouncedPercent on list, detail, dashboard, and result screens.",
     "Rankings / performance / summary: Teacher (own), SchoolAdmin (school), PortalAdmin (all) — not students/parents.",
   ])}
 
@@ -1233,7 +1244,7 @@ const docChildren = [
     "Parent list = shared published school-type catalog ∪ linked-child assignments ∪ own school-type.",
     "Parent list = shared published school-type catalog ∪ linked-child assignments ∪ own school-type.",
     "Student sees assigned quizzes plus Public catalog only.",
-    "Results masked while review pending; otherwise Full.",
+    "Student/parent results: auto-graded questions announce 1 hour after quiz completion; teacher-review questions stay pending until finalize. Show resultAnnouncedPercent with the quiz.",
     "Reports: Teacher own / SchoolAdmin school / PortalAdmin all.",
   ].map(docBullet),
 
