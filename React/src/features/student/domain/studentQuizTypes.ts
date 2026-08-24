@@ -24,6 +24,7 @@ export interface QuizDetail {
   schoolName: string;
   resultStatus: string;
   resultPercent: number | null;
+  resultAnnouncedPercent?: number | null;
   /** Questions presented per attempt when random subset is enabled. */
   questionsPerAttempt?: number | null;
 }
@@ -142,6 +143,7 @@ export interface QuizResultQuestion {
   selectedOptionIds?: number[] | null;
   correctOptionIds?: number[] | null;
   options?: QuizResultOption[];
+  resultPending?: boolean;
 }
 
 export interface QuizAttemptResult {
@@ -157,6 +159,8 @@ export interface QuizAttemptResult {
   reviewAvailable: boolean;
   reviewPending?: boolean;
   reviewDisplayMode?: string;
+  resultAnnouncedPercent?: number;
+  resultsAnnounceAt?: string | null;
   questions: QuizResultQuestion[];
 }
 

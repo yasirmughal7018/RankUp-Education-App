@@ -30,7 +30,9 @@ public sealed record QuizListItem(
     string? LifecycleStatusName = null,
     string? QuizResultStatusName = null,
     string? ApprovalStatusName = null,
-    bool HasSubmittedForReview = false);
+    bool HasSubmittedForReview = false,
+    bool IsReviewDone = false,
+    short? AutoGradedMarks = null);
 
 /// <summary>Quiz awaiting school-admin approval (Pending or Rejected).</summary>
 public sealed record PendingQuizApprovalItem(
@@ -89,7 +91,9 @@ public sealed record QuizDetailItem(
     int? CampusId = null,
     short? RandomQuestionCount = null,
     string CreatorDisplayName = "",
-    DateTimeOffset? CreatedAt = null);
+    DateTimeOffset? CreatedAt = null,
+    bool IsReviewDone = false,
+    short? AutoGradedMarks = null);
 
 /// <summary>One quiz workflow event projected from app_approval.</summary>
 public sealed record QuizApprovalEventItem(

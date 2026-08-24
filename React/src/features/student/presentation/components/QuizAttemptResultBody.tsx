@@ -13,19 +13,23 @@ interface QuizAttemptResultBodyProps {
   answerLabel?: string;
 }
 
-/** Shared student/parent result breakdown (Full after review is published). */
+/** Shared student/parent result breakdown (announced questions only until review is done). */
 export function QuizAttemptResultBody({
   result,
   answerLabel = "Your answer",
 }: QuizAttemptResultBodyProps) {
   const display = resolveQuizResultDisplay(result);
+  const scoreLabel =
+    display.announcedPercent > 0 && display.announcedPercent < 100
+      ? "Announced score"
+      : "Score";
 
   return (
     <>
-      <section className="mb-6 grid gap-4 md:grid-cols-3">
+      <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <AppCard>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Score
+            {scoreLabel}
           </p>
           <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-foreground">
             {display.showScore
@@ -39,6 +43,14 @@ export function QuizAttemptResultBody({
           </p>
           <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-primary">
             {display.showScore ? `${result.percentage}%` : "—"}
+          </p>
+        </AppCard>
+        <AppCard>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Results announced
+          </p>
+          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-foreground">
+            {display.announcedPercent}%
           </p>
         </AppCard>
         <AppCard>
@@ -68,19 +80,27 @@ export function QuizAttemptResultBody({
       ) : null}
 
       <div className="space-y-4">
-        {result.questions.map((question, index) => (
-          <AppCard key={question.id}>
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 font-display text-sm font-semibold text-primary">
-                  {index + 1}
-                </span>
-                <h2 className="font-display text-sm font-semibold leading-6 text-foreground sm:text-base">
-                  {question.text}
-                </h2>
-              </div>
-              {display.showScore ? (
-                display.showCorrectness ? (
+        {result.questions.map((question, index) => {
+          const pending =
+            question.resultPending === true ||
+            (!display.showScore && display.reviewPending);
+
+          return (
+            <AppCard key={question.id}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 font-display text-sm font-semibold text-primary">
+                    {index + 1}
+                  </span>
+                  <h2 className="font-display text-sm font-semibold leading-6 text-foreground sm:text-base">
+                    {question.text}
+                  </h2>
+                </div>
+                {pending ? (
+                  <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    Pending
+                  </span>
+                ) : display.showCorrectness ? (
                   <span
                     className={cn(
                       "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold",
@@ -95,41 +115,37 @@ export function QuizAttemptResultBody({
                   <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                     {question.awardedMarks}/{question.marks}
                   </span>
-                )
-              ) : (
-                <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                  Pending
-                </span>
-              )}
-            </div>
+                )}
+              </div>
 
-            <QuizAnswerDisplay
-              question={{
-                questionType: question.questionType ?? "Single Choice",
-                selectedOptionId: question.selectedOptionId,
-                selectedOptionIds: question.selectedOptionIds,
-                submittedText: question.submittedText,
-                options: question.options?.map((option) => ({
-                  id: option.id,
-                  text: option.text,
-                  imageUrl: option.imageUrl,
-                  isCorrect: option.isCorrect,
-                })),
-              }}
-              answerLabel={answerLabel}
-              showCorrectAnswers={display.showCorrectAnswers}
-              selectedMatchLabel="Your match"
-              yourOrderLabel={answerLabel}
-              className="mt-1"
-            />
+              <QuizAnswerDisplay
+                question={{
+                  questionType: question.questionType ?? "Single Choice",
+                  selectedOptionId: question.selectedOptionId,
+                  selectedOptionIds: question.selectedOptionIds,
+                  submittedText: question.submittedText,
+                  options: question.options?.map((option) => ({
+                    id: option.id,
+                    text: option.text,
+                    imageUrl: option.imageUrl,
+                    isCorrect: option.isCorrect,
+                  })),
+                }}
+                answerLabel={answerLabel}
+                showCorrectAnswers={!pending && display.showCorrectAnswers}
+                selectedMatchLabel="Your match"
+                yourOrderLabel={answerLabel}
+                className="mt-1"
+              />
 
-            {display.showExplanations && question.explanation ? (
-              <p className="mt-3 rounded-xl border border-border/80 bg-muted/50 px-3 py-2 text-sm leading-6 text-muted-foreground">
-                {question.explanation}
-              </p>
-            ) : null}
-          </AppCard>
-        ))}
+              {!pending && display.showExplanations && question.explanation ? (
+                <p className="mt-3 rounded-xl border border-border/80 bg-muted/50 px-3 py-2 text-sm leading-6 text-muted-foreground">
+                  {question.explanation}
+                </p>
+              ) : null}
+            </AppCard>
+          );
+        })}
       </div>
     </>
   );

@@ -951,14 +951,17 @@ public sealed class QuizService : IQuizService
             (short)Math.Clamp((int)request.TimeSpentSeconds, 0, short.MaxValue));
 
         var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
-        // Progress assignment status from scoring-loop subjective detection (pre-persist).
-        var statusVisibility = QuizReviewDisplay.Resolve(
-            quiz.ReviewDisplayMode,
-            reviewState?.IsReviewRequired ?? quiz.IsReviewRequired,
-            reviewState?.IsReviewDone ?? false,
-            hasSubjectiveAnswers);
-
         var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
+        var statusShares = hasSubjectiveAnswers
+            ? new (bool IsAutoGraded, short Marks)[] { (true, 1), (false, 1) }
+            : new (bool IsAutoGraded, short Marks)[] { (true, 1) };
+        var statusVisibility = QuizReviewDisplay.Resolve(
+            reviewState?.IsReviewDone ?? false,
+            now,
+            now,
+            assignment?.EndDateTime,
+            statusShares);
+
         if (assignment is not null)
         {
             var resultStatusId = await _lookups.ResolveLookupIdAsync(
@@ -992,18 +995,23 @@ public sealed class QuizService : IQuizService
         var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        // Same subjective detection as GetAttemptResultAsync — keeps submit/get-result mask symmetric.
+        var questionShares = result.Questions
+            .Select(question => (QuizQuestionHelper.IsAutoGradedQuestion(question), question.Marks))
+            .ToArray();
         var visibility = QuizReviewDisplay.Resolve(
-            quiz.ReviewDisplayMode,
-            reviewState?.IsReviewRequired ?? quiz.IsReviewRequired,
             reviewState?.IsReviewDone ?? false,
-            QuizQuestionHelper.HasSubjectiveAnswersRequiringReview(result.Questions));
+            now,
+            result.SubmittedAt,
+            assignment?.EndDateTime,
+            questionShares);
+        var resultStatusOverride = QuizReviewDisplay.ResolveResultStatusOverride(
+            visibility.AnnouncedPercent);
 
         return QuizMapping.ToAttemptResult(
             result,
             quizTitle,
             visibility,
-            resultStatusOverride: visibility.ReviewPending ? "Pending Review" : null);
+            resultStatusOverride);
     }
 
     public async Task<SyncOfflineQuizAttemptResponse> SyncOfflineAttemptAsync(
@@ -1128,19 +1136,25 @@ public sealed class QuizService : IQuizService
             ?? "Quiz";
 
         var reviewState = await _assignments.GetAssignmentReviewStateAsync(quizId, studentId, cancellationToken);
-        var hasSubjectiveAnswers = QuizQuestionHelper.HasSubjectiveAnswersRequiringReview(result.Questions);
-        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var questionShares = result.Questions
+            .Select(question => (QuizQuestionHelper.IsAutoGradedQuestion(question), question.Marks))
+            .ToArray();
         var visibility = QuizReviewDisplay.Resolve(
-            quiz?.ReviewDisplayMode,
-            reviewState?.IsReviewRequired ?? quiz?.IsReviewRequired ?? false,
             reviewState?.IsReviewDone ?? false,
-            hasSubjectiveAnswers);
+            now,
+            result.SubmittedAt,
+            assignment?.EndDateTime,
+            questionShares);
+        var resultStatusOverride = QuizReviewDisplay.ResolveResultStatusOverride(
+            visibility.AnnouncedPercent);
 
         return QuizMapping.ToAttemptResult(
             result,
             quizTitle,
             visibility,
-            resultStatusOverride: visibility.ReviewPending ? "Pending Review" : null);
+            resultStatusOverride);
     }
 
     private async Task<StartQuizAttemptResponse> BuildAttemptPayloadAsync(

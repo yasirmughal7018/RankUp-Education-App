@@ -33,6 +33,7 @@ class QuizSummaryModel extends QuizSummary {
     super.reviewAvailable,
     super.resultStatus,
     super.resultPercent,
+    super.resultAnnouncedPercent,
     super.createdBy,
     super.schoolName,
   });
@@ -79,6 +80,8 @@ class QuizSummaryModel extends QuizSummary {
       resultStatus:
           _readString(json, ['resultStatus'], fallback: 'Not Started'),
       resultPercent: _readNullableInt(json, ['resultPercent']),
+      resultAnnouncedPercent:
+          _readNullableInt(json, ['resultAnnouncedPercent']),
       createdBy: _readString(json, ['createdBy']),
       schoolName: _readString(json, ['schoolName', 'school', 'campusName']),
     );

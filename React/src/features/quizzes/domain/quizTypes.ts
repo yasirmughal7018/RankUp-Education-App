@@ -30,6 +30,7 @@ export interface QuizSummary {
   reviewAvailable: boolean;
   resultStatus: string;
   resultPercent: number | null;
+  resultAnnouncedPercent?: number | null;
   createdBy: string;
   schoolName: string;
 }

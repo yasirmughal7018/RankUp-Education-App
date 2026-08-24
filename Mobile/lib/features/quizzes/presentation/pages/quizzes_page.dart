@@ -630,6 +630,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         status: QuizStatus.completed,
         resultStatus: result.resultStatus,
         resultPercent: result.percentage,
+        resultAnnouncedPercent: result.resultAnnouncedPercent,
         completedAt: DateTime.now(),
         reviewAvailable: result.reviewAvailable,
       );
@@ -2049,7 +2050,13 @@ class _QuizCard extends StatelessWidget {
                       icon: Icons.event_available_outlined,
                       label: _dateLabel(quiz.dueAt, fallback: 'No due date'),
                     ),
-                  if (completed && quiz.resultPercent != null)
+                  if (quiz.resultAnnouncedPercent != null)
+                    _InfoChip(
+                      icon: Icons.campaign_outlined,
+                      label:
+                          '${quiz.resultAnnouncedPercent}% results announced',
+                    )
+                  else if (completed && quiz.resultPercent != null)
                     _InfoChip(
                       icon: Icons.fact_check_outlined,
                       label: 'Result: ${quiz.resultPercent}%',
@@ -2962,9 +2969,14 @@ class _SubmissionConfirmationView extends StatelessWidget {
                   label: 'Result status',
                   value: _studentQuizResultLabel(quiz),
                 ),
+                if (quiz.resultAnnouncedPercent != null)
+                  _DetailRow(
+                    label: 'Results announced',
+                    value: '${quiz.resultAnnouncedPercent}%',
+                  ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Your attempt was submitted successfully. Score, correct answers, and feedback will appear after review is completed.',
+                  'Your attempt was submitted successfully. Auto-graded answers are announced 1 hour after the quiz ends. Teacher-review questions stay pending until they are marked.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
@@ -3002,7 +3014,9 @@ class _QuizReviewView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reviewComplete = result != null && result!.reviewAvailable;
+    final announcedPercent = result?.resultAnnouncedPercent ?? 0;
+    final showScore = announcedPercent > 0;
+    final reviewComplete = announcedPercent >= 100;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -3023,16 +3037,23 @@ class _QuizReviewView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  reviewComplete
-                      ? 'Reviewed answers, explanations, and feedback are available for this quiz.'
-                      : 'Your attempt has been submitted. Answers and feedback will appear after AI and teacher review are completed.',
+                  announcedPercent <= 0
+                      ? 'Auto-graded answers (questions with a known correct answer) are announced 1 hour after the quiz ends. Teacher-review questions stay pending until they are marked.'
+                      : announcedPercent < 100
+                          ? '$announcedPercent% of this result is announced (auto-graded questions). The rest stays pending until a teacher publishes review.'
+                          : 'Reviewed answers, explanations, and feedback are available for this quiz.',
                 ),
                 if (result != null) ...[
                   const SizedBox(height: 12),
                   _DetailRow(
+                    label: 'Results announced',
+                    value: '$announcedPercent%',
+                  ),
+                  _DetailRow(
                     label: 'Score',
-                    value:
-                        '${result!.percentage}% (${result!.obtainedMarks}/${result!.totalMarks})',
+                    value: showScore
+                        ? '${result!.percentage}% (${result!.obtainedMarks}/${result!.totalMarks})'
+                        : '—',
                   ),
                   _DetailRow(label: 'Status', value: result!.resultStatus),
                 ],
@@ -3048,7 +3069,8 @@ class _QuizReviewView extends StatelessWidget {
             _ReviewQuestionCard(
               index: index,
               question: result!.questions[index],
-              reviewComplete: reviewComplete,
+              reviewComplete:
+                  reviewComplete || !result!.questions[index].resultPending,
             ),
             const SizedBox(height: 12),
           ],
@@ -4253,12 +4275,12 @@ _AnswerReviewState _answerReviewState(
   QuizResultQuestion question, {
   required bool reviewComplete,
 }) {
-  if (!reviewComplete) {
+  if (!reviewComplete || question.resultPending) {
     return const _AnswerReviewState(
-      label: 'Review Pending',
+      label: 'Pending',
       color: Color(0xFF7C3AED),
       icon: Icons.pending_actions_outlined,
-      feedback: 'Review is pending.',
+      feedback: 'This question stays pending until results are announced.',
     );
   }
 
@@ -4363,6 +4385,10 @@ String _actionLabelForStatus(String status) {
 }
 
 bool _isReviewComplete(QuizSummary quiz) {
+  if (quiz.resultAnnouncedPercent != null) {
+    return quiz.resultAnnouncedPercent == 100;
+  }
+
   final normalizedStatus = quiz.resultStatus.toLowerCase().replaceAll(' ', '');
   return quiz.resultPercent != null &&
       (normalizedStatus == 'reviewed' ||
@@ -4415,6 +4441,11 @@ String _studentQuizResultLabel(QuizSummary quiz) {
       quiz.dueAt!.isBefore(now) &&
       normalizedStatus == 'notstarted') {
     return '-';
+  }
+
+  if (quiz.resultAnnouncedPercent != null &&
+      quiz.resultAnnouncedPercent! < 100) {
+    return '${quiz.resultAnnouncedPercent}% results announced';
   }
 
   if (quiz.resultPercent != null &&

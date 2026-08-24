@@ -124,6 +124,33 @@ public static class QuizQuestionHelper
             || IsMediaType(questionTypeName);
 
     /// <summary>
+    /// Questions with a known correct answer already on the item (options or fill-blank keys).
+    /// Results for these can be announced without teacher review.
+    /// </summary>
+    public static bool IsAutoGradedType(string questionTypeName)
+        => UsesOptions(questionTypeName) || IsFillBlankType(questionTypeName);
+
+    /// <summary>Descriptive or file answers that stay pending until review is published.</summary>
+    public static bool IsTeacherReviewType(string questionTypeName)
+        => IsDescriptiveType(questionTypeName) || IsFileUploadType(questionTypeName);
+
+    /// <summary>Attempt row: auto-graded unless it is a teacher-review type (or text-only without options).</summary>
+    public static bool IsAutoGradedQuestion(QuizAttemptQuestionItem question)
+    {
+        if (IsTeacherReviewType(question.QuestionTypeName))
+        {
+            return false;
+        }
+
+        if (IsAutoGradedType(question.QuestionTypeName))
+        {
+            return true;
+        }
+
+        return question.Options.Count > 0;
+    }
+
+    /// <summary>
     /// True when submitted answers include subjective items that need teacher/parent review
     /// (descriptive / file upload, or fill-blank with AllowTeacherReview).
     /// </summary>

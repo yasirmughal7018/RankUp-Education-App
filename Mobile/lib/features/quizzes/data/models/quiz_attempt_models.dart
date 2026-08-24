@@ -29,6 +29,7 @@ class QuizDetailModel extends QuizDetail {
     super.reviewAvailable,
     super.resultStatus,
     super.resultPercent,
+    super.resultAnnouncedPercent,
     super.createdBy,
     super.schoolName,
     super.attemptsUsed,
@@ -63,6 +64,7 @@ class QuizDetailModel extends QuizDetail {
       reviewAvailable: summary.reviewAvailable,
       resultStatus: summary.resultStatus,
       resultPercent: summary.resultPercent,
+      resultAnnouncedPercent: summary.resultAnnouncedPercent,
       createdBy: summary.createdBy,
       schoolName: summary.schoolName,
       attemptsUsed: _readInt(json, ['attemptsUsed']),
@@ -345,6 +347,9 @@ class QuizAttemptResultModel extends QuizAttemptResult {
     required super.resultStatus,
     required super.reviewAvailable,
     required super.questions,
+    super.resultAnnouncedPercent,
+    super.resultsAnnounceAt,
+    super.reviewPending,
   });
 
   factory QuizAttemptResultModel.fromJson(Map<String, dynamic> json) {
@@ -360,6 +365,9 @@ class QuizAttemptResultModel extends QuizAttemptResult {
       timeSpentSeconds: _readInt(json, ['timeSpentSeconds']),
       resultStatus: _readString(json, ['resultStatus'], fallback: 'Submitted'),
       reviewAvailable: _readBool(json, ['reviewAvailable'], defaultValue: true),
+      resultAnnouncedPercent: _readInt(json, ['resultAnnouncedPercent']),
+      resultsAnnounceAt: _readDate(json, ['resultsAnnounceAt']),
+      reviewPending: _readBool(json, ['reviewPending']),
       questions: questions is List
           ? questions
               .whereType<Map<String, dynamic>>()
@@ -382,6 +390,7 @@ class QuizResultQuestionModel extends QuizResultQuestion {
     super.selectedOptionId,
     super.correctOptionId,
     super.submittedText,
+    super.resultPending,
   });
 
   factory QuizResultQuestionModel.fromJson(Map<String, dynamic> json) {
@@ -395,6 +404,7 @@ class QuizResultQuestionModel extends QuizResultQuestion {
       selectedOptionId: _readNullableString(json, ['selectedOptionId']),
       correctOptionId: _readNullableString(json, ['correctOptionId']),
       submittedText: _readNullableString(json, ['submittedText']),
+      resultPending: _readBool(json, ['resultPending']),
     );
   }
 }

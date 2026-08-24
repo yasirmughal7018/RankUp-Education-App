@@ -120,7 +120,9 @@ public sealed record QuizAttemptResultResponse(
     bool ReviewAvailable,
     IReadOnlyList<QuizResultQuestionResponse> Questions,
     bool ReviewPending = false,
-    string ReviewDisplayMode = "ScoreOnly");
+    string ReviewDisplayMode = "ScoreOnly",
+    short ResultAnnouncedPercent = 0,
+    DateTimeOffset? ResultsAnnounceAt = null);
 
 /// <summary>Per-question breakdown on result view (includes correct answers when review allows).</summary>
 public sealed record QuizResultQuestionResponse(
@@ -136,7 +138,8 @@ public sealed record QuizResultQuestionResponse(
     IReadOnlyList<long>? SelectedOptionIds = null,
     IReadOnlyList<long>? CorrectOptionIds = null,
     string? QuestionType = null,
-    IReadOnlyList<QuizResultOptionResponse>? Options = null);
+    IReadOnlyList<QuizResultOptionResponse>? Options = null,
+    bool ResultPending = false);
 
 /// <summary>Frozen option row on the student/parent result screen.</summary>
 public sealed record QuizResultOptionResponse(

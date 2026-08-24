@@ -31,6 +31,7 @@ class QuizSummary {
     this.reviewAvailable = true,
     this.resultStatus = 'Not Started',
     this.resultPercent,
+    this.resultAnnouncedPercent,
     this.createdBy = '',
     this.schoolName = '',
   });
@@ -63,6 +64,7 @@ class QuizSummary {
   final bool reviewAvailable;
   final String resultStatus;
   final int? resultPercent;
+  final int? resultAnnouncedPercent;
   final String createdBy;
   final String schoolName;
 
@@ -95,6 +97,7 @@ class QuizSummary {
     bool? reviewAvailable,
     String? resultStatus,
     int? resultPercent,
+    int? resultAnnouncedPercent,
     String? createdBy,
     String? schoolName,
   }) {
@@ -127,6 +130,8 @@ class QuizSummary {
       reviewAvailable: reviewAvailable ?? this.reviewAvailable,
       resultStatus: resultStatus ?? this.resultStatus,
       resultPercent: resultPercent ?? this.resultPercent,
+      resultAnnouncedPercent:
+          resultAnnouncedPercent ?? this.resultAnnouncedPercent,
       createdBy: createdBy ?? this.createdBy,
       schoolName: schoolName ?? this.schoolName,
     );

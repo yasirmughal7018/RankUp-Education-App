@@ -108,7 +108,7 @@ export function resolveApprovalStatusKey(
 ): ApprovalStatusKey {
   const s = status.trim().toLowerCase();
   if (s.includes("reject") || s.includes("declin")) return "rejected";
-  if (s.includes("pending") || s.includes("draft") || s.includes("review")) {
+  if (s.includes("pending") || s.includes("draft") || s.includes("review") || s.includes("partial")) {
     return "pending";
   }
   if (s.includes("lock")) return "locked";

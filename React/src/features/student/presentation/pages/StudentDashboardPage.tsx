@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, Flame, Activity } from "lucide-react";
+import { formatAnnouncedResultsLabel } from "@/features/student/domain/quizResultDisplay";
 import { useStudentQuizzesQuery } from "@/features/student/presentation/hooks/useStudentQuizQueries";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { AppStatCard } from "@/components/ui/app-stat-card";
@@ -100,7 +101,11 @@ export function StudentDashboardPage() {
           />
         ) : (
           <div className="space-y-3">
-            {quizzes.slice(0, 6).map((quiz) => (
+            {quizzes.slice(0, 6).map((quiz) => {
+              const announcedLabel = formatAnnouncedResultsLabel(
+                quiz.resultAnnouncedPercent,
+              );
+              return (
               <AppCard
                 key={quiz.id}
                 className="flex flex-wrap items-center justify-between gap-3"
@@ -112,6 +117,7 @@ export function StudentDashboardPage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     Due{" "}
                     {quiz.dueAt ? new Date(quiz.dueAt).toLocaleString() : "—"}
+                    {announcedLabel ? ` · ${announcedLabel}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -123,7 +129,8 @@ export function StudentDashboardPage() {
                   </Button>
                 </div>
               </AppCard>
-            ))}
+              );
+            })}
             {quizzes.length > 6 ? (
               <div className="pt-1">
                 <Button variant="outline" asChild>

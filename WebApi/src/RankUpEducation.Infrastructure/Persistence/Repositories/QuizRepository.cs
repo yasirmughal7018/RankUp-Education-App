@@ -110,6 +110,12 @@ public sealed class QuizRepository : IQuizRepository
             merged.Add(item);
         }
 
+        var shares = await QuizQueryHelper.LoadAutoGradedMarksByQuizAsync(
+            _dbContext,
+            merged.Select(item => item.QuizId),
+            cancellationToken);
+        merged = QuizQueryHelper.ApplyAutoGradedMarks(merged, shares).ToList();
+
         return merged.OrderByDescending(item => item.StartDateTime).ToArray();
     }
 
@@ -406,11 +412,16 @@ public sealed class QuizRepository : IQuizRepository
         var stats = await QuizQueryHelper.GetAttemptStatsAsync(_dbContext, quizId, studentId, cancellationToken);
         var lookupNames = await QuizQueryHelper.LoadLookupNamesAsync(_dbContext, [quiz], cancellationToken);
         var schools = await QuizQueryHelper.LoadSchoolNamesAsync(_dbContext, [quiz.SchoolId], cancellationToken);
+        var autoGradedMarks = await QuizQueryHelper.LoadAutoGradedMarksByQuizAsync(
+            _dbContext,
+            [quizId],
+            cancellationToken);
 
+        QuizDetailItem detail;
         if (assignment is not null)
         {
             var resultStatusName = await _lookups.GetLookupNameAsync(assignment.QuizResultStatus, cancellationToken);
-            return QuizQueryHelper.MapQuizDetail(
+            detail = QuizQueryHelper.MapQuizDetail(
                 quiz,
                 assignment,
                 lookupNames,
@@ -422,41 +433,45 @@ public sealed class QuizRepository : IQuizRepository
                 lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
                 resultStatusName);
         }
+        else
+        {
+            detail = new QuizDetailItem(
+                quiz.Id,
+                null,
+                quiz.QuizTitle,
+                quiz.Description,
+                quiz.TotalQuestions,
+                quiz.TotalMarks,
+                quiz.TimeLimitMinutes,
+                quiz.AudienceAllowedAttempts ?? quiz.AllowedAttempts ?? 1,
+                quiz.AudienceStartAt,
+                quiz.AudienceEndAt,
+                quiz.CreatedByName,
+                QuizQueryHelper.ResolveSchoolName(schools, quiz.SchoolId),
+                lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
+                lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
+                QuizQueryHelper.ResolveLookupName(lookupNames, quiz.TopicId, "Topic"),
+                lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
+                QuizQueryHelper.ResolveLookupName(lookupNames, quiz.DifficultyLevelId, "Medium"),
+                quiz.Instructions,
+                quiz.ShuffleQuestions,
+                quiz.ShuffleOptions,
+                quiz.IsReviewRequired,
+                quiz.NavigationMode,
+                stats.AttemptCount,
+                stats.BestPercentage,
+                stats.LastSubmittedAt,
+                quiz.ClassId,
+                quiz.SubjectId,
+                quiz.TopicId ?? 0,
+                quiz.DifficultyLevelId ?? 0,
+                quiz.LifecycleStatusId,
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"),
+                ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
+                RandomQuestionCount: quiz.RandomQuestionCount);
+        }
 
-        return new QuizDetailItem(
-            quiz.Id,
-            null,
-            quiz.QuizTitle,
-            quiz.Description,
-            quiz.TotalQuestions,
-            quiz.TotalMarks,
-            quiz.TimeLimitMinutes,
-            quiz.AudienceAllowedAttempts ?? quiz.AllowedAttempts ?? 1,
-            quiz.AudienceStartAt,
-            quiz.AudienceEndAt,
-            quiz.CreatedByName,
-            QuizQueryHelper.ResolveSchoolName(schools, quiz.SchoolId),
-            lookupNames.GetValueOrDefault(quiz.SubjectId, "Subject"),
-            lookupNames.GetValueOrDefault(quiz.ClassId, "Grade"),
-            QuizQueryHelper.ResolveLookupName(lookupNames, quiz.TopicId, "Topic"),
-            lookupNames.GetValueOrDefault(quiz.QuizTypeId, "Quiz"),
-            QuizQueryHelper.ResolveLookupName(lookupNames, quiz.DifficultyLevelId, "Medium"),
-            quiz.Instructions,
-            quiz.ShuffleQuestions,
-            quiz.ShuffleOptions,
-            quiz.IsReviewRequired,
-            quiz.NavigationMode,
-            stats.AttemptCount,
-            stats.BestPercentage,
-            stats.LastSubmittedAt,
-            quiz.ClassId,
-            quiz.SubjectId,
-            quiz.TopicId ?? 0,
-            quiz.DifficultyLevelId ?? 0,
-            quiz.LifecycleStatusId,
-            lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"),
-            ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
-            RandomQuestionCount: quiz.RandomQuestionCount);
+        return QuizQueryHelper.ApplyAutoGradedMarks(detail, autoGradedMarks);
     }
 
     public async Task AddQuizAsync(Quiz quiz, CancellationToken cancellationToken)
@@ -782,6 +797,12 @@ public sealed class QuizRepository : IQuizRepository
 
             items.Add(item);
         }
+
+        var shares = await QuizQueryHelper.LoadAutoGradedMarksByQuizAsync(
+            _dbContext,
+            items.Select(item => item.QuizId),
+            cancellationToken);
+        items = QuizQueryHelper.ApplyAutoGradedMarks(items, shares).ToList();
 
         return items.OrderByDescending(item => item.StartDateTime).ToArray();
     }

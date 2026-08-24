@@ -24,6 +24,22 @@ internal static class QuizMapping
 
         var totalMarks = item.TotalMarks ?? item.TotalQuestions;
         var points = totalMarks;
+        var announcedPercent = QuizReviewDisplay.ResolveListAnnouncedPercent(
+            now,
+            item.LastSubmittedAt,
+            item.EndDateTime,
+            item.IsReviewDone,
+            item.AutoGradedMarks ?? totalMarks,
+            totalMarks);
+        var scorePercent = announcedPercent == 100 ? item.BestPercentage : null;
+        var resultStatus = QuizReviewDisplay.ApplyListResultStatus(
+            ResolveResultStatusName(
+                item.QuizResultStatusName,
+                item.AttemptCount,
+                attemptLimit,
+                item.BestPercentage,
+                item.LastSubmittedAt),
+            announcedPercent);
 
         return new QuizSummaryResponse(
             item.QuizId,
@@ -45,10 +61,11 @@ internal static class QuizMapping
             item.LastSubmittedAt,
             QuizStatusCalculator.ParseInstructions(item.Instructions),
             item.IsReviewRequired,
-            ResolveResultStatusName(item.QuizResultStatusName, item.AttemptCount, attemptLimit, item.BestPercentage, item.LastSubmittedAt),
-            item.BestPercentage,
+            resultStatus,
+            scorePercent,
             item.CreatedByName,
-            item.SchoolName);
+            item.SchoolName,
+            announcedPercent);
     }
 
     public static QuizDetailResponse ToDetailResponse(QuizDetailItem item, DateTimeOffset now)
@@ -62,6 +79,24 @@ internal static class QuizMapping
             attemptLimit,
             item.LastSubmittedAt);
 
+        var totalMarks = item.TotalMarks ?? item.TotalQuestions;
+        var announcedPercent = QuizReviewDisplay.ResolveListAnnouncedPercent(
+            now,
+            item.LastSubmittedAt,
+            item.EndDateTime,
+            item.IsReviewDone,
+            item.AutoGradedMarks ?? totalMarks,
+            totalMarks);
+        var scorePercent = announcedPercent == 100 ? item.BestPercentage : null;
+        var resultStatus = QuizReviewDisplay.ApplyListResultStatus(
+            ResolveResultStatusName(
+                item.QuizResultStatusName,
+                item.AttemptCount,
+                attemptLimit,
+                item.BestPercentage,
+                item.LastSubmittedAt),
+            announcedPercent);
+
         return new QuizDetailResponse(
             item.QuizId,
             item.QuizTitle,
@@ -72,7 +107,7 @@ internal static class QuizMapping
             item.QuizTypeName,
             item.DifficultyName,
             item.TotalQuestions,
-            item.TotalMarks ?? item.TotalQuestions,
+            totalMarks,
             item.TimeLimitMinutes,
             attemptLimit,
             (short)item.AttemptCount,
@@ -86,9 +121,10 @@ internal static class QuizMapping
             item.IsReviewRequired,
             item.CreatedByName,
             item.SchoolName,
-            ResolveResultStatusName(item.QuizResultStatusName, item.AttemptCount, attemptLimit, item.BestPercentage, item.LastSubmittedAt),
-            item.BestPercentage,
-            item.RandomQuestionCount ?? item.TotalQuestions);
+            resultStatus,
+            scorePercent,
+            item.RandomQuestionCount ?? item.TotalQuestions,
+            announcedPercent);
     }
 
     private static string ResolveResultStatusName(
@@ -135,9 +171,47 @@ internal static class QuizMapping
         QuizReviewDisplay.Visibility visibility,
         string? resultStatusOverride = null)
     {
-        var maskScore = !visibility.ShowScore;
-        var displayedObtained = maskScore ? (short)0 : item.ObtainedMarks;
-        var displayedPercentage = maskScore ? (short)0 : item.Percentage;
+        var questions = item.Questions.Select(question =>
+        {
+            var isAutoGraded = QuizQuestionHelper.IsAutoGradedQuestion(question);
+            var announced = visibility.IsQuestionAnnounced(isAutoGraded);
+            var correctOptions = question.Options.Where(option => option.IsCorrect).ToArray();
+            var correctOption = correctOptions.FirstOrDefault();
+            var awardedMarks = announced ? question.AwardedMarks : (short)0;
+
+            return new QuizResultQuestionResponse(
+                question.QuestionId,
+                question.QuestionText,
+                question.Marks,
+                awardedMarks,
+                announced && question.IsCorrect,
+                announced && visibility.ShowExplanations ? question.Explanation : null,
+                question.SelectedOptionId,
+                announced && visibility.ShowCorrectAnswers ? correctOption?.OptionId : null,
+                question.SubmittedText,
+                question.SelectedOptionIds,
+                announced && visibility.ShowCorrectAnswers
+                    ? correctOptions.Select(option => option.OptionId).ToArray()
+                    : null,
+                string.IsNullOrWhiteSpace(question.QuestionTypeName)
+                    ? null
+                    : question.QuestionTypeName,
+                question.Options
+                    .Select(option => new QuizResultOptionResponse(
+                        option.OptionId,
+                        option.OptionText,
+                        option.OptionImageUrl,
+                        announced && visibility.ShowCorrectAnswers && option.IsCorrect))
+                    .ToArray(),
+                ResultPending: !announced);
+        }).ToArray();
+
+        var displayedObtained = visibility.ShowScore
+            ? (short)Math.Clamp(questions.Sum(question => (int)question.AwardedMarks), 0, short.MaxValue)
+            : (short)0;
+        var displayedPercentage = visibility.ShowScore && item.TotalMarks > 0
+            ? (short)Math.Clamp((int)Math.Round(displayedObtained * 100m / item.TotalMarks), 0, 100)
+            : (short)0;
         var reviewAvailable = visibility.ShowCorrectAnswers || visibility.ShowExplanations;
 
         return new QuizAttemptResultResponse(
@@ -151,42 +225,10 @@ internal static class QuizMapping
             item.TimeSpentSeconds,
             resultStatusOverride ?? item.StatusName,
             reviewAvailable,
-            item.Questions.Select(question =>
-            {
-                var correctOptions = question.Options.Where(option => option.IsCorrect).ToArray();
-                var correctOption = correctOptions.FirstOrDefault();
-                var isSubjective = !string.IsNullOrWhiteSpace(question.SubmittedText)
-                    && question.SelectedOptionIds.Count == 0
-                    && question.SelectedOptionId is null;
-                var hideSubjectiveScore = maskScore || (visibility.ReviewPending && isSubjective);
-                var awardedMarks = hideSubjectiveScore ? (short)0 : question.AwardedMarks;
-
-                return new QuizResultQuestionResponse(
-                    question.QuestionId,
-                    question.QuestionText,
-                    question.Marks,
-                    awardedMarks,
-                    visibility.ShowScore && !hideSubjectiveScore && question.IsCorrect,
-                    visibility.ShowExplanations ? question.Explanation : null,
-                    question.SelectedOptionId,
-                    visibility.ShowCorrectAnswers ? correctOption?.OptionId : null,
-                    question.SubmittedText,
-                    question.SelectedOptionIds,
-                    visibility.ShowCorrectAnswers
-                        ? correctOptions.Select(option => option.OptionId).ToArray()
-                        : null,
-                    string.IsNullOrWhiteSpace(question.QuestionTypeName)
-                        ? null
-                        : question.QuestionTypeName,
-                    question.Options
-                        .Select(option => new QuizResultOptionResponse(
-                            option.OptionId,
-                            option.OptionText,
-                            option.OptionImageUrl,
-                            visibility.ShowCorrectAnswers && option.IsCorrect))
-                        .ToArray());
-            }).ToArray(),
+            questions,
             visibility.ReviewPending,
-            visibility.Mode);
+            visibility.Mode,
+            visibility.AnnouncedPercent,
+            visibility.AnnouncesAt);
     }
 }

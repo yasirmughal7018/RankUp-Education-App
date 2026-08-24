@@ -6,6 +6,7 @@ import {
   getQuestionStatusTone,
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
+import { formatAnnouncedResultsLabel } from "@/features/student/domain/quizResultDisplay";
 import { useStudentQuizzesQuery } from "@/features/student/presentation/hooks/useStudentQuizQueries";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
@@ -266,7 +267,11 @@ export function StudentQuizzesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredQuizzes.map((quiz) => (
+                {filteredQuizzes.map((quiz) => {
+                  const announcedLabel = formatAnnouncedResultsLabel(
+                    quiz.resultAnnouncedPercent,
+                  );
+                  return (
                   <tr key={quiz.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <Link
@@ -296,7 +301,11 @@ export function StudentQuizzesPage() {
                         label={quiz.resultStatus}
                         tone={getQuestionStatusTone(quiz.resultStatus, true)}
                       />
-                      {quiz.resultPercent != null ? (
+                      {announcedLabel ? (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {announcedLabel}
+                        </p>
+                      ) : quiz.resultPercent != null ? (
                         <p className="mt-1 text-xs text-slate-500">
                           {quiz.resultPercent}%
                         </p>
@@ -311,7 +320,8 @@ export function StudentQuizzesPage() {
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

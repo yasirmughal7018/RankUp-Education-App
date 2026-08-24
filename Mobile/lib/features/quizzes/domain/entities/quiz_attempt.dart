@@ -70,6 +70,7 @@ class QuizDetail extends QuizSummary {
     super.reviewAvailable,
     super.resultStatus,
     super.resultPercent,
+    super.resultAnnouncedPercent,
     super.createdBy,
     super.schoolName,
     this.attemptsUsed = 0,
@@ -103,6 +104,7 @@ class QuizDetail extends QuizSummary {
       reviewAvailable: summary.reviewAvailable,
       resultStatus: summary.resultStatus,
       resultPercent: summary.resultPercent,
+      resultAnnouncedPercent: summary.resultAnnouncedPercent,
       createdBy: summary.createdBy,
       schoolName: summary.schoolName,
     );
@@ -175,6 +177,7 @@ class QuizResultQuestion {
     this.selectedOptionId,
     this.correctOptionId,
     this.submittedText,
+    this.resultPending = false,
   });
 
   final String id;
@@ -186,6 +189,7 @@ class QuizResultQuestion {
   final String? selectedOptionId;
   final String? correctOptionId;
   final String? submittedText;
+  final bool resultPending;
 }
 
 /// Final scored attempt returned after submit or result fetch.
@@ -202,6 +206,9 @@ class QuizAttemptResult {
     required this.resultStatus,
     required this.reviewAvailable,
     required this.questions,
+    this.resultAnnouncedPercent = 0,
+    this.resultsAnnounceAt,
+    this.reviewPending = false,
   });
 
   final String attemptId;
@@ -215,6 +222,9 @@ class QuizAttemptResult {
   final String resultStatus;
   final bool reviewAvailable;
   final List<QuizResultQuestion> questions;
+  final int resultAnnouncedPercent;
+  final DateTime? resultsAnnounceAt;
+  final bool reviewPending;
 }
 
 int questionTypeIdFromName(String questionType) {

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
 using RankUpEducation.Domain.Approvals;
 using RankUpEducation.Domain.Quizzes;
@@ -92,7 +93,8 @@ internal static class QuizQueryHelper
             stats.BestPercentage,
             stats.LastSubmittedAt,
             QuizResultStatusName: quizResultStatusName
-                ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus));
+                ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus),
+            IsReviewDone: assignment.IsReviewDone);
     }
 
     public static QuizListItem MapQuizWithoutAssignment(
@@ -216,7 +218,8 @@ internal static class QuizQueryHelper
             string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
             lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"),
             quiz.RejectionReason,
-            RandomQuestionCount: quiz.RandomQuestionCount);
+            RandomQuestionCount: quiz.RandomQuestionCount,
+            IsReviewDone: assignment.IsReviewDone);
     }
 
     public static async Task<IReadOnlyDictionary<short, string>> LoadLifecycleNamesAsync(
@@ -317,6 +320,79 @@ internal static class QuizQueryHelper
             attempts.Count,
             attempts.Max(attempt => (short?)attempt.Percentage),
             attempts.Max(attempt => (DateTimeOffset?)attempt.SubmittedDate));
+    }
+
+    public static async Task<IReadOnlyDictionary<long, short>> LoadAutoGradedMarksByQuizAsync(
+        RankUpDbContext dbContext,
+        IEnumerable<long> quizIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = quizIds.Distinct().ToArray();
+        if (ids.Length == 0)
+        {
+            return new Dictionary<long, short>();
+        }
+
+        var subjectiveTypeNames = LookupNames.DescriptiveQuestionTypeNames
+            .Concat(LookupNames.FileUploadQuestionTypeNames)
+            .ToArray();
+        var subjectiveTypeIds = await ResolveStatusIdsByNamesAsync(
+            dbContext,
+            LookupNames.QuestionType,
+            subjectiveTypeNames,
+            cancellationToken);
+
+        var rows = await (
+            from quizQuestion in dbContext.QuizQuestions.AsNoTracking()
+            join question in dbContext.Questions.AsNoTracking()
+                on quizQuestion.QuestionId equals question.Id
+            where ids.Contains(quizQuestion.QuizId)
+            select new
+            {
+                quizQuestion.QuizId,
+                quizQuestion.Marks,
+                question.QuestionTypeId,
+            }).ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.QuizId)
+            .ToDictionary(
+                group => group.Key,
+                group => (short)Math.Clamp(
+                    group
+                        .Where(row => !subjectiveTypeIds.Contains(row.QuestionTypeId))
+                        .Sum(row => (int)row.Marks),
+                    0,
+                    short.MaxValue));
+    }
+
+    public static IReadOnlyList<QuizListItem> ApplyAutoGradedMarks(
+        IReadOnlyList<QuizListItem> items,
+        IReadOnlyDictionary<long, short> autoGradedMarksByQuiz)
+    {
+        return items
+            .Select(item =>
+            {
+                if (!autoGradedMarksByQuiz.TryGetValue(item.QuizId, out var autoMarks))
+                {
+                    autoMarks = item.TotalMarks ?? item.TotalQuestions;
+                }
+
+                return item with { AutoGradedMarks = autoMarks };
+            })
+            .ToArray();
+    }
+
+    public static QuizDetailItem ApplyAutoGradedMarks(
+        QuizDetailItem item,
+        IReadOnlyDictionary<long, short> autoGradedMarksByQuiz)
+    {
+        if (!autoGradedMarksByQuiz.TryGetValue(item.QuizId, out var autoMarks))
+        {
+            autoMarks = item.TotalMarks ?? item.TotalQuestions;
+        }
+
+        return item with { AutoGradedMarks = autoMarks };
     }
 
     public static async Task<IReadOnlyList<short>> ResolveStatusIdsByNamesAsync(

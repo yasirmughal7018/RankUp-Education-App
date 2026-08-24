@@ -10,6 +10,7 @@ import {
   loadOfflineAttemptSession,
   persistOfflineAttemptSession,
 } from "@/features/student/domain/offlineAttemptSession";
+import { formatAnnouncedResultsLabel } from "@/features/student/domain/quizResultDisplay";
 import { hasInProgressAttempt } from "@/features/student/domain/studentQuizTypes";
 import {
   useStartQuizAttemptMutation,
@@ -170,6 +171,9 @@ export function StudentQuizDetailPage() {
     );
   }
 
+  const announcedLabel = formatAnnouncedResultsLabel(
+    quiz.resultAnnouncedPercent,
+  );
   const attemptsRemaining =
     quiz.attemptLimit > 0
       ? Math.max(quiz.attemptLimit - quiz.attemptsUsed, 0)
@@ -250,6 +254,9 @@ export function StudentQuizDetailPage() {
             label={quiz.resultStatus}
             tone={getQuestionStatusTone(quiz.resultStatus, true)}
           />
+          {announcedLabel ? (
+            <StatusBadge label={announcedLabel} status="pending" />
+          ) : null}
         </div>
 
         <dl className="grid gap-3 text-sm text-slate-700 sm:grid-cols-2">

@@ -680,7 +680,9 @@ String _studentStatus(QuizSummary quiz, DateTime now) {
       normalizedResultStatus == 'teacherreview' ||
       normalizedResultStatus == 'pendingteacherreview' ||
       normalizedResultStatus == 'submitted' ||
-      normalizedResultStatus == 'autosubmitted') {
+      normalizedResultStatus == 'autosubmitted' ||
+      normalizedResultStatus == 'resultspending' ||
+      normalizedResultStatus == 'partialresults') {
     return 'Under Review';
   }
 
