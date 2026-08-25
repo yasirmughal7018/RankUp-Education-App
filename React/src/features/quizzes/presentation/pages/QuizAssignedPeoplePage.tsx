@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
-import type { QuizAssignmentAttempt } from "@/features/quizzes/domain/quizTypes";
+import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
+import { getMonitorStatusTone } from "@/features/quizzes/domain/quizMonitorTypes";
+import type { QuizAssignment } from "@/features/quizzes/domain/quizTypes";
+import { QuizAssignmentAttemptsDialog } from "@/features/quizzes/presentation/components/QuizAssignmentAttemptsDialog";
 import {
   useAllowRetryMutation,
   useManageQuizQuery,
@@ -14,10 +18,6 @@ function formatDateTime(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatAttemptWhen(attempt: QuizAssignmentAttempt): string {
-  return formatDateTime(attempt.submittedAt ?? attempt.startedAt);
 }
 
 function canAllowRetry(assignment: {
@@ -40,6 +40,8 @@ export function QuizAssignedPeoplePage() {
     user?.role === "Parent" ? "Assigned children" : "Assigned students";
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [attemptsAssignment, setAttemptsAssignment] =
+    useState<QuizAssignment | null>(null);
 
   const {
     data: quiz,
@@ -128,9 +130,6 @@ export function QuizAssignedPeoplePage() {
                     Student
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Assigned
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Window
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
@@ -146,50 +145,36 @@ export function QuizAssignedPeoplePage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {assignments.map((assignment) => (
-                  <tr key={assignment.assignmentId}>
-                    <td className="px-4 py-3 align-top text-slate-700">
+                  <tr key={assignment.assignmentId} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-slate-700">
                       {assignment.studentName?.trim() || assignment.studentId}
                     </td>
-                    <td className="px-4 py-3 align-top text-slate-700">
-                      {assignment.assignedAt
-                        ? formatDateTime(assignment.assignedAt)
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 align-top text-slate-700">
+                    <td className="px-4 py-3 text-slate-700">
                       {formatDateTime(assignment.startAt)} -{" "}
                       {formatDateTime(assignment.endAt)}
                     </td>
-                    <td className="px-4 py-3 align-top text-slate-700">
-                      <p>
+                    <td className="px-4 py-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`View attempts for ${assignment.studentName?.trim() || assignment.studentId}`}
+                        onClick={() => setAttemptsAssignment(assignment)}
+                      >
                         {assignment.attemptCount}/{assignment.allowedAttempts}
-                      </p>
-                      {assignment.attempts && assignment.attempts.length > 0 ? (
-                        <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
-                          {assignment.attempts.map((attempt) => (
-                            <li key={attempt.attemptNumber}>
-                              Attempt {attempt.attemptNumber} ·{" "}
-                              {formatAttemptWhen(attempt)}
-                              {attempt.status
-                                ? ` · ${attempt.status}`
-                                : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : assignment.attempts ? (
-                        <p className="mt-1 text-xs text-slate-400">
-                          No attempts yet
-                        </p>
-                      ) : null}
+                      </Button>
                     </td>
-                    <td className="px-4 py-3 align-top text-slate-700">
-                      {assignment.resultStatus}
-                      {assignment.isReviewDone ? (
-                        <span className="ml-2 text-xs text-emerald-700">
-                          Reviewed
-                        </span>
-                      ) : null}
+                    <td className="px-4 py-3">
+                      <StatusBadge
+                        label={
+                          assignment.isReviewDone
+                            ? `${assignment.resultStatus} · Reviewed`
+                            : assignment.resultStatus
+                        }
+                        tone={getMonitorStatusTone(assignment.resultStatus)}
+                      />
                     </td>
-                    <td className="px-4 py-3 align-top text-right">
+                    <td className="px-4 py-3 text-right">
                       {canAllowRetry(assignment) ? (
                         <button
                           type="button"
@@ -216,6 +201,15 @@ export function QuizAssignedPeoplePage() {
           </p>
         )}
       </div>
+
+      <QuizAssignmentAttemptsDialog
+        assignment={attemptsAssignment}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAttemptsAssignment(null);
+          }
+        }}
+      />
     </div>
   );
 }
