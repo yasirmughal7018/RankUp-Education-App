@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import type { QuizAssignmentAttempt } from "@/features/quizzes/domain/quizTypes";
 import {
   useAllowRetryMutation,
   useManageQuizQuery,
@@ -13,6 +14,10 @@ function formatDateTime(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatAttemptWhen(attempt: QuizAssignmentAttempt): string {
+  return formatDateTime(attempt.submittedAt ?? attempt.startedAt);
 }
 
 function canAllowRetry(assignment: {
@@ -123,6 +128,9 @@ export function QuizAssignedPeoplePage() {
                     Student
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
+                    Assigned
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Window
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
@@ -139,17 +147,41 @@ export function QuizAssignedPeoplePage() {
               <tbody className="divide-y divide-slate-200">
                 {assignments.map((assignment) => (
                   <tr key={assignment.assignmentId}>
-                    <td className="px-4 py-3 text-slate-700">
+                    <td className="px-4 py-3 align-top text-slate-700">
                       {assignment.studentName?.trim() || assignment.studentId}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">
+                    <td className="px-4 py-3 align-top text-slate-700">
+                      {assignment.assignedAt
+                        ? formatDateTime(assignment.assignedAt)
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3 align-top text-slate-700">
                       {formatDateTime(assignment.startAt)} -{" "}
                       {formatDateTime(assignment.endAt)}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {assignment.attemptCount}/{assignment.allowedAttempts}
+                    <td className="px-4 py-3 align-top text-slate-700">
+                      <p>
+                        {assignment.attemptCount}/{assignment.allowedAttempts}
+                      </p>
+                      {assignment.attempts && assignment.attempts.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
+                          {assignment.attempts.map((attempt) => (
+                            <li key={attempt.attemptNumber}>
+                              Attempt {attempt.attemptNumber} ·{" "}
+                              {formatAttemptWhen(attempt)}
+                              {attempt.status
+                                ? ` · ${attempt.status}`
+                                : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : assignment.attempts ? (
+                        <p className="mt-1 text-xs text-slate-400">
+                          No attempts yet
+                        </p>
+                      ) : null}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">
+                    <td className="px-4 py-3 align-top text-slate-700">
                       {assignment.resultStatus}
                       {assignment.isReviewDone ? (
                         <span className="ml-2 text-xs text-emerald-700">
@@ -157,7 +189,7 @@ export function QuizAssignedPeoplePage() {
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 align-top text-right">
                       {canAllowRetry(assignment) ? (
                         <button
                           type="button"

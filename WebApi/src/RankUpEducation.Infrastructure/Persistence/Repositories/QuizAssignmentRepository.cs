@@ -49,13 +49,39 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             assignments.Select(item => item.StudentId),
             cancellationToken);
 
+        var assignmentStudentIds = assignments.Select(item => item.StudentId).Distinct().ToList();
+        var attemptRows = await _dbContext.QuizAttempts.AsNoTracking()
+            .Where(attempt => attempt.QuizId == quizId && assignmentStudentIds.Contains(attempt.StudentId))
+            .OrderBy(attempt => attempt.StudentId)
+            .ThenBy(attempt => attempt.AttemptNumber)
+            .ThenBy(attempt => attempt.StartedDate)
+            .ToListAsync(cancellationToken);
+
+        var attemptStatusIds = attemptRows.Select(attempt => attempt.StatusId).Distinct().ToList();
+        var attemptStatusNames = attemptStatusIds.Count == 0
+            ? new Dictionary<short, string>()
+            : await _dbContext.Lookups.AsNoTracking()
+                .Where(lookup => attemptStatusIds.Contains(lookup.Id))
+                .ToDictionaryAsync(lookup => lookup.Id, lookup => lookup.Name, cancellationToken);
+
+        var attemptsByStudent = attemptRows
+            .GroupBy(attempt => attempt.StudentId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<QuizAssignmentAttemptItem>)group
+                    .Select(attempt => new QuizAssignmentAttemptItem(
+                        attempt.AttemptNumber,
+                        attempt.StartedDate,
+                        ResolveAttemptSubmittedAt(attempt),
+                        attemptStatusNames.GetValueOrDefault(attempt.StatusId, "Unknown")))
+                    .ToArray());
+
         var items = new List<QuizAssignmentListItem>();
         foreach (var assignment in assignments)
         {
-            var attemptCount = await _dbContext.QuizAttempts.AsNoTracking()
-                .CountAsync(
-                    attempt => attempt.QuizId == quizId && attempt.StudentId == assignment.StudentId,
-                    cancellationToken);
+            var attempts = attemptsByStudent.GetValueOrDefault(
+                assignment.StudentId,
+                Array.Empty<QuizAssignmentAttemptItem>());
 
             items.Add(new QuizAssignmentListItem(
                 assignment.Id,
@@ -68,11 +94,30 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 assignment.QuizResultStatus,
                 resultStatusNames.GetValueOrDefault(assignment.QuizResultStatus, "Unknown"),
                 assignment.IsReviewDone,
-                attemptCount,
-                assignment.AssignedById));
+                attempts.Count,
+                assignment.AssignedById,
+                assignment.CreatedDate,
+                attempts));
         }
 
         return items;
+    }
+
+    private static DateTimeOffset? ResolveAttemptSubmittedAt(QuizAttempt attempt)
+    {
+        if (attempt.StatusId is LookupNames.QuizAttemptStatusIds.Started
+            or LookupNames.QuizAttemptStatusIds.InProgress)
+        {
+            return null;
+        }
+
+        // Begin() copies StartedDate onto SubmittedDate until the student actually submits.
+        if (attempt.SubmittedDate <= attempt.StartedDate)
+        {
+            return null;
+        }
+
+        return attempt.SubmittedDate;
     }
 
     public async Task<int> RemoveFutureAssignmentsAsync(

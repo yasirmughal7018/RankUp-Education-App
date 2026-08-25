@@ -408,6 +408,33 @@ class AssignQuizInput {
       };
 }
 
+class QuizAssignmentAttemptItem {
+  const QuizAssignmentAttemptItem({
+    required this.attemptNumber,
+    required this.startedAt,
+    required this.status,
+    this.submittedAt,
+  });
+
+  factory QuizAssignmentAttemptItem.fromJson(Map<String, dynamic> json) {
+    return QuizAssignmentAttemptItem(
+      attemptNumber: _asInt(json['attemptNumber'], fallback: 1),
+      startedAt: _parseDateTime(json['startedAt']),
+      submittedAt: json['submittedAt'] == null
+          ? null
+          : DateTime.tryParse(json['submittedAt'].toString()),
+      status: _asString(json['status']),
+    );
+  }
+
+  final int attemptNumber;
+  final DateTime startedAt;
+  final DateTime? submittedAt;
+  final String status;
+
+  DateTime get occurredAt => submittedAt ?? startedAt;
+}
+
 class QuizAssignmentItem {
   const QuizAssignmentItem({
     required this.assignmentId,
@@ -421,9 +448,12 @@ class QuizAssignmentItem {
     required this.resultStatus,
     this.groupId,
     this.assignedById = '',
+    this.assignedAt,
+    this.attempts = const [],
   });
 
   factory QuizAssignmentItem.fromJson(Map<String, dynamic> json) {
+    final attemptsJson = json['attempts'];
     return QuizAssignmentItem(
       assignmentId: _asString(json['assignmentId']),
       studentId: _asString(json['studentId']),
@@ -438,6 +468,15 @@ class QuizAssignmentItem {
       isReviewDone: json['isReviewDone'] == true,
       resultStatus: _asString(json['resultStatus']),
       assignedById: _asString(json['assignedById']),
+      assignedAt: json['assignedAt'] == null
+          ? null
+          : DateTime.tryParse(json['assignedAt'].toString()),
+      attempts: attemptsJson is List
+          ? attemptsJson
+              .whereType<Map<String, dynamic>>()
+              .map(QuizAssignmentAttemptItem.fromJson)
+              .toList()
+          : const [],
     );
   }
 
@@ -452,6 +491,8 @@ class QuizAssignmentItem {
   final bool isReviewDone;
   final String resultStatus;
   final String assignedById;
+  final DateTime? assignedAt;
+  final List<QuizAssignmentAttemptItem> attempts;
 }
 
 class PendingReviewItem {

@@ -113,6 +113,12 @@ public sealed record StudentSchoolContext(
     string Section = "");
 
 /// <summary>Assignment row with student display name and attempt count for manage UI.</summary>
+public sealed record QuizAssignmentAttemptItem(
+    short AttemptNumber,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? SubmittedAt,
+    string Status);
+
 public sealed record QuizAssignmentListItem(
     long AssignmentId,
     long StudentId,
@@ -125,7 +131,9 @@ public sealed record QuizAssignmentListItem(
     string QuizResultStatusName,
     bool IsReviewDone,
     int AttemptCount,
-    long AssignedById);
+    long AssignedById,
+    DateTimeOffset AssignedAt,
+    IReadOnlyList<QuizAssignmentAttemptItem> Attempts);
 
 /// <summary>Question attached to a quiz, including options and fill-blank accepted answers for scoring.</summary>
 public sealed record QuizQuestionItem(

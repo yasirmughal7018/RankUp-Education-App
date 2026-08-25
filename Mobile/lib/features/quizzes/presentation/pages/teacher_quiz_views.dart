@@ -680,21 +680,64 @@ class TeacherQuizAssignedView extends StatelessWidget {
             Text('No ${assignedPeopleLabel.toLowerCase()} yet.')
           else
             for (final assignment in state.assignments) ...[
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(assignment.studentName),
-                subtitle: Text(
-                  '${assignment.resultStatus} · attempts ${assignment.attemptCount}/${assignment.allowedAttempts}',
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              assignment.studentName,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${assignment.resultStatus} · attempts ${assignment.attemptCount}/${assignment.allowedAttempts}',
+                            ),
+                            if (assignment.assignedAt != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Assigned ${_formatAssignmentDateTime(assignment.assignedAt!)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                            Text(
+                              'Window ${_formatAssignmentDateTime(assignment.startAt)} – ${_formatAssignmentDateTime(assignment.endAt)}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            if (assignment.attempts.isEmpty)
+                              Text(
+                                'No attempts yet',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              )
+                            else
+                              for (final attempt in assignment.attempts)
+                                Text(
+                                  'Attempt ${attempt.attemptNumber} · ${_formatAssignmentDateTime(attempt.occurredAt)}${attempt.status.isEmpty ? '' : ' · ${attempt.status}'}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                          ],
+                        ),
+                      ),
+                      if (assignment.isReviewDone && onAllowRetry != null)
+                        TextButton(
+                          onPressed: state.isSaving
+                              ? null
+                              : () => onAllowRetry!(assignment.assignmentId),
+                          child: const Text('Allow retry'),
+                        ),
+                    ],
+                  ),
                 ),
-                trailing: assignment.isReviewDone && onAllowRetry != null
-                    ? TextButton(
-                        onPressed: state.isSaving
-                            ? null
-                            : () => onAllowRetry!(assignment.assignmentId),
-                        child: const Text('Allow retry'),
-                      )
-                    : null,
               ),
+              const SizedBox(height: 8),
             ],
         ],
       ),
@@ -906,6 +949,15 @@ class TeacherAttemptReviewView extends StatelessWidget {
 }
 
 String _quizYesNo(bool value) => value ? 'Yes' : 'No';
+
+String _formatAssignmentDateTime(DateTime value) {
+  final local = value.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.year}-$month-$day $hour:$minute';
+}
 
 String _quizDash(String value) {
   final trimmed = value.trim();

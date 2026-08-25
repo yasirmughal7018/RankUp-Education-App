@@ -235,6 +235,13 @@ export interface AssignQuizInput {
   campusId?: number | null;
 }
 
+export interface QuizAssignmentAttempt {
+  attemptNumber: number;
+  startedAt: string;
+  submittedAt: string | null;
+  status: string;
+}
+
 export interface QuizAssignment {
   assignmentId: number;
   studentId: number;
@@ -247,6 +254,8 @@ export interface QuizAssignment {
   isReviewDone: boolean;
   resultStatus: string;
   assignedById: number;
+  assignedAt?: string;
+  attempts?: QuizAssignmentAttempt[];
 }
 
 export const QUIZ_MANAGER_ROLES: UserRole[] = [

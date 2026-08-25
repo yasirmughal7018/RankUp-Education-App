@@ -121,6 +121,12 @@ public sealed record AssignQuizRequest(
     int? CampusId = null);
 
 /// <summary>One student assignment with attempt and review summary.</summary>
+public sealed record QuizAssignmentAttemptResponse(
+    short AttemptNumber,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? SubmittedAt,
+    string Status);
+
 public sealed record QuizAssignmentResponse(
     long AssignmentId,
     long StudentId,
@@ -132,7 +138,9 @@ public sealed record QuizAssignmentResponse(
     int AttemptCount,
     bool IsReviewDone,
     string ResultStatus,
-    long AssignedById);
+    long AssignedById,
+    DateTimeOffset AssignedAt,
+    IReadOnlyList<QuizAssignmentAttemptResponse> Attempts);
 
 public sealed record QuizAssignmentListResponse(IReadOnlyList<QuizAssignmentResponse> Items);
 

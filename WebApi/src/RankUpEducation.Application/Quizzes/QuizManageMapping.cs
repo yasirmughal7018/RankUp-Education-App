@@ -106,5 +106,11 @@ internal static class QuizManageMapping
             item.AttemptCount,
             item.IsReviewDone,
             item.QuizResultStatusName,
-            item.AssignedById);
+            item.AssignedById,
+            item.AssignedAt,
+            item.Attempts.Select(attempt => new QuizAssignmentAttemptResponse(
+                attempt.AttemptNumber,
+                attempt.StartedAt,
+                attempt.SubmittedAt,
+                attempt.Status)).ToArray());
 }

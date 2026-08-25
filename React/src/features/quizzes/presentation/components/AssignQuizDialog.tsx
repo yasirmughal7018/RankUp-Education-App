@@ -356,9 +356,6 @@ export function AssignQuizDialog({
       setSelectedStudentIds([studentId]);
       return;
     }
-      setSelectedStudentIds([studentId]);
-      return;
-    }
 
     setSelectedStudentIds((current) =>
       current.includes(studentId)
