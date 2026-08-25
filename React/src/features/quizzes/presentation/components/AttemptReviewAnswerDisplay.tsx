@@ -25,7 +25,6 @@ export function AttemptReviewAnswerDisplay({
       showCorrectAnswers
       selectedMatchLabel="Student matched"
       yourOrderLabel="Student order"
-      className="mb-3 rounded-lg bg-slate-50 px-4 py-3"
     />
   );
 }

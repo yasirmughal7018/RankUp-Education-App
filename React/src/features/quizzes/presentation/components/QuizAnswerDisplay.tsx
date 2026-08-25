@@ -7,6 +7,7 @@ import {
   normalizeQuestionType,
 } from "@/features/questions/domain/questionTypes";
 import type { QuizAnswerDisplayInput } from "@/features/quizzes/domain/quizAnswerDisplayTypes";
+import { cn } from "@/lib/utils";
 
 function resolveSelectedIds(question: QuizAnswerDisplayInput): number[] {
   if (question.selectedOptionIds && question.selectedOptionIds.length > 0) {
@@ -29,6 +30,18 @@ function optionLabel(
   return match?.text?.trim() || `Option #${optionId}`;
 }
 
+function optionLetter(index: number): string {
+  return String.fromCharCode(65 + (index % 26));
+}
+
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
 function MatchingAnswerPanel({
   question,
   showCorrectAnswers,
@@ -49,7 +62,7 @@ function MatchingAnswerPanel({
   const selectedIds = resolveSelectedIds(question);
 
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2.5">
       {lefts.map((left, index) => {
         const selectedId = selectedIds[index] ?? null;
         const correctRight = rights[index];
@@ -61,28 +74,31 @@ function MatchingAnswerPanel({
         return (
           <li
             key={`${left.id}-${correctRight?.id ?? index}`}
-            className={
+            className={cn(
+              "rounded-xl border px-4 py-3",
               showCorrectAnswers
                 ? pairCorrect
-                  ? "rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5"
-                  : "rounded-lg border border-red-200 bg-red-50/60 px-3 py-2.5"
-                : "rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
-            }
+                  ? "border-[hsl(var(--success))]/35 bg-[hsl(var(--success-light))]"
+                  : "border-destructive/35 bg-[hsl(var(--destructive-light))]"
+                : "border-border/80 bg-muted/30",
+            )}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Pair {index + 1}
             </p>
-            <div className="mt-1 space-y-1 text-sm text-slate-800">
+            <div className="mt-1.5 space-y-1 text-sm text-foreground">
               <p>
-                <span className="font-medium text-slate-600">Left:</span>{" "}
+                <span className="font-medium text-muted-foreground">Left:</span>{" "}
                 {left.text.trim() || "—"}
               </p>
               <p>
-                <span className="font-medium text-slate-600">{selectedMatchLabel}:</span>{" "}
+                <span className="font-medium text-muted-foreground">
+                  {selectedMatchLabel}:
+                </span>{" "}
                 {optionLabel(options, selectedId)}
               </p>
               {showCorrectAnswers ? (
-                <p className="text-emerald-800">
+                <p className="text-[hsl(var(--success))]">
                   <span className="font-medium">Correct:</span>{" "}
                   {correctRight?.text.trim() || "—"}
                 </p>
@@ -109,7 +125,9 @@ function OrderingAnswerPanel({
   const byId = new Map(options.map((option) => [option.id, option]));
 
   if (selectedIds.length === 0) {
-    return <p className="text-sm text-slate-500">No order submitted.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">No order submitted.</p>
+    );
   }
 
   return (
@@ -119,10 +137,8 @@ function OrderingAnswerPanel({
       }
     >
       <div>
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-          {yourOrderLabel}
-        </p>
-        <ol className="space-y-1.5 text-sm text-slate-800">
+        <FieldLabel>{yourOrderLabel}</FieldLabel>
+        <ol className="space-y-2 text-sm text-foreground">
           {selectedIds.map((optionId, index) => {
             const correctId = options[index]?.id;
             const isPositionCorrect =
@@ -130,15 +146,16 @@ function OrderingAnswerPanel({
             return (
               <li
                 key={`student-${optionId}-${index}`}
-                className={`flex items-start gap-2 rounded-md px-2 py-1.5 ${
+                className={cn(
+                  "flex items-start gap-2 rounded-xl border px-3 py-2",
                   showCorrectAnswers
                     ? isPositionCorrect
-                      ? "bg-emerald-50"
-                      : "bg-red-50"
-                    : "bg-slate-100"
-                }`}
+                      ? "border-[hsl(var(--success))]/35 bg-[hsl(var(--success-light))]"
+                      : "border-destructive/35 bg-[hsl(var(--destructive-light))]"
+                    : "border-border/80 bg-muted/30",
+                )}
               >
-                <span className="shrink-0 font-semibold text-slate-500">
+                <span className="shrink-0 font-semibold text-muted-foreground">
                   {index + 1}.
                 </span>
                 <span className="min-w-0">
@@ -151,16 +168,14 @@ function OrderingAnswerPanel({
       </div>
       {showCorrectAnswers ? (
         <div>
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Correct order
-          </p>
-          <ol className="space-y-1.5 text-sm text-emerald-900">
+          <FieldLabel>Correct order</FieldLabel>
+          <ol className="space-y-2 text-sm text-foreground">
             {options.map((option, index) => (
               <li
                 key={`correct-${option.id}`}
-                className="flex items-start gap-2 rounded-md bg-emerald-50/80 px-2 py-1.5"
+                className="flex items-start gap-2 rounded-xl border border-[hsl(var(--success))]/35 bg-[hsl(var(--success-light))] px-3 py-2"
               >
-                <span className="shrink-0 font-semibold text-emerald-700">
+                <span className="shrink-0 font-semibold text-[hsl(var(--success))]">
                   {index + 1}.
                 </span>
                 <span className="min-w-0">{option.text.trim() || "—"}</span>
@@ -173,51 +188,85 @@ function OrderingAnswerPanel({
   );
 }
 
-function McqCorrectPanel({
+function ChoiceOptionCards({
   question,
+  showCorrectAnswers,
 }: {
   question: QuizAnswerDisplayInput;
+  showCorrectAnswers: boolean;
 }) {
   const options = question.options ?? [];
-  const correct = options.filter((option) => option.isCorrect);
-  if (correct.length === 0) {
-    return null;
-  }
+  const selectedIds = resolveSelectedIds(question);
 
   return (
-    <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50/80 px-3 py-2">
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
-        Correct answer{correct.length === 1 ? "" : "s"}
-      </p>
-      <ul className="space-y-1 text-sm text-emerald-900">
-        {correct.map((option) => (
-          <li key={option.id}>{option.text.trim() || "—"}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+    <div className="space-y-2.5">
+      {options.map((option, optionIndex) => {
+        const selected = selectedIds.includes(option.id);
+        const isCorrect = Boolean(showCorrectAnswers && option.isCorrect);
+        const wrongSelected = Boolean(
+          showCorrectAnswers && selected && !option.isCorrect,
+        );
 
-function SelectedOptionsList({
-  question,
-  selectedIds,
-}: {
-  question: QuizAnswerDisplayInput;
-  selectedIds: number[];
-}) {
-  const options = question.options ?? [];
-
-  return (
-    <ul className="space-y-1 text-sm text-slate-800">
-      {selectedIds.map((optionId) => {
-        const option = options.find((item) => item.id === optionId);
         return (
-          <li key={optionId} className="rounded-md bg-slate-100 px-2 py-1.5">
-            {option?.text.trim() || `Option #${optionId}`}
-          </li>
+          <div
+            key={option.id}
+            className={cn(
+              "flex items-start gap-3 rounded-xl border px-4 py-3.5",
+              isCorrect &&
+                "border-[hsl(var(--success))]/40 bg-[hsl(var(--success-light))]",
+              wrongSelected &&
+                "border-destructive/40 bg-[hsl(var(--destructive-light))]",
+              selected &&
+                !showCorrectAnswers &&
+                "border-primary/40 bg-primary/10 ring-2 ring-primary/15",
+              !selected &&
+                !isCorrect &&
+                "border-border/80 bg-card",
+            )}
+          >
+            <span
+              className={cn(
+                "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold",
+                isCorrect
+                  ? "bg-[hsl(var(--success))] text-white"
+                  : wrongSelected
+                    ? "bg-destructive text-destructive-foreground"
+                    : selected
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+              )}
+            >
+              {optionLetter(optionIndex)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm leading-6 text-foreground">
+                {option.text}
+              </p>
+              {option.imageUrl ? (
+                <img
+                  src={option.imageUrl}
+                  alt=""
+                  className="mt-2 max-h-40 rounded-xl border border-border object-contain"
+                />
+              ) : null}
+              {showCorrectAnswers && (isCorrect || selected) ? (
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {isCorrect && selected
+                    ? "Your answer · Correct"
+                    : isCorrect
+                      ? "Correct answer"
+                      : "Your answer"}
+                </p>
+              ) : selected && !showCorrectAnswers ? (
+                <p className="mt-1 text-xs font-semibold text-primary">
+                  Your answer
+                </p>
+              ) : null}
+            </div>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
@@ -239,7 +288,7 @@ export function QuizAnswerDisplay({
   showCorrectAnswers = true,
   selectedMatchLabel = "Matched",
   yourOrderLabel = "Your order",
-  className = "rounded-lg bg-slate-50 px-4 py-3",
+  className,
 }: QuizAnswerDisplayProps) {
   const type = normalizeQuestionType(question.questionType);
   const selectedIds = resolveSelectedIds(question);
@@ -247,11 +296,11 @@ export function QuizAnswerDisplay({
 
   if (question.submittedText?.trim()) {
     return (
-      <div className={`${className} text-sm text-slate-700`}>
-        <p className="mb-1 text-xs font-medium uppercase text-slate-500">
-          {answerLabel}
+      <div className={cn("text-sm text-foreground", className)}>
+        <FieldLabel>{answerLabel}</FieldLabel>
+        <p className="whitespace-pre-wrap rounded-xl border border-border/80 bg-muted/30 px-4 py-3 leading-6">
+          {question.submittedText.trim()}
         </p>
-        <p className="whitespace-pre-wrap">{question.submittedText.trim()}</p>
       </div>
     );
   }
@@ -259,9 +308,7 @@ export function QuizAnswerDisplay({
   if (isMatchingType(type) && hasOptions) {
     return (
       <div className={className}>
-        <p className="mb-2 text-xs font-medium uppercase text-slate-500">
-          {answerLabel}
-        </p>
+        <FieldLabel>{answerLabel}</FieldLabel>
         <MatchingAnswerPanel
           question={question}
           showCorrectAnswers={showCorrectAnswers}
@@ -274,9 +321,7 @@ export function QuizAnswerDisplay({
   if (isOrderingType(type) && hasOptions) {
     return (
       <div className={className}>
-        <p className="mb-2 text-xs font-medium uppercase text-slate-500">
-          {answerLabel}
-        </p>
+        <FieldLabel>{answerLabel}</FieldLabel>
         <OrderingAnswerPanel
           question={question}
           showCorrectAnswers={showCorrectAnswers}
@@ -284,10 +329,6 @@ export function QuizAnswerDisplay({
         />
       </div>
     );
-  }
-
-  if (selectedIds.length === 0) {
-    return null;
   }
 
   if (
@@ -298,27 +339,27 @@ export function QuizAnswerDisplay({
   ) {
     return (
       <div className={className}>
-        <p className="mb-2 text-xs font-medium uppercase text-slate-500">
-          {answerLabel}
-        </p>
-        {selectedIds.length === 1 ? (
-          <p className="text-sm text-slate-800">
-            {optionLabel(question.options, selectedIds[0])}
-          </p>
-        ) : (
-          <SelectedOptionsList question={question} selectedIds={selectedIds} />
-        )}
-        {showCorrectAnswers ? <McqCorrectPanel question={question} /> : null}
+        <FieldLabel>{answerLabel}</FieldLabel>
+        <ChoiceOptionCards
+          question={question}
+          showCorrectAnswers={showCorrectAnswers}
+        />
       </div>
     );
   }
 
-  return (
-    <div className={`${className} text-sm text-slate-700`}>
-      <p className="mb-1 text-xs font-medium uppercase text-slate-500">
-        {answerLabel}
+  if (selectedIds.length === 0) {
+    return (
+      <p className={cn("text-sm text-muted-foreground", className)}>
+        No answer recorded.
       </p>
-      <p>
+    );
+  }
+
+  return (
+    <div className={cn("text-sm text-foreground", className)}>
+      <FieldLabel>{answerLabel}</FieldLabel>
+      <p className="rounded-xl border border-border/80 bg-muted/30 px-4 py-3">
         Selected option id{selectedIds.length === 1 ? "" : "s"}:{" "}
         {selectedIds.join(", ")}
       </p>

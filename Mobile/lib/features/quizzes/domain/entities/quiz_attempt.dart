@@ -178,6 +178,9 @@ class QuizResultQuestion {
     this.correctOptionId,
     this.submittedText,
     this.resultPending = false,
+    this.teacherFeedback,
+    this.parentFeedback,
+    this.aiFeedback,
   });
 
   final String id;
@@ -190,6 +193,9 @@ class QuizResultQuestion {
   final String? correctOptionId;
   final String? submittedText;
   final bool resultPending;
+  final String? teacherFeedback;
+  final String? parentFeedback;
+  final String? aiFeedback;
 }
 
 /// Final scored attempt returned after submit or result fetch.

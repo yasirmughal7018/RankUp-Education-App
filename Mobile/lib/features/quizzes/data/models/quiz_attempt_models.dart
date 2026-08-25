@@ -391,6 +391,9 @@ class QuizResultQuestionModel extends QuizResultQuestion {
     super.correctOptionId,
     super.submittedText,
     super.resultPending,
+    super.teacherFeedback,
+    super.parentFeedback,
+    super.aiFeedback,
   });
 
   factory QuizResultQuestionModel.fromJson(Map<String, dynamic> json) {
@@ -405,6 +408,9 @@ class QuizResultQuestionModel extends QuizResultQuestion {
       correctOptionId: _readNullableString(json, ['correctOptionId']),
       submittedText: _readNullableString(json, ['submittedText']),
       resultPending: _readBool(json, ['resultPending']),
+      teacherFeedback: _readNullableString(json, ['teacherFeedback']),
+      parentFeedback: _readNullableString(json, ['parentFeedback']),
+      aiFeedback: _readNullableString(json, ['aiFeedback']),
     );
   }
 }

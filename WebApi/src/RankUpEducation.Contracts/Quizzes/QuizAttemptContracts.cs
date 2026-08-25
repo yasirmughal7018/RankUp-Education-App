@@ -139,7 +139,10 @@ public sealed record QuizResultQuestionResponse(
     IReadOnlyList<long>? CorrectOptionIds = null,
     string? QuestionType = null,
     IReadOnlyList<QuizResultOptionResponse>? Options = null,
-    bool ResultPending = false);
+    bool ResultPending = false,
+    string? TeacherFeedback = null,
+    string? ParentFeedback = null,
+    string? AiFeedback = null);
 
 /// <summary>Frozen option row on the student/parent result screen.</summary>
 public sealed record QuizResultOptionResponse(

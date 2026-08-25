@@ -192,7 +192,10 @@ public sealed record QuizAttemptQuestionItem(
     string? Hint = null,
     short EstimatedTimeSeconds = 0,
     short TimeSpentSeconds = 0,
-    IReadOnlyList<QuestionAcceptedAnswerScoreItem>? AcceptedAnswers = null);
+    IReadOnlyList<QuestionAcceptedAnswerScoreItem>? AcceptedAnswers = null,
+    string? TeacherFeedback = null,
+    string? ParentFeedback = null,
+    string? AiFeedback = null);
 
 /// <summary>Assignment window and attempt quota checked before start/submit.</summary>
 public sealed record QuizAssignmentAccess(

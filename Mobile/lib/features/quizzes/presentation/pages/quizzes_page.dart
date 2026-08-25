@@ -3131,6 +3131,18 @@ class _ReviewQuestionCard extends StatelessWidget {
               Text('Correct option: ${question.correctOptionId}'),
             if (reviewComplete && (question.explanation ?? '').isNotEmpty)
               Text('Explanation: ${question.explanation}'),
+            if ((question.teacherFeedback ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Teacher feedback: ${question.teacherFeedback}'),
+            ],
+            if ((question.parentFeedback ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Checker feedback: ${question.parentFeedback}'),
+            ],
+            if ((question.aiFeedback ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('AI review: ${question.aiFeedback}'),
+            ],
             if (reviewComplete) ...[
               const SizedBox(height: 8),
               Text('Feedback: ${answerState.feedback}'),

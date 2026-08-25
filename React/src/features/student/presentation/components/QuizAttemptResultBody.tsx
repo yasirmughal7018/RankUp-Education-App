@@ -1,16 +1,92 @@
+import { Award, Percent, Megaphone, MessageSquare, UserCheck, Sparkles } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { AppCard } from "@/components/ui/app-card";
-import {
-  getQuestionStatusTone,
-  StatusBadge,
-} from "@/features/questions/presentation/components/StatusBadge";
+import { AppSectionHeader } from "@/components/ui/app-section-header";
+import { AppStatCard } from "@/components/ui/app-stat-card";
+import { AppStatusBadge } from "@/components/ui/app-status-badge";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuizAnswerDisplay } from "@/features/quizzes/presentation/components/QuizAnswerDisplay";
 import type { QuizAttemptResult } from "@/features/student/domain/studentQuizTypes";
 import { resolveQuizResultDisplay } from "@/features/student/domain/quizResultDisplay";
-import { cn } from "@/lib/utils";
+import { formatMonitorStatus } from "@/features/quizzes/domain/quizMonitorTypes";
 
 interface QuizAttemptResultBodyProps {
   result: QuizAttemptResult;
   answerLabel?: string;
+}
+
+function ReviewNote({
+  title,
+  body,
+  icon: Icon,
+  className,
+}: {
+  title: string;
+  body: string;
+  icon: LucideIcon;
+  className: string;
+}) {
+  const text = body.trim();
+  if (!text) {
+    return null;
+  }
+
+  return (
+    <div className={`mt-3 rounded-xl border px-4 py-3 text-sm leading-6 ${className}`}>
+      <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+        {title}
+      </p>
+      <p className="whitespace-pre-wrap text-foreground">{text}</p>
+    </div>
+  );
+}
+
+function QuestionReviewNotes({
+  teacherFeedback,
+  checkerFeedback,
+  aiFeedback,
+  hideUntilAnnounced,
+}: {
+  teacherFeedback?: string | null;
+  checkerFeedback?: string | null;
+  aiFeedback?: string | null;
+  hideUntilAnnounced: boolean;
+}) {
+  if (hideUntilAnnounced) {
+    return null;
+  }
+
+  const teacher = teacherFeedback?.trim() ?? "";
+  const checker = checkerFeedback?.trim() ?? "";
+  const ai = aiFeedback?.trim() ?? "";
+  if (!teacher && !checker && !ai) {
+    return null;
+  }
+
+  return (
+    <div className="mt-1">
+      <ReviewNote
+        title="Teacher feedback"
+        body={teacher}
+        icon={MessageSquare}
+        className="border-primary/20 bg-primary/5"
+      />
+      <ReviewNote
+        title="Checker feedback"
+        body={checker}
+        icon={UserCheck}
+        className="border-[hsl(var(--achievement))]/25 bg-[hsl(var(--achievement-light))]"
+      />
+      <ReviewNote
+        title="AI review"
+        body={ai}
+        icon={Sparkles}
+        className="border-[hsl(var(--ai))]/25 bg-[hsl(var(--ai-light))]"
+      />
+    </div>
+  );
 }
 
 /** Shared student/parent result breakdown (announced questions only until review is done). */
@@ -26,127 +102,149 @@ export function QuizAttemptResultBody({
 
   return (
     <>
-      <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <AppCard>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {scoreLabel}
-          </p>
-          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-foreground">
-            {display.showScore
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <AppStatCard
+          title={scoreLabel}
+          value={
+            display.showScore
               ? `${result.obtainedMarks}/${result.totalMarks}`
-              : "—"}
-          </p>
-        </AppCard>
-        <AppCard>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Percentage
-          </p>
-          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-primary">
-            {display.showScore ? `${result.percentage}%` : "—"}
-          </p>
-        </AppCard>
-        <AppCard>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Results announced
-          </p>
-          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-foreground">
-            {display.announcedPercent}%
-          </p>
-        </AppCard>
-        <AppCard>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Status
-          </p>
-          <div className="mt-2">
-            <StatusBadge
-              label={result.resultStatus}
-              tone={getQuestionStatusTone(result.resultStatus, true)}
-            />
-          </div>
-        </AppCard>
+              : "—"
+          }
+          icon={Award}
+          colorVariant="primary"
+          description={
+            display.showScore
+              ? "Marks from announced questions"
+              : "Hidden until results are announced"
+          }
+        />
+        <AppStatCard
+          title="Percentage"
+          value={display.showScore ? `${result.percentage}%` : "—"}
+          icon={Percent}
+          colorVariant="achievement"
+          description={
+            display.showScore
+              ? "Of total quiz marks"
+              : "Available after announcement"
+          }
+        />
+        <AppStatCard
+          title="Results announced"
+          value={`${display.announcedPercent}%`}
+          icon={Megaphone}
+          colorVariant={display.announcedPercent >= 100 ? "success" : "warning"}
+          description={
+            display.announcedPercent >= 100
+              ? "All question results are visible"
+              : "Share of marks that have been released"
+          }
+        />
       </section>
 
-      {display.modeNote ? (
-        <div
-          className={cn(
-            "mb-6 rounded-xl border px-4 py-3 text-sm",
-            display.reviewPending
-              ? "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]"
-              : "border-border bg-muted/70 text-muted-foreground",
-          )}
-        >
-          {display.modeNote}
+      <AppCard className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">Status</p>
+          <div className="mt-2">
+            <AppStatusBadge
+              status={result.resultStatus}
+              label={formatMonitorStatus(result.resultStatus)}
+            />
+          </div>
         </div>
+        <div className="min-w-[12rem] flex-1">
+          <p className="mb-2 text-sm font-medium text-muted-foreground">
+            Announcement progress
+          </p>
+          <Progress value={display.announcedPercent} className="h-3" />
+        </div>
+      </AppCard>
+
+      {display.modeNote ? (
+        <Alert>
+          <AlertTitle>
+            {display.announcedPercent <= 0
+              ? "Results pending"
+              : "Partial results"}
+          </AlertTitle>
+          <AlertDescription>{display.modeNote}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <div className="space-y-4">
-        {result.questions.map((question, index) => {
-          const pending =
-            question.resultPending === true ||
-            (!display.showScore && display.reviewPending);
+      <section>
+        <AppSectionHeader
+          title="Question review"
+          description={
+            display.reviewPending
+              ? "Announced questions show marks and answers. The rest stay pending."
+              : "Your answers, marks, and explanations for this attempt."
+          }
+        />
 
-          return (
-            <AppCard key={question.id}>
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 font-display text-sm font-semibold text-primary">
-                    {index + 1}
-                  </span>
-                  <h2 className="font-display text-sm font-semibold leading-6 text-foreground sm:text-base">
-                    {question.text}
-                  </h2>
+        <div className="space-y-4">
+          {result.questions.map((question, index) => {
+            const pending =
+              question.resultPending === true ||
+              (!display.showScore && display.reviewPending);
+
+            return (
+              <AppCard key={question.id} animate>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 font-display text-sm font-semibold text-primary">
+                      {index + 1}
+                    </span>
+                    <h2 className="font-display text-base font-semibold leading-6 tracking-tight text-foreground sm:text-lg">
+                      {question.text}
+                    </h2>
+                  </div>
+                  {pending ? (
+                    <AppStatusBadge status="pending" label="Pending" />
+                  ) : (
+                    <AppStatusBadge
+                      status={question.isCorrect ? "approved" : "rejected"}
+                      label={`${question.awardedMarks}/${question.marks}`}
+                    />
+                  )}
                 </div>
-                {pending ? (
-                  <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                    Pending
-                  </span>
-                ) : display.showCorrectness ? (
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold",
-                      question.isCorrect
-                        ? "border-[var(--status-approved-border)] bg-[var(--status-approved-bg)] text-[var(--status-approved-text)]"
-                        : "border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] text-[var(--status-rejected-text)]",
-                    )}
-                  >
-                    {question.awardedMarks}/{question.marks}
-                  </span>
-                ) : (
-                  <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                    {question.awardedMarks}/{question.marks}
-                  </span>
-                )}
-              </div>
 
-              <QuizAnswerDisplay
-                question={{
-                  questionType: question.questionType ?? "Single Choice",
-                  selectedOptionId: question.selectedOptionId,
-                  selectedOptionIds: question.selectedOptionIds,
-                  submittedText: question.submittedText,
-                  options: question.options?.map((option) => ({
-                    id: option.id,
-                    text: option.text,
-                    imageUrl: option.imageUrl,
-                    isCorrect: option.isCorrect,
-                  })),
-                }}
-                answerLabel={answerLabel}
-                showCorrectAnswers={!pending && display.showCorrectAnswers}
-                selectedMatchLabel="Your match"
-                yourOrderLabel={answerLabel}
-                className="mt-1"
-              />
+                <QuizAnswerDisplay
+                  question={{
+                    questionType: question.questionType ?? "Single Choice",
+                    selectedOptionId: question.selectedOptionId,
+                    selectedOptionIds: question.selectedOptionIds,
+                    submittedText: question.submittedText,
+                    options: question.options?.map((option) => ({
+                      id: option.id,
+                      text: option.text,
+                      imageUrl: option.imageUrl,
+                      isCorrect: option.isCorrect,
+                    })),
+                  }}
+                  answerLabel={answerLabel}
+                  showCorrectAnswers={!pending && display.showCorrectAnswers}
+                  selectedMatchLabel="Your match"
+                  yourOrderLabel={answerLabel}
+                />
 
-              {!pending && display.showExplanations && question.explanation ? (
-                <p className="mt-3 rounded-xl border border-border/80 bg-muted/50 px-3 py-2 text-sm leading-6 text-muted-foreground">
-                  {question.explanation}
-                </p>
-              ) : null}
-            </AppCard>
-          );
-        })}
-      </div>
+                {!pending && display.showExplanations && question.explanation ? (
+                  <p className="mt-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm leading-6 text-foreground">
+                    <span className="font-semibold text-primary">Explanation: </span>
+                    {question.explanation}
+                  </p>
+                ) : null}
+
+                <QuestionReviewNotes
+                  teacherFeedback={question.teacherFeedback}
+                  checkerFeedback={question.parentFeedback}
+                  aiFeedback={question.aiFeedback}
+                  hideUntilAnnounced={pending && !display.showExplanations}
+                />
+              </AppCard>
+            );
+          })}
+        </div>
+      </section>
     </>
   );
 }

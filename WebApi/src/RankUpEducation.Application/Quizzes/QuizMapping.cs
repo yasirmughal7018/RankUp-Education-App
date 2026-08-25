@@ -178,6 +178,7 @@ internal static class QuizMapping
             var correctOptions = question.Options.Where(option => option.IsCorrect).ToArray();
             var correctOption = correctOptions.FirstOrDefault();
             var awardedMarks = announced ? question.AwardedMarks : (short)0;
+            var showReviewNotes = announced || visibility.ReviewDone;
 
             return new QuizResultQuestionResponse(
                 question.QuestionId,
@@ -203,7 +204,10 @@ internal static class QuizMapping
                         option.OptionImageUrl,
                         announced && visibility.ShowCorrectAnswers && option.IsCorrect))
                     .ToArray(),
-                ResultPending: !announced);
+                ResultPending: !announced,
+                TeacherFeedback: showReviewNotes ? question.TeacherFeedback : null,
+                ParentFeedback: showReviewNotes ? question.ParentFeedback : null,
+                AiFeedback: showReviewNotes ? question.AiFeedback : null);
         }).ToArray();
 
         var displayedObtained = visibility.ShowScore

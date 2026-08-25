@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Lookups;
 using RankUpEducation.Application.Quizzes;
+using RankUpEducation.Common.Utilities;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Repositories;
@@ -121,6 +122,23 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
 
         var totalMarks = attemptQuestions.Sum(item => (int)item.Marks);
 
+        var reviewIds = attemptQuestions
+            .Where(item => item.QuizReviewId is not null)
+            .Select(item => item.QuizReviewId!.Value)
+            .Distinct()
+            .ToArray();
+        var reviews = reviewIds.Length == 0
+            ? new Dictionary<long, (string? Teacher, string? Parent, string? Ai)>()
+            : await _dbContext.QuizReviews.AsNoTracking()
+                .Where(review => reviewIds.Contains(review.Id))
+                .ToDictionaryAsync(
+                    review => review.Id,
+                    review => (
+                        Teacher: review.TeacherReviewComment,
+                        Parent: review.ParentReviewComment,
+                        Ai: review.AiReviewComment),
+                    cancellationToken);
+
         return new QuizAttemptDetailItem(
             attempt.Id,
             attempt.QuizId,
@@ -203,6 +221,17 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                         answer.AllowTeacherReview))
                     .ToArray();
 
+                string? teacherFeedback = null;
+                string? parentFeedback = null;
+                string? aiFeedback = null;
+                if (item.QuizReviewId is not null
+                    && reviews.TryGetValue(item.QuizReviewId.Value, out var reviewComments))
+                {
+                    teacherFeedback = reviewComments.Teacher.AsTrimmedOrNull();
+                    parentFeedback = reviewComments.Parent.AsTrimmedOrNull();
+                    aiFeedback = reviewComments.Ai.AsTrimmedOrNull();
+                }
+
                 return new QuizAttemptQuestionItem(
                     item.Id,
                     item.QuestionId,
@@ -221,7 +250,10 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                     item.Hint,
                     item.EstimatedTimeSeconds,
                     item.TimeSpentSeconds,
-                    accepted);
+                    accepted,
+                    teacherFeedback,
+                    parentFeedback,
+                    aiFeedback);
             }).ToArray());
     }
 

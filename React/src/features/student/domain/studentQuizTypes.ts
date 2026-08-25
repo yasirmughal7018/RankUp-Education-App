@@ -144,6 +144,9 @@ export interface QuizResultQuestion {
   correctOptionIds?: number[] | null;
   options?: QuizResultOption[];
   resultPending?: boolean;
+  teacherFeedback?: string | null;
+  parentFeedback?: string | null;
+  aiFeedback?: string | null;
 }
 
 export interface QuizAttemptResult {
