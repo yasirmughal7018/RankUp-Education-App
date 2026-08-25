@@ -77,11 +77,13 @@ public sealed class QuizReviewService : IQuizReviewService
     public async Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var (creatorUserId, schoolId, campusId) = QuizScopeResolver.ResolveOwnerListFilter(scope);
+        var (studentIds, assignedByUserId) = await QuizScopeResolver.ResolveAssignmentViewFilterAsync(
+            _studentScope,
+            scope,
+            cancellationToken);
         var items = await _reviews.ListPendingReviewsAsync(
-            creatorUserId,
-            schoolId,
-            campusId,
+            studentIds,
+            assignedByUserId,
             cancellationToken);
 
         return new PendingReviewListResponse(items.Select(item => new PendingReviewItemResponse(
@@ -256,15 +258,23 @@ public sealed class QuizReviewService : IQuizReviewService
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
 
-        QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        QuizScopeResolver.EnsureCanViewQuiz(
+            quiz,
+            scope,
+            LookupNames.IsDraftLifecycleName(lifecycleName));
 
         var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        await QuizScopeResolver.EnsureCanAccessStudentAsync(
+        var assignment = await _assignments.GetAssignmentEntityAsync(quizId, attempt.StudentId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz assignment was not found.");
+
+        await QuizScopeResolver.EnsureCanViewAssignedStudentAsync(
             _studentScope,
             scope,
             attempt.StudentId,
+            assignment.AssignedById,
             cancellationToken);
     }
 

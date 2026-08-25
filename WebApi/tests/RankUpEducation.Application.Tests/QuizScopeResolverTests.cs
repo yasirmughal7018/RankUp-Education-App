@@ -44,6 +44,42 @@ public sealed class QuizScopeResolverTests
     }
 
     [Fact]
+    public void IsAssignmentVisible_PortalAdmin_Unrestricted()
+    {
+        Assert.True(QuizScopeResolver.IsAssignmentVisible(99, 1, visibleStudentIds: null, callerUserId: 1));
+    }
+
+    [Fact]
+    public void IsAssignmentVisible_Teacher_SeesRosterStudentOnAnyQuiz()
+    {
+        Assert.True(QuizScopeResolver.IsAssignmentVisible(
+            studentId: 10,
+            assignedByUserId: 50,
+            visibleStudentIds: [10, 11],
+            callerUserId: 7));
+    }
+
+    [Fact]
+    public void IsAssignmentVisible_Parent_DoesNotSeeUnrelatedChild()
+    {
+        Assert.False(QuizScopeResolver.IsAssignmentVisible(
+            studentId: 99,
+            assignedByUserId: 50,
+            visibleStudentIds: [10, 11],
+            callerUserId: 8));
+    }
+
+    [Fact]
+    public void IsAssignmentVisible_CallerKeepsRowsTheyAssigned()
+    {
+        Assert.True(QuizScopeResolver.IsAssignmentVisible(
+            studentId: 99,
+            assignedByUserId: 8,
+            visibleStudentIds: [10, 11],
+            callerUserId: 8));
+    }
+
+    [Fact]
     public void EnsureCanApproveOrRejectQuiz_BlocksSelfApprovalForSchoolAdmin()
     {
         var quiz = CreateQuiz(createdBy: "5");

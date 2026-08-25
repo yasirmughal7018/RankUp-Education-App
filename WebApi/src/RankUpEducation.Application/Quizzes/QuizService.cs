@@ -189,7 +189,8 @@ public sealed class QuizService : IQuizService
             _ => throw new ForbiddenAppException("Your role cannot access quizzes.")
         };
 
-        return new QuizListResponse(items.Select(item => QuizMapping.ToSummaryResponse(item, now)).ToArray());
+        return new QuizListResponse(items.Select(item =>
+            QuizMapping.ToSummaryResponse(item, now, studentFacing: role == UserRole.Student)).ToArray());
     }
 
     public async Task<QuizDetailResponse> GetDetailAsync(long quizId, CancellationToken cancellationToken)
@@ -1391,15 +1392,11 @@ public sealed class QuizService : IQuizService
             includePublishedFromAllSchools: true);
 
         var studentIds = await _studentScope.GetLinkedStudentIdsAsync(parentId, cancellationToken);
-        var assignedItems = studentIds.Count > 0
-            ? await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken)
-            : Array.Empty<QuizListItem>();
-
-        return catalogItems
-            .Concat(assignedItems.Where(assigned => catalogItems.All(item => item.QuizId != assigned.QuizId)))
-            .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
-            .ThenByDescending(item => item.QuizId)
-            .ToArray();
+        return MergeCatalogWithAssigned(
+            catalogItems,
+            studentIds.Count > 0
+                ? await _quizzes.ListForLinkedStudentsAsync(studentIds, search, subject, grade, cancellationToken)
+                : Array.Empty<QuizListItem>());
     }
 
     private async Task<IReadOnlyList<QuizListItem>> ListForTeacherAsync(
@@ -1412,8 +1409,9 @@ public sealed class QuizService : IQuizService
         var schoolId = _currentUser.SchoolId ?? throw new ForbiddenAppException("Teacher school context was not found.");
         var campusId = _currentUser.CampusId ?? throw new ForbiddenAppException("Teacher campus context was not found.");
 
-        // Published school-type quizzes (any school / creator) plus own drafts.
-        return await _quizzes.ListForSchoolAsync(
+        // Published school-type quizzes (any school / creator) plus own drafts
+        // and quizzes assigned to the caller's roster students.
+        var catalogItems = await _quizzes.ListForSchoolAsync(
             schoolId,
             campusId,
             viewerUserId: teacherUserId,
@@ -1424,6 +1422,30 @@ public sealed class QuizService : IQuizService
             grade,
             cancellationToken,
             includePublishedFromAllSchools: true);
+
+        var rosterIds = await _studentScope.GetRosterStudentIdsAsync(
+            _currentUser.ProfileId ?? teacherUserId,
+            schoolId,
+            campusId,
+            ParseRole(_currentUser.Role),
+            cancellationToken);
+
+        return MergeCatalogWithAssigned(
+            catalogItems,
+            rosterIds.Count > 0
+                ? await _quizzes.ListForLinkedStudentsAsync(rosterIds, search, subject, grade, cancellationToken)
+                : Array.Empty<QuizListItem>());
+    }
+
+    private static IReadOnlyList<QuizListItem> MergeCatalogWithAssigned(
+        IReadOnlyList<QuizListItem> catalogItems,
+        IReadOnlyList<QuizListItem> assignedItems)
+    {
+        return catalogItems
+            .Concat(assignedItems.Where(assigned => catalogItems.All(item => item.QuizId != assigned.QuizId)))
+            .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
+            .ThenByDescending(item => item.QuizId)
+            .ToArray();
     }
 
     private static readonly TimeSpan OfflineSubmitGrace = TimeSpan.FromMinutes(30);
@@ -1589,7 +1611,21 @@ public sealed class QuizService : IQuizService
             return attempt.StudentId;
         }
 
-        throw new ForbiddenAppException("Only students and linked parents can view quiz attempt results.");
+        if (role is UserRole.Teacher or UserRole.Coordinator
+            or UserRole.CampusAdmin or UserRole.SchoolAdmin or UserRole.PortalAdmin)
+        {
+            var scope = QuizScopeResolver.RequireManageScope(_currentUser);
+            var assignment = await _assignments.GetAssignmentEntityAsync(quizId, attempt.StudentId, cancellationToken);
+            await QuizScopeResolver.EnsureCanViewAssignedStudentAsync(
+                _studentScope,
+                scope,
+                attempt.StudentId,
+                assignment?.AssignedById ?? 0,
+                cancellationToken);
+            return attempt.StudentId;
+        }
+
+        throw new ForbiddenAppException("You do not have access to this quiz attempt result.");
     }
 
     private static bool HasAttemptAnswer(QuizAttemptQuestionItem question)

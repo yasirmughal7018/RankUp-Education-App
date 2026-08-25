@@ -51,7 +51,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizListResponse>.Ok(response));
     }
 
-    /// <summary>Cross-quiz assignment board for the authenticated quiz owner.</summary>
+    /// <summary>Cross-quiz assignment board for the caller's students or children.</summary>
     [HttpGet("assignments")]
     public async Task<ActionResult<ApiResponse<QuizAssignmentBoardResponse>>> ListAllAssignmentsAsync(
         [FromQuery] long? studentId,
@@ -281,7 +281,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ManageQuizResponse>.Ok(response, "Quiz published."));
     }
 
-    /// <summary>Assigns quiz to students; moves lifecycle to Assigned.</summary>
+    /// <summary>Assigns quiz to students. Lifecycle stays Published.</summary>
     [HttpPost("{quizId:long}/assign")]
     public async Task<ActionResult<ApiResponse<AssignQuizResponse>>> AssignAsync(
         long quizId,
@@ -292,7 +292,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<AssignQuizResponse>.Ok(response, "Quiz assigned."));
     }
 
-    /// <summary>Lists assignments for one quiz.</summary>
+    /// <summary>Lists in-scope student assignments for one quiz.</summary>
     [HttpGet("{quizId:long}/assignments")]
     public async Task<ActionResult<ApiResponse<QuizAssignmentListResponse>>> ListAssignmentsAsync(
         long quizId,
@@ -307,7 +307,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<QuizAssignmentListResponse>.Ok(response));
     }
 
-    /// <summary>Cancels upcoming assignments for a quiz.</summary>
+    /// <summary>Cancels upcoming assignments created by the caller.</summary>
     [HttpPost("{quizId:long}/cancel")]
     public async Task<ActionResult<ApiResponse<CancelQuizResponse>>> CancelAsync(
         long quizId,
@@ -388,7 +388,7 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<ArchiveQuizResponse>.Ok(response, message));
     }
 
-    /// <summary>Restores an archived quiz to Published or Assigned.</summary>
+    /// <summary>Restores an archived quiz to Published.</summary>
     [HttpPost("{quizId:long}/unarchive")]
     public async Task<ActionResult<ApiResponse<UnarchiveQuizResponse>>> UnarchiveAsync(
         long quizId,

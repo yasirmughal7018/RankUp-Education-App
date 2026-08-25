@@ -989,7 +989,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
 
     private const string QuizLookupSupportSql = """
         -- Quiz approval: 40 Pending, 41 SchoolApproved, 42 Approved, 43 Rejected.
-        -- Quiz lifecycle: 60 Draft, 61 Published, 62 Assigned, 63 Archived.
+        -- Quiz lifecycle: 60 Draft, 61 Published, 63 Archived. 62 Assigned is legacy (deactivated).
         INSERT INTO public.lookups (id, name, type, order_by, is_active, lookup_ref_id)
         SELECT v.id, v.name, v.type, v.ord, TRUE, NULL
         FROM (
@@ -1067,37 +1067,38 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
             END
         WHERE id IN (44, 45, 46) AND type = 'QuizApprovalStatus';
 
-        -- Canonical lifecycle names: Draft → Published → Assigned → Archived.
+        -- Canonical lifecycle names: Draft → Published → Archived.
         UPDATE public.lookups SET name = 'Draft', order_by = 1, is_active = TRUE
         WHERE id = 60 AND type = 'QuizLifecycleStatus';
 
         UPDATE public.lookups SET name = 'Published', order_by = 2, is_active = TRUE
         WHERE id = 61 AND type = 'QuizLifecycleStatus';
 
-        UPDATE public.lookups SET name = 'Assigned', order_by = 3, is_active = TRUE
-        WHERE id = 62 AND type = 'QuizLifecycleStatus';
-
         -- Remap retired lifecycle rows on quizzes before ID 63 becomes Archived.
-        -- Cancelled (65) → Assigned if any assignment rows exist, else Published.
-        UPDATE public.quizzes AS q
-        SET lifecycle_status_id = 62
-        WHERE q.lifecycle_status_id = 65
-          AND EXISTS (
-              SELECT 1 FROM public.quiz_assignments AS a WHERE a.quiz_id = q.id
-          );
-
+        -- Cancelled (65) → Published (Assigned is not a quiz status).
         UPDATE public.quizzes
         SET lifecycle_status_id = 61
         WHERE lifecycle_status_id = 65;
 
-        -- Old In Progress (63) / Completed (64) were never valid on the quiz row → Assigned.
+        -- Old In Progress (63) / Completed (64) were never valid on the quiz row → Published.
         UPDATE public.quizzes AS q
-        SET lifecycle_status_id = 62
+        SET lifecycle_status_id = 61
         FROM public.lookups AS l
         WHERE q.lifecycle_status_id = l.id
           AND l.type = 'QuizLifecycleStatus'
           AND l.id IN (63, 64)
           AND lower(l.name) NOT IN ('archived');
+
+        -- Assigned (62) is not a quiz lifecycle — stay Published after assign.
+        UPDATE public.quizzes
+        SET lifecycle_status_id = 61
+        WHERE lifecycle_status_id = 62;
+
+        UPDATE public.lookups
+        SET is_active = FALSE,
+            order_by = 99,
+            name = 'Assigned (legacy)'
+        WHERE id = 62 AND type = 'QuizLifecycleStatus';
 
         -- Previous Archived id 66 → canonical 63.
         UPDATE public.quizzes

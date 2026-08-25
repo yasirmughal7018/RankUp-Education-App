@@ -105,5 +105,6 @@ internal static class QuizManageMapping
             item.AllowedAttempts,
             item.AttemptCount,
             item.IsReviewDone,
-            item.QuizResultStatusName);
+            item.QuizResultStatusName,
+            item.AssignedById);
 }

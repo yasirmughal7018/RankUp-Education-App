@@ -172,7 +172,7 @@ export async function archiveQuiz(
   };
 }
 
-/** Restore an archived quiz to Published or Assigned. */
+/** Restore an archived quiz to Published. */
 export async function unarchiveQuiz(
   quizId: number,
 ): Promise<{ quizId: number; lifecycleStatus: string }> {
@@ -292,7 +292,7 @@ export async function listQuizAssignments(
   return response.items;
 }
 
-/** Cancel all assignments for a quiz. */
+/** Cancel upcoming assignments created by the current user. */
 export async function cancelQuizAssignments(quizId: number): Promise<void> {
   await apiRequest(`/quizzes/${quizId}/cancel`, { method: "POST" });
 }

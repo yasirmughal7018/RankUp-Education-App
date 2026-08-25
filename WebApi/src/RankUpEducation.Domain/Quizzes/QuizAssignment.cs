@@ -53,6 +53,30 @@ public sealed class QuizAssignment : BaseEntity
         StudentGroupId = studentGroupId;
     }
 
+    /// <summary>
+    /// Reopens an expired (or past-window unused) assignment with a new schedule.
+    /// </summary>
+    public void ReopenForReassign(
+        long assignedById,
+        DateTimeOffset startDateTime,
+        DateTimeOffset endDateTime,
+        short allowedAttempts,
+        short quizResultStatus)
+    {
+        if (endDateTime <= startDateTime)
+        {
+            throw new BusinessRuleException("Quiz assignment end date must be after start date.");
+        }
+
+        AssignedById = assignedById;
+        StartDateTime = startDateTime;
+        EndDateTime = endDateTime;
+        AllowedAttempts = allowedAttempts;
+        QuizResultStatus = quizResultStatus;
+        IsReviewDone = false;
+        ModifiedDate = DateTimeOffset.UtcNow;
+    }
+
     /// <summary>Called when teacher/parent finalizes subjective-answer review for this assignment.</summary>
     public void MarkReviewDone()
     {

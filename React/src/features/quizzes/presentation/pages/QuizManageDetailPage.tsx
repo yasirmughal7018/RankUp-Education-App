@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Users } from "lucide-react";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { AttachBankQuestionsDialog } from "@/features/quizzes/presentation/components/AttachBankQuestionsDialog";
@@ -18,6 +18,7 @@ import {
   canEditQuizSettings,
   canPortalPublishQuiz,
   canAssignQuiz,
+  canCancelOwnUpcomingAssignments,
   canRequestQuizEdit,
   canResubmitQuizForReview,
   canSubmitQuizForReview,
@@ -41,7 +42,6 @@ import {
   StatusBadge,
 } from "@/features/questions/presentation/components/StatusBadge";
 import {
-  useAllowRetryMutation,
   useApproveQuizMutation,
   useArchiveQuizMutation,
   useUnarchiveQuizMutation,
@@ -223,23 +223,14 @@ function resolveQuizScopeRows(
   }
 }
 
-function canAllowRetry(assignment: {
-  isReviewDone: boolean;
-  attemptCount: number;
-  allowedAttempts: number;
-}): boolean {
-  return (
-    assignment.isReviewDone &&
-    assignment.attemptCount >= assignment.allowedAttempts
-  );
-}
-
-/** Quiz manage hub: questions, assignments, publish/archive, and lifecycle actions. */
+/** Quiz manage hub: questions, publish/archive, and lifecycle actions. */
 export function QuizManageDetailPage() {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const canAuthor = user != null && canAuthorQuizzes(user.role);
+  const assignedPeopleLabel =
+    user?.role === "Parent" ? "Assigned children" : "Assigned students";
   const numericQuizId = Number(quizId);
 
   // When true, stop manage/assignments queries so hard-delete cannot trigger a
@@ -271,7 +262,6 @@ export function QuizManageDetailPage() {
   const attachBankQuestion = useAttachBankQuestionMutation(numericQuizId);
   const assignQuiz = useAssignQuizMutation(numericQuizId);
   const cancelAssignments = useCancelQuizAssignmentsMutation(numericQuizId);
-  const allowRetry = useAllowRetryMutation(numericQuizId);
   const requestQuizEdit = useRequestQuizEditMutation(numericQuizId);
   const approveEditRequest = useApproveQuizEditRequestMutation(numericQuizId);
   const rejectEditRequest = useRejectQuizEditRequestMutation(numericQuizId);
@@ -316,7 +306,6 @@ export function QuizManageDetailPage() {
     attachBankQuestion.isPending ||
     assignQuiz.isPending ||
     cancelAssignments.isPending ||
-    allowRetry.isPending ||
     requestQuizEdit.isPending ||
     approveEditRequest.isPending ||
     rejectEditRequest.isPending;
@@ -463,6 +452,10 @@ export function QuizManageDetailPage() {
       quiz.questionCount,
       quiz.quizType,
     );
+  const canCancelAssignments = canCancelOwnUpcomingAssignments(
+    user?.id,
+    assignments,
+  );
   const displayStatus = resolveQuizDisplayStatus(
     quiz.lifecycleStatus,
     quiz.approvalStatus,
@@ -771,12 +764,37 @@ export function QuizManageDetailPage() {
                 : "—"}
           </p>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Assignments</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {assignments.length}
-          </p>
-        </div>
+        {!draft ? (
+          <Link
+            to={`/quizzes/${numericQuizId}/assigned`}
+            aria-label={`View ${assignedPeopleLabel.toLowerCase()}`}
+            className="group relative flex min-h-[8.5rem] flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card/90 p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_8px_28px_rgba(37,99,235,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <div className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-primary/10 transition-colors duration-200 group-hover:bg-primary/15" />
+            <div className="relative flex items-start justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {assignedPeopleLabel}
+              </p>
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary shadow-sm shadow-primary/10 transition-all duration-200 group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-md group-hover:shadow-primary/20">
+                <Users className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="relative mt-3">
+              <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                {assignments.length}
+              </p>
+            </div>
+          </Link>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              {assignedPeopleLabel}
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">
+              {assignments.length}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -802,12 +820,6 @@ export function QuizManageDetailPage() {
                 label={displayStatus}
                 tone={getQuestionStatusTone(displayStatus, true)}
               />
-              {!isDraftQuiz(quiz.lifecycleStatus.trim().toLowerCase()) ? (
-                <StatusBadge
-                  label={quiz.lifecycleStatus}
-                  tone={getQuestionStatusTone(quiz.lifecycleStatus, true)}
-                />
-              ) : null}
               <StatusBadge
                 label={formatQuizDisplayStatusLabel(quiz.approvalStatus)}
                 tone={getQuestionStatusTone(quiz.approvalStatus, true)}
@@ -1103,13 +1115,13 @@ export function QuizManageDetailPage() {
                   Archive
                 </button>
             ) : null}
-            {assignments.length > 0 ? (
+            {canCancelAssignments ? (
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => {
                   const confirmed = window.confirm(
-                    "Cancel upcoming assignments for this quiz?",
+                    "Cancel upcoming assignments that you assigned for this quiz?",
                   );
                   if (!confirmed) {
                     return;
@@ -1242,83 +1254,6 @@ export function QuizManageDetailPage() {
         )}
       </section>
 
-      {assignments.length > 0 ? (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Assignments</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Student
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Window
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Attempts
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Result
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {assignments.map((assignment) => (
-                  <tr key={assignment.assignmentId}>
-                    <td className="px-4 py-3 text-slate-700">
-                      {assignment.studentName?.trim() || assignment.studentId}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {formatDateTime(assignment.startAt)} -{" "}
-                      {formatDateTime(assignment.endAt)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {assignment.attemptCount}/{assignment.allowedAttempts}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {assignment.resultStatus}
-                      {assignment.isReviewDone ? (
-                        <span className="ml-2 text-xs text-emerald-700">
-                          Reviewed
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {canAllowRetry(assignment) ? (
-                        <button
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() =>
-                            void runAction(
-                              () =>
-                                allowRetry.mutateAsync({
-                                  assignmentId: assignment.assignmentId,
-                                }),
-                              "Extra attempt allowed.",
-                            )
-                          }
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                        >
-                          Allow retry
-                        </button>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
       <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <button
           type="button"
@@ -1440,6 +1375,7 @@ export function QuizManageDetailPage() {
           schoolId={quiz.schoolId}
           campusId={quiz.campusId}
           quizType={quiz.quizType}
+          existingAssignments={assignments}
           onClose={() => setShowAssignDialog(false)}
           onSubmit={async (input) => {
             setActionError(null);

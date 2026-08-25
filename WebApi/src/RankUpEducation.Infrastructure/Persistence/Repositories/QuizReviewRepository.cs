@@ -21,6 +21,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
 
     public async Task<IReadOnlyList<QuizMonitoringStudentItem>> ListMonitoringForQuizAsync(
         long quizId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         CancellationToken cancellationToken)
     {
         var quizExists = await _dbContext.Quizzes.AsNoTracking()
@@ -33,8 +35,18 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             return Array.Empty<QuizMonitoringStudentItem>();
         }
 
-        var assignments = await _dbContext.QuizAssignments.AsNoTracking()
-            .Where(assignment => assignment.QuizId == quizId)
+        var assignmentQuery = _dbContext.QuizAssignments.AsNoTracking()
+            .Where(assignment => assignment.QuizId == quizId);
+        if (studentIds is not null)
+        {
+            assignmentQuery = assignedByUserId is not null
+                ? assignmentQuery.Where(assignment =>
+                    studentIds.Contains(assignment.StudentId)
+                    || assignment.AssignedById == assignedByUserId.Value)
+                : assignmentQuery.Where(assignment => studentIds.Contains(assignment.StudentId));
+        }
+
+        var assignments = await assignmentQuery
             .OrderBy(assignment => assignment.StudentId)
             .ToListAsync(cancellationToken);
 
@@ -89,9 +101,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
     }
 
     public async Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsAsync(
-        long? creatorUserId,
-        int? schoolId,
-        int? campusId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         CancellationToken cancellationToken)
     {
         var submittedStatusIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
@@ -116,24 +127,15 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 && !assignment.IsReviewDone
                 && submittedStatusIds.Contains(attempt.StatusId)
                 && attempt.SubmittedDate != default
-            select new { attempt, quiz };
+            select new { attempt, quiz, assignment };
 
-        if (creatorUserId is not null)
+        if (studentIds is not null)
         {
-            var creatorKey = creatorUserId.Value.ToString();
-            query = query.Where(row => row.quiz.CreatedByName == creatorKey);
-        }
-
-        if (schoolId is not null)
-        {
-            query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
-        }
-
-        if (campusId is not null)
-        {
-            query = query.Where(row =>
-                row.quiz.SchoolCampusId == campusId.Value
-                || row.quiz.SchoolCampusId == null);
+            query = assignedByUserId is not null
+                ? query.Where(row =>
+                    studentIds.Contains(row.attempt.StudentId)
+                    || row.assignment.AssignedById == assignedByUserId.Value)
+                : query.Where(row => studentIds.Contains(row.attempt.StudentId));
         }
 
         var rows = await query

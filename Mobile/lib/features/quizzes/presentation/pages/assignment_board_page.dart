@@ -7,6 +7,7 @@ import 'package:rankup_education/features/authentication/presentation/providers/
 import 'package:rankup_education/features/parent/presentation/providers/parent_providers.dart';
 import 'package:rankup_education/features/quizzes/data/models/quiz_manage_models.dart';
 import 'package:rankup_education/features/quizzes/presentation/providers/quiz_providers.dart';
+import 'package:rankup_education/features/teacher/presentation/providers/teacher_providers.dart';
 
 /// Cross-quiz assignment overview (mirrors web `/quizzes/assignments`).
 class AssignmentBoardPage extends ConsumerStatefulWidget {
@@ -19,6 +20,21 @@ class AssignmentBoardPage extends ConsumerStatefulWidget {
 
 class _AssignmentBoardPageState extends ConsumerState<AssignmentBoardPage> {
   int? _studentFilter;
+  var _didReadQuery = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didReadQuery) {
+      return;
+    }
+    _didReadQuery = true;
+    final raw = GoRouterState.of(context).uri.queryParameters['studentId'];
+    final parsed = int.tryParse(raw ?? '');
+    if (parsed != null && parsed > 0) {
+      _studentFilter = parsed;
+    }
+  }
 
   String _formatWindow(DateTime start, DateTime end) {
     final localizations = MaterialLocalizations.of(context);
@@ -32,7 +48,8 @@ class _AssignmentBoardPageState extends ConsumerState<AssignmentBoardPage> {
     final role =
         ref.watch(authControllerProvider).user?.role ?? UserRole.student;
     final isParent = role == UserRole.parent;
-    final isLinkedAssigner = isParent;
+    final isRosterViewer =
+        role == UserRole.teacher || role == UserRole.coordinator;
     final boardAsync = ref.watch(assignmentBoardProvider(_studentFilter));
 
     return Scaffold(
@@ -62,14 +79,19 @@ class _AssignmentBoardPageState extends ConsumerState<AssignmentBoardPage> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
             Text(
-              'Overview of quiz assignments across your students.',
+              'Quiz assignments for your students or children, according to your role.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 12),
-            if (isLinkedAssigner)
+            if (isParent)
               _LinkedStudentFilter(
+                selectedStudentId: _studentFilter,
+                onChanged: (value) => setState(() => _studentFilter = value),
+              )
+            else if (isRosterViewer)
+              _RosterStudentFilter(
                 selectedStudentId: _studentFilter,
                 onChanged: (value) => setState(() => _studentFilter = value),
               ),
@@ -92,7 +114,7 @@ class _AssignmentBoardPageState extends ConsumerState<AssignmentBoardPage> {
                     icon: Icons.assignment_outlined,
                     title: 'No assignments',
                     message:
-                        'Assignments appear here after you assign quizzes.',
+                        'Assignments for your students or children appear here.',
                   );
                 }
                 return Column(
@@ -134,6 +156,7 @@ class _LinkedStudentFilter extends ConsumerWidget {
       loading: () => const LinearProgressIndicator(),
       error: (_, __) => const SizedBox.shrink(),
       data: (students) => _StudentDropdown(
+        allLabel: 'All linked students',
         students: [
           for (final student in students)
             (id: student.studentId, label: student.label),
@@ -145,13 +168,43 @@ class _LinkedStudentFilter extends ConsumerWidget {
   }
 }
 
+class _RosterStudentFilter extends ConsumerWidget {
+  const _RosterStudentFilter({
+    required this.selectedStudentId,
+    required this.onChanged,
+  });
+
+  final int? selectedStudentId;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(teacherRosterProvider);
+    return async.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (roster) => _StudentDropdown(
+        allLabel: 'All roster students',
+        students: [
+          for (final student in roster.students)
+            (id: student.studentId, label: student.label),
+        ],
+        selectedStudentId: selectedStudentId,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
 class _StudentDropdown extends StatelessWidget {
   const _StudentDropdown({
+    required this.allLabel,
     required this.students,
     required this.selectedStudentId,
     required this.onChanged,
   });
 
+  final String allLabel;
   final List<({int id, String label})> students;
   final int? selectedStudentId;
   final ValueChanged<int?> onChanged;
@@ -168,9 +221,9 @@ class _StudentDropdown extends StatelessWidget {
         labelText: 'Filter by student',
       ),
       items: [
-        const DropdownMenuItem<int?>(
+        DropdownMenuItem<int?>(
           value: null,
-          child: Text('All linked students'),
+          child: Text(allLabel),
         ),
         for (final student in students)
           DropdownMenuItem<int?>(

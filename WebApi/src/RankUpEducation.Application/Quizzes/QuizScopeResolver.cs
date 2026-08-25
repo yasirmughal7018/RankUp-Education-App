@@ -244,6 +244,7 @@ public static class QuizScopeResolver
     /// <summary>
     /// List filters for assignment board / pending reviews / reports-style boards.
     /// Teacher/Parent: own quizzes; SchoolAdmin: school; CampusAdmin: campus; PortalAdmin: platform.
+    /// Prefer <see cref="ResolveAssignmentViewFilterAsync"/> for student-scoped assignment views.
     /// </summary>
     public static (long? CreatorUserId, int? SchoolId, int? CampusId) ResolveOwnerListFilter(QuizManageScope scope)
     {
@@ -254,6 +255,86 @@ public static class QuizScopeResolver
             UserRole.PortalAdmin => (null, null, null),
             _ => (scope.UserId, null, null),
         };
+    }
+
+    /// <summary>
+    /// Student ids the caller may see on assignment/monitor/review boards.
+    /// <c>StudentIds</c> is null for PortalAdmin (unrestricted).
+    /// <c>AssignedByUserId</c> keeps rows the caller created even if a student later left scope.
+    /// </summary>
+    public static async Task<(IReadOnlyList<long>? StudentIds, long? AssignedByUserId)> ResolveAssignmentViewFilterAsync(
+        IStudentScopeRepository studentScope,
+        QuizManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        if (scope.Role == UserRole.PortalAdmin)
+        {
+            return (null, null);
+        }
+
+        IReadOnlyList<long> studentIds = scope.Role switch
+        {
+            UserRole.Parent => await studentScope.GetLinkedStudentIdsAsync(
+                scope.ParentId,
+                cancellationToken),
+            UserRole.Teacher or UserRole.Coordinator => await studentScope.GetRosterStudentIdsAsync(
+                scope.ProfileId,
+                scope.SchoolId!.Value,
+                scope.CampusId!.Value,
+                scope.Role,
+                cancellationToken),
+            UserRole.CampusAdmin => await studentScope.GetStudentIdsInSchoolAsync(
+                scope.SchoolId!.Value,
+                cancellationToken,
+                scope.CampusId),
+            UserRole.SchoolAdmin => await studentScope.GetStudentIdsInSchoolAsync(
+                scope.SchoolId!.Value,
+                cancellationToken),
+            _ => Array.Empty<long>(),
+        };
+
+        return (studentIds, scope.UserId);
+    }
+
+    /// <summary>
+    /// True when the assignment belongs to a visible student or was created by the caller.
+    /// <paramref name="visibleStudentIds"/> null means unrestricted (PortalAdmin).
+    /// </summary>
+    public static bool IsAssignmentVisible(
+        long studentId,
+        long assignedByUserId,
+        IReadOnlyList<long>? visibleStudentIds,
+        long? callerUserId)
+    {
+        if (visibleStudentIds is null)
+        {
+            return true;
+        }
+
+        if (visibleStudentIds.Contains(studentId))
+        {
+            return true;
+        }
+
+        return callerUserId is not null && assignedByUserId == callerUserId.Value;
+    }
+
+    /// <summary>
+    /// View/retry/review an existing assignment: caller created it, or the student is in role scope.
+    /// </summary>
+    public static async Task EnsureCanViewAssignedStudentAsync(
+        IStudentScopeRepository studentScope,
+        QuizManageScope scope,
+        long studentId,
+        long assignedByUserId,
+        CancellationToken cancellationToken)
+    {
+        if (scope.Role == UserRole.PortalAdmin || assignedByUserId == scope.UserId)
+        {
+            return;
+        }
+
+        await EnsureCanAccessStudentAsync(studentScope, scope, studentId, cancellationToken);
     }
 
     /// <summary>No self-approval except PortalAdmin (platform final authority).</summary>

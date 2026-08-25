@@ -109,7 +109,8 @@ class ManageQuiz {
   }
 
   bool get isPublished {
-    return lifecycleStatus.trim().toLowerCase() == 'published';
+    final normalized = lifecycleStatus.trim().toLowerCase();
+    return normalized == 'published' || normalized == 'assigned';
   }
 
   bool get isAssigned {
@@ -419,6 +420,7 @@ class QuizAssignmentItem {
     required this.isReviewDone,
     required this.resultStatus,
     this.groupId,
+    this.assignedById = '',
   });
 
   factory QuizAssignmentItem.fromJson(Map<String, dynamic> json) {
@@ -435,6 +437,7 @@ class QuizAssignmentItem {
       attemptCount: _asInt(json['attemptCount']),
       isReviewDone: json['isReviewDone'] == true,
       resultStatus: _asString(json['resultStatus']),
+      assignedById: _asString(json['assignedById']),
     );
   }
 
@@ -448,6 +451,7 @@ class QuizAssignmentItem {
   final int attemptCount;
   final bool isReviewDone;
   final String resultStatus;
+  final String assignedById;
 }
 
 class PendingReviewItem {

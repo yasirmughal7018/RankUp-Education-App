@@ -11,6 +11,8 @@ import {
 } from "@/features/quizzes/domain/quizMonitorTypes";
 import { useAssignmentBoardQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
+import { formatRosterStudent } from "@/features/teacher/domain/teacherTypes";
+import { useTeacherRosterQuery } from "@/features/teacher/presentation/hooks/useTeacherQueries";
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -19,12 +21,13 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
-/** Cross-quiz assignment board filtered by student (parents see linked children). */
+/** Cross-quiz assignment board filtered by the caller's students or children. */
 export function AssignmentBoardPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const isParent = user?.role === "Parent";
-  const isLinkedAssigner = isParent;
+  const isRosterViewer =
+    user?.role === "Teacher" || user?.role === "Coordinator";
   const queryStudentId = Number(searchParams.get("studentId"));
   const [studentFilter, setStudentFilter] = useState<number | "">(
     queryStudentId > 0 ? queryStudentId : "",
@@ -37,7 +40,24 @@ export function AssignmentBoardPage() {
   }, [queryStudentId]);
 
   const { data: parentLinkedStudents = [] } = useLinkedStudentsQuery(isParent);
-  const linkedCount = parentLinkedStudents.length;
+  const { data: roster } = useTeacherRosterQuery(isRosterViewer);
+  const rosterStudents = roster?.students ?? [];
+  const scopedStudents = isParent
+    ? parentLinkedStudents.map((student) => ({
+        id: student.studentId,
+        label: formatStudentLabel(student),
+      }))
+    : isRosterViewer
+      ? rosterStudents.map((student) => ({
+          id: student.studentId,
+          label: formatRosterStudent(student),
+        }))
+      : [];
+  const allStudentsLabel = isParent
+    ? "All linked students"
+    : isRosterViewer
+      ? "All roster students"
+      : "All students";
   const studentId = studentFilter === "" ? null : studentFilter;
 
   function updateStudentFilter(value: number | "") {
@@ -57,7 +77,7 @@ export function AssignmentBoardPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Assignment board"
-        description="Overview of all quiz assignments across your students."
+        description="Quiz assignments for your students or children, according to your role."
         backTo="/quizzes"
         backAriaLabel="Back to quizzes"
         action={
@@ -74,9 +94,9 @@ export function AssignmentBoardPage() {
 
       <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          Filter by student ID
+          Filter by student
         </label>
-        {isLinkedAssigner && linkedCount > 0 ? (
+        {scopedStudents.length > 0 ? (
           <select
             value={studentFilter === "" ? "" : String(studentFilter)}
             onChange={(event) =>
@@ -86,10 +106,10 @@ export function AssignmentBoardPage() {
             }
             className="w-full max-w-md rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
           >
-            <option value="">All linked students</option>
-            {parentLinkedStudents.map((student) => (
-              <option key={student.studentId} value={student.studentId}>
-                {formatStudentLabel(student)}
+            <option value="">{allStudentsLabel}</option>
+            {scopedStudents.map((student) => (
+              <option key={student.id} value={student.id}>
+                {student.label}
               </option>
             ))}
           </select>
@@ -122,7 +142,7 @@ export function AssignmentBoardPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No assignments found.
+            No assignments found for your students or children.
           </div>
         ) : (
           <div className="overflow-x-auto">

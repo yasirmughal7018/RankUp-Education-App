@@ -53,7 +53,6 @@ type ListFilter =
   | "all"
   | "draft"
   | "published"
-  | "assigned"
   | "archived"
   | "edit-requests";
 
@@ -61,21 +60,9 @@ function normalizeStatus(status: string): string {
   return status.trim().toLowerCase();
 }
 
-/** Attempt/result-style list statuses still mean the quiz is in the assigned path. */
-function isAssignedLikeStatus(status: string): boolean {
+function isPublishedLikeStatus(status: string): boolean {
   const s = normalizeStatus(status);
-  if (s === "assigned") {
-    return true;
-  }
-  return (
-    s.includes("progress") ||
-    s.includes("upcoming") ||
-    s.includes("completed") ||
-    s.includes("expired") ||
-    s.includes("attempt") ||
-    s.includes("review") ||
-    s.includes("submitted")
-  );
+  return s === "published" || s === "assigned";
 }
 
 function matchesListFilter(quiz: QuizSummary, filter: ListFilter): boolean {
@@ -86,9 +73,7 @@ function matchesListFilter(quiz: QuizSummary, filter: ListFilter): boolean {
     case "draft":
       return isUnpublishedQuizDisplayStatus(status);
     case "published":
-      return status === "published";
-    case "assigned":
-      return isAssignedLikeStatus(status);
+      return isPublishedLikeStatus(status);
     case "archived":
       return status === "archived";
     case "edit-requests":
@@ -104,8 +89,6 @@ function listFilterLabel(filter: ListFilter): string {
       return "Draft";
     case "published":
       return "Published";
-    case "assigned":
-      return "Assigned";
     case "archived":
       return "Archived";
     case "edit-requests":
@@ -124,14 +107,11 @@ function getQuizListStatusKey(status: string): ApprovalStatusKey {
   if (s === "approval pending" || isDraftQuiz(s) || s === "school approved" || s === "awaiting publish") {
     return "pending";
   }
-  if (s === "published") {
+  if (s === "published" || s === "assigned") {
     return "approved";
   }
   if (s === "archived") {
     return "deactivated";
-  }
-  if (isAssignedLikeStatus(s)) {
-    return "active";
   }
   if (s.includes("reject")) {
     return "rejected";
@@ -286,19 +266,16 @@ export function QuizzesPage() {
   const bankStats = useMemo(() => {
     let draft = 0;
     let published = 0;
-    let assigned = 0;
     let archived = 0;
 
     for (const quiz of scopedQuizzes) {
       const status = normalizeStatus(quiz.status);
       if (isUnpublishedQuizDisplayStatus(status)) {
         draft += 1;
-      } else if (status === "published") {
-        published += 1;
       } else if (status === "archived") {
         archived += 1;
-      } else if (isAssignedLikeStatus(status)) {
-        assigned += 1;
+      } else if (isPublishedLikeStatus(status)) {
+        published += 1;
       }
     }
 
@@ -306,7 +283,6 @@ export function QuizzesPage() {
       total: scopedQuizzes.length,
       draft,
       published,
-      assigned,
       archived,
     };
   }, [scopedQuizzes]);
@@ -557,7 +533,7 @@ export function QuizzesPage() {
         <div
           className={cn(
             "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5",
-            canReviewEditRequests ? "lg:grid-cols-6" : "lg:grid-cols-5",
+            canReviewEditRequests ? "lg:grid-cols-5" : "lg:grid-cols-4",
           )}
         >
           <QuestionBankStatTile
@@ -580,13 +556,6 @@ export function QuizzesPage() {
             status="approved"
             active={listFilter === "published"}
             onClick={() => selectListFilter("published")}
-          />
-          <QuestionBankStatTile
-            label="Assigned"
-            value={bankStats.assigned}
-            status="active"
-            active={listFilter === "assigned"}
-            onClick={() => selectListFilter("assigned")}
           />
           <QuestionBankStatTile
             label="Archived"
@@ -799,10 +768,10 @@ export function QuizzesPage() {
                     : "—";
 
                 return (
-                  <li key={quiz.id}>
+                  <li key={quiz.id} className="px-4 py-3.5 sm:px-5">
                     <Link
                       to={`/quizzes/${quiz.id}`}
-                      className="block px-4 py-3.5 transition hover:bg-muted/30 sm:px-5"
+                      className="block min-w-0 transition hover:opacity-90"
                     >
                       <p
                         className="truncate text-sm font-semibold text-foreground"

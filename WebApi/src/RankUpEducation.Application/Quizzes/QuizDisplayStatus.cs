@@ -13,7 +13,7 @@ public static class QuizDisplayStatus
 
     /// <summary>
     /// Staff catalog cards: lifecycle Draft shows approval phase (not plain "Draft") once the quiz has questions.
-    /// Lifecycle Published/Assigned/Archived keep their lifecycle names.
+    /// Lifecycle Published (including legacy Assigned) and Archived keep those names — Assigned displays as Published.
     /// </summary>
     public static string ResolveStaffListStatus(
         string? lifecycleStatusName,
@@ -26,6 +26,12 @@ public static class QuizDisplayStatus
 
         if (!IsDraftLifecycleName(lifecycle))
         {
+            if (LookupNames.AssignedLifecycleNames.Any(
+                    name => name.Equals(lifecycle, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "Published";
+            }
+
             return lifecycle;
         }
 

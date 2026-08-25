@@ -36,13 +36,15 @@ public static class LookupNames
     }
 
     /// <summary>
-    /// Quiz-definition lifecycle only: Draft -> Published -> Assigned -> Archived.
+    /// Quiz-definition lifecycle only: Draft -> Published -> Archived.
+    /// Assigned (62) is a retired quiz-row status; assignment lives on quiz_assignment.
     /// Completed / In Progress / Cancelled are not quiz-lifecycle states (deactivated).
     /// </summary>
     public static class QuizLifecycleStatusIds
     {
         public const short Draft = 60;
         public const short Published = 61;
+        /// <summary>Legacy quiz-row status. Remapped to Published; do not write on new assigns.</summary>
         public const short Assigned = 62;
         public const short Archived = 63;
     }
@@ -129,6 +131,7 @@ public static class LookupNames
     /// <summary>Initial editable lifecycle (DB may still say "Not Assigned" until initializer renames).</summary>
     public static readonly string[] DraftLifecycleNames = ["Draft", "Not Assigned", "DRAFT"];
     public static readonly string[] PublishedLifecycleNames = ["Published", "PUBLISHED"];
+    /// <summary>Retired quiz-row status; treat as Published for assign/display until rows are remapped.</summary>
     public static readonly string[] AssignedLifecycleNames = ["Assigned", "ASSIGNED"];
     public static readonly string[] ArchivedLifecycleNames = ["Archived", "ARCHIVED"];
     public static readonly string[] ApprovedStatusNames = ["Approved", "APPROVED"];
@@ -167,6 +170,11 @@ public static class LookupNames
     /// <summary>True when lifecycle is unpublished Draft (including legacy "Not Assigned").</summary>
     public static bool IsDraftLifecycleName(string? name)
         => MatchesAnyName(name, DraftLifecycleNames);
+
+    /// <summary>Live catalog status: Published, plus legacy Assigned quiz-row values.</summary>
+    public static bool IsPublishedLifecycleName(string? name)
+        => MatchesAnyName(name, PublishedLifecycleNames)
+            || MatchesAnyName(name, AssignedLifecycleNames);
 
     /// <summary>
     /// Submitted unpublished quiz that is not SchoolApproved, Approved, or Rejected.

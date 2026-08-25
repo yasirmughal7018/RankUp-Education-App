@@ -100,7 +100,7 @@ public sealed class QuizRepository : IQuizRepository
                 stats.AttemptCount,
                 stats.BestPercentage,
                 stats.LastSubmittedAt,
-                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"));
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Published"));
 
             if (!QuizQueryHelper.MatchesFilters(item, search, subject, grade))
             {
@@ -466,7 +466,7 @@ public sealed class QuizRepository : IQuizRepository
                 quiz.TopicId ?? 0,
                 quiz.DifficultyLevelId ?? 0,
                 quiz.LifecycleStatusId,
-                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Assigned"),
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Published"),
                 ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
                 RandomQuestionCount: quiz.RandomQuestionCount);
         }

@@ -12,6 +12,7 @@ public sealed class QuizDisplayStatusTests
     [InlineData("Draft", "Approved", 2, false, "Awaiting Publish")]
     [InlineData("Draft", "Rejected", 2, false, "Rejected")]
     [InlineData("Published", "Approved", 2, false, "Published")]
+    [InlineData("Assigned", "Approved", 2, false, "Published")]
     public void ResolveStaffListStatus_CombinesLifecycleAndApproval(
         string lifecycle,
         string approval,

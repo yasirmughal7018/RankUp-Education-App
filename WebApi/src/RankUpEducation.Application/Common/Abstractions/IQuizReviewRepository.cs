@@ -8,16 +8,17 @@ public interface IQuizReviewRepository
     /// <summary>Per-student monitoring rows for a quiz (authorization is enforced by the caller).</summary>
     Task<IReadOnlyList<QuizMonitoringStudentItem>> ListMonitoringForQuizAsync(
         long quizId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Pending subjective reviews. Pass creatorUserId for Teacher/Parent ownership,
-    /// schoolId for SchoolAdmin, campusId for CampusAdmin, or neither for PortalAdmin (platform-wide).
+    /// Pending subjective reviews for students in the caller's scope.
+    /// <paramref name="studentIds"/> null is unrestricted (PortalAdmin).
     /// </summary>
     Task<IReadOnlyList<PendingReviewItem>> ListPendingReviewsAsync(
-        long? creatorUserId,
-        int? schoolId,
-        int? campusId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         CancellationToken cancellationToken);
 
     Task<AttemptReviewDetailItem?> GetAttemptReviewDetailAsync(

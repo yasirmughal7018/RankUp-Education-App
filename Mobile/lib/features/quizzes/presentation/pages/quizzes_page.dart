@@ -35,6 +35,7 @@ enum _QuizView {
   history,
   create,
   manage,
+  assigned,
   pendingReviews,
   teacherReview,
 }
@@ -67,6 +68,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
 
   _QuizView _view = _QuizView.list;
   _QuizView _reviewReturnView = _QuizView.details;
+  _QuizView _assignedReturnView = _QuizView.list;
   QuizSummary? _selectedQuiz;
   String _quizType = '';
   String _status = '';
@@ -88,6 +90,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
   String? _deviceId;
 
   bool get _isTeacher => canManageQuizzes(_role);
+
+  String get _assignedPeopleLabel =>
+      _role == UserRole.parent ? 'Assigned children' : 'Assigned students';
 
   UserRole get _role =>
       ref.watch(authControllerProvider).user?.role ?? UserRole.student;
@@ -202,6 +207,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
                 onSearch: _load,
                 onRefresh: _load,
                 onOpenQuiz: _openTeacherManage,
+                onOpenAssigned: (quiz) {
+                  unawaited(_openTeacherAssigned(quiz, _QuizView.list));
+                },
                 onCreateQuiz: () {
                   ref
                       .read(teacherQuizManageControllerProvider.notifier)
@@ -357,6 +365,31 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
                 context.push('/quizzes/monitoring/${quiz.id}');
               }
             },
+            onOpenAssigned: () {
+              setState(() {
+                _assignedReturnView = _QuizView.manage;
+                _view = _QuizView.assigned;
+              });
+            },
+            assignedPeopleLabel: _assignedPeopleLabel,
+            assignedByUserId:
+                ref.watch(authControllerProvider).user?.id ?? '',
+          ),
+        _QuizView.assigned => TeacherQuizAssignedView(
+            state: ref.watch(teacherQuizManageControllerProvider),
+            assignedPeopleLabel: _assignedPeopleLabel,
+            onBack: () {
+              setState(() => _view = _assignedReturnView);
+            },
+            onRefresh: () async {
+              final quiz = _selectedQuiz;
+              if (quiz == null) {
+                return;
+              }
+              await ref
+                  .read(teacherQuizManageControllerProvider.notifier)
+                  .loadManageQuiz(quiz.id);
+            },
             onAllowRetry: (assignmentId) {
               final quiz = _selectedQuiz;
               if (quiz != null) {
@@ -509,6 +542,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       _QuizView.details => 'Quiz Details',
       _QuizView.create => 'Create quiz',
       _QuizView.manage => 'Manage quiz',
+      _QuizView.assigned => _assignedPeopleLabel,
       _QuizView.pendingReviews => 'Pending reviews',
       _QuizView.teacherReview => 'Review attempt',
       _QuizView.attempt => 'Quiz Attempt',
@@ -1443,6 +1477,7 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         _QuizView.history => _QuizView.list,
         _QuizView.create => _QuizView.list,
         _QuizView.manage => _QuizView.list,
+        _QuizView.assigned => _assignedReturnView,
         _QuizView.pendingReviews => _QuizView.list,
         _QuizView.teacherReview => _QuizView.pendingReviews,
         _QuizView.list => _QuizView.list,
@@ -1454,6 +1489,20 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     setState(() {
       _selectedQuiz = quiz;
       _view = _QuizView.manage;
+    });
+    await ref
+        .read(teacherQuizManageControllerProvider.notifier)
+        .loadManageQuiz(quiz.id);
+  }
+
+  Future<void> _openTeacherAssigned(
+    QuizSummary quiz,
+    _QuizView returnView,
+  ) async {
+    setState(() {
+      _selectedQuiz = quiz;
+      _assignedReturnView = returnView;
+      _view = _QuizView.assigned;
     });
     await ref
         .read(teacherQuizManageControllerProvider.notifier)
@@ -1489,6 +1538,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       role: _role,
       defaultGradeLabel: manage?.grade ?? quiz.grade,
       defaultAllowedAttempts: manage?.allowedAttempts ?? quiz.attemptLimit,
+      existingAssignments:
+          ref.read(teacherQuizManageControllerProvider).assignments,
     );
     if (input == null || !mounted) {
       return;

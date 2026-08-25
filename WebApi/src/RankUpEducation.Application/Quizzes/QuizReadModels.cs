@@ -124,7 +124,8 @@ public sealed record QuizAssignmentListItem(
     short QuizResultStatusId,
     string QuizResultStatusName,
     bool IsReviewDone,
-    int AttemptCount);
+    int AttemptCount,
+    long AssignedById);
 
 /// <summary>Question attached to a quiz, including options and fill-blank accepted answers for scoring.</summary>
 public sealed record QuizQuestionItem(

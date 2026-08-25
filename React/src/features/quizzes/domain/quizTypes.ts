@@ -246,6 +246,7 @@ export interface QuizAssignment {
   attemptCount: number;
   isReviewDone: boolean;
   resultStatus: string;
+  assignedById: number;
 }
 
 export const QUIZ_MANAGER_ROLES: UserRole[] = [
@@ -827,6 +828,9 @@ export function resolveQuizDisplayStatus(
   const approval = approvalStatus.trim().toLowerCase();
 
   if (!isDraftQuiz(lifecycle)) {
+    if (lifecycle === "assigned") {
+      return "Published";
+    }
     return lifecycleStatus.trim();
   }
 
@@ -886,6 +890,9 @@ export function formatQuizDisplayStatusLabel(status: string): string {
   if (isDraftQuiz(normalized)) {
     return "Draft";
   }
+  if (normalized === "assigned") {
+    return "Published";
+  }
 
   return raw
     .split(/[\s_]+/)
@@ -899,7 +906,7 @@ export function isDraftQuiz(status: string): boolean {
   return normalized === "draft" || normalized === "not assigned";
 }
 
-/** Published or assigned — required before students can be assigned. */
+/** Published is the live catalog status. Legacy "Assigned" on the quiz row still counts. */
 export function isPublishedQuizLifecycle(status: string): boolean {
   const normalized = status.trim().toLowerCase();
   return normalized === "published" || normalized === "assigned";
@@ -925,6 +932,58 @@ export function hasQuizAssignmentStarted(
       new Date(assignment.startAt).getTime() <= now ||
       assignment.attemptCount > 0,
   );
+}
+
+/** True when the caller assigned at least one assignment that has not started yet. */
+export function canCancelOwnUpcomingAssignments(
+  userId: number | string | undefined,
+  assignments: Array<{ assignedById?: number; startAt: string }>,
+  now: number = Date.now(),
+): boolean {
+  if (userId == null || String(userId).trim() === "") {
+    return false;
+  }
+
+  const callerId = String(userId);
+  return assignments.some(
+    (assignment) =>
+      String(assignment.assignedById ?? "") === callerId &&
+      new Date(assignment.startAt).getTime() > now,
+  );
+}
+
+function normalizeAssignmentResultStatus(status: string): string {
+  return status.trim().toLowerCase();
+}
+
+/** True when the window ended unused or the result is Expired — student can be reassigned. */
+export function isExpiredQuizAssignment(
+  assignment: { resultStatus: string; endAt: string },
+  now: number = Date.now(),
+): boolean {
+  const status = normalizeAssignmentResultStatus(assignment.resultStatus);
+  if (status === "expired") {
+    return true;
+  }
+
+  if (new Date(assignment.endAt).getTime() >= now) {
+    return false;
+  }
+
+  return (
+    status === "not attempted" ||
+    status === "upcoming" ||
+    status === "up coming" ||
+    status === "in progress"
+  );
+}
+
+/** True when the student still has an active assignment that should stay locked in the picker. */
+export function isActiveQuizAssignment(
+  assignment: { resultStatus: string; endAt: string },
+  now: number = Date.now(),
+): boolean {
+  return !isExpiredQuizAssignment(assignment, now);
 }
 
 /**

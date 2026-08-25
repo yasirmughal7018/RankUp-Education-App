@@ -48,6 +48,7 @@ import { AttemptReviewPage } from "@/features/quizzes/presentation/pages/Attempt
 import { PendingReviewsPage } from "@/features/quizzes/presentation/pages/PendingReviewsPage";
 import { QuizCreatePage } from "@/features/quizzes/presentation/pages/QuizCreatePage";
 import { QuizEditPage } from "@/features/quizzes/presentation/pages/QuizEditPage";
+import { QuizAssignedPeoplePage } from "@/features/quizzes/presentation/pages/QuizAssignedPeoplePage";
 import { QuizManageDetailPage } from "@/features/quizzes/presentation/pages/QuizManageDetailPage";
 import { QuizMonitoringPage } from "@/features/quizzes/presentation/pages/QuizMonitoringPage";
 import { QuizzesPage } from "@/features/quizzes/presentation/pages/QuizzesPage";
@@ -169,6 +170,10 @@ export function AppRouter() {
               <Route path="quizzes/assignments" element={<AssignmentBoardPage />} />
               <Route path="quizzes/reviews/pending" element={<PendingReviewsPage />} />
               <Route path="quizzes/new" element={<QuizCreatePage />} />
+              <Route
+                path="quizzes/:quizId/assigned"
+                element={<QuizAssignedPeoplePage />}
+              />
               <Route
                 path="quizzes/:quizId/monitoring"
                 element={<QuizMonitoringPage />}

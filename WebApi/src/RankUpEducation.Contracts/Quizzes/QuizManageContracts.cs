@@ -131,7 +131,8 @@ public sealed record QuizAssignmentResponse(
     short AllowedAttempts,
     int AttemptCount,
     bool IsReviewDone,
-    string ResultStatus);
+    string ResultStatus,
+    long AssignedById);
 
 public sealed record QuizAssignmentListResponse(IReadOnlyList<QuizAssignmentResponse> Items);
 

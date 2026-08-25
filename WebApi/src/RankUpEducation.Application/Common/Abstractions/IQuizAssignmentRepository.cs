@@ -9,20 +9,30 @@ public interface IQuizAssignmentRepository
 
     Task<IReadOnlyList<QuizAssignmentListItem>> ListAssignmentsForQuizAsync(
         long quizId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         CancellationToken cancellationToken);
 
-    Task<int> RemoveFutureAssignmentsAsync(long quizId, DateTimeOffset now, CancellationToken cancellationToken);
+    Task<int> RemoveFutureAssignmentsAsync(
+        long quizId,
+        DateTimeOffset now,
+        long assignedByUserId,
+        CancellationToken cancellationToken);
 
     Task<bool> AssignmentExistsAsync(long quizId, long studentId, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<QuizAssignment>> GetAssignmentEntitiesForStudentsAsync(
+        long quizId,
+        IReadOnlyList<long> studentIds,
+        CancellationToken cancellationToken);
+
     /// <summary>
-    /// Cross-quiz assignment board. Pass creatorUserId for Teacher/Parent ownership,
-    /// schoolId for SchoolAdmin, campusId for CampusAdmin, or neither for PortalAdmin (platform-wide).
+    /// Cross-quiz assignment board scoped to the caller's students.
+    /// <paramref name="studentIds"/> null is unrestricted (PortalAdmin).
     /// </summary>
     Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardAsync(
-        long? creatorUserId,
-        int? schoolId,
-        int? campusId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         long? studentId,
         CancellationToken cancellationToken);
 

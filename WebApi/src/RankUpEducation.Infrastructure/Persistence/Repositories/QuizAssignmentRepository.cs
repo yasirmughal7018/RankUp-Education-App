@@ -23,10 +23,15 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
 
     public async Task<IReadOnlyList<QuizAssignmentListItem>> ListAssignmentsForQuizAsync(
         long quizId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         CancellationToken cancellationToken)
     {
-        var assignments = await _dbContext.QuizAssignments.AsNoTracking()
-            .Where(assignment => assignment.QuizId == quizId)
+        var query = _dbContext.QuizAssignments.AsNoTracking()
+            .Where(assignment => assignment.QuizId == quizId);
+        query = ApplyStudentScope(query, studentIds, assignedByUserId);
+
+        var assignments = await query
             .OrderBy(assignment => assignment.StartDateTime)
             .ToListAsync(cancellationToken);
 
@@ -63,16 +68,24 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 assignment.QuizResultStatus,
                 resultStatusNames.GetValueOrDefault(assignment.QuizResultStatus, "Unknown"),
                 assignment.IsReviewDone,
-                attemptCount));
+                attemptCount,
+                assignment.AssignedById));
         }
 
         return items;
     }
 
-    public async Task<int> RemoveFutureAssignmentsAsync(long quizId, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<int> RemoveFutureAssignmentsAsync(
+        long quizId,
+        DateTimeOffset now,
+        long assignedByUserId,
+        CancellationToken cancellationToken)
     {
         var assignments = await _dbContext.QuizAssignments
-            .Where(assignment => assignment.QuizId == quizId && assignment.StartDateTime > now)
+            .Where(assignment =>
+                assignment.QuizId == quizId
+                && assignment.AssignedById == assignedByUserId
+                && assignment.StartDateTime > now)
             .ToListAsync(cancellationToken);
 
         if (assignments.Count == 0)
@@ -90,36 +103,37 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             .AnyAsync(assignment => assignment.QuizId == quizId && assignment.StudentId == studentId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<QuizAssignment>> GetAssignmentEntitiesForStudentsAsync(
+        long quizId,
+        IReadOnlyList<long> studentIds,
+        CancellationToken cancellationToken)
+    {
+        if (studentIds.Count == 0)
+        {
+            return Array.Empty<QuizAssignment>();
+        }
+
+        return await _dbContext.QuizAssignments
+            .Where(assignment => assignment.QuizId == quizId && studentIds.Contains(assignment.StudentId))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<QuizAssignmentBoardItem>> ListAssignmentBoardAsync(
-        long? creatorUserId,
-        int? schoolId,
-        int? campusId,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId,
         long? studentId,
         CancellationToken cancellationToken)
     {
+        var assignmentQuery = ApplyStudentScope(
+            _dbContext.QuizAssignments.AsNoTracking(),
+            studentIds,
+            assignedByUserId);
+
         var query =
-            from assignment in _dbContext.QuizAssignments.AsNoTracking()
+            from assignment in assignmentQuery
             join quiz in _dbContext.Quizzes.AsNoTracking() on assignment.QuizId equals quiz.Id
             where quiz.IsActive && !quiz.IsDeleted
             select new { assignment, quiz };
-
-        if (creatorUserId is not null)
-        {
-            var creatorKey = creatorUserId.Value.ToString();
-            query = query.Where(row => row.quiz.CreatedByName == creatorKey);
-        }
-
-        if (schoolId is not null)
-        {
-            query = query.Where(row => row.quiz.SchoolId == schoolId.Value);
-        }
-
-        if (campusId is not null)
-        {
-            query = query.Where(row =>
-                row.quiz.SchoolCampusId == campusId.Value
-                || row.quiz.SchoolCampusId == null);
-        }
 
         if (studentId is not null)
         {
@@ -323,5 +337,25 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
         }
 
         return new QuizAssignmentLifecycleMaintenanceResult(changed, newlyOpenedSurprise);
+    }
+
+    private static IQueryable<QuizAssignment> ApplyStudentScope(
+        IQueryable<QuizAssignment> query,
+        IReadOnlyList<long>? studentIds,
+        long? assignedByUserId)
+    {
+        if (studentIds is null)
+        {
+            return query;
+        }
+
+        if (assignedByUserId is not null)
+        {
+            return query.Where(assignment =>
+                studentIds.Contains(assignment.StudentId)
+                || assignment.AssignedById == assignedByUserId.Value);
+        }
+
+        return query.Where(assignment => studentIds.Contains(assignment.StudentId));
     }
 }

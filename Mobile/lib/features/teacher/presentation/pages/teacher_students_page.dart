@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rankup_education/core/widgets/app_empty_state.dart';
 import 'package:rankup_education/features/teacher/data/models/teacher_roster_models.dart';
 import 'package:rankup_education/features/teacher/presentation/providers/teacher_providers.dart';
@@ -329,6 +330,13 @@ class _StudentTile extends StatelessWidget {
         title: Text(student.fullName),
         subtitle: Text(
           '${student.username} · Roll ${student.rollNumber.isEmpty ? '—' : student.rollNumber}',
+        ),
+        trailing: IconButton(
+          tooltip: 'View assignments',
+          onPressed: () => context.push(
+            '/quizzes/assignments?studentId=${student.studentId}',
+          ),
+          icon: const Icon(Icons.assignment_outlined),
         ),
       ),
     );

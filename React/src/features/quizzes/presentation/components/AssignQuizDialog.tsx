@@ -17,10 +17,12 @@ import {
   useLinkedStudentsQuery,
   useParentGroupsQuery,
 } from "@/features/parent/presentation/hooks/useParentQueries";
-import type { AssignQuizInput } from "@/features/quizzes/domain/quizTypes";
+import type { AssignQuizInput, QuizAssignment } from "@/features/quizzes/domain/quizTypes";
 import {
   assignModesForRole,
   defaultAssignModeForRole,
+  isActiveQuizAssignment,
+  isExpiredQuizAssignment,
 } from "@/features/quizzes/domain/quizTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
@@ -36,6 +38,8 @@ interface AssignQuizDialogProps {
   campusId?: number | null;
   /** When Surprise, defaults to open-now / short window and clamps attempts. */
   quizType?: string;
+  /** Existing per-student assignments — used to lock active rows and allow expired reassign. */
+  existingAssignments?: QuizAssignment[];
   onClose: () => void;
   onSubmit: (input: AssignQuizInput) => Promise<void>;
 }
@@ -90,6 +94,7 @@ export function AssignQuizDialog({
   schoolId: quizSchoolId,
   campusId: quizCampusId,
   quizType,
+  existingAssignments = [],
   onClose,
   onSubmit,
 }: AssignQuizDialogProps) {
@@ -307,6 +312,30 @@ export function AssignQuizDialog({
     [selectedStudentIds],
   );
 
+  const assignmentByStudentId = useMemo(() => {
+    const map = new Map<number, QuizAssignment>();
+    for (const assignment of existingAssignments) {
+      map.set(assignment.studentId, assignment);
+    }
+    return map;
+  }, [existingAssignments]);
+
+  const blockedStudentIds = useMemo(() => {
+    const blocked = new Set<number>();
+    for (const assignment of existingAssignments) {
+      if (isActiveQuizAssignment(assignment)) {
+        blocked.add(assignment.studentId);
+      }
+    }
+    return blocked;
+  }, [existingAssignments]);
+
+  useEffect(() => {
+    setSelectedStudentIds((current) =>
+      current.filter((studentId) => !blockedStudentIds.has(studentId)),
+    );
+  }, [blockedStudentIds]);
+
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape" && !isSubmitting) {
@@ -319,7 +348,14 @@ export function AssignQuizDialog({
   }, [isSubmitting, onClose]);
 
   function toggleStudent(studentId: number) {
+    if (blockedStudentIds.has(studentId)) {
+      return;
+    }
+
     if (mode === "one") {
+      setSelectedStudentIds([studentId]);
+      return;
+    }
       setSelectedStudentIds([studentId]);
       return;
     }
@@ -426,7 +462,9 @@ export function AssignQuizDialog({
     try {
       await onSubmit({
         mode,
-        studentIds: selectedStudentIds,
+        studentIds: selectedStudentIds.filter(
+          (studentId) => !blockedStudentIds.has(studentId),
+        ),
         groupId: groupId ? Number(groupId) : null,
         startAt: startDate.toISOString(),
         endAt: endDate.toISOString(),
@@ -661,13 +699,26 @@ export function AssignQuizDialog({
                   <ul className="divide-y divide-border">
                     {students.map((student) => {
                       const checked = selectedSet.has(student.studentId);
+                      const existing = assignmentByStudentId.get(
+                        student.studentId,
+                      );
+                      const alreadyAssigned =
+                        existing != null && isActiveQuizAssignment(existing);
+                      const expiredAssigned =
+                        existing != null && isExpiredQuizAssignment(existing);
                       return (
                         <li key={student.studentId}>
-                          <label className="flex cursor-pointer items-start gap-3 px-3 py-2 hover:bg-muted/50">
+                          <label
+                            className={`flex items-start gap-3 px-3 py-2 ${
+                              alreadyAssigned
+                                ? "cursor-not-allowed bg-muted/40 opacity-70"
+                                : "cursor-pointer hover:bg-muted/50"
+                            }`}
+                          >
                             <input
                               type="checkbox"
                               checked={checked}
-                              disabled={isSubmitting}
+                              disabled={isSubmitting || alreadyAssigned}
                               onChange={() => toggleStudent(student.studentId)}
                               className="mt-1"
                             />
@@ -680,6 +731,16 @@ export function AssignQuizDialog({
                                 {student.section ? `-${student.section}` : ""} ·{" "}
                                 {student.rollNumber || student.username}
                               </span>
+                              {alreadyAssigned ? (
+                                <span className="mt-1 block text-xs font-medium text-muted-foreground">
+                                  Already assigned
+                                </span>
+                              ) : null}
+                              {expiredAssigned ? (
+                                <span className="mt-1 block text-xs font-medium text-[var(--status-pending-text)]">
+                                  Previous assignment expired — can reassign
+                                </span>
+                              ) : null}
                             </span>
                           </label>
                         </li>

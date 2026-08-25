@@ -16,13 +16,13 @@ namespace RankUpEducation.Application.Quizzes;
 /// </summary>
 public interface IQuizAssignService
 {
-    /// <summary>Creates per-student assignments and moves quiz lifecycle to Assigned.</summary>
+    /// <summary>Creates per-student assignments. Quiz lifecycle stays Published.</summary>
     Task<AssignQuizResponse> AssignAsync(long quizId, AssignQuizRequest request, CancellationToken cancellationToken);
 
-    /// <summary>Lists all assignments for a quiz owned by the caller.</summary>
+    /// <summary>Lists assignments for a quiz that are in the caller's student/child scope.</summary>
     Task<QuizAssignmentListResponse> ListAssignmentsAsync(long quizId, CancellationToken cancellationToken);
 
-    /// <summary>Removes upcoming assignments and sets lifecycle to Cancelled.</summary>
+    /// <summary>Removes upcoming assignments created by the caller. Quiz stays Published.</summary>
     Task<CancelQuizResponse> CancelAsync(long quizId, CancellationToken cancellationToken);
 
     /// <summary>Grants extra attempts after review is done and all allowed attempts were used.</summary>
@@ -99,15 +99,14 @@ public sealed class QuizAssignService : IQuizAssignService
             }
 
             quiz.SetAudienceAccess("Public", request.StartAt, request.EndAt, request.AllowedAttempts);
-            var publicLifecycleId = await RequireLookupAsync(
+            var publishedLifecycleId = await RequireLookupAsync(
                 LookupNames.QuizLifecycleStatus,
-                LookupNames.AssignedLifecycleNames,
+                LookupNames.PublishedLifecycleNames,
                 cancellationToken);
-            quiz.SetLifecycleStatus(publicLifecycleId);
+            quiz.SetLifecycleStatus(publishedLifecycleId);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
-            return new AssignQuizResponse(quizId, lifecycleName, 0, Array.Empty<QuizAssignmentResponse>());
+            return new AssignQuizResponse(quizId, "Published", 0, Array.Empty<QuizAssignmentResponse>());
         }
 
         var studentIds = await ResolveTargetStudentIdsAsync(scope, request, cancellationToken);
@@ -117,6 +116,16 @@ public sealed class QuizAssignService : IQuizAssignService
         }
 
         var now = _dateTimeProvider.UtcNow;
+        var expiredMaintenance = await _assignments.ExpireOverdueUnattemptedAsync(now, cancellationToken);
+        if (expiredMaintenance.ChangedCount > 0)
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await QuizSurpriseNotifications.NotifyNewlyOpenedAsync(
+                _notifications,
+                expiredMaintenance.NewlyOpenedSurpriseAssignments,
+                cancellationToken);
+        }
+
         var resultStatusId = request.StartAt > now
             ? await _lookups.ResolveLookupIdByNamesAsync(
                 LookupNames.QuizResultStatus,
@@ -128,16 +137,44 @@ public sealed class QuizAssignService : IQuizAssignService
                 LookupNames.AssignedResultNames,
                 LookupNames.QuizResultStatusIds.NotAttempted,
                 cancellationToken);
-        var assignedLifecycleId = await RequireLookupAsync(
-            LookupNames.QuizLifecycleStatus,
-            LookupNames.AssignedLifecycleNames,
-            cancellationToken);
 
-        var assignments = new List<QuizAssignment>();
+        var existingByStudent = (await _assignments.GetAssignmentEntitiesForStudentsAsync(
+                quizId,
+                studentIds,
+                cancellationToken))
+            .GroupBy(assignment => assignment.StudentId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var created = new List<QuizAssignment>();
+        var notifyStudentIds = new List<long>();
+        var reopenedCount = 0;
+        var isGroupAssign = request.Mode.Equals("group", StringComparison.OrdinalIgnoreCase)
+            && request.GroupId is not null;
+
         foreach (var studentId in studentIds)
         {
-            if (await _assignments.AssignmentExistsAsync(quizId, studentId, cancellationToken))
+            if (existingByStudent.TryGetValue(studentId, out var existing))
             {
+                if (!IsReassignable(existing, now))
+                {
+                    continue;
+                }
+
+                var attemptCount = await _attempts.CountAttemptsAsync(quizId, studentId, cancellationToken);
+                var quota = (short)Math.Min(short.MaxValue, request.AllowedAttempts + attemptCount);
+                existing.ReopenForReassign(
+                    scope.UserId,
+                    request.StartAt,
+                    request.EndAt,
+                    quota,
+                    resultStatusId);
+                if (isGroupAssign)
+                {
+                    existing.AssignToGroup(request.GroupId!.Value);
+                }
+
+                reopenedCount++;
+                notifyStudentIds.Add(studentId);
                 continue;
             }
 
@@ -150,42 +187,51 @@ public sealed class QuizAssignService : IQuizAssignService
                 request.AllowedAttempts,
                 resultStatusId);
 
-            if (request.Mode.Equals("group", StringComparison.OrdinalIgnoreCase) && request.GroupId is not null)
+            if (isGroupAssign)
             {
-                assignment.AssignToGroup(request.GroupId.Value);
+                assignment.AssignToGroup(request.GroupId!.Value);
             }
 
-            assignments.Add(assignment);
+            created.Add(assignment);
+            notifyStudentIds.Add(studentId);
         }
 
-        if (assignments.Count == 0)
+        if (created.Count == 0 && reopenedCount == 0)
         {
-            throw new BusinessRuleException("All selected students already have assignments for this quiz.");
+            throw new BusinessRuleException(
+                "All selected students already have active assignments for this quiz.");
         }
 
-        await _assignments.AddAssignmentsAsync(assignments, cancellationToken);
+        if (created.Count > 0)
+        {
+            await _assignments.AddAssignmentsAsync(created, cancellationToken);
+        }
 
-        quiz.SetLifecycleStatus(assignedLifecycleId);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Surprise quizzes stay hidden until StartAt — notify only when the window is already open.
-        if (!QuizTypeBehavior.IsSurprise(quizTypeName) || request.StartAt <= now)
+        if (notifyStudentIds.Count > 0
+            && (!QuizTypeBehavior.IsSurprise(quizTypeName) || request.StartAt <= now))
         {
             await _notifications.CreateAsync(
-                studentIds,
+                notifyStudentIds,
                 "New quiz assigned",
                 $"\"{quiz.QuizTitle}\" has been assigned to you. Open My Quizzes to start.",
                 QuizNotificationCategories.QuizAssigned,
                 cancellationToken);
         }
 
-        var createdAssignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
-        var assignedLifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        var createdAssignments = await ListScopedAssignmentsAsync(quizId, scope, cancellationToken);
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        if (LookupNames.IsPublishedLifecycleName(lifecycleName))
+        {
+            lifecycleName = "Published";
+        }
 
         return new AssignQuizResponse(
             quizId,
-            assignedLifecycleName,
-            assignments.Count,
+            lifecycleName,
+            created.Count + reopenedCount,
             createdAssignments.Select(QuizManageMapping.ToAssignmentResponse).ToArray());
     }
 
@@ -194,7 +240,7 @@ public sealed class QuizAssignService : IQuizAssignService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireAssignScope(_currentUser);
-        await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+        await RequireViewableQuizAsync(quizId, scope, cancellationToken);
 
         var expired = await _assignments.ExpireOverdueUnattemptedAsync(_dateTimeProvider.UtcNow, cancellationToken);
         if (expired.ChangedCount > 0)
@@ -206,29 +252,31 @@ public sealed class QuizAssignService : IQuizAssignService
                 cancellationToken);
         }
 
-        var assignments = await _assignments.ListAssignmentsForQuizAsync(quizId, cancellationToken);
+        var assignments = await ListScopedAssignmentsAsync(quizId, scope, cancellationToken);
         return new QuizAssignmentListResponse(assignments.Select(QuizManageMapping.ToAssignmentResponse).ToArray());
     }
 
     public async Task<CancelQuizResponse> CancelAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var quiz = await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
+        var quiz = await RequireViewableQuizAsync(quizId, scope, cancellationToken);
         var now = _dateTimeProvider.UtcNow;
 
-        var removed = await _assignments.RemoveFutureAssignmentsAsync(quizId, now, cancellationToken);
+        var removed = await _assignments.RemoveFutureAssignmentsAsync(
+            quizId,
+            now,
+            scope.UserId,
+            cancellationToken);
         if (removed == 0)
         {
-            throw new BusinessRuleException("No upcoming assignments were found to cancel.");
+            throw new BusinessRuleException(
+                "No upcoming assignments that you assigned were found to cancel.");
         }
 
-        // Cancelled is not a quiz lifecycle — restore Assigned or Published from remaining rows.
-        var hasAssignments = await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken);
+        // Cancelled is not a quiz lifecycle — stay Published after removing upcoming rows.
         var restoredLifecycleId = await RequireLookupAsync(
             LookupNames.QuizLifecycleStatus,
-            hasAssignments
-                ? LookupNames.AssignedLifecycleNames
-                : LookupNames.PublishedLifecycleNames,
+            LookupNames.PublishedLifecycleNames,
             cancellationToken);
         quiz.SetLifecycleStatus(restoredLifecycleId);
 
@@ -245,15 +293,18 @@ public sealed class QuizAssignService : IQuizAssignService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        await RequireOwnedQuizAsync(quizId, scope, cancellationToken);
-
-        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
-            ?? throw new NotFoundAppException("Quiz was not found.");
-
+        var quiz = await RequireViewableQuizAsync(quizId, scope, cancellationToken);
         await EnsureNotArchivedAsync(quiz, cancellationToken);
 
         var assignment = await _assignments.GetAssignmentEntityByIdAsync(assignmentId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Assignment was not found.");
+
+        await QuizScopeResolver.EnsureCanViewAssignedStudentAsync(
+            _studentScope,
+            scope,
+            assignment.StudentId,
+            assignment.AssignedById,
+            cancellationToken);
 
         if (!assignment.IsReviewDone)
         {
@@ -373,6 +424,46 @@ public sealed class QuizAssignService : IQuizAssignService
 
         QuizScopeResolver.EnsureOwnsQuiz(quiz, scope);
         return quiz;
+    }
+
+    private async Task<Quiz> RequireViewableQuizAsync(
+        long quizId,
+        QuizManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        if (quizId <= 0)
+        {
+            throw new NotFoundAppException("Quiz was not found.");
+        }
+
+        var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken);
+        if (quiz is null)
+        {
+            throw new NotFoundAppException($"Quiz #{quizId} was not found.");
+        }
+
+        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
+        QuizScopeResolver.EnsureCanViewQuiz(
+            quiz,
+            scope,
+            LookupNames.IsDraftLifecycleName(lifecycleName));
+        return quiz;
+    }
+
+    private async Task<IReadOnlyList<QuizAssignmentListItem>> ListScopedAssignmentsAsync(
+        long quizId,
+        QuizManageScope scope,
+        CancellationToken cancellationToken)
+    {
+        var (studentIds, assignedByUserId) = await QuizScopeResolver.ResolveAssignmentViewFilterAsync(
+            _studentScope,
+            scope,
+            cancellationToken);
+        return await _assignments.ListAssignmentsForQuizAsync(
+            quizId,
+            studentIds,
+            assignedByUserId,
+            cancellationToken);
     }
 
     private async Task<IReadOnlyList<long>> ResolveTargetStudentIdsAsync(
@@ -679,9 +770,26 @@ public sealed class QuizAssignService : IQuizAssignService
         return (schoolId, campusId);
     }
 
+    private static bool IsReassignable(QuizAssignment assignment, DateTimeOffset now)
+    {
+        if (assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Expired)
+        {
+            return true;
+        }
+
+        if (assignment.EndDateTime >= now)
+        {
+            return false;
+        }
+
+        return assignment.QuizResultStatus is
+            LookupNames.QuizResultStatusIds.NotAttempted
+            or LookupNames.QuizResultStatusIds.Upcoming
+            or LookupNames.QuizResultStatusIds.InProgress;
+    }
+
     private static bool IsAssignableLifecycle(string lifecycleName)
-        => lifecycleName.Equals("Published", StringComparison.OrdinalIgnoreCase)
-            || lifecycleName.Equals("Assigned", StringComparison.OrdinalIgnoreCase);
+        => LookupNames.IsPublishedLifecycleName(lifecycleName);
 
     private static void ValidateAssignRequest(AssignQuizRequest request)
     {

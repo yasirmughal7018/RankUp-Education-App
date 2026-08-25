@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Link } from "react-router-dom";
 import { Plus, RefreshCw, Search, Users } from "lucide-react";
 import { StudentGroupsWorkspace } from "@/components/groups/StudentGroupsWorkspace";
 import { AppEmptyState } from "@/components/ui/app-empty-state";
@@ -529,7 +530,7 @@ function StudentListPanel({
         {students.map((student) => (
           <li key={student.studentId} className="flex items-center gap-3 px-5 py-3">
             <StudentAvatar name={student.fullName} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate font-medium text-foreground">
                 {student.fullName}
               </p>
@@ -537,6 +538,12 @@ function StudentListPanel({
                 {student.username} · Roll {student.rollNumber || "—"}
               </p>
             </div>
+            <Link
+              to={`/quizzes/assignments?studentId=${student.studentId}`}
+              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted/60"
+            >
+              View assignments
+            </Link>
           </li>
         ))}
       </ul>

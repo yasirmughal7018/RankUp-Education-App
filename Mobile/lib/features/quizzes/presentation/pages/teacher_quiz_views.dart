@@ -22,6 +22,7 @@ class TeacherQuizListView extends StatelessWidget {
     required this.onSearch,
     required this.onRefresh,
     required this.onOpenQuiz,
+    required this.onOpenAssigned,
     required this.onCreateQuiz,
     required this.onOpenPendingReviews,
     required this.onOpenAssignmentBoard,
@@ -33,6 +34,7 @@ class TeacherQuizListView extends StatelessWidget {
   final VoidCallback onSearch;
   final Future<void> Function() onRefresh;
   final ValueChanged<QuizSummary> onOpenQuiz;
+  final ValueChanged<QuizSummary> onOpenAssigned;
   final VoidCallback onCreateQuiz;
   final VoidCallback onOpenPendingReviews;
   final VoidCallback onOpenAssignmentBoard;
@@ -107,11 +109,12 @@ class TeacherQuizListView extends StatelessWidget {
                   title: Text(quiz.title),
                   subtitle: Text(
                     '${quiz.subject} · ${quiz.grade} · ${quiz.questionCount} questions'
-                    ' · ${quiz.status.label}',
+                    ' · ${quiz.status.label == 'Assigned' ? 'Published' : quiz.status.label}',
                   ),
-                  trailing: Chip(
-                    label: Text(quiz.status.label),
-                    visualDensity: VisualDensity.compact,
+                  trailing: IconButton(
+                    tooltip: 'Assigned students',
+                    onPressed: () => onOpenAssigned(quiz),
+                    icon: const Icon(Icons.groups_outlined),
                   ),
                   onTap: () => onOpenQuiz(quiz),
                 ),
@@ -370,7 +373,9 @@ class TeacherQuizManageView extends StatelessWidget {
     this.onArchive,
     this.onCancel,
     this.onMonitor,
-    this.onAllowRetry,
+    this.onOpenAssigned,
+    this.assignedPeopleLabel = 'Assigned students',
+    this.assignedByUserId = '',
     super.key,
   });
 
@@ -386,7 +391,9 @@ class TeacherQuizManageView extends StatelessWidget {
   final VoidCallback? onArchive;
   final VoidCallback? onCancel;
   final VoidCallback? onMonitor;
-  final ValueChanged<String>? onAllowRetry;
+  final VoidCallback? onOpenAssigned;
+  final String assignedPeopleLabel;
+  final String assignedByUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -448,7 +455,11 @@ class TeacherQuizManageView extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      Chip(label: Text(quiz.lifecycleStatus)),
+                      Chip(
+                        label: Text(
+                          quiz.isPublished ? 'Published' : quiz.lifecycleStatus,
+                        ),
+                      ),
                       Chip(label: Text(quiz.approvalStatus)),
                       Chip(label: Text(quiz.quizType)),
                       Chip(label: Text('${quiz.questionCount} questions')),
@@ -495,6 +506,12 @@ class TeacherQuizManageView extends StatelessWidget {
                   icon: const Icon(Icons.group_add_outlined),
                   label: const Text('Assign'),
                 ),
+              if (!quiz.isDraft && onOpenAssigned != null)
+                OutlinedButton.icon(
+                  onPressed: onOpenAssigned,
+                  icon: const Icon(Icons.groups_outlined),
+                  label: Text(assignedPeopleLabel),
+                ),
               if (onDuplicate != null)
                 OutlinedButton.icon(
                   onPressed: state.isSaving ? null : onDuplicate,
@@ -507,13 +524,21 @@ class TeacherQuizManageView extends StatelessWidget {
                   icon: const Icon(Icons.archive_outlined),
                   label: const Text('Archive'),
                 ),
-              if (quiz.isAssigned && onCancel != null)
+              if (onCancel != null &&
+                  assignedByUserId.isNotEmpty &&
+                  state.assignments.any(
+                    (assignment) =>
+                        assignment.assignedById == assignedByUserId &&
+                        assignment.startAt
+                            .toUtc()
+                            .isAfter(DateTime.now().toUtc()),
+                  ))
                 OutlinedButton.icon(
                   onPressed: state.isSaving ? null : onCancel,
                   icon: const Icon(Icons.cancel_outlined),
                   label: const Text('Cancel assignments'),
                 ),
-              if (quiz.isAssigned && onMonitor != null)
+              if (state.assignments.isNotEmpty && onMonitor != null)
                 OutlinedButton.icon(
                   onPressed: onMonitor,
                   icon: const Icon(Icons.monitor_heart_outlined),
@@ -567,15 +592,94 @@ class TeacherQuizManageView extends StatelessWidget {
               const SizedBox(height: 8),
             ],
           const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Back to list'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Assigned students or children for one quiz.
+class TeacherQuizAssignedView extends StatelessWidget {
+  const TeacherQuizAssignedView({
+    required this.state,
+    required this.onBack,
+    required this.onRefresh,
+    required this.assignedPeopleLabel,
+    this.onAllowRetry,
+    super.key,
+  });
+
+  final TeacherQuizManageState state;
+  final VoidCallback onBack;
+  final Future<void> Function() onRefresh;
+  final String assignedPeopleLabel;
+  final ValueChanged<String>? onAllowRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.isLoading && state.manageQuiz == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final quiz = state.manageQuiz;
+    if (quiz == null) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          AppEmptyState(
+            icon: Icons.error_outline,
+            title: '$assignedPeopleLabel unavailable',
+            message: state.errorMessage ?? 'Unable to load assignments.',
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Back'),
+          ),
+        ],
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (state.errorMessage != null) ...[
+            _MessageBanner(message: state.errorMessage!, isError: true),
+            const SizedBox(height: 12),
+          ],
+          if (state.successMessage != null) ...[
+            _MessageBanner(message: state.successMessage!, isError: false),
+            const SizedBox(height: 12),
+          ],
           Text(
-            'Assignments (${state.assignments.length})',
+            quiz.title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${quiz.subject} · ${quiz.grade}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '$assignedPeopleLabel (${state.assignments.length})',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
           if (state.assignments.isEmpty)
-            const Text('No assignments yet.')
+            Text('No ${assignedPeopleLabel.toLowerCase()} yet.')
           else
-            for (final assignment in state.assignments.take(20)) ...[
+            for (final assignment in state.assignments) ...[
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(assignment.studentName),
@@ -592,12 +696,6 @@ class TeacherQuizManageView extends StatelessWidget {
                     : null,
               ),
             ],
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back),
-            label: const Text('Back to list'),
-          ),
         ],
       ),
     );
@@ -904,7 +1002,10 @@ class _QuizSettingsSheet extends StatelessWidget {
       ('Navigation mode', _quizNavigationLabel(quiz.navigationMode)),
       ('Review required', _quizYesNo(quiz.isReviewRequired)),
       ('Student result view', _quizReviewDisplayLabel(quiz.reviewDisplayMode)),
-      ('Lifecycle', _quizDash(quiz.lifecycleStatus)),
+      (
+        'Lifecycle',
+        _quizDash(quiz.isPublished ? 'Published' : quiz.lifecycleStatus),
+      ),
       ('Approval', _quizDash(quiz.approvalStatus)),
       ('Questions', '${quiz.questionCount}'),
       ('Total marks', '${quiz.totalMarks}'),
@@ -1010,6 +1111,7 @@ Future<AssignQuizInput?> showTeacherAssignSheet(
   required UserRole role,
   required String defaultGradeLabel,
   int? defaultAllowedAttempts,
+  List<QuizAssignmentItem> existingAssignments = const [],
 }) {
   return showModalBottomSheet<AssignQuizInput>(
     context: context,
@@ -1019,6 +1121,7 @@ Future<AssignQuizInput?> showTeacherAssignSheet(
         role: role,
         defaultGradeLabel: defaultGradeLabel,
         defaultAllowedAttempts: defaultAllowedAttempts ?? 1,
+        existingAssignments: existingAssignments,
       );
     },
   );
@@ -1044,16 +1147,34 @@ Future<QuestionSummaryModel?> showAttachBankQuestionDialog(
   );
 }
 
+bool _isExpiredQuizAssignment(QuizAssignmentItem assignment) {
+  final status = assignment.resultStatus.trim().toLowerCase();
+  if (status == 'expired') {
+    return true;
+  }
+  final ended = assignment.endAt.toUtc().isBefore(DateTime.now().toUtc());
+  return ended &&
+      (status == 'not attempted' ||
+          status == 'upcoming' ||
+          status == 'up coming' ||
+          status == 'in progress');
+}
+
+bool _isActiveQuizAssignment(QuizAssignmentItem assignment) =>
+    !_isExpiredQuizAssignment(assignment);
+
 class _AssignSheet extends ConsumerStatefulWidget {
   const _AssignSheet({
     required this.role,
     required this.defaultGradeLabel,
     required this.defaultAllowedAttempts,
+    this.existingAssignments = const [],
   });
 
   final UserRole role;
   final String defaultGradeLabel;
   final int defaultAllowedAttempts;
+  final List<QuizAssignmentItem> existingAssignments;
 
   @override
   ConsumerState<_AssignSheet> createState() => _AssignSheetState();
@@ -1100,6 +1221,20 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
   int? _parseGrade() {
     final match = RegExp(r'\d+').firstMatch(widget.defaultGradeLabel);
     return match == null ? null : int.tryParse(match.group(0)!);
+  }
+
+  QuizAssignmentItem? _assignmentFor(String studentId) {
+    for (final assignment in widget.existingAssignments) {
+      if (assignment.studentId == studentId) {
+        return assignment;
+      }
+    }
+    return null;
+  }
+
+  bool _isBlocked(String studentId) {
+    final assignment = _assignmentFor(studentId);
+    return assignment != null && _isActiveQuizAssignment(assignment);
   }
 
   void _submit() {
@@ -1149,8 +1284,9 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
     Navigator.of(context).pop(
       AssignQuizInput(
         mode: _mode,
-        studentIds:
-            _mode == 'one' || _mode == 'selected' ? _selectedIds.toList() : [],
+        studentIds: _mode == 'one' || _mode == 'selected'
+            ? _selectedIds.where((id) => !_isBlocked(id)).toList()
+            : [],
         groupId: _mode == 'group' ? groupId : null,
         startAt: _startAt,
         endAt: _endAt,
@@ -1276,24 +1412,36 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                           final student = students[index];
                           final selected =
                               _selectedIds.contains(student.studentId);
+                          final assignment = _assignmentFor(student.studentId);
+                          final alreadyAssigned = assignment != null &&
+                              _isActiveQuizAssignment(assignment);
+                          final expiredAssigned = assignment != null &&
+                              _isExpiredQuizAssignment(assignment);
                           return CheckboxListTile(
                             value: selected,
                             title: Text(student.fullName),
                             subtitle: Text(
-                              'Grade ${student.grade} · ${student.section}',
+                              alreadyAssigned
+                                  ? 'Already assigned'
+                                  : expiredAssigned
+                                      ? 'Previous assignment expired — can reassign\nGrade ${student.grade} · ${student.section}'
+                                      : 'Grade ${student.grade} · ${student.section}',
                             ),
-                            onChanged: (value) {
-                              setState(() {
-                                if (value ?? false) {
-                                  if (_mode == 'one') {
-                                    _selectedIds.clear();
-                                  }
-                                  _selectedIds.add(student.studentId);
-                                } else {
-                                  _selectedIds.remove(student.studentId);
-                                }
-                              });
-                            },
+                            enabled: !alreadyAssigned,
+                            onChanged: alreadyAssigned
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      if (value ?? false) {
+                                        if (_mode == 'one') {
+                                          _selectedIds.clear();
+                                        }
+                                        _selectedIds.add(student.studentId);
+                                      } else {
+                                        _selectedIds.remove(student.studentId);
+                                      }
+                                    });
+                                  },
                           );
                         },
                       ),

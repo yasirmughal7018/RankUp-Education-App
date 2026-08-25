@@ -210,7 +210,7 @@ export function QuizSettingsOverview({ quiz }: { quiz: ManageQuiz }) {
           label="Lifecycle"
           value={
             <StatusBadge
-              label={displayOrDash(quiz.lifecycleStatus)}
+              label={displayOrDash(formatQuizDisplayStatusLabel(quiz.lifecycleStatus))}
               tone={getQuestionStatusTone(quiz.lifecycleStatus, true)}
             />
           }

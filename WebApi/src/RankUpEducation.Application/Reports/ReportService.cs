@@ -2,6 +2,7 @@ using RankUpEducation.Application.Common.Abstractions;
 using RankUpEducation.Application.Common.Exceptions;
 using RankUpEducation.Contracts.Reports;
 using RankUpEducation.Domain.Auth;
+using RankUpEducation.Application.Quizzes;
 
 namespace RankUpEducation.Application.Reports;
 
@@ -153,58 +154,12 @@ public sealed class ReportService : IReportService
             return;
         }
 
-        if (role == UserRole.Parent)
-        {
-            var parentId = _currentUser.ProfileId ?? _currentUser.UserId
-                ?? throw new ForbiddenAppException("Parent profile was not found.");
-            if (!await _studentScope.IsLinkedStudentAsync(parentId, studentId, cancellationToken))
-            {
-                throw new ForbiddenAppException("You can only view linked student history.");
-            }
-
-            return;
-        }
-
-        if (role is UserRole.Teacher or UserRole.Coordinator)
-        {
-            var teacherId = _currentUser.ProfileId ?? _currentUser.UserId
-                ?? throw new ForbiddenAppException("Teacher profile was not found.");
-            var schoolId = _currentUser.SchoolId
-                ?? throw new ForbiddenAppException("School context was not found.");
-            var campusId = _currentUser.CampusId
-                ?? throw new ForbiddenAppException("Campus context was not found.");
-            if (!await _studentScope.IsStudentInTeacherRosterAsync(
-                    teacherId,
-                    studentId,
-                    schoolId,
-                    campusId,
-                    cancellationToken))
-            {
-                throw new ForbiddenAppException(
-                    "You can only view students in your assigned classes and sections.");
-            }
-
-            return;
-        }
-
-        if (role == UserRole.SchoolAdmin)
-        {
-            var schoolId = _currentUser.SchoolId
-                ?? throw new ForbiddenAppException("School context was not found.");
-            var campusId = _currentUser.CampusId
-                ?? throw new ForbiddenAppException("Campus context was not found.");
-            if (!await _studentScope.IsStudentInSchoolAsync(studentId, schoolId, campusId, cancellationToken))
-            {
-                throw new ForbiddenAppException("Student is outside your school campus.");
-            }
-
-            return;
-        }
-
-        if (role != UserRole.PortalAdmin)
-        {
-            throw new ForbiddenAppException("You do not have access to student quiz history.");
-        }
+        var scope = QuizScopeResolver.RequireManageScope(_currentUser);
+        await QuizScopeResolver.EnsureCanAccessStudentAsync(
+            _studentScope,
+            scope,
+            studentId,
+            cancellationToken);
     }
 
     private void EnsureAdminOrTeacher()

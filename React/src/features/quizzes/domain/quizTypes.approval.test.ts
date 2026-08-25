@@ -5,6 +5,9 @@ import {
   canAssignAdminAudiences,
   canAssignQuiz,
   canAuthorQuizzes,
+  canCancelOwnUpcomingAssignments,
+  isActiveQuizAssignment,
+  isExpiredQuizAssignment,
   canDeleteOrArchiveQuiz,
   canEditQuizSettings,
   canManageQuizzes,
@@ -173,6 +176,77 @@ describe("hasQuizAssignmentStarted", () => {
         Date.parse("2026-01-01T00:00:00Z"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("canCancelOwnUpcomingAssignments", () => {
+  const now = Date.parse("2026-01-01T00:00:00Z");
+
+  it("allows only the assigner of a window that has not started", () => {
+    expect(
+      canCancelOwnUpcomingAssignments(
+        42,
+        [{ assignedById: 42, startAt: "2099-01-01T00:00:00Z" }],
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      canCancelOwnUpcomingAssignments(
+        99,
+        [{ assignedById: 42, startAt: "2099-01-01T00:00:00Z" }],
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("hides cancel after the assignment window has started", () => {
+    expect(
+      canCancelOwnUpcomingAssignments(
+        42,
+        [{ assignedById: 42, startAt: "2025-01-01T00:00:00Z" }],
+        now,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("expired assignment reassign", () => {
+  const now = Date.parse("2026-01-01T00:00:00Z");
+
+  it("treats Expired and past unused windows as reassignable", () => {
+    expect(
+      isExpiredQuizAssignment(
+        { resultStatus: "Expired", endAt: "2025-12-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isExpiredQuizAssignment(
+        { resultStatus: "Not Attempted", endAt: "2025-12-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("locks students who still have an active assignment", () => {
+    expect(
+      isActiveQuizAssignment(
+        { resultStatus: "Not Attempted", endAt: "2099-01-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isActiveQuizAssignment(
+        { resultStatus: "Completed", endAt: "2025-12-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isActiveQuizAssignment(
+        { resultStatus: "Expired", endAt: "2025-12-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(false);
   });
 });
 

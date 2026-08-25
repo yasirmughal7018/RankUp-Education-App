@@ -5,22 +5,25 @@ namespace RankUpEducation.Application.Quizzes;
 
 internal static class QuizMapping
 {
-    public static QuizSummaryResponse ToSummaryResponse(QuizListItem item, DateTimeOffset now)
+    public static QuizSummaryResponse ToSummaryResponse(
+        QuizListItem item,
+        DateTimeOffset now,
+        bool studentFacing = false)
     {
         var attemptLimit = item.AllowedAttempts <= 0 ? (short)1 : item.AllowedAttempts;
-        var status = item.StartDateTime is null && !string.IsNullOrWhiteSpace(item.LifecycleStatusName)
-            ? QuizDisplayStatus.ResolveStaffListStatus(
-                item.LifecycleStatusName,
-                item.ApprovalStatusName,
-                item.TotalQuestions,
-                item.HasSubmittedForReview).ToLowerInvariant()
-            : QuizStatusCalculator.ResolveListStatus(
+        var status = studentFacing
+            ? QuizStatusCalculator.ResolveListStatus(
                 now,
                 item.StartDateTime,
                 item.EndDateTime,
                 item.AttemptCount,
                 attemptLimit,
-                item.LastSubmittedAt);
+                item.LastSubmittedAt)
+            : QuizDisplayStatus.ResolveStaffListStatus(
+                item.LifecycleStatusName,
+                item.ApprovalStatusName,
+                item.TotalQuestions,
+                item.HasSubmittedForReview);
 
         var totalMarks = item.TotalMarks ?? item.TotalQuestions;
         var points = totalMarks;

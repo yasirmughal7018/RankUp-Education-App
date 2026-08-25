@@ -46,7 +46,7 @@ public interface IQuizManageService
     /// </summary>
     Task<ArchiveQuizResponse> ArchiveAsync(long quizId, CancellationToken cancellationToken);
 
-    /// <summary>Restores an archived quiz to Published (no assignments) or Assigned (has assignments).</summary>
+    /// <summary>Restores an archived quiz to Published.</summary>
     Task<UnarchiveQuizResponse> UnarchiveAsync(long quizId, CancellationToken cancellationToken);
 
     /// <summary>School admin approves a teacher quiz pending approval.</summary>
@@ -784,12 +784,9 @@ public sealed class QuizManageService : IQuizManageService
             throw new BusinessRuleException("Only archived quizzes can be unarchived.");
         }
 
-        var hasAssignments = await _quizzes.HasAnyAssignmentsAsync(quizId, cancellationToken);
         var restoredStatusId = await _guard.RequireLookupAsync(
             LookupNames.QuizLifecycleStatus,
-            hasAssignments
-                ? LookupNames.AssignedLifecycleNames
-                : LookupNames.PublishedLifecycleNames,
+            LookupNames.PublishedLifecycleNames,
             cancellationToken);
 
         quiz.Unarchive(restoredStatusId);
