@@ -12,7 +12,8 @@ public sealed record PendingReviewItemResponse(
     short AttemptNumber,
     DateTimeOffset SubmittedAt,
     short TotalMarks,
-    short ObtainedMarks);
+    short ObtainedMarks,
+    bool CanScore = false);
 
 /// <summary>Full review workspace for marking subjective answers.</summary>
 public sealed record AttemptReviewResponse(
@@ -30,7 +31,9 @@ public sealed record AttemptReviewResponse(
     DateTimeOffset SubmittedAt,
     IReadOnlyList<AttemptReviewQuestionResponse> Questions,
     short FocusLossCount = 0,
-    short ClipboardPasteCount = 0);
+    short ClipboardPasteCount = 0,
+    bool CanScore = false,
+    string AssignedByRole = "");
 
 /// <summary>One question on the review screen with marks and feedback.</summary>
 public sealed record AttemptReviewQuestionResponse(

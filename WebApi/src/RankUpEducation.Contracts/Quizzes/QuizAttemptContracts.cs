@@ -106,6 +106,14 @@ public sealed record SyncOfflineQuizAttemptResponse(
     SaveQuizAttemptAnswersResponse? Draft = null,
     QuizAttemptResultResponse? Result = null);
 
+/// <summary>Submitted attempt row for switching results when a quiz allows multiple runs.</summary>
+public sealed record QuizAttemptSummaryResponse(
+    long AttemptId,
+    short AttemptNumber,
+    string Status,
+    short Percentage,
+    DateTimeOffset SubmittedAt);
+
 /// <summary>Scored attempt result; may mask marks while subjective review is pending or review is withheld.</summary>
 public sealed record QuizAttemptResultResponse(
     long AttemptId,
@@ -122,7 +130,8 @@ public sealed record QuizAttemptResultResponse(
     bool ReviewPending = false,
     string ReviewDisplayMode = "ScoreOnly",
     short ResultAnnouncedPercent = 0,
-    DateTimeOffset? ResultsAnnounceAt = null);
+    DateTimeOffset? ResultsAnnounceAt = null,
+    IReadOnlyList<QuizAttemptSummaryResponse>? Attempts = null);
 
 /// <summary>Per-question breakdown on result view (includes correct answers when review allows).</summary>
 public sealed record QuizResultQuestionResponse(

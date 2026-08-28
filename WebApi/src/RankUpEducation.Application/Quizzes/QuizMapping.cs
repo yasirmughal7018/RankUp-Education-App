@@ -68,7 +68,8 @@ internal static class QuizMapping
             scorePercent,
             item.CreatedByName,
             item.SchoolName,
-            announcedPercent);
+            announcedPercent,
+            item.LastAttemptId);
     }
 
     public static QuizDetailResponse ToDetailResponse(QuizDetailItem item, DateTimeOffset now)
@@ -127,7 +128,8 @@ internal static class QuizMapping
             resultStatus,
             scorePercent,
             item.RandomQuestionCount ?? item.TotalQuestions,
-            announcedPercent);
+            announcedPercent,
+            item.LastAttemptId);
     }
 
     private static string ResolveResultStatusName(
@@ -172,7 +174,8 @@ internal static class QuizMapping
         QuizAttemptDetailItem item,
         string quizTitle,
         QuizReviewDisplay.Visibility visibility,
-        string? resultStatusOverride = null)
+        string? resultStatusOverride = null,
+        IReadOnlyList<QuizAttemptSummaryItem>? attempts = null)
     {
         var questions = item.Questions.Select(question =>
         {
@@ -236,6 +239,14 @@ internal static class QuizMapping
             visibility.ReviewPending,
             visibility.Mode,
             visibility.AnnouncedPercent,
-            visibility.AnnouncesAt);
+            visibility.AnnouncesAt,
+            (attempts ?? Array.Empty<QuizAttemptSummaryItem>())
+                .Select(attempt => new QuizAttemptSummaryResponse(
+                    attempt.AttemptId,
+                    attempt.AttemptNumber,
+                    attempt.StatusName,
+                    attempt.Percentage,
+                    attempt.SubmittedAt))
+                .ToArray());
     }
 }

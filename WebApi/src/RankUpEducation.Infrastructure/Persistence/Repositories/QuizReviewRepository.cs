@@ -59,10 +59,12 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             .Where(attempt => attempt.QuizId == quizId)
             .Select(attempt => new
             {
+                attempt.Id,
                 attempt.StudentId,
                 attempt.Percentage,
                 attempt.SubmittedDate,
                 attempt.StartedDate,
+                attempt.StatusId,
                 attempt.FocusLossCount,
                 attempt.ClipboardPasteCount
             })
@@ -74,10 +76,18 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             var studentAttempts = attempts
                 .Where(attempt => attempt.StudentId == assignment.StudentId)
                 .ToArray();
-            var latestAttempt = studentAttempts
+            var latestSubmitted = studentAttempts
+                .Where(attempt =>
+                    attempt.StatusId != LookupNames.QuizAttemptStatusIds.Started
+                    && attempt.StatusId != LookupNames.QuizAttemptStatusIds.InProgress)
                 .OrderByDescending(attempt => attempt.SubmittedDate)
-                .ThenByDescending(attempt => attempt.StartedDate)
+                .ThenByDescending(attempt => attempt.Id)
                 .FirstOrDefault();
+            var latestAttempt = latestSubmitted
+                ?? studentAttempts
+                    .OrderByDescending(attempt => attempt.SubmittedDate)
+                    .ThenByDescending(attempt => attempt.StartedDate)
+                    .FirstOrDefault();
 
             items.Add(new QuizMonitoringStudentItem(
                 assignment.StudentId,
@@ -94,7 +104,9 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 assignment.StartDateTime,
                 assignment.EndDateTime,
                 latestAttempt?.FocusLossCount ?? 0,
-                latestAttempt?.ClipboardPasteCount ?? 0));
+                latestAttempt?.ClipboardPasteCount ?? 0,
+                latestSubmitted?.Id,
+                assignment.AssignedByRole));
         }
 
         return items;
@@ -105,17 +117,6 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
         long? assignedByUserId,
         CancellationToken cancellationToken)
     {
-        var submittedStatusIds = await QuizQueryHelper.ResolveStatusIdsByNamesAsync(
-            _dbContext,
-            "QuizAttemptStatus",
-            LookupNames.SubmittedAttemptStatusNames,
-            cancellationToken);
-
-        if (submittedStatusIds.Count == 0)
-        {
-            return Array.Empty<PendingReviewItem>();
-        }
-
         var query =
             from attempt in _dbContext.QuizAttempts.AsNoTracking()
             join quiz in _dbContext.Quizzes.AsNoTracking() on attempt.QuizId equals quiz.Id
@@ -123,9 +124,9 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 on new { attempt.QuizId, attempt.StudentId } equals new { assignment.QuizId, assignment.StudentId }
             where quiz.IsActive
                 && !quiz.IsDeleted
-                && quiz.IsReviewRequired
                 && !assignment.IsReviewDone
-                && submittedStatusIds.Contains(attempt.StatusId)
+                && attempt.StatusId != LookupNames.QuizAttemptStatusIds.Started
+                && attempt.StatusId != LookupNames.QuizAttemptStatusIds.InProgress
                 && attempt.SubmittedDate != default
             select new { attempt, quiz, assignment };
 
@@ -148,7 +149,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 row.attempt.StudentId,
                 row.attempt.AttemptNumber,
                 row.attempt.SubmittedDate,
-                row.attempt.ObtainedMarks
+                row.attempt.ObtainedMarks,
+                row.assignment.AssignedByRole
             })
             .ToListAsync(cancellationToken);
 
@@ -178,7 +180,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                 row.AttemptNumber,
                 row.SubmittedDate,
                 (short)totalMarks,
-                row.ObtainedMarks));
+                row.ObtainedMarks,
+                row.AssignedByRole));
         }
 
         return items;

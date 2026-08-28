@@ -164,6 +164,7 @@ public sealed class QuizAssignService : IQuizAssignService
                 var quota = (short)Math.Min(short.MaxValue, request.AllowedAttempts + attemptCount);
                 existing.ReopenForReassign(
                     scope.UserId,
+                    scope.Role,
                     request.StartAt,
                     request.EndAt,
                     quota,
@@ -182,6 +183,7 @@ public sealed class QuizAssignService : IQuizAssignService
                 quizId,
                 studentId,
                 scope.UserId,
+                scope.Role,
                 request.StartAt,
                 request.EndAt,
                 request.AllowedAttempts,
@@ -232,7 +234,7 @@ public sealed class QuizAssignService : IQuizAssignService
             quizId,
             lifecycleName,
             created.Count + reopenedCount,
-            createdAssignments.Select(QuizManageMapping.ToAssignmentResponse).ToArray());
+            createdAssignments.Select(item => QuizManageMapping.ToAssignmentResponse(item, scope.Role)).ToArray());
     }
 
     public async Task<QuizAssignmentListResponse> ListAssignmentsAsync(
@@ -253,7 +255,7 @@ public sealed class QuizAssignService : IQuizAssignService
         }
 
         var assignments = await ListScopedAssignmentsAsync(quizId, scope, cancellationToken);
-        return new QuizAssignmentListResponse(assignments.Select(QuizManageMapping.ToAssignmentResponse).ToArray());
+        return new QuizAssignmentListResponse(assignments.Select(item => QuizManageMapping.ToAssignmentResponse(item, scope.Role)).ToArray());
     }
 
     public async Task<CancelQuizResponse> CancelAsync(long quizId, CancellationToken cancellationToken)

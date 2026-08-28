@@ -122,6 +122,7 @@ public sealed record AssignQuizRequest(
 
 /// <summary>One student assignment with attempt and review summary.</summary>
 public sealed record QuizAssignmentAttemptResponse(
+    long AttemptId,
     short AttemptNumber,
     DateTimeOffset StartedAt,
     DateTimeOffset? SubmittedAt,
@@ -140,7 +141,9 @@ public sealed record QuizAssignmentResponse(
     string ResultStatus,
     long AssignedById,
     DateTimeOffset AssignedAt,
-    IReadOnlyList<QuizAssignmentAttemptResponse> Attempts);
+    IReadOnlyList<QuizAssignmentAttemptResponse> Attempts,
+    string AssignedByRole = "",
+    bool CanScore = false);
 
 public sealed record QuizAssignmentListResponse(IReadOnlyList<QuizAssignmentResponse> Items);
 

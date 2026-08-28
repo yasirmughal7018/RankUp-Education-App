@@ -308,7 +308,7 @@ public static class LookupNames
     /// <summary>Status used when creating inline quiz questions (quiz-ready).</summary>
     public static readonly string[] ActiveQuestionStatusNames = ["Approved"];
     public static readonly string[] SubmittedAttemptStatusNames =
-        ["Submitted", "SUBMITTED", "AutoSubmitted", "AUTOSUBMITTED"];
+        ["Submitted", "SUBMITTED", "AutoSubmitted", "AUTOSUBMITTED", "Expired", "EXPIRED"];
     public static readonly string[] ReviewedAttemptStatusNames = ["Reviewed", "REVIEWED"];
     public static readonly string[] CompletedResultNames = ["Completed", "Reviewed"];
 

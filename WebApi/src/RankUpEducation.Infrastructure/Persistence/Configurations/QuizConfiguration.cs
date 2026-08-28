@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Infrastructure.Persistence.Configurations;
@@ -65,6 +66,13 @@ public sealed class QuizAssignmentConfiguration : IEntityTypeConfiguration<QuizA
         builder.Property(assignment => assignment.QuizId).HasColumnName("quiz_id").IsRequired();
         builder.Property(assignment => assignment.StudentId).HasColumnName("student_id").IsRequired();
         builder.Property(assignment => assignment.AssignedById).HasColumnName("assigned_by_id").IsRequired();
+        builder.Property(assignment => assignment.AssignedByRole)
+            .HasColumnName("assigned_by_role")
+            .HasColumnType("smallint")
+            .HasConversion(
+                role => (short)role,
+                value => (UserRole)value)
+            .IsRequired();
         builder.Property(assignment => assignment.StudentGroupId).HasColumnName("student_group_id");
         builder.Property(assignment => assignment.StartDateTime).HasColumnName("start_date_time").IsRequired();
         builder.Property(assignment => assignment.EndDateTime).HasColumnName("end_date_time").IsRequired();

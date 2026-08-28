@@ -1,3 +1,4 @@
+using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
 
 namespace RankUpEducation.Domain.Quizzes;
@@ -16,6 +17,7 @@ public sealed class QuizAssignment : BaseEntity
         long quizId,
         long studentId,
         long assignedById,
+        UserRole assignedByRole,
         DateTimeOffset startDateTime,
         DateTimeOffset endDateTime,
         short allowedAttempts,
@@ -29,6 +31,7 @@ public sealed class QuizAssignment : BaseEntity
         QuizId = quizId;
         StudentId = studentId;
         AssignedById = assignedById;
+        AssignedByRole = assignedByRole;
         StartDateTime = startDateTime;
         EndDateTime = endDateTime;
         AllowedAttempts = allowedAttempts;
@@ -38,6 +41,7 @@ public sealed class QuizAssignment : BaseEntity
     public long QuizId { get; private set; }
     public long StudentId { get; private set; }
     public long AssignedById { get; private set; }
+    public UserRole AssignedByRole { get; private set; }
     public long? StudentGroupId { get; private set; }
     public DateTimeOffset StartDateTime { get; private set; }
     public DateTimeOffset EndDateTime { get; private set; }
@@ -58,6 +62,7 @@ public sealed class QuizAssignment : BaseEntity
     /// </summary>
     public void ReopenForReassign(
         long assignedById,
+        UserRole assignedByRole,
         DateTimeOffset startDateTime,
         DateTimeOffset endDateTime,
         short allowedAttempts,
@@ -69,6 +74,7 @@ public sealed class QuizAssignment : BaseEntity
         }
 
         AssignedById = assignedById;
+        AssignedByRole = assignedByRole;
         StartDateTime = startDateTime;
         EndDateTime = endDateTime;
         AllowedAttempts = allowedAttempts;

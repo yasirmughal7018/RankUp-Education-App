@@ -33,6 +33,7 @@ export interface QuizSummary {
   resultAnnouncedPercent?: number | null;
   createdBy: string;
   schoolName: string;
+  lastAttemptId?: number | null;
 }
 
 export interface QuizQuestionOption {
@@ -236,6 +237,7 @@ export interface AssignQuizInput {
 }
 
 export interface QuizAssignmentAttempt {
+  attemptId: number;
   attemptNumber: number;
   startedAt: string;
   submittedAt: string | null;
@@ -254,8 +256,10 @@ export interface QuizAssignment {
   isReviewDone: boolean;
   resultStatus: string;
   assignedById: number;
+  assignedByRole?: string;
   assignedAt?: string;
   attempts?: QuizAssignmentAttempt[];
+  canScore?: boolean;
 }
 
 export const QUIZ_MANAGER_ROLES: UserRole[] = [

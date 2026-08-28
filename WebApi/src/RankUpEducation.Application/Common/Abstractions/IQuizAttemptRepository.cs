@@ -27,6 +27,12 @@ public interface IQuizAttemptRepository
 
     Task<QuizAttemptDetailItem?> GetAttemptDetailAsync(long attemptId, long studentId, CancellationToken cancellationToken);
 
+    /// <summary>Submitted (not in-progress) attempts for a student on one quiz, oldest first.</summary>
+    Task<IReadOnlyList<QuizAttemptSummaryItem>> ListCompletedAttemptsAsync(
+        long quizId,
+        long studentId,
+        CancellationToken cancellationToken);
+
     Task<QuizAttempt?> GetAttemptEntityAsync(long attemptId, long studentId, CancellationToken cancellationToken);
 
     Task<int> CountAttemptsAsync(long quizId, long studentId, CancellationToken cancellationToken);

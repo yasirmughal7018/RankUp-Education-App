@@ -1,10 +1,14 @@
 using RankUpEducation.Contracts.Quizzes;
+using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Quizzes;
 
 internal static class QuizReviewMapping
 {
-    public static AttemptReviewResponse ToReviewResponse(AttemptReviewDetailItem detail)
+    public static AttemptReviewResponse ToReviewResponse(
+        AttemptReviewDetailItem detail,
+        bool canScore,
+        UserRole assignedByRole)
         => new(
             detail.AttemptId,
             detail.QuizId,
@@ -39,5 +43,7 @@ internal static class QuizReviewMapping
                         option.IsCorrect))
                     .ToArray())).ToArray(),
             detail.FocusLossCount,
-            detail.ClipboardPasteCount);
+            detail.ClipboardPasteCount,
+            canScore,
+            assignedByRole.ToString());
 }

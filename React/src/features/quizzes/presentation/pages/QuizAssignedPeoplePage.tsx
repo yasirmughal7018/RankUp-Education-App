@@ -1,10 +1,16 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/core/components/PageHeader";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
-import { getMonitorStatusTone } from "@/features/quizzes/domain/quizMonitorTypes";
+import {
+  getMonitorStatusTone,
+  latestCheckableAttemptId,
+  studentAttemptCheckPath,
+  attemptReviewActionLabel,
+  hasAttemptScoreAccess,
+} from "@/features/quizzes/domain/quizMonitorTypes";
 import type { QuizAssignment } from "@/features/quizzes/domain/quizTypes";
 import { QuizAssignmentAttemptsDialog } from "@/features/quizzes/presentation/components/QuizAssignmentAttemptsDialog";
 import {
@@ -175,20 +181,54 @@ export function QuizAssignedPeoplePage() {
                       />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {canAllowRetry(assignment) ? (
-                        <button
-                          type="button"
-                          disabled={allowRetry.isPending}
-                          onClick={() =>
-                            void runAllowRetry(assignment.assignmentId)
-                          }
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-                        >
-                          Allow retry
-                        </button>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                      {(() => {
+                        const attemptId = latestCheckableAttemptId(
+                          assignment.attempts,
+                        );
+                        const checkPath =
+                          attemptId != null
+                            ? studentAttemptCheckPath(
+                                numericQuizId,
+                                attemptId,
+                                "assigned",
+                              )
+                            : null;
+                        const canScore = hasAttemptScoreAccess(assignment.canScore);
+                        const retry = canAllowRetry(assignment);
+
+                        if (!checkPath && !retry) {
+                          return <span className="text-slate-400">—</span>;
+                        }
+
+                        return (
+                          <div className="flex justify-end gap-2">
+                            {checkPath ? (
+                              <Button
+                                size="sm"
+                                variant={canScore ? "default" : "outline"}
+                                className="h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none"
+                                asChild
+                              >
+                                <Link to={checkPath}>
+                                  {attemptReviewActionLabel(canScore)}
+                                </Link>
+                              </Button>
+                            ) : null}
+                            {retry ? (
+                              <button
+                                type="button"
+                                disabled={allowRetry.isPending}
+                                onClick={() =>
+                                  void runAllowRetry(assignment.assignmentId)
+                                }
+                                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                              >
+                                Allow retry
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -203,6 +243,7 @@ export function QuizAssignedPeoplePage() {
       </div>
 
       <QuizAssignmentAttemptsDialog
+        quizId={numericQuizId}
         assignment={attemptsAssignment}
         onOpenChange={(open) => {
           if (!open) {

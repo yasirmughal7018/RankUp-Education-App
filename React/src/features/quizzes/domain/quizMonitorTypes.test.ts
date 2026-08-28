@@ -3,6 +3,11 @@ import {
   displayStudentName,
   formatMonitorStatus,
   getMonitorStatusTone,
+  latestCheckableAttemptId,
+  studentAttemptCheckPath,
+  canScoreQuizAssignment,
+  hasAttemptScoreAccess,
+  attemptReviewActionLabel,
 } from "@/features/quizzes/domain/quizMonitorTypes";
 
 describe("displayStudentName", () => {
@@ -36,3 +41,64 @@ describe("getMonitorStatusTone", () => {
     expect(getMonitorStatusTone("reviewed")).toBe("success");
   });
 });
+
+describe("studentAttemptCheckPath", () => {
+  it("appends the page the reviewer came from", () => {
+    expect(studentAttemptCheckPath(4, 9, "assigned")).toBe(
+      "/quizzes/4/attempts/9/review?from=assigned",
+    );
+  });
+});
+
+describe("latestCheckableAttemptId", () => {
+  it("skips in-progress drafts and returns the latest submitted id", () => {
+    expect(
+      latestCheckableAttemptId([
+        {
+          attemptId: 1,
+          attemptNumber: 1,
+          status: "Submitted",
+          submittedAt: "2026-08-14T10:00:00Z",
+        },
+        {
+          attemptId: 2,
+          attemptNumber: 2,
+          status: "InProgress",
+          submittedAt: null,
+        },
+      ]),
+    ).toBe(1);
+  });
+});
+
+describe("canScoreQuizAssignment", () => {
+  it("lets only the parent score parent-assigned quizzes", () => {
+    expect(canScoreQuizAssignment("Parent", "Parent")).toBe(true);
+    expect(canScoreQuizAssignment("Teacher", "Parent")).toBe(false);
+    expect(canScoreQuizAssignment("CampusAdmin", "Parent")).toBe(false);
+    expect(canScoreQuizAssignment("PortalAdmin", "Parent")).toBe(true);
+  });
+
+  it("lets teachers and school admins score teacher-assigned quizzes", () => {
+    expect(canScoreQuizAssignment("Teacher", "Teacher")).toBe(true);
+    expect(canScoreQuizAssignment("CampusAdmin", "Teacher")).toBe(true);
+    expect(canScoreQuizAssignment("SchoolAdmin", "Teacher")).toBe(true);
+    expect(canScoreQuizAssignment("Parent", "Teacher")).toBe(false);
+  });
+});
+
+describe("attemptReviewActionLabel", () => {
+  it("uses Check for scorers and View for everyone else", () => {
+    expect(attemptReviewActionLabel(true)).toBe("Check");
+    expect(attemptReviewActionLabel(false)).toBe("View");
+  });
+});
+
+describe("hasAttemptScoreAccess", () => {
+  it("only allows scoring when the API explicitly says so", () => {
+    expect(hasAttemptScoreAccess(undefined)).toBe(false);
+    expect(hasAttemptScoreAccess(false)).toBe(false);
+    expect(hasAttemptScoreAccess(true)).toBe(true);
+  });
+});
+

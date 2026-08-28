@@ -89,7 +89,9 @@ public sealed class QuizMonitorService : IQuizMonitorService
                 item.EndDateTime,
                 item.AttemptCount,
                 item.IsReviewDone,
-                item.LastSubmittedAt))).ToArray());
+                item.LastSubmittedAt),
+            item.LastAttemptId,
+            QuizReviewAuthorizationRules.CanScore(scope.Role, item.AssignedByRole))).ToArray());
     }
 
     public async Task<QuizMonitoringResponse> GetMonitoringAsync(long quizId, CancellationToken cancellationToken)
@@ -143,7 +145,9 @@ public sealed class QuizMonitorService : IQuizMonitorService
                 item.LastSubmittedAt),
             item.LastSubmittedAt,
             item.FocusLossCount,
-            item.ClipboardPasteCount)).ToArray();
+            item.ClipboardPasteCount,
+            item.LastAttemptId,
+            QuizReviewAuthorizationRules.CanScore(scope.Role, item.AssignedByRole))).ToArray();
 
         return new QuizMonitoringResponse(
             quiz.Id,

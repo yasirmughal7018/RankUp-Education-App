@@ -15,7 +15,9 @@ public sealed record QuizAssignmentBoardItemResponse(
     int AttemptCount,
     bool IsReviewDone,
     string ResultStatus,
-    string MonitorStatus);
+    string MonitorStatus,
+    long? LastAttemptId = null,
+    bool CanScore = false);
 
 /// <summary>Aggregate monitoring stats and per-student rows for one quiz.</summary>
 public sealed record QuizMonitoringResponse(
@@ -38,4 +40,6 @@ public sealed record QuizMonitoringStudentResponse(
     string Status,
     DateTimeOffset? LastSubmittedAt,
     short FocusLossCount = 0,
-    short ClipboardPasteCount = 0);
+    short ClipboardPasteCount = 0,
+    long? LastAttemptId = null,
+    bool CanScore = false);

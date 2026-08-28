@@ -100,7 +100,8 @@ public sealed class QuizRepository : IQuizRepository
                 stats.AttemptCount,
                 stats.BestPercentage,
                 stats.LastSubmittedAt,
-                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Published"));
+                lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Published"),
+                LastAttemptId: stats.LastAttemptId);
 
             if (!QuizQueryHelper.MatchesFilters(item, search, subject, grade))
             {
@@ -431,7 +432,8 @@ public sealed class QuizRepository : IQuizRepository
                 stats.LastSubmittedAt,
                 quiz.LifecycleStatusId,
                 lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Unknown"),
-                resultStatusName);
+                resultStatusName,
+                stats.LastAttemptId);
         }
         else
         {
@@ -468,7 +470,8 @@ public sealed class QuizRepository : IQuizRepository
                 quiz.LifecycleStatusId,
                 lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Published"),
                 ReviewDisplayMode: string.IsNullOrWhiteSpace(quiz.ReviewDisplayMode) ? "ScoreOnly" : quiz.ReviewDisplayMode,
-                RandomQuestionCount: quiz.RandomQuestionCount);
+                RandomQuestionCount: quiz.RandomQuestionCount,
+                LastAttemptId: stats.LastAttemptId);
         }
 
         return QuizQueryHelper.ApplyAutoGradedMarks(detail, autoGradedMarks);

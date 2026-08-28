@@ -27,6 +27,7 @@ export interface QuizDetail {
   resultAnnouncedPercent?: number | null;
   /** Questions presented per attempt when random subset is enabled. */
   questionsPerAttempt?: number | null;
+  lastAttemptId?: number | null;
 }
 
 export interface QuizAttemptOption {
@@ -149,6 +150,14 @@ export interface QuizResultQuestion {
   aiFeedback?: string | null;
 }
 
+export interface QuizAttemptSummary {
+  attemptId: number;
+  attemptNumber: number;
+  status: string;
+  percentage: number;
+  submittedAt: string;
+}
+
 export interface QuizAttemptResult {
   attemptId: number;
   quizId: number;
@@ -165,6 +174,7 @@ export interface QuizAttemptResult {
   resultAnnouncedPercent?: number;
   resultsAnnounceAt?: string | null;
   questions: QuizResultQuestion[];
+  attempts?: QuizAttemptSummary[];
 }
 
 export const STUDENT_DEVICE_ID_STORAGE_KEY = "rankup-student-device-id";
@@ -253,7 +263,212 @@ export function isOrderingQuestionType(questionType: string): boolean {
 }
 
 /** Student has an unfinished attempt. */
-export function hasInProgressAttempt(quiz: QuizDetail): boolean {
-  const result = quiz.resultStatus.toLowerCase();
-  return result.includes("in progress") || result.includes("inprogress");
+export function hasInProgressAttempt(quiz: {
+  resultStatus: string;
+  status?: string;
+}): boolean {
+  const result = normalizeStudentQuizStatus(quiz.resultStatus);
+  const status = normalizeStudentQuizStatus(quiz.status ?? "");
+  return result.includes("inprogress") || status.includes("inprogress");
+}
+
+export type StudentQuizBucket =
+  | "inProgress"
+  | "upcoming"
+  | "expired"
+  | "attempted"
+  | "active";
+
+export interface StudentQuizListItemLike {
+  id: number;
+  resultStatus: string;
+  status?: string;
+  startAt: string | null;
+  dueAt: string | null;
+  completedAt?: string | null;
+  lastAttemptId?: number | null;
+}
+
+function normalizeStudentQuizStatus(value: string): string {
+  return value.toLowerCase().replace(/[_\s-]/g, "");
+}
+
+export function isStudentQuizUpcoming(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): boolean {
+  if (hasInProgressAttempt(quiz) || isStudentQuizAttempted(quiz, now)) {
+    return false;
+  }
+
+  const result = normalizeStudentQuizStatus(quiz.resultStatus);
+  if (result.includes("upcoming") || result.includes("coming")) {
+    return true;
+  }
+
+  return quiz.startAt != null && new Date(quiz.startAt) > now;
+}
+
+export function isStudentQuizAttempted(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): boolean {
+  if (hasInProgressAttempt(quiz)) {
+    return false;
+  }
+
+  const result = normalizeStudentQuizStatus(quiz.resultStatus);
+  if (result.includes("expir")) {
+    return false;
+  }
+
+  if (quiz.lastAttemptId != null) {
+    return true;
+  }
+
+  if (
+    result.includes("complete") ||
+    result.includes("review") ||
+    result.includes("submit") ||
+    result.includes("result")
+  ) {
+    return true;
+  }
+
+  return quiz.completedAt != null && new Date(quiz.completedAt) <= now;
+}
+
+export function isStudentQuizExpired(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): boolean {
+  if (hasInProgressAttempt(quiz) || isStudentQuizAttempted(quiz, now)) {
+    return false;
+  }
+
+  const result = normalizeStudentQuizStatus(quiz.resultStatus);
+  if (result.includes("expir")) {
+    return true;
+  }
+
+  if (isStudentQuizUpcoming(quiz, now)) {
+    return false;
+  }
+
+  return quiz.dueAt != null && new Date(quiz.dueAt) < now;
+}
+
+export function classifyStudentQuiz(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): StudentQuizBucket {
+  if (hasInProgressAttempt(quiz)) {
+    return "inProgress";
+  }
+
+  if (isStudentQuizAttempted(quiz, now)) {
+    return "attempted";
+  }
+
+  if (isStudentQuizUpcoming(quiz, now)) {
+    return "upcoming";
+  }
+
+  if (isStudentQuizExpired(quiz, now)) {
+    return "expired";
+  }
+
+  return "active";
+}
+
+export function isStudentQuizInLastMonth(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): boolean {
+  const from = new Date(now);
+  from.setMonth(from.getMonth() - 1);
+  const ahead = new Date(now);
+  ahead.setMonth(ahead.getMonth() + 1);
+
+  const start = quiz.startAt ? new Date(quiz.startAt) : null;
+  const due = quiz.dueAt ? new Date(quiz.dueAt) : null;
+  const completed = quiz.completedAt ? new Date(quiz.completedAt) : null;
+
+  if (start && due && start <= now && due >= now) {
+    return true;
+  }
+
+  if (start && start > now && start <= ahead) {
+    return true;
+  }
+
+  return [start, due, completed].some(
+    (value) => value != null && value >= from && value <= now,
+  );
+}
+
+export function resolveStudentQuizAction(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): { label: string; to: string; variant: "default" | "outline" } {
+  const bucket = classifyStudentQuiz(quiz, now);
+  const detailPath = `/student/quizzes/${quiz.id}`;
+
+  if (bucket === "inProgress") {
+    return { label: "Continue quiz", to: detailPath, variant: "default" };
+  }
+
+  if (bucket === "attempted") {
+    return { label: "View result", to: detailPath, variant: "default" };
+  }
+
+  if (bucket === "active") {
+    return { label: "Start quiz", to: detailPath, variant: "default" };
+  }
+
+  return { label: "Open", to: detailPath, variant: "outline" };
+}
+
+/** Compact score/pending label for the student quiz list Result column. */
+export function formatStudentQuizListResult(quiz: {
+  resultStatus: string;
+  resultPercent?: number | null;
+  resultAnnouncedPercent?: number | null;
+  lastAttemptId?: number | null;
+}): { label: string; detail: string | null } {
+  const hasAttempt =
+    quiz.lastAttemptId != null || typeof quiz.resultPercent === "number";
+  const status = quiz.resultStatus.trim();
+  const statusKey = normalizeStudentQuizStatus(status);
+  const lookedLikeResult =
+    statusKey.includes("complete") ||
+    statusKey.includes("review") ||
+    statusKey.includes("submit") ||
+    statusKey.includes("result");
+
+  if (!hasAttempt && !lookedLikeResult) {
+    return { label: "—", detail: null };
+  }
+
+  if (typeof quiz.resultPercent === "number") {
+    const noisy = /^(completed|attempted|submitted)$/i.test(status);
+    return {
+      label: `${Math.round(quiz.resultPercent)}%`,
+      detail: noisy || status.length === 0 ? null : status,
+    };
+  }
+
+  const announced = quiz.resultAnnouncedPercent;
+  if (typeof announced === "number" && announced > 0 && announced < 100) {
+    return { label: "Pending", detail: `${announced}% announced` };
+  }
+
+  return { label: "Pending", detail: status.length > 0 ? status : null };
+}
+
+/** Show the other-attempts control when a quiz has more than two submitted runs. */
+export function canSwitchOtherQuizAttempts(
+  attempts: readonly QuizAttemptSummary[] | null | undefined,
+): boolean {
+  return (attempts?.length ?? 0) > 2;
 }

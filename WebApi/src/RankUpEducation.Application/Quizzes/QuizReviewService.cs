@@ -86,7 +86,9 @@ public sealed class QuizReviewService : IQuizReviewService
             assignedByUserId,
             cancellationToken);
 
-        return new PendingReviewListResponse(items.Select(item => new PendingReviewItemResponse(
+        return new PendingReviewListResponse(items
+            .Where(item => QuizReviewAuthorizationRules.CanScore(scope.Role, item.AssignedByRole))
+            .Select(item => new PendingReviewItemResponse(
             item.QuizId,
             item.QuizTitle,
             item.AttemptId,
@@ -95,7 +97,8 @@ public sealed class QuizReviewService : IQuizReviewService
             item.AttemptNumber,
             item.SubmittedAt,
             item.TotalMarks,
-            item.ObtainedMarks)).ToArray());
+            item.ObtainedMarks,
+            true)).ToArray());
     }
 
     public async Task<AttemptReviewResponse> GetReviewDetailAsync(
@@ -103,11 +106,14 @@ public sealed class QuizReviewService : IQuizReviewService
         long attemptId,
         CancellationToken cancellationToken)
     {
-        await EnsureReviewAccessAsync(quizId, attemptId, cancellationToken);
+        var (scope, assignment) = await EnsureReviewViewAccessAsync(quizId, attemptId, cancellationToken);
         var detail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        return QuizReviewMapping.ToReviewResponse(detail);
+        return QuizReviewMapping.ToReviewResponse(
+            detail,
+            QuizReviewAuthorizationRules.CanScore(scope.Role, assignment.AssignedByRole),
+            assignment.AssignedByRole);
     }
 
     public async Task<AttemptReviewResponse> MarkAnswersAsync(
@@ -116,14 +122,7 @@ public sealed class QuizReviewService : IQuizReviewService
         MarkAttemptAnswersRequest request,
         CancellationToken cancellationToken)
     {
-        var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        await EnsureReviewAccessAsync(quizId, attemptId, cancellationToken);
-
-        var assignment = await RequireAssignmentAsync(quizId, attemptId, cancellationToken);
-        if (assignment.IsReviewDone)
-        {
-            throw new BusinessRuleException("This attempt review has already been finalized.");
-        }
+        var (scope, assignment) = await EnsureReviewScoreAccessAsync(quizId, attemptId, cancellationToken);
 
         var reviewDetail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
@@ -174,10 +173,15 @@ public sealed class QuizReviewService : IQuizReviewService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (assignment.IsReviewDone)
+        {
+            await ApplyReviewedScoreAsync(quizId, attemptId, cancellationToken);
+        }
+
         var updated = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        return QuizReviewMapping.ToReviewResponse(updated);
+        return QuizReviewMapping.ToReviewResponse(updated, canScore: true, assignment.AssignedByRole);
     }
 
     public async Task<FinalizeReviewResponse> FinalizeAsync(
@@ -185,10 +189,7 @@ public sealed class QuizReviewService : IQuizReviewService
         long attemptId,
         CancellationToken cancellationToken)
     {
-        var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        await EnsureReviewAccessAsync(quizId, attemptId, cancellationToken);
-
-        var assignment = await RequireAssignmentAsync(quizId, attemptId, cancellationToken);
+        var (_, assignment) = await EnsureReviewScoreAccessAsync(quizId, attemptId, cancellationToken);
         if (assignment.IsReviewDone)
         {
             throw new BusinessRuleException("This attempt review has already been finalized.");
@@ -197,7 +198,8 @@ public sealed class QuizReviewService : IQuizReviewService
         var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        if (!await _attempts.IsSubmittedAttemptAsync(attemptId, cancellationToken))
+        if (!IsClosedAttemptForReview(attempt.StatusId)
+            && !await _attempts.IsSubmittedAttemptAsync(attemptId, cancellationToken))
         {
             throw new BusinessRuleException("Only submitted attempts can be reviewed.");
         }
@@ -252,7 +254,16 @@ public sealed class QuizReviewService : IQuizReviewService
             "Reviewed");
     }
 
-    private async Task EnsureReviewAccessAsync(long quizId, long attemptId, CancellationToken cancellationToken)
+    private static bool IsClosedAttemptForReview(short statusId)
+        => statusId is LookupNames.QuizAttemptStatusIds.Submitted
+            or LookupNames.QuizAttemptStatusIds.AutoSubmitted
+            or LookupNames.QuizAttemptStatusIds.Expired
+            or LookupNames.QuizAttemptStatusIds.Reviewed;
+
+    private async Task<(QuizManageScope Scope, QuizAssignment Assignment)> EnsureReviewViewAccessAsync(
+        long quizId,
+        long attemptId,
+        CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
@@ -276,18 +287,43 @@ public sealed class QuizReviewService : IQuizReviewService
             attempt.StudentId,
             assignment.AssignedById,
             cancellationToken);
+
+        return (scope, assignment);
     }
 
-    private async Task<QuizAssignment> RequireAssignmentAsync(
+    private async Task<(QuizManageScope Scope, QuizAssignment Assignment)> EnsureReviewScoreAccessAsync(
+        long quizId,
+        long attemptId,
+        CancellationToken cancellationToken)
+    {
+        var (scope, assignment) = await EnsureReviewViewAccessAsync(quizId, attemptId, cancellationToken);
+        if (!QuizReviewAuthorizationRules.CanScore(scope.Role, assignment.AssignedByRole))
+        {
+            throw new ForbiddenAppException(
+                QuizReviewAuthorizationRules.DescribeScoreDenial(assignment.AssignedByRole));
+        }
+
+        return (scope, assignment);
+    }
+
+    private async Task ApplyReviewedScoreAsync(
         long quizId,
         long attemptId,
         CancellationToken cancellationToken)
     {
         var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
+        var reviewDetail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
+            ?? throw new NotFoundAppException("Quiz attempt was not found.");
 
-        return await _assignments.GetAssignmentEntityAsync(quizId, attempt.StudentId, cancellationToken)
-            ?? throw new NotFoundAppException("Quiz assignment was not found.");
+        var obtainedMarks = (short)reviewDetail.Questions.Sum(question => question.AwardedMarks);
+        var reviewedStatusId = await _lookups.ResolveLookupIdByNamesAsync(
+            "QuizAttemptStatus",
+            LookupNames.ReviewedAttemptStatusNames,
+            fallback: attempt.StatusId,
+            cancellationToken);
+        attempt.ApplyReviewedScore(obtainedMarks, reviewDetail.TotalMarks, reviewedStatusId);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     private async Task UpsertReviewFeedbackAsync(

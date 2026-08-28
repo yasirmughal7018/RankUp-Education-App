@@ -11,6 +11,8 @@ export interface AssignmentBoardItem {
   isReviewDone: boolean;
   resultStatus: string;
   monitorStatus: string;
+  lastAttemptId?: number | null;
+  canScore?: boolean;
 }
 
 export interface PendingReviewItem {
@@ -23,6 +25,7 @@ export interface PendingReviewItem {
   submittedAt: string;
   totalMarks: number;
   obtainedMarks: number;
+  canScore?: boolean;
 }
 
 export interface QuizMonitoringStudent {
@@ -36,6 +39,8 @@ export interface QuizMonitoringStudent {
   lastSubmittedAt: string | null;
   focusLossCount?: number;
   clipboardPasteCount?: number;
+  lastAttemptId?: number | null;
+  canScore?: boolean;
 }
 
 export interface QuizMonitoring {
@@ -87,6 +92,8 @@ export interface AttemptReview {
   questions: AttemptReviewQuestion[];
   focusLossCount?: number;
   clipboardPasteCount?: number;
+  canScore?: boolean;
+  assignedByRole?: string;
 }
 
 /** Fallback to student id when name missing. */
@@ -185,4 +192,105 @@ export function buildQuizMonitoringCsv(monitoring: QuizMonitoring): string {
     ...rows.map((row) => row.map(escape).join(",")),
     "",
   ].join("\n");
+}
+
+export type StudentAttemptCheckFrom = "assigned" | "monitoring" | "board";
+
+/** Review workspace for a submitted student attempt. */
+export function studentAttemptCheckPath(
+  quizId: number,
+  attemptId: number,
+  from?: StudentAttemptCheckFrom,
+): string {
+  const path = `/quizzes/${quizId}/attempts/${attemptId}/review`;
+  return from ? `${path}?from=${from}` : path;
+}
+
+/** Submitted / reviewed / expired — not an open draft. */
+export function isCheckableAttemptStatus(status: string): boolean {
+  const normalized = status.toLowerCase().replace(/[_\s-]/g, "");
+  return (
+    normalized.length > 0 &&
+    !normalized.includes("progress") &&
+    normalized !== "started"
+  );
+}
+
+/** Latest submitted attempt id from an assignment's attempt list. */
+export function latestCheckableAttemptId(
+  attempts:
+    | Array<{
+        attemptId?: number | null;
+        attemptNumber: number;
+        status: string;
+        submittedAt?: string | null;
+      }>
+    | null
+    | undefined,
+): number | null {
+  let best: { attemptId: number; attemptNumber: number } | null = null;
+
+  for (const attempt of attempts ?? []) {
+    if (attempt.attemptId == null || attempt.attemptId <= 0) {
+      continue;
+    }
+    if (!isCheckableAttemptStatus(attempt.status)) {
+      continue;
+    }
+    if (
+      !best ||
+      attempt.attemptNumber > best.attemptNumber ||
+      (attempt.attemptNumber === best.attemptNumber &&
+        attempt.attemptId > best.attemptId)
+    ) {
+      best = { attemptId: attempt.attemptId, attemptNumber: attempt.attemptNumber };
+    }
+  }
+
+  return best?.attemptId ?? null;
+}
+
+/** True when the current role may mark or update this assignment. */
+export function canScoreQuizAssignment(
+  callerRole: string | null | undefined,
+  assignedByRole: string | null | undefined,
+): boolean {
+  const caller = (callerRole ?? "").toLowerCase();
+  const origin = (assignedByRole ?? "Teacher").toLowerCase();
+  if (caller === "portaladmin") {
+    return true;
+  }
+  if (origin === "parent") {
+    return caller === "parent";
+  }
+  return (
+    caller === "teacher" ||
+    caller === "coordinator" ||
+    caller === "campusadmin" ||
+    caller === "schooladmin"
+  );
+}
+
+export function hasAttemptScoreAccess(canScore: boolean | null | undefined): boolean {
+  return canScore === true;
+}
+
+export function attemptReviewActionLabel(canScore: boolean): "Check" | "View" {
+  return canScore ? "Check" : "View";
+}
+
+export function attemptReviewScoreHint(
+  canScore: boolean,
+  assignedByRole: string | null | undefined,
+): string | null {
+  if (canScore) {
+    return null;
+  }
+
+  const origin = (assignedByRole ?? "").toLowerCase();
+  if (origin === "parent") {
+    return "This quiz was assigned by a parent. You can view answers and marks. Ask the parent to update scoring if something is wrong.";
+  }
+
+  return "This quiz was assigned by a teacher. You can view answers and marks. Ask the teacher, campus admin, or school admin to update scoring if something is wrong.";
 }

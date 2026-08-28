@@ -1,12 +1,33 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { FieldLabel } from "@/core/components/FieldLabel";
-import { PageHeader } from "@/core/components/PageHeader";
+import { Link, useSearchParams } from "react-router-dom";
 import {
-  getQuestionStatusTone,
-  StatusBadge,
-} from "@/features/questions/presentation/components/StatusBadge";
-import { formatAnnouncedResultsLabel } from "@/features/student/domain/quizResultDisplay";
+  CalendarClock,
+  CheckCircle2,
+  ClipboardList,
+  Eye,
+  LayoutDashboard,
+  PlayCircle,
+  RefreshCw,
+  TimerOff,
+} from "lucide-react";
+import { AppEmptyState } from "@/components/ui/app-empty-state";
+import { AppErrorState } from "@/components/ui/app-error-state";
+import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
+import { AppPageHeader } from "@/components/ui/app-page-header";
+import { AppSectionHeader } from "@/components/ui/app-section-header";
+import { AppStatCard } from "@/components/ui/app-stat-card";
+import { Button } from "@/components/ui/button";
+import { FieldLabel } from "@/core/components/FieldLabel";
+import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
+import type { ApprovalStatusKey } from "@/lib/constants/approval-status";
+import type { QuizSummary } from "@/features/quizzes/domain/quizTypes";
+import {
+  classifyStudentQuiz,
+  formatStudentQuizListResult,
+  isStudentQuizInLastMonth,
+  resolveStudentQuizAction,
+  type StudentQuizBucket,
+} from "@/features/student/domain/studentQuizTypes";
 import { useStudentQuizzesQuery } from "@/features/student/presentation/hooks/useStudentQuizQueries";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
@@ -23,63 +44,57 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
-function startOfDay(value: Date): Date {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-}
-
-function isSameDay(left: Date, right: Date): boolean {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  );
-}
-
-function isWithinPastDays(date: Date, now: Date, days: number): boolean {
-  const start = startOfDay(now);
-  start.setDate(start.getDate() - (days - 1));
-  const tomorrow = startOfDay(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return date >= start && date < tomorrow;
-}
-
-function matchesStudentDateFilter(
-  quiz: { startAt: string | null; dueAt: string | null; resultStatus: string },
-  filter: string,
-  now: Date,
-): boolean {
-  const startAt = quiz.startAt ? new Date(quiz.startAt) : null;
-  const dueAt = quiz.dueAt ? new Date(quiz.dueAt) : null;
-  const anchor = dueAt ?? startAt;
-  const completed =
-    quiz.resultStatus.toLowerCase().includes("review") ||
-    quiz.resultStatus.toLowerCase().includes("completed") ||
-    quiz.resultStatus.toLowerCase() === "reviewed";
-
-  switch (filter) {
-    case "Today":
-      return anchor != null && isSameDay(anchor, now);
-    case "Upcoming":
-      return startAt != null && startAt > now;
-    case "Overdue":
-      return dueAt != null && dueAt < now && !completed;
-    case "Last 7 Days":
-      return anchor != null && isWithinPastDays(anchor, now, 7);
-    case "Last 15 Days":
-      return anchor != null && isWithinPastDays(anchor, now, 15);
+function bucketLabel(bucket: StudentQuizBucket): string {
+  switch (bucket) {
+    case "inProgress":
+      return "In progress";
+    case "upcoming":
+      return "Upcoming";
+    case "expired":
+      return "Expired";
+    case "attempted":
+      return "Attempted";
     default:
-      return true;
+      return "Open now";
   }
 }
 
+function bucketThemeKey(bucket: StudentQuizBucket): ApprovalStatusKey {
+  switch (bucket) {
+    case "inProgress":
+      return "locked";
+    case "upcoming":
+      return "pending";
+    case "expired":
+      return "deactivated";
+    case "attempted":
+      return "approved";
+    default:
+      return "active";
+  }
+}
+
+function actionIcon(label: string) {
+  if (label.startsWith("View")) {
+    return CheckCircle2;
+  }
+  if (label === "Open") {
+    return Eye;
+  }
+  return PlayCircle;
+}
+
 export function StudentQuizzesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const showAll = searchParams.get("all") === "1";
   const { data: quizzes = [], isLoading, error, refetch, isFetching } =
     useStudentQuizzesQuery();
 
   const [search, setSearch] = useState("");
   const [quizTypeFilter, setQuizTypeFilter] = useState("");
-  const [resultStatusFilter, setResultStatusFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StudentQuizBucket | "">("");
+
+  const now = useMemo(() => new Date(), [quizzes]);
 
   const quizTypeOptions = useMemo(
     () =>
@@ -89,28 +104,38 @@ export function StudentQuizzesPage() {
     [quizzes],
   );
 
-  const resultStatusOptions = useMemo(
-    () =>
-      [
-        ...new Set(quizzes.map((quiz) => quiz.resultStatus).filter(Boolean)),
-      ].sort((a, b) => a.localeCompare(b)),
-    [quizzes],
-  );
+  const dashboard = useMemo(() => {
+    const counts = {
+      active: 0,
+      upcoming: 0,
+      expired: 0,
+      attempted: 0,
+      inProgress: 0,
+    };
+    for (const quiz of quizzes) {
+      counts[classifyStudentQuiz(quiz, now)] += 1;
+    }
+    return counts;
+  }, [quizzes, now]);
 
-  const filteredQuizzes = useMemo(() => {
+  const visibleQuizzes = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const now = new Date();
 
     return quizzes.filter((quiz) => {
+      if (!showAll && !isStudentQuizInLastMonth(quiz, now)) {
+        return false;
+      }
+
       if (quizTypeFilter && quiz.quizType !== quizTypeFilter) {
         return false;
       }
 
-      if (resultStatusFilter && quiz.resultStatus !== resultStatusFilter) {
-        return false;
-      }
-
-      if (dateFilter && !matchesStudentDateFilter(quiz, dateFilter, now)) {
+      if (statusFilter === "active") {
+        const bucket = classifyStudentQuiz(quiz, now);
+        if (bucket !== "active" && bucket !== "inProgress") {
+          return false;
+        }
+      } else if (statusFilter && classifyStudentQuiz(quiz, now) !== statusFilter) {
         return false;
       }
 
@@ -124,34 +149,106 @@ export function StudentQuizzesPage() {
         quiz.grade,
         quiz.quizType,
         quiz.resultStatus,
-        quiz.dueAt ? formatDateTime(quiz.dueAt) : "",
-        quiz.startAt ? formatDateTime(quiz.startAt) : "",
       ]
         .join(" ")
         .toLowerCase();
 
       return haystack.includes(needle);
     });
-  }, [quizzes, search, quizTypeFilter, resultStatusFilter, dateFilter]);
+  }, [quizzes, showAll, now, search, quizTypeFilter, statusFilter]);
+
+  function setShowAll(next: boolean) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (next) {
+      nextParams.set("all", "1");
+    } else {
+      nextParams.delete("all");
+    }
+    setSearchParams(nextParams, { replace: true });
+    setStatusFilter("");
+  }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title="My quizzes"
-        description="View assigned quizzes and start new attempts."
+    <div className="space-y-6">
+      <AppPageHeader
+        studentFacing
+        title={showAll ? "All quizzes" : "My quizzes"}
+        subtitle={
+          showAll
+            ? "Every assigned quiz, with a snapshot of what is open, upcoming, expired, or already attempted."
+            : "Quizzes from the last month. Older quizzes stay in All quizzes."
+        }
         action={
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            {showAll ? (
+              <Button type="button" variant="outline" onClick={() => setShowAll(false)}>
+                Last month
+              </Button>
+            ) : (
+              <Button type="button" onClick={() => setShowAll(true)}>
+                <LayoutDashboard className="h-4 w-4" />
+                All quizzes
+              </Button>
+            )}
+          </div>
         }
       />
 
-      <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-2 xl:grid-cols-4">
+      {error ? (
+        <AppErrorState message={error.message} onRetry={() => void refetch()} />
+      ) : null}
+
+      {showAll ? (
+        isLoading ? (
+          <AppLoadingSkeleton count={4} />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <AppStatCard
+              compact
+              title="Open now"
+              value={dashboard.active + dashboard.inProgress}
+              icon={PlayCircle}
+              colorVariant="primary"
+              onClick={() => setStatusFilter("active")}
+            />
+            <AppStatCard
+              compact
+              title="Upcoming"
+              value={dashboard.upcoming}
+              icon={CalendarClock}
+              colorVariant="warning"
+              onClick={() => setStatusFilter("upcoming")}
+            />
+            <AppStatCard
+              compact
+              title="Expired"
+              value={dashboard.expired}
+              icon={TimerOff}
+              colorVariant="neutral"
+              onClick={() => setStatusFilter("expired")}
+            />
+            <AppStatCard
+              compact
+              title="Attempted"
+              value={dashboard.attempted}
+              icon={CheckCircle2}
+              colorVariant="success"
+              onClick={() => setStatusFilter("attempted")}
+            />
+          </div>
+        )
+      ) : null}
+
+      <section className="grid gap-4 rounded-2xl border border-border/80 bg-card/90 p-4 md:grid-cols-2 xl:grid-cols-3">
         <div>
           <FieldLabel htmlFor="student-quiz-search" optional>
             Search
@@ -161,11 +258,10 @@ export function StudentQuizzesPage() {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Title, subject, type, status…"
+            placeholder="Title, subject, type…"
             className={inputClassName}
           />
         </div>
-
         <div>
           <FieldLabel htmlFor="student-quiz-type" optional>
             Quiz type
@@ -184,149 +280,161 @@ export function StudentQuizzesPage() {
             ))}
           </select>
         </div>
-
         <div>
-          <FieldLabel htmlFor="student-quiz-result" optional>
-            Result status
+          <FieldLabel htmlFor="student-quiz-bucket" optional>
+            Status
           </FieldLabel>
           <select
-            id="student-quiz-result"
-            value={resultStatusFilter}
-            onChange={(event) => setResultStatusFilter(event.target.value)}
+            id="student-quiz-bucket"
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter((event.target.value || "") as StudentQuizBucket | "")
+            }
             className={inputClassName}
           >
             <option value="">All statuses</option>
-            {resultStatusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <FieldLabel htmlFor="student-quiz-date" optional>
-            Date
-          </FieldLabel>
-          <select
-            id="student-quiz-date"
-            value={dateFilter}
-            onChange={(event) => setDateFilter(event.target.value)}
-            className={inputClassName}
-          >
-            <option value="">All dates</option>
-            <option value="Today">Today</option>
-            <option value="Upcoming">Upcoming</option>
-            <option value="Overdue">Overdue</option>
-            <option value="Last 7 Days">Last 7 Days</option>
-            <option value="Last 15 Days">Last 15 Days</option>
+            <option value="active">Open now</option>
+            <option value="inProgress">In progress</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="expired">Expired</option>
+            <option value="attempted">Attempted</option>
           </select>
         </div>
       </section>
 
-      {error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error.message}
-        </div>
-      ) : null}
+      <section>
+        <AppSectionHeader
+          title={showAll ? "Quiz list" : "Last month"}
+          description={
+            statusFilter
+              ? `Showing ${bucketLabel(statusFilter).toLowerCase()} quizzes.`
+              : showAll
+                ? "Open a quiz to start, review settings, or see your result."
+                : "Active, upcoming, and recently closed quizzes."
+          }
+        />
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            Loading assigned quizzes...
-          </div>
-        ) : filteredQuizzes.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            {quizzes.length === 0
-              ? "No quizzes assigned yet."
-              : "No quizzes match your filters."}
-          </div>
+          <AppLoadingSkeleton variant="table" count={5} />
+        ) : visibleQuizzes.length === 0 ? (
+          <AppEmptyState
+            icon={ClipboardList}
+            title={
+              quizzes.length === 0
+                ? "No quizzes assigned yet"
+                : showAll
+                  ? "No quizzes match your filters"
+                  : "No quizzes in the last month"
+            }
+            description={
+              quizzes.length === 0
+                ? "When a teacher or parent assigns work, it will show up here."
+                : showAll
+                  ? "Try clearing search or status filters."
+                  : "Use All quizzes to see older assignments and a full snapshot."
+            }
+            actionLabel={showAll || quizzes.length === 0 ? undefined : "All quizzes"}
+            onAction={
+              showAll || quizzes.length === 0 ? undefined : () => setShowAll(true)
+            }
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Quiz
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Subject
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Due
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Attempts
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Result
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredQuizzes.map((quiz) => {
-                  const announcedLabel = formatAnnouncedResultsLabel(
-                    quiz.resultAnnouncedPercent,
-                  );
-                  return (
-                  <tr key={quiz.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/student/quizzes/${quiz.id}`}
-                        className="font-medium text-brand-700 hover:text-brand-800"
-                      >
-                        {quiz.title}
-                      </Link>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {quiz.quizType} · {quiz.questionCount} questions ·{" "}
-                        {quiz.totalMarks} marks
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {quiz.subject} / {quiz.grade}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {formatDateTime(quiz.dueAt)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {quiz.attemptLimit > 0
-                        ? `${quiz.attemptLimit} allowed`
-                        : "Unlimited"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        label={quiz.resultStatus}
-                        tone={getQuestionStatusTone(quiz.resultStatus, true)}
-                      />
-                      {announcedLabel ? (
-                        <p className="mt-1 text-xs text-slate-500">
-                          {announcedLabel}
-                        </p>
-                      ) : quiz.resultPercent != null ? (
-                        <p className="mt-1 text-xs text-slate-500">
-                          {quiz.resultPercent}%
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        to={`/student/quizzes/${quiz.id}`}
-                        className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
-                      >
-                        Open
-                      </Link>
-                    </td>
+          <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-muted/40 text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2.5 font-medium">Quiz</th>
+                    <th className="px-4 py-2.5 font-medium">Subject</th>
+                    <th className="px-4 py-2.5 font-medium">Due</th>
+                    <th className="px-4 py-2.5 font-medium">Status</th>
+                    <th className="px-4 py-2.5 font-medium">Result</th>
+                    <th className="px-4 py-2.5 text-right font-medium">
+                      Action
+                    </th>
                   </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {visibleQuizzes.map((quiz) => (
+                    <StudentQuizTableRow
+                      key={quiz.id}
+                      quiz={quiz}
+                      now={now}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
+  );
+}
+
+function StudentQuizTableRow({
+  quiz,
+  now,
+}: {
+  quiz: QuizSummary;
+  now: Date;
+}) {
+  const bucket = classifyStudentQuiz(quiz, now);
+  const action = resolveStudentQuizAction(quiz, now);
+  const result = formatStudentQuizListResult(quiz);
+  const Icon = actionIcon(action.label);
+
+  return (
+    <tr className="hover:bg-muted/30">
+      <td className="px-4 py-2 align-middle">
+        <Link
+          to={action.to}
+          className="font-display font-semibold text-foreground hover:text-primary"
+        >
+          {quiz.title}
+        </Link>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {quiz.quizType}
+          {quiz.attemptLimit > 0 ? ` · ${quiz.attemptLimit} attempts` : ""}
+        </p>
+      </td>
+      <td className="px-4 py-2 align-middle text-muted-foreground">
+        {quiz.subject} / {quiz.grade}
+      </td>
+      <td className="whitespace-nowrap px-4 py-2 align-middle text-muted-foreground">
+        {bucket === "upcoming"
+          ? `Opens ${formatDateTime(quiz.startAt)}`
+          : formatDateTime(quiz.dueAt)}
+      </td>
+      <td className="whitespace-nowrap px-4 py-2 align-middle">
+        <StatusBadge
+          label={bucketLabel(bucket)}
+          status={bucketThemeKey(bucket)}
+        />
+      </td>
+      <td className="whitespace-nowrap px-4 py-2 align-middle">
+        <p className="font-semibold tabular-nums text-foreground">
+          {result.label}
+        </p>
+        {result.detail ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">{result.detail}</p>
+        ) : null}
+      </td>
+      <td className="px-4 py-2 align-middle">
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant={action.variant}
+            className="h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none"
+            asChild
+          >
+            <Link to={action.to}>
+              <Icon className="h-3 w-3" />
+              {action.label}
+            </Link>
+          </Button>
+        </div>
+      </td>
+    </tr>
   );
 }

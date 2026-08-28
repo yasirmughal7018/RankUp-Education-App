@@ -70,6 +70,7 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 group => group.Key,
                 group => (IReadOnlyList<QuizAssignmentAttemptItem>)group
                     .Select(attempt => new QuizAssignmentAttemptItem(
+                        attempt.Id,
                         attempt.AttemptNumber,
                         attempt.StartedDate,
                         ResolveAttemptSubmittedAt(attempt),
@@ -97,7 +98,8 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 attempts.Count,
                 assignment.AssignedById,
                 assignment.CreatedDate,
-                attempts));
+                attempts,
+                assignment.AssignedByRole));
         }
 
         return items;
@@ -220,7 +222,9 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
                 stats.AttemptCount,
                 row.assignment.IsReviewDone,
                 resultStatusNames.GetValueOrDefault(row.assignment.QuizResultStatus, "Unknown"),
-                stats.LastSubmittedAt));
+                stats.LastSubmittedAt,
+                stats.LastAttemptId,
+                row.assignment.AssignedByRole));
         }
 
         return items;

@@ -257,6 +257,29 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
             }).ToArray());
     }
 
+    public async Task<IReadOnlyList<QuizAttemptSummaryItem>> ListCompletedAttemptsAsync(
+        long quizId,
+        long studentId,
+        CancellationToken cancellationToken)
+    {
+        return await (
+            from attempt in _dbContext.QuizAttempts.AsNoTracking()
+            join lookup in _dbContext.Lookups.AsNoTracking() on attempt.StatusId equals lookup.Id
+            where attempt.QuizId == quizId
+                && attempt.StudentId == studentId
+                && attempt.StatusId != LookupNames.QuizAttemptStatusIds.Started
+                && attempt.StatusId != LookupNames.QuizAttemptStatusIds.InProgress
+                && lookup.Type == LookupNames.QuizAttemptStatus
+            orderby attempt.AttemptNumber, attempt.Id
+            select new QuizAttemptSummaryItem(
+                attempt.Id,
+                attempt.AttemptNumber,
+                lookup.Name,
+                attempt.Percentage,
+                attempt.SubmittedDate))
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<QuizAttempt?> GetAttemptEntityAsync(
         long attemptId,
         long studentId,

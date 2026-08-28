@@ -49,6 +49,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuizContentFreezeAndIntegritySupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(UserRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(AppUserRolesSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizAssignmentAssignedByRoleSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(DropAppUsersRoleAndAdminTargetSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(ApprovalLookupSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(ApprovalSupportSql, cancellationToken);
@@ -1302,6 +1303,49 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         LEFT JOIN public.lookups AS l ON l.id = q.question_type_id
         WHERE aq.question_id = q.id
           AND (aq.question_text = '' OR aq.question_type_name = '');
+        """;
+
+    /// <summary>
+    /// Stamp the role used at assignment time so scoring rights follow parent vs teacher origin.
+    /// Existing parent-to-child rows become Parent; remaining rows take the assigner's staff role.
+    /// </summary>
+    private const string QuizAssignmentAssignedByRoleSupportSql = """
+        ALTER TABLE public.quiz_assignments
+            ADD COLUMN IF NOT EXISTS assigned_by_role smallint NOT NULL DEFAULT 2014;
+
+        UPDATE public.quiz_assignments AS a
+        SET assigned_by_role = 2013
+        WHERE EXISTS (
+            SELECT 1
+            FROM public.parent_student_relations AS p
+            WHERE p.parent_id = a.assigned_by_id
+              AND p.student_id = a.student_id
+              AND COALESCE(p.is_active, TRUE)
+        );
+
+        UPDATE public.quiz_assignments AS a
+        SET assigned_by_role = COALESCE((
+            SELECT r.role
+            FROM public.app_user_roles AS r
+            WHERE r.user_id = a.assigned_by_id
+              AND r.role IN (2010, 2011, 2012, 2014, 2016)
+            ORDER BY CASE r.role
+                WHEN 2010 THEN 1
+                WHEN 2011 THEN 2
+                WHEN 2012 THEN 3
+                WHEN 2016 THEN 4
+                WHEN 2014 THEN 5
+                ELSE 6
+            END
+            LIMIT 1
+        ), a.assigned_by_role)
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.parent_student_relations AS p
+            WHERE p.parent_id = a.assigned_by_id
+              AND p.student_id = a.student_id
+              AND COALESCE(p.is_active, TRUE)
+        );
         """;
 
     private const string UserRoleSupportSql = """

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { TrendingUp } from "lucide-react";
 import { AppCard } from "@/components/ui/app-card";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,10 @@ export interface AppStatCardProps {
   onClick?: () => void;
   className?: string;
   animate?: boolean;
+  /** Tighter padding and type for dense dashboards. */
+  compact?: boolean;
+  /** Compact control beside the title (does not replace the tone icon). */
+  action?: ReactNode;
 }
 
 const variantTone: Record<StatColorVariant, StatusTone | "danger"> = {
@@ -57,27 +62,39 @@ export function AppStatCard({
   onClick,
   className,
   animate = true,
+  compact = false,
+  action,
 }: AppStatCardProps) {
   return (
     <AppCard
       interactive={Boolean(onClick)}
       onClick={onClick}
       animate={animate}
-      className={cn("min-w-0", className)}
+      padded={!compact}
+      className={cn("min-w-0", compact && "px-4 py-3", className)}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="text-xs font-medium text-muted-foreground sm:text-sm">{title}</p>
+            {action}
+          </div>
           <p
             className={cn(
-              "mt-2 break-words text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl",
+              "mt-1 break-words font-semibold tabular-nums tracking-tight",
+              compact ? "text-xl sm:text-2xl" : "mt-2 text-2xl sm:text-3xl",
               TONE_STAT_CLASS[variantTone[colorVariant]],
             )}
           >
             {value}
           </p>
           {description ? (
-            <p className="mt-2 text-sm leading-5 text-muted-foreground">
+            <p
+              className={cn(
+                "leading-5 text-muted-foreground",
+                compact ? "mt-1 text-xs" : "mt-2 text-sm",
+              )}
+            >
               {description}
             </p>
           ) : null}
@@ -91,12 +108,13 @@ export function AppStatCard({
         {Icon ? (
           <span
             className={cn(
-              "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
+              "inline-flex shrink-0 items-center justify-center rounded-xl",
+              compact ? "h-9 w-9" : "h-12 w-12 rounded-2xl",
               iconBg[colorVariant],
             )}
             aria-hidden
           >
-            <Icon className="h-5 w-5" />
+            <Icon className={compact ? "h-4 w-4" : "h-5 w-5"} />
           </span>
         ) : null}
       </div>

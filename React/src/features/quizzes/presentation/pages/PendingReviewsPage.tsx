@@ -22,7 +22,7 @@ export function PendingReviewsPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <PageHeader
         title="Pending quiz reviews"
-        description="Review submitted attempts that require teacher or parent marking."
+        description="Score submitted attempts you are allowed to mark. Auto-marked questions already have scores; questions without a set answer need marking by the assigner or an admin with scoring rights."
         action={
           <button
             type="button"
@@ -98,7 +98,7 @@ export function PendingReviewsPage() {
                         to={`/quizzes/${item.quizId}/attempts/${item.attemptId}/review`}
                         className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
                       >
-                        Review
+                        Check
                       </Link>
                     </td>
                   </tr>

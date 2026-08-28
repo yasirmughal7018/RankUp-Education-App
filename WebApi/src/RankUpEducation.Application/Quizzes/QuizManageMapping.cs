@@ -2,6 +2,7 @@ using RankUpEducation.Application.QuizQuestions;
 using RankUpEducation.Contracts.QuizQuestions;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Approvals;
+using RankUpEducation.Domain.Auth;
 
 namespace RankUpEducation.Application.Quizzes;
 
@@ -94,7 +95,7 @@ internal static class QuizManageMapping
         return createdEvent?.OccurredAt ?? DateTimeOffset.UtcNow;
     }
 
-    public static QuizAssignmentResponse ToAssignmentResponse(QuizAssignmentListItem item)
+    public static QuizAssignmentResponse ToAssignmentResponse(QuizAssignmentListItem item, UserRole callerRole)
         => new(
             item.AssignmentId,
             item.StudentId,
@@ -109,8 +110,11 @@ internal static class QuizManageMapping
             item.AssignedById,
             item.AssignedAt,
             item.Attempts.Select(attempt => new QuizAssignmentAttemptResponse(
+                attempt.AttemptId,
                 attempt.AttemptNumber,
                 attempt.StartedAt,
                 attempt.SubmittedAt,
-                attempt.Status)).ToArray());
+                attempt.Status)).ToArray(),
+            item.AssignedByRole.ToString(),
+            QuizReviewAuthorizationRules.CanScore(callerRole, item.AssignedByRole));
 }

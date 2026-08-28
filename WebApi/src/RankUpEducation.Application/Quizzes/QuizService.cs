@@ -315,6 +315,7 @@ public sealed class QuizService : IQuizService
                 quizId,
                 studentId,
                 assignedById,
+                UserRole.Teacher,
                 access.StartDateTime,
                 access.EndDateTime,
                 access.AllowedAttempts,
@@ -671,7 +672,8 @@ public sealed class QuizService : IQuizService
             now,
             attempt,
             cancellationToken,
-            allowOfflineGrace: request.IsOfflineSync);
+            allowOfflineGrace: request.IsOfflineSync,
+            allowSubmitAfterEnd: true);
 
         var quiz = await _quizzes.GetQuizEntityAsync(quizId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz was not found.");
@@ -995,6 +997,7 @@ public sealed class QuizService : IQuizService
 
         var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
+        var history = await _attempts.ListCompletedAttemptsAsync(quizId, studentId, cancellationToken);
 
         var questionShares = result.Questions
             .Select(question => (QuizQuestionHelper.IsAutoGradedQuestion(question), question.Marks))
@@ -1012,7 +1015,8 @@ public sealed class QuizService : IQuizService
             result,
             quizTitle,
             visibility,
-            resultStatusOverride);
+            resultStatusOverride,
+            history);
     }
 
     public async Task<SyncOfflineQuizAttemptResponse> SyncOfflineAttemptAsync(
@@ -1133,6 +1137,7 @@ public sealed class QuizService : IQuizService
             throw new NotFoundAppException("Quiz attempt was not found.");
         }
 
+        var history = await _attempts.ListCompletedAttemptsAsync(quizId, studentId, cancellationToken);
         var quizTitle = (await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken))?.QuizTitle
             ?? "Quiz";
 
@@ -1155,7 +1160,8 @@ public sealed class QuizService : IQuizService
             result,
             quizTitle,
             visibility,
-            resultStatusOverride);
+            resultStatusOverride,
+            history);
     }
 
     private async Task<StartQuizAttemptResponse> BuildAttemptPayloadAsync(
@@ -1450,12 +1456,17 @@ public sealed class QuizService : IQuizService
 
     private static readonly TimeSpan OfflineSubmitGrace = TimeSpan.FromMinutes(30);
 
+    /// <summary>
+    /// Assignment window for start/save. Submit may close after EndAt so timer expiry
+    /// still scores the attempt instead of leaving it Expired and blocking review.
+    /// </summary>
     private async Task EnsureAttemptWindowAsync(
         QuizAssignmentAccess access,
         DateTimeOffset now,
         QuizAttempt? inProgressAttempt,
         CancellationToken cancellationToken,
-        bool allowOfflineGrace = false)
+        bool allowOfflineGrace = false,
+        bool allowSubmitAfterEnd = false)
     {
         if (now < access.StartDateTime)
         {
@@ -1472,6 +1483,15 @@ public sealed class QuizService : IQuizService
             && inProgressAttempt is not null
             && inProgressAttempt.StartedDate <= access.EndDateTime
             && now <= access.EndDateTime + OfflineSubmitGrace)
+        {
+            return;
+        }
+
+        // Timer / window auto-submit must still close the attempt with scores instead of
+        // marking it Expired-without-submit (which blocked parent/teacher finalize).
+        if (allowSubmitAfterEnd
+            && inProgressAttempt is not null
+            && inProgressAttempt.StatusId == LookupNames.QuizAttemptStatusIds.InProgress)
         {
             return;
         }

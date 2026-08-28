@@ -8,6 +8,9 @@ import {
   displayStudentName,
   formatMonitorStatus,
   getMonitorStatusTone,
+  studentAttemptCheckPath,
+  attemptReviewActionLabel,
+  hasAttemptScoreAccess,
 } from "@/features/quizzes/domain/quizMonitorTypes";
 import { useAssignmentBoardQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
@@ -211,12 +214,32 @@ export function AssignmentBoardPage() {
                       />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link
-                        to={`/quizzes/${item.quizId}/monitoring`}
-                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                      >
-                        Monitor
-                      </Link>
+                      <div className="flex justify-end gap-2">
+                        {item.lastAttemptId ? (
+                          <Link
+                            to={studentAttemptCheckPath(
+                              item.quizId,
+                              item.lastAttemptId,
+                              "board",
+                            )}
+                            className={
+                              hasAttemptScoreAccess(item.canScore)
+                                ? "rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
+                                : "rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                            }
+                          >
+                            {attemptReviewActionLabel(
+                              hasAttemptScoreAccess(item.canScore),
+                            )}
+                          </Link>
+                        ) : null}
+                        <Link
+                          to={`/quizzes/${item.quizId}/monitoring`}
+                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                        >
+                          Monitor
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

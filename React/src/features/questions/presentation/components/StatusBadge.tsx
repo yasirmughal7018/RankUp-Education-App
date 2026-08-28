@@ -21,6 +21,7 @@ interface StatusBadgeProps {
   status?: ApprovalStatusKey;
   /** @deprecated Prefer `status` — kept for older call sites. */
   tone?: "default" | "success" | "warning" | "danger";
+  className?: string;
 }
 
 const legacyToneToStatus: Record<
@@ -37,6 +38,7 @@ export function StatusBadge({
   label,
   status,
   tone = "default",
+  className,
 }: StatusBadgeProps) {
   const key = status ?? legacyToneToStatus[tone];
   return (
@@ -44,6 +46,7 @@ export function StatusBadge({
       className={cn(
         "inline-flex max-w-full whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium",
         APPROVAL_STATUS_CHIP[key],
+        className,
       )}
     >
       {label}

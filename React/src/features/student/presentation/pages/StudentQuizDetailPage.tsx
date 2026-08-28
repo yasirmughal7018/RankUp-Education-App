@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/core/components/PageHeader";
 import {
   getQuestionStatusTone,
@@ -11,7 +12,10 @@ import {
   persistOfflineAttemptSession,
 } from "@/features/student/domain/offlineAttemptSession";
 import { formatAnnouncedResultsLabel } from "@/features/student/domain/quizResultDisplay";
-import { hasInProgressAttempt } from "@/features/student/domain/studentQuizTypes";
+import {
+  classifyStudentQuiz,
+  hasInProgressAttempt,
+} from "@/features/student/domain/studentQuizTypes";
 import {
   useStartQuizAttemptMutation,
   useStudentQuizDetailQuery,
@@ -97,6 +101,21 @@ export function StudentQuizDetailPage() {
 
     setOfflineStartError(null);
 
+    const bucket = classifyStudentQuiz(
+      {
+        id: quiz.id,
+        resultStatus: quiz.resultStatus,
+        status: quiz.status,
+        startAt: quiz.startAt,
+        dueAt: quiz.dueAt,
+        lastAttemptId: quiz.lastAttemptId,
+      },
+      new Date(),
+    );
+    if (bucket === "upcoming" || bucket === "expired") {
+      return;
+    }
+
     try {
       const requiresAck =
         !hasInProgressAttempt(quiz) && quiz.instructions.length > 0;
@@ -179,12 +198,29 @@ export function StudentQuizDetailPage() {
       ? Math.max(quiz.attemptLimit - quiz.attemptsUsed, 0)
       : null;
   const continueQuiz = hasInProgressAttempt(quiz);
+  const bucket = classifyStudentQuiz(
+    {
+      id: quiz.id,
+      resultStatus: quiz.resultStatus,
+      status: quiz.status,
+      startAt: quiz.startAt,
+      dueAt: quiz.dueAt,
+      lastAttemptId: quiz.lastAttemptId,
+    },
+    new Date(),
+  );
+  const settingsOnly = bucket === "upcoming" || bucket === "expired";
   const canStart =
-    continueQuiz || attemptsRemaining === null || attemptsRemaining > 0;
+    !settingsOnly &&
+    (continueQuiz || attemptsRemaining === null || attemptsRemaining > 0);
   const requiresInstructionsAck =
     !continueQuiz && quiz.instructions.length > 0;
   const canClickStart =
     canStart && (!requiresInstructionsAck || instructionsAcknowledged);
+  const resultPath =
+    quiz.lastAttemptId != null
+      ? `/student/quizzes/${quiz.id}/attempts/${quiz.lastAttemptId}/result`
+      : null;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -286,7 +322,7 @@ export function StudentQuizDetailPage() {
                 <li key={instruction}>{instruction}</li>
               ))}
             </ul>
-            {requiresInstructionsAck ? (
+            {requiresInstructionsAck && canStart ? (
               <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800">
                 <input
                   type="checkbox"
@@ -306,21 +342,47 @@ export function StudentQuizDetailPage() {
         ) : null}
       </section>
 
-      <button
-        type="button"
-        disabled={startAttempt.isPending || !canClickStart}
-        onClick={() => void handleStartAttempt()}
-        className="w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
-      >
-        {startAttempt.isPending
-          ? continueQuiz
-            ? "Resuming..."
-            : "Starting attempt..."
-          : continueQuiz
-            ? "Continue quiz"
-            : "Start quiz"}
-      </button>
-      {requiresInstructionsAck && !instructionsAcknowledged ? (
+      {bucket === "upcoming" ? (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          This quiz is upcoming. You can review the settings now. Questions stay
+          hidden until it opens {formatDateTime(quiz.startAt)}.
+        </p>
+      ) : null}
+
+      {bucket === "expired" ? (
+        <p className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          This quiz has ended. You can review the settings, but questions are not
+          available.
+        </p>
+      ) : null}
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        {bucket === "attempted" && resultPath ? (
+          <Button className="flex-1" asChild>
+            <Link to={resultPath}>View last result</Link>
+          </Button>
+        ) : null}
+
+        {canStart ? (
+          <button
+            type="button"
+            disabled={startAttempt.isPending || !canClickStart}
+            onClick={() => void handleStartAttempt()}
+            className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-70"
+          >
+            {startAttempt.isPending
+              ? continueQuiz
+                ? "Resuming..."
+                : "Starting attempt..."
+              : continueQuiz
+                ? "Continue quiz"
+                : bucket === "attempted"
+                  ? "Start another attempt"
+                  : "Start quiz"}
+          </button>
+        ) : null}
+      </div>
+      {canStart && requiresInstructionsAck && !instructionsAcknowledged ? (
         <p className="mt-2 text-center text-xs text-slate-500">
           Acknowledge the instructions above to start.
         </p>

@@ -66,7 +66,13 @@ export function ParentChildResultPage() {
         backAriaLabel="Back to history"
       />
 
-      <QuizAttemptResultBody result={result} answerLabel="Answer" />
+      <QuizAttemptResultBody
+        result={result}
+        answerLabel="Answer"
+        attemptResultTo={(id) =>
+          `/parent/children/${studentId}/quizzes/${result.quizId}/attempts/${id}/result`
+        }
+      />
     </div>
   );
 }

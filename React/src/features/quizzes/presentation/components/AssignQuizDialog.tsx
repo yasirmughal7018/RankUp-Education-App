@@ -720,24 +720,26 @@ export function AssignQuizDialog({
                               className="mt-1"
                             />
                             <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-medium text-foreground">
-                                {student.fullName}
+                              <span className="flex items-center justify-between gap-3">
+                                <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                  {student.fullName}
+                                </span>
+                                {alreadyAssigned ? (
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    Already assigned
+                                  </span>
+                                ) : null}
+                                {expiredAssigned ? (
+                                  <span className="max-w-[55%] shrink-0 text-right text-xs font-medium text-[var(--status-pending-text)]">
+                                    Previous assignment expired — can reassign
+                                  </span>
+                                ) : null}
                               </span>
                               <span className="block text-xs text-muted-foreground">
                                 Grade {student.grade}
                                 {student.section ? `-${student.section}` : ""} ·{" "}
                                 {student.rollNumber || student.username}
                               </span>
-                              {alreadyAssigned ? (
-                                <span className="mt-1 block text-xs font-medium text-muted-foreground">
-                                  Already assigned
-                                </span>
-                              ) : null}
-                              {expiredAssigned ? (
-                                <span className="mt-1 block text-xs font-medium text-[var(--status-pending-text)]">
-                                  Previous assignment expired — can reassign
-                                </span>
-                              ) : null}
                             </span>
                           </label>
                         </li>

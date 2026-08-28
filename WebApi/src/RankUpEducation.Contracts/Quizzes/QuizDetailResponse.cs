@@ -28,4 +28,5 @@ public sealed record QuizDetailResponse(
     string ResultStatus,
     short? ResultPercent,
     short? QuestionsPerAttempt = null,
-    short? ResultAnnouncedPercent = null);
+    short? ResultAnnouncedPercent = null,
+    long? LastAttemptId = null);

@@ -75,7 +75,12 @@ export function StudentQuizResultPage() {
         }
       />
 
-      <QuizAttemptResultBody result={result} />
+      <QuizAttemptResultBody
+        result={result}
+        attemptResultTo={(id) =>
+          `/student/quizzes/${result.quizId}/attempts/${id}/result`
+        }
+      />
     </div>
   );
 }

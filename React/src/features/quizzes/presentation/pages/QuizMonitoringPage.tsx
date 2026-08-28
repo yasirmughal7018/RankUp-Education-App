@@ -7,6 +7,9 @@ import {
   formatIntegrityCounters,
   formatMonitorStatus,
   getMonitorStatusTone,
+  studentAttemptCheckPath,
+  attemptReviewActionLabel,
+  hasAttemptScoreAccess,
 } from "@/features/quizzes/domain/quizMonitorTypes";
 import { useQuizMonitoringQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
 import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
@@ -198,15 +201,28 @@ export function QuizMonitoringPage() {
                       })()}
                     </td>
                     <td className="px-4 py-3">
-                      {student.isReviewDone ? (
-                        <StatusBadge label="Reviewed" tone="success" />
-                      ) : student.status.toLowerCase().includes("pending") ? (
-                        <Link
-                          to="/quizzes/reviews/pending"
-                          className="text-sm font-medium text-brand-700 hover:text-brand-800"
-                        >
-                          Open reviews
-                        </Link>
+                      {student.lastAttemptId ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            to={studentAttemptCheckPath(
+                              monitoring.quizId,
+                              student.lastAttemptId,
+                              "monitoring",
+                            )}
+                            className={
+                              hasAttemptScoreAccess(student.canScore)
+                                ? "rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
+                                : "rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                            }
+                          >
+                            {attemptReviewActionLabel(
+                              hasAttemptScoreAccess(student.canScore),
+                            )}
+                          </Link>
+                          {student.isReviewDone ? (
+                            <StatusBadge label="Reviewed" tone="success" />
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="text-slate-500">—</span>
                       )}

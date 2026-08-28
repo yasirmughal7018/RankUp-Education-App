@@ -1,4 +1,5 @@
 import { ClipboardList } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
-import { getMonitorStatusTone } from "@/features/quizzes/domain/quizMonitorTypes";
+import {
+  getMonitorStatusTone,
+  isCheckableAttemptStatus,
+  studentAttemptCheckPath,
+  attemptReviewActionLabel,
+  hasAttemptScoreAccess,
+} from "@/features/quizzes/domain/quizMonitorTypes";
 import type {
   QuizAssignment,
   QuizAssignmentAttempt,
@@ -52,13 +59,20 @@ interface AttemptRecord {
   attempts: string;
   attemptedDate: string;
   result: string;
+  checkTo: string | null;
+  canScore: boolean;
 }
 
-function buildAttemptRecords(assignment: QuizAssignment): AttemptRecord[] {
+function buildAttemptRecords(
+  assignment: QuizAssignment,
+  quizId: number,
+): AttemptRecord[] {
   const assigned = assignment.assignedAt
     ? formatDateTime(assignment.assignedAt)
     : "—";
   const attempts = assignment.attempts ?? [];
+
+  const canScore = hasAttemptScoreAccess(assignment.canScore);
 
   if (attempts.length === 0) {
     return [
@@ -68,30 +82,39 @@ function buildAttemptRecords(assignment: QuizAssignment): AttemptRecord[] {
         attempts: `0 / ${assignment.allowedAttempts}`,
         attemptedDate: "—",
         result: assignment.resultStatus || "Not Attempted",
+        checkTo: null,
+        canScore,
       },
     ];
   }
 
   return attempts.map((attempt) => ({
-    key: String(attempt.attemptNumber),
+    key: String(attempt.attemptId || attempt.attemptNumber),
     assigned,
     attempts: `${attempt.attemptNumber} / ${assignment.allowedAttempts}`,
     attemptedDate: formatAttemptWhen(attempt),
     result: attempt.status || assignment.resultStatus,
+    checkTo:
+      attempt.attemptId > 0 && isCheckableAttemptStatus(attempt.status)
+        ? studentAttemptCheckPath(quizId, attempt.attemptId, "assigned")
+        : null,
+    canScore,
   }));
 }
 
 interface QuizAssignmentAttemptsDialogProps {
+  quizId: number;
   assignment: QuizAssignment | null;
   onOpenChange: (open: boolean) => void;
 }
 
 /** Nested attempt history for one assigned student. */
 export function QuizAssignmentAttemptsDialog({
+  quizId,
   assignment,
   onOpenChange,
 }: QuizAssignmentAttemptsDialogProps) {
-  const records = assignment ? buildAttemptRecords(assignment) : [];
+  const records = assignment ? buildAttemptRecords(assignment, quizId) : [];
   const studentLabel = assignment
     ? assignment.studentName?.trim() || String(assignment.studentId)
     : "";
@@ -135,6 +158,9 @@ export function QuizAssignmentAttemptsDialog({
                     <th className="px-4 py-3 text-left font-medium text-slate-600">
                       Result
                     </th>
+                    <th className="px-4 py-3 text-right font-medium text-slate-600">
+                      Review
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -154,6 +180,22 @@ export function QuizAssignmentAttemptsDialog({
                           label={record.result}
                           tone={attemptResultTone(record.result)}
                         />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {record.checkTo ? (
+                          <Button
+                            size="sm"
+                            variant={record.canScore ? "default" : "outline"}
+                            className="h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none"
+                            asChild
+                          >
+                            <Link to={record.checkTo} onClick={() => onOpenChange(false)}>
+                              {attemptReviewActionLabel(record.canScore)}
+                            </Link>
+                          </Button>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}

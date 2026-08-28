@@ -66,7 +66,7 @@ internal static class QuizQueryHelper
         QuizAssignment assignment,
         IReadOnlyDictionary<short, string> lookupNames,
         IReadOnlyDictionary<int, string> schoolNames,
-        (int AttemptCount, short? BestPercentage, DateTimeOffset? LastSubmittedAt) stats,
+        (int AttemptCount, short? BestPercentage, DateTimeOffset? LastSubmittedAt, long? LastAttemptId) stats,
         string? quizResultStatusName = null)
     {
         return new QuizListItem(
@@ -94,7 +94,8 @@ internal static class QuizQueryHelper
             stats.LastSubmittedAt,
             QuizResultStatusName: quizResultStatusName
                 ?? lookupNames.GetValueOrDefault(assignment.QuizResultStatus),
-            IsReviewDone: assignment.IsReviewDone);
+            IsReviewDone: assignment.IsReviewDone,
+            LastAttemptId: stats.LastAttemptId);
     }
 
     public static QuizListItem MapQuizWithoutAssignment(
@@ -180,7 +181,8 @@ internal static class QuizQueryHelper
         DateTimeOffset? lastSubmittedAt,
         short lifecycleStatusId,
         string lifecycleStatusName,
-        string? quizResultStatusName = null)
+        string? quizResultStatusName = null,
+        long? lastAttemptId = null)
     {
         return new QuizDetailItem(
             quiz.Id,
@@ -219,7 +221,8 @@ internal static class QuizQueryHelper
             lookupNames.GetValueOrDefault(quiz.ApprovalStatusId, "Pending"),
             quiz.RejectionReason,
             RandomQuestionCount: quiz.RandomQuestionCount,
-            IsReviewDone: assignment.IsReviewDone);
+            IsReviewDone: assignment.IsReviewDone,
+            LastAttemptId: lastAttemptId);
     }
 
     public static async Task<IReadOnlyDictionary<short, string>> LoadLifecycleNamesAsync(
@@ -300,7 +303,7 @@ internal static class QuizQueryHelper
             .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
     }
 
-    public static async Task<(int AttemptCount, short? BestPercentage, DateTimeOffset? LastSubmittedAt)> GetAttemptStatsAsync(
+    public static async Task<(int AttemptCount, short? BestPercentage, DateTimeOffset? LastSubmittedAt, long? LastAttemptId)> GetAttemptStatsAsync(
         RankUpDbContext dbContext,
         long quizId,
         long studentId,
@@ -308,18 +311,33 @@ internal static class QuizQueryHelper
     {
         var attempts = await dbContext.QuizAttempts.AsNoTracking()
             .Where(attempt => attempt.QuizId == quizId && attempt.StudentId == studentId)
-            .Select(attempt => new { attempt.Percentage, attempt.SubmittedDate })
+            .Select(attempt => new
+            {
+                attempt.Id,
+                attempt.Percentage,
+                attempt.SubmittedDate,
+                attempt.StatusId,
+            })
             .ToListAsync(cancellationToken);
 
         if (attempts.Count == 0)
         {
-            return (0, null, null);
+            return (0, null, null, null);
         }
+
+        var lastSubmittedAttempt = attempts
+            .Where(attempt =>
+                attempt.StatusId != LookupNames.QuizAttemptStatusIds.Started
+                && attempt.StatusId != LookupNames.QuizAttemptStatusIds.InProgress)
+            .OrderByDescending(attempt => attempt.SubmittedDate)
+            .ThenByDescending(attempt => attempt.Id)
+            .FirstOrDefault();
 
         return (
             attempts.Count,
             attempts.Max(attempt => (short?)attempt.Percentage),
-            attempts.Max(attempt => (DateTimeOffset?)attempt.SubmittedDate));
+            attempts.Max(attempt => (DateTimeOffset?)attempt.SubmittedDate),
+            lastSubmittedAttempt?.Id);
     }
 
     public static async Task<IReadOnlyDictionary<long, short>> LoadAutoGradedMarksByQuizAsync(

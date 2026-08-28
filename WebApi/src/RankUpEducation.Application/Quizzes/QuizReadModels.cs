@@ -32,7 +32,8 @@ public sealed record QuizListItem(
     string? ApprovalStatusName = null,
     bool HasSubmittedForReview = false,
     bool IsReviewDone = false,
-    short? AutoGradedMarks = null);
+    short? AutoGradedMarks = null,
+    long? LastAttemptId = null);
 
 /// <summary>Quiz awaiting school-admin approval (Pending or Rejected).</summary>
 public sealed record PendingQuizApprovalItem(
@@ -93,7 +94,8 @@ public sealed record QuizDetailItem(
     string CreatorDisplayName = "",
     DateTimeOffset? CreatedAt = null,
     bool IsReviewDone = false,
-    short? AutoGradedMarks = null);
+    short? AutoGradedMarks = null,
+    long? LastAttemptId = null);
 
 /// <summary>One quiz workflow event projected from app_approval.</summary>
 public sealed record QuizApprovalEventItem(
@@ -114,6 +116,7 @@ public sealed record StudentSchoolContext(
 
 /// <summary>Assignment row with student display name and attempt count for manage UI.</summary>
 public sealed record QuizAssignmentAttemptItem(
+    long AttemptId,
     short AttemptNumber,
     DateTimeOffset StartedAt,
     DateTimeOffset? SubmittedAt,
@@ -133,7 +136,8 @@ public sealed record QuizAssignmentListItem(
     int AttemptCount,
     long AssignedById,
     DateTimeOffset AssignedAt,
-    IReadOnlyList<QuizAssignmentAttemptItem> Attempts);
+    IReadOnlyList<QuizAssignmentAttemptItem> Attempts,
+    UserRole AssignedByRole = UserRole.Teacher);
 
 /// <summary>Question attached to a quiz, including options and fill-blank accepted answers for scoring.</summary>
 public sealed record QuizQuestionItem(
@@ -166,6 +170,14 @@ public sealed record QuizQuestionOptionItem(
     string OptionText,
     string? OptionImageUrl,
     bool IsCorrect);
+
+/// <summary>Lightweight submitted attempt for result history switching.</summary>
+public sealed record QuizAttemptSummaryItem(
+    long AttemptId,
+    short AttemptNumber,
+    string StatusName,
+    short Percentage,
+    DateTimeOffset SubmittedAt);
 
 /// <summary>Submitted attempt with per-question answers and aggregate score.</summary>
 public sealed record QuizAttemptDetailItem(
@@ -229,7 +241,9 @@ public sealed record QuizAssignmentBoardItem(
     int AttemptCount,
     bool IsReviewDone,
     string ResultStatusName,
-    DateTimeOffset? LastSubmittedAt);
+    DateTimeOffset? LastSubmittedAt,
+    long? LastAttemptId = null,
+    UserRole AssignedByRole = UserRole.Teacher);
 
 /// <summary>Per-student progress row for quiz monitoring dashboard.</summary>
 public sealed record QuizMonitoringStudentItem(
@@ -243,7 +257,9 @@ public sealed record QuizMonitoringStudentItem(
     DateTimeOffset StartDateTime,
     DateTimeOffset EndDateTime,
     short FocusLossCount = 0,
-    short ClipboardPasteCount = 0);
+    short ClipboardPasteCount = 0,
+    long? LastAttemptId = null,
+    UserRole AssignedByRole = UserRole.Teacher);
 
 /// <summary>Submitted attempt awaiting teacher/parent review of subjective answers.</summary>
 public sealed record PendingReviewItem(
@@ -255,7 +271,8 @@ public sealed record PendingReviewItem(
     short AttemptNumber,
     DateTimeOffset SubmittedAt,
     short TotalMarks,
-    short ObtainedMarks);
+    short ObtainedMarks,
+    UserRole AssignedByRole = UserRole.Teacher);
 
 /// <summary>Full review workspace for one submitted attempt.</summary>
 public sealed record AttemptReviewDetailItem(

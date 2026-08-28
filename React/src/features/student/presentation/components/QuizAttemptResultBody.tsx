@@ -1,4 +1,4 @@
-import { Award, Percent, Megaphone, MessageSquare, UserCheck, Sparkles } from "lucide-react";
+import { Award, Percent, Megaphone, MessageSquare, UserCheck, Sparkles, Hash } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AppCard } from "@/components/ui/app-card";
 import { AppSectionHeader } from "@/components/ui/app-section-header";
@@ -7,6 +7,7 @@ import { AppStatusBadge } from "@/components/ui/app-status-badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuizAnswerDisplay } from "@/features/quizzes/presentation/components/QuizAnswerDisplay";
+import { QuizOtherAttemptsControl } from "@/features/student/presentation/components/QuizOtherAttemptsDialog";
 import type { QuizAttemptResult } from "@/features/student/domain/studentQuizTypes";
 import { resolveQuizResultDisplay } from "@/features/student/domain/quizResultDisplay";
 import { formatMonitorStatus } from "@/features/quizzes/domain/quizMonitorTypes";
@@ -14,6 +15,7 @@ import { formatMonitorStatus } from "@/features/quizzes/domain/quizMonitorTypes"
 interface QuizAttemptResultBodyProps {
   result: QuizAttemptResult;
   answerLabel?: string;
+  attemptResultTo?: (attemptId: number) => string;
 }
 
 function ReviewNote({
@@ -93,8 +95,10 @@ function QuestionReviewNotes({
 export function QuizAttemptResultBody({
   result,
   answerLabel = "Your answer",
+  attemptResultTo,
 }: QuizAttemptResultBodyProps) {
   const display = resolveQuizResultDisplay(result);
+  const submittedCount = result.attempts?.length ?? 0;
   const scoreLabel =
     display.announcedPercent > 0 && display.announcedPercent < 100
       ? "Announced score"
@@ -102,7 +106,28 @@ export function QuizAttemptResultBody({
 
   return (
     <>
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <AppStatCard
+          title="Attempt"
+          value={`#${result.attemptNumber}`}
+          icon={Hash}
+          colorVariant="neutral"
+          description={
+            submittedCount > 0
+              ? `${result.attemptNumber} of ${submittedCount} submitted`
+              : "Submitted result"
+          }
+          action={
+            attemptResultTo ? (
+              <QuizOtherAttemptsControl
+                attempts={result.attempts}
+                currentAttemptId={result.attemptId}
+                showScore={display.showScore}
+                attemptResultTo={attemptResultTo}
+              />
+            ) : null
+          }
+        />
         <AppStatCard
           title={scoreLabel}
           value={

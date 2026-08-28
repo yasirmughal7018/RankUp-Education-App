@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, Flame, Activity } from "lucide-react";
 import { formatAnnouncedResultsLabel } from "@/features/student/domain/quizResultDisplay";
+import { resolveStudentQuizAction } from "@/features/student/domain/studentQuizTypes";
 import { useStudentQuizzesQuery } from "@/features/student/presentation/hooks/useStudentQuizQueries";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { AppStatCard } from "@/components/ui/app-stat-card";
@@ -105,6 +106,7 @@ export function StudentDashboardPage() {
               const announcedLabel = formatAnnouncedResultsLabel(
                 quiz.resultAnnouncedPercent,
               );
+              const action = resolveStudentQuizAction(quiz);
               return (
               <AppCard
                 key={quiz.id}
@@ -124,8 +126,8 @@ export function StudentDashboardPage() {
                   <AppStatusBadge
                     status={quiz.resultStatus ?? quiz.status ?? "Assigned"}
                   />
-                  <Button size="sm" asChild>
-                    <Link to={`/student/quizzes/${quiz.id}`}>Open</Link>
+                  <Button size="sm" variant={action.variant} asChild>
+                    <Link to={action.to}>{action.label}</Link>
                   </Button>
                 </div>
               </AppCard>
