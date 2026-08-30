@@ -471,9 +471,7 @@ public sealed class QuizService : IQuizService
             && assignment.QuizResultStatus is
                 LookupNames.QuizResultStatusIds.NotAttempted
                 or LookupNames.QuizResultStatusIds.Upcoming
-                or LookupNames.QuizResultStatusIds.Expired
-                or LookupNames.QuizResultStatusIds.Completed
-                or LookupNames.QuizResultStatusIds.UnderReview)
+                or LookupNames.QuizResultStatusIds.Expired)
         {
             var inProgressResultId = await _lookups.ResolveLookupIdAsync(
                 LookupNames.QuizResultStatus,
@@ -1084,7 +1082,10 @@ public sealed class QuizService : IQuizService
             reviewState?.IsReviewDone ?? false,
             now,
             result.SubmittedAt,
-            assignment?.EndDateTime,
+            QuizReviewDisplay.ResolveAttemptAssignmentEnd(
+                result.SubmittedAt,
+                assignment?.StartDateTime,
+                assignment?.EndDateTime),
             questionShares);
         var resultStatusOverride = QuizReviewDisplay.ResolveResultStatusOverride(
             visibility.AnnouncedPercent,

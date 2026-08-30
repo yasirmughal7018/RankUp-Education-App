@@ -17,6 +17,7 @@ import {
   areStudentQuizResultsReleased,
   classifyStudentQuiz,
   hasInProgressAttempt,
+  isStudentAttemptResultVisible,
 } from "@/features/student/domain/studentQuizTypes";
 import {
   useStartQuizAttemptMutation,
@@ -40,7 +41,7 @@ export function StudentQuizDetailPage() {
   const numericQuizId = Number(quizId);
   const [instructionsAcknowledged, setInstructionsAcknowledged] = useState(false);
   const [offlineStartError, setOfflineStartError] = useState<string | null>(null);
-  const [attemptsExpanded, setAttemptsExpanded] = useState(false);
+  const [attemptsExpanded, setAttemptsExpanded] = useState(true);
 
   const { data: quiz, isLoading, error } = useStudentQuizDetailQuery(numericQuizId);
   const startAttempt = useStartQuizAttemptMutation(numericQuizId);
@@ -224,6 +225,7 @@ export function StudentQuizDetailPage() {
   const settingsOnly = bucket === "upcoming" || bucket === "expired";
   const canStart =
     !settingsOnly &&
+    bucket !== "attempted" &&
     (continueQuiz || attemptsRemaining === null || attemptsRemaining > 0);
   const requiresInstructionsAck =
     !continueQuiz && quiz.instructions.length > 0;
@@ -233,6 +235,15 @@ export function StudentQuizDetailPage() {
     quiz.lastAttemptId != null
       ? `/student/quizzes/${quiz.id}/attempts/${quiz.lastAttemptId}/result`
       : null;
+  const lastCompletedAttempt =
+    quiz.attempts && quiz.attempts.length > 0
+      ? quiz.attempts.reduce((latest, attempt) =>
+          attempt.attemptNumber > latest.attemptNumber ? attempt : latest,
+        )
+      : null;
+  const lastAttemptResultVisible =
+    lastCompletedAttempt != null &&
+    isStudentAttemptResultVisible(lastCompletedAttempt, quiz, now);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -387,7 +398,9 @@ export function StudentQuizDetailPage() {
               <p className="mt-1 text-xs text-slate-500">
                 {attemptsExpanded
                   ? "Hide previous attempts"
-                  : "Show previous attempts"}
+                  : lastAttemptResultVisible && lastCompletedAttempt
+                    ? `Last result ${Math.round(lastCompletedAttempt.percentage)}% · Show previous attempts`
+                    : "Show previous attempts"}
               </p>
             </div>
             <ChevronDown
@@ -401,7 +414,11 @@ export function StudentQuizDetailPage() {
             <ul id="student-quiz-attempts" className="mt-4 space-y-2">
               {quiz.attempts.map((attempt) => {
                 const resultTo = `/student/quizzes/${quiz.id}/attempts/${attempt.attemptId}/result`;
-                const showScore = resultsReleased && quiz.resultPercent != null;
+                const resultVisible = isStudentAttemptResultVisible(
+                  attempt,
+                  quiz,
+                  now,
+                );
                 const rowClassName =
                   "flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3";
                 const body = (
@@ -409,10 +426,15 @@ export function StudentQuizDetailPage() {
                     <div className="min-w-0">
                       <p className="font-medium text-slate-900">
                         Attempt #{attempt.attemptNumber}
+                        {resultVisible ? (
+                          <span className="ml-2 font-semibold tabular-nums text-slate-700">
+                            {Math.round(attempt.percentage)}%
+                          </span>
+                        ) : null}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500">
                         {formatDateTime(attempt.submittedAt)}
-                        {showScore ? ` · ${attempt.percentage}%` : ""}
+                        {resultVisible ? " · View result" : ""}
                       </p>
                     </div>
                     <StatusBadge
@@ -423,7 +445,7 @@ export function StudentQuizDetailPage() {
                 );
                 return (
                   <li key={attempt.attemptId}>
-                    {resultsReleased ? (
+                    {resultVisible ? (
                       <Link
                         to={resultTo}
                         className={`${rowClassName} transition hover:border-brand-300 hover:bg-slate-50`}
@@ -461,9 +483,7 @@ export function StudentQuizDetailPage() {
                 : "Starting attempt..."
               : continueQuiz
                 ? "Continue quiz"
-                : bucket === "attempted"
-                  ? "Start another attempt"
-                  : "Start quiz"}
+                : "Start quiz"}
           </button>
         ) : null}
       </div>

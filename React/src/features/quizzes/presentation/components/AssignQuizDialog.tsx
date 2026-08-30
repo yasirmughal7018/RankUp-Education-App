@@ -20,7 +20,6 @@ import {
 import type { AssignQuizInput, QuizAssignment } from "@/features/quizzes/domain/quizTypes";
 import {
   assignModesForRole,
-  canReassignQuizAssignment,
   defaultAssignModeForRole,
   isActiveQuizAssignment,
 } from "@/features/quizzes/domain/quizTypes";
@@ -36,7 +35,7 @@ interface AssignQuizDialogProps {
   campusId?: number | null;
   /** When Surprise, defaults to open-now / short window. */
   quizType?: string;
-  /** Existing per-student assignments — used to lock active rows and allow expired reassign. */
+  /** Existing per-student assignments — students with a row cannot be selected again. */
   existingAssignments?: QuizAssignment[];
   onClose: () => void;
   onSubmit: (input: AssignQuizInput) => Promise<void>;
@@ -674,10 +673,6 @@ export function AssignQuizDialog({
                       );
                       const alreadyAssigned =
                         existing != null && isActiveQuizAssignment(existing);
-                      const canReassign =
-                        existing != null && canReassignQuizAssignment(existing);
-                      const previouslyAttempted =
-                        canReassign && (existing?.attemptCount ?? 0) > 0;
                       return (
                         <li key={student.studentId}>
                           <label
@@ -702,13 +697,6 @@ export function AssignQuizDialog({
                                 {alreadyAssigned ? (
                                   <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                     Already assigned
-                                  </span>
-                                ) : null}
-                                {canReassign ? (
-                                  <span className="max-w-[55%] shrink-0 text-right text-xs font-medium text-[var(--status-pending-text)]">
-                                    {previouslyAttempted
-                                      ? "Previously attempted — can reassign"
-                                      : "Already assigned — can reassign"}
                                   </span>
                                 ) : null}
                               </span>

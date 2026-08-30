@@ -92,11 +92,11 @@ const quizAssignmentFields = [
   ["StudentGroupId", "Optional. Set when the row was created via a group expand; still one row per student."],
   ["StartDateTime", "Availability window start for this student."],
   ["EndDateTime", "Availability window end; must be after StartDateTime."],
-  ["AllowedAttempts", "Attempt quota for this assignment. Starts at 1 (quiz definition has no Allowed Attempts field). Increased by Allow Retry or reassign."],
+  ["AllowedAttempts", "Attempt quota for this assignment. Always 1. Quiz definition has no Allowed Attempts field. Retry and reassign do not increase it."],
   ["QuizResultStatus", "Per-assignment result lookup (see meanings below). Initial value is typically Not Attempted (24) or Up Coming (25)."],
-  ["IsReviewDone", "True after teacher/parent finalize-review for this student’s subjective answers. Reset to false on Allow Retry."],
+  ["IsReviewDone", "True after teacher/parent finalize-review for this student’s subjective answers."],
   ["CreatedDate", "When the assignment row was created."],
-  ["ModifiedDate", "Updated on review finalize / retry grant."],
+  ["ModifiedDate", "Updated on review finalize or result-status change."],
 ];
 
 const assignmentResultMeanings = [
@@ -132,7 +132,7 @@ const assignmentStatusConflicts = [
 ];
 
 const quizTypes = [
-  ["1", "Practice", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin / Parent", "Learning-oriented school quiz. Admin approval before assign. One allowed attempt (same as other types); extra attempts only via Allow retry / reassign. Optional time; answers may show after submit (type-specific UX still soft)."],
+  ["1", "Practice", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin / Parent", "Learning-oriented school quiz. Admin approval before assign. One allowed attempt (same as other types). Optional time; answers may show after submit (type-specific UX still soft)."],
   ["2", "Assessment", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin / Parent", "Assigned assessment with due window; may have limited time; visible to selected audience after assign. Admin approval before assign."],
   ["3", "Competition", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin / Parent", "Class/school/inter-school competition intent: fixed schedule, strict attempts. Device lock (all quiz types) + FocusLoss≥5 / Paste≥3 draft lockout (all types). Admin approval before assign."],
   ["4", "Surprise", "Teacher / Coordinator / SchoolAdmin / CampusAdmin / PortalAdmin / Parent", "Hidden from students until StartDateTime (no advance notice); availability window ≤24h; StartAt ≤ now+24h; ≤1 attempt. Assign notifications deferred until the window opens. Admin approval before assign. Broader PortalAdmin/AI-only authorship is future policy."],
@@ -184,7 +184,7 @@ const permissions = [
   ["Reject quizzes (in scope)", "Yes", "Yes (own school)", "Yes (own campus)", "No", "No", "No", "No"],
   ["Publish (lifecycle → Published)", "Yes (final authority)", "No", "No", "No", "No", "No", "No"],
   ["Delete / archive / unarchive", "Yes (all). Only role that may archive Published or Assigned", "Delete own Draft only — cannot archive Published/Assigned", "Delete own Draft only — cannot archive Published/Assigned", "Delete own Draft only — cannot archive Published/Assigned", "Delete own Draft only — cannot archive Published/Assigned", "Delete own Draft only — cannot archive Published/Assigned", "No"],
-  ["Assign / cancel / allow-retry / monitor / review", "Yes", "School-scoped assign (own school quizzes)", "Campus-scoped assign (own campus quizzes)*", "Shared catalog → own roster (Published school-type)", "Shared catalog → own roster (Published school-type)", "Shared catalog → linked children", "No"],
+  ["Assign / cancel / monitor / review", "Yes", "School-scoped assign (own school quizzes)", "Campus-scoped assign (own campus quizzes)*", "Shared catalog → own roster (Published school-type)", "Shared catalog → own roster (Published school-type)", "Shared catalog → linked children", "No"],
   ["Approve / reject Parent-created quizzes", "Yes (only)", "No", "No", "No", "No", "No (Parent creators)", "No"],
   ["Review submitted drafts (Draft tile → /quizzes/:id)", "Yes (Teacher/Coordinator/CampusAdmin Pending + SchoolApproved + SchoolAdmin/school-type Pending)", "Teacher/Coordinator/CampusAdmin submitted in school", "Teacher/Coordinator submitted in campus", "No", "No", "No", "No"],
   ["List / view Draft (unpublished) quizzes", "Own WIP; others only after submit for approval", "Own drafts + Teacher/Coordinator submitted in school", "Own drafts + Teacher/Coordinator submitted in campus", "Own", "Own", "Own (Parent)", "No"],
@@ -201,7 +201,7 @@ const coordinatorRoleSummary = [
   "Submit for approval: yes (lifecycle stays Draft). Cannot approve or publish own or others’ quizzes.",
   "Approval path: same as Teacher-created — own SchoolAdmin or CampusAdmin may school-approve (→ SchoolApproved); PortalAdmin approves (→ Approved) and publishes (→ Published).",
   "Assign (Published only): may assign any published school-type quiz from the shared catalog to students in the caller’s roster (one, selected, group, allInGrade, allInSection). Not school-wide, multi-school, or public catalog.",
-  "Monitor / review / allow-retry: roster students on viewable (catalog or owned) quizzes. Cancel-upcoming still requires quiz ownership.",
+  "Monitor / review: roster students on viewable (catalog or owned) quizzes. Cancel-upcoming still requires quiz ownership.",
   "Catalog list: all published school-type quizzes (any school, any creator) plus own drafts — same 9-quiz example as SchoolAdmin. Optional Mine only filter on web.",
   "Cannot access the quiz edit-request queue (SchoolAdmin, CampusAdmin, PortalAdmin only).",
   "Delete: own Draft only. Cannot archive Published or Assigned quizzes — PortalAdmin only.",
@@ -359,7 +359,7 @@ const timeManagementAppBehaviors = [
   ["Warn when time is low", "Covered", "At ≤5 min: dismissible banner. At ≤60s: urgent (red) countdown chip, modal dialog, and short alert (web beep; mobile system sound + haptic). Per-question timer turns amber at ≤10s. Autosave: 1.2s debounce + 15s interval + Save now (web + mobile)."],
   ["Auto-submit on expiry", "Covered", "Client submits with IsAutoSubmit=true → AutoSubmitted (83). Server enforces TimeLimitMinutes with grace for auto-submit path."],
   ["Save answers before auto-submission", "Covered", "Autosave flush runs before submit/auto-submit (web + mobile)."],
-  ["Prevent reopening after expiry unless allowed", "Covered", "Assignment window expiry blocks/expires attempts. Allow Retry grants ExtraAttempts after quota is used (review finalize not required). Reassign can also open a new window. Prior attempts stay."],
+  ["Prevent reopening after expiry unless allowed", "Covered", "Assignment window expiry blocks/expires attempts. There is no Allow Retry and no reassign of the same quiz. One attempt only."],
 ];
 
 const timeManagementGaps = [];
@@ -368,8 +368,8 @@ const attemptRules = [
   "Student role only for start / draft / submit.",
   "Assignment required; quiz IsActive; now within [StartDateTime, EndDateTime].",
   "If an InProgress attempt exists → resume (no new attempt).",
-  "New start blocked when ExistingAttemptCount ≥ AllowedAttempts.",
-  "Reassign after the window ends does not delete or rewrite prior attempts. The next start inserts a new QuizAttempt. Student quiz detail returns attempts[] (number, status, result, submitted time).",
+  "New start blocked when ExistingAttemptCount ≥ AllowedAttempts (always 1).",
+  "Assign skips students who already have a QuizAssignment row. Cancel of future unused rows deletes that row so the student can be assigned later. Historical QuizAttempt rows stay.",
   "DeviceId required (non-empty).",
   "Time limit returned to client; UI countdown + auto-submit. Server enforces TimeLimitMinutes (with grace for IsAutoSubmit) and assignment EndDateTime.",
   "On start: create QuizAttempt and snapshot QuizAttemptQuestion rows (text, marks, options; shuffled order when ShuffleQuestions is on).",
@@ -475,7 +475,7 @@ const partialCreditExamples = [
 const reviewRules = [
   "Pending reviews: owned quizzes with IsReviewRequired, assignment not review-done, attempt Submitted/AutoSubmitted.",
   "RequiresReview per question: Descriptive/Essay OR File Upload OR (Fill + AllowTeacherReview + submitted text that is not a full accepted-answer match).",
-  "Mark answers: awarded marks in [0, MaxMarks]. After owner Completed (IsReviewDone), mark/feedback updates are rejected and the review workspace is read-only until Allow Retry.",
+  "Mark answers: awarded marks in [0, MaxMarks]. After owner Completed (IsReviewDone), mark/feedback updates are rejected and the review workspace is read-only.",
   "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true. Completed results cannot be edited again on the review page.",
   "Quiz completion = later of student SubmittedAt and assignment EndDateTime. Auto-graded questions (known correct answer already on the item: MCQ, T/F, multi-select, matching, ordering, media, fill-blank) announce when that moment is reached. Early submitters do not see answers while the window is still open.",
   "Teacher-review questions (Descriptive, File Upload) stay pending until the owner marks the attempt Completed (IsReviewDone). Full student status Completed also waits for that owner action.",
@@ -499,12 +499,11 @@ const apiMap = [
   ["GET/POST /api/parents/me/groups", "Parent-only child groups (list/create). Used by My children and Parent assign mode=group."],
   ["PUT/DELETE /api/parents/me/groups/{groupId}", "Parent update or deactivate own group."],
   ["POST/DELETE /api/parents/me/groups/{groupId}/members", "Add/remove linked children only."],
-  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published (legacy Assigned still allowed). Not Draft. Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle stays Published. Parent mode=group uses a parent-owned group id. Reassign is allowed after the window ends, or while it is open if the student already attempted. Prior attempts stay."],
+  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published (legacy Assigned still allowed). Not Draft. Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments for students who do not already have a row; existing students are skipped. Lifecycle stays Published. Parent mode=group uses a parent-owned group id."],
   ["POST /api/quizzes/{id}/cancel", "Remove upcoming assignments; quiz stays Published."],
   ["POST /api/quizzes/{id}/archive", "PortalAdmin only when lifecycle is Published or Assigned (any student/child assignment). Other roles: own Draft delete only. No assignments → hard delete; else Archived + Inactive."],
   ["POST /api/quizzes/{id}/unarchive", "PortalAdmin only. Restore Published."],
   ["POST /api/quizzes/{id}/duplicate", "Deep-copy to new Draft + Pending."],
-  ["POST .../assignments/{id}/allow-retry", "After the student has at least one attempt. ExtraAttempts (+1 default). Does not require IsReviewDone and does not overwrite prior attempts."],
   ["GET /api/questions/{id}/quizzes", "Question-manage: quizzes currently using this bank question (same CanView as question detail)."],
   ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove; TimeLimitMinutes recalculated from EstimatedTimeSeconds."],
   ["POST .../attempts", "Student start/resume; instructions ack gate when Instructions set."],
@@ -570,7 +569,7 @@ const scenarios = [
     "QZ-08",
     "Attempt limit",
     "Student already has AllowedAttempts completed attempts and tries again.",
-    "Start blocked until owner Allow Retry after review (ExtraAttempts).",
+    "Start blocked. There is no Allow Retry and no reassign of the same quiz.",
   ],
   [
     "QZ-09",
@@ -718,15 +717,15 @@ const scenarios = [
   ],
   [
     "QZ-31",
-    "Reassign after an attempted quiz keeps old results",
-    "Student submits quiz 36. After the due date a parent or teacher assigns the same quiz again. Student opens quiz details and starts.",
-    "Existing QuizAttempt rows and scores stay. Assignment AllowedAttempts = old count + 1. QuizResultStatus resets to Upcoming or Not Attempted. Student list shows Upcoming or Open Now with an empty Result column. Start creates attempt #2. Detail shows attempt count and each prior result.",
+    "Already-assigned students cannot be assigned again",
+    "Student is already on quiz 36. Teacher or parent opens Assign and selects that student (or a mix that includes them).",
+    "The picker shows Already assigned and the checkbox is locked. Assign skips existing rows. If every selected student already has a row, the API returns that they already have assignments. Existing QuizAttempt rows stay unchanged.",
   ],
   [
     "QZ-32",
-    "Reassign or Allow retry without waiting for Completed",
-    "Student submitted quiz 36 (Under Review or Completed). Window is still open. Parent or teacher opens Assign or Assigned people.",
-    "Student is selectable for reassign. Allow retry is shown after any attempt. Old attempt #1 stays; student can start attempt #2.",
+    "No retry after the first attempt",
+    "Student submitted quiz 36. Teacher or parent opens Assigned people. Student opens the quiz while the window is still open.",
+    "Allow retry is not shown. The student cannot start a second attempt. View result stays hidden until the due date.",
   ],
 ];
 
@@ -769,8 +768,8 @@ const checklist = [
   "Scoring: on submit and when the assignment window ends (overdue InProgress auto-submit from last draft). Single/TF all-or-nothing; Multiple Choice / Matching / Ordering proportional floored marks; Fill full accepted-answer match only; Essay never auto-marked.",
     "After submit, auto-graded results announce when the assignment due date ends. Teacher-review questions and full Completed wait until the owner clicks Completed. Show resultAnnouncedPercent with the quiz. View result is hidden until the due date.",
   "ApplyCreateDefaults: AllowedAttempts always 1; other nullables use type defaults; bools never OR’d.",
-  "Create, edit, settings, and assign do not collect Allowed Attempts. Each quiz allows one attempt. Extra attempts come only from Allow retry or reassign on the assignment.",
-  "Allow retry after at least one attempt (no IsReviewDone or quota-used requirement). Extra attempts += 1 on the assignment.",
+  "Create, edit, settings, and assign do not collect Allowed Attempts. Each quiz allows one attempt. Retry and reassign of the same quiz are not supported.",
+  "Assign skips students who already have a QuizAssignment row. Cancel of future unused assignments deletes that row so the student can be assigned later.",
   "Cancel removes only future assignments and restores Assigned or Published (never Cancelled lifecycle).",
   "Archive of Published or Assigned quizzes (including any student/child assignment) is PortalAdmin only. Other roles cannot archive those quizzes. No assignments → hard delete; has assignments → Archived + Inactive. Draft must be deleted by the owner.",
   "Duplicate creates Draft + Pending copy with questions.",
@@ -953,12 +952,9 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   ${htmlTable(["Mode", "Who", "Audience"], assignmentModes)}
   ${htmlList([
     "Prerequisites: Lifecycle Published or Assigned (not Draft); Approval gates met; not Archived; ≥1 question.",
-    "EndAt > StartAt. Quiz and assign forms do not collect Allowed Attempts — each quiz allows one attempt. Assignment quota starts at 1.",
-    "Parent, teacher, or any assigner may reassign any existing student. The assign picker does not lock students. Prior attempts stay.",
-    "Reassign of a student who already attempted does not overwrite attempt rows or scores. AllowedAttempts becomes existing attempt count + 1; IsReviewDone and stored attempt results stay. QuizResultStatus resets to Up Coming (StartAt > now) or Not Attempted (window open), same as a new assign. Student /student/quizzes shows Upcoming or Open Now — not Attempted — while the new window is unused. The Result column stays empty like a new assignment until the student submits in this window and the due date ends. The next start creates a new QuizAttempt.",
-    "Unused existing rows reopen the same row with the new window.",
-    "Cancel: hard-delete future assignments only; restore lifecycle Assigned or Published (never Cancelled).",
-    "Allow retry: available to any assigner after the student has at least one attempt. Does not require IsReviewDone or a used-up quota. ExtraAttempts += 1 (default). Does not reset IsReviewDone or overwrite prior attempts. Archived blocked.",
+    "EndAt > StartAt. Quiz and assign forms do not collect Allowed Attempts — each quiz allows one attempt. Assignment quota is always 1.",
+    "Students who already have a QuizAssignment row are locked in the assign picker and skipped by the API. There is no reassign of the same quiz.",
+    "Cancel: hard-delete future unused assignments only; restore lifecycle Assigned or Published (never Cancelled). After cancel, that student may be assigned again as a new row.",
     "Parent group assign: groups come from /parents/me/groups (created on My children). Dropdown by group name; members must be linked children.",
   ])}
   <h3>QuizAssignment table</h3>
@@ -968,7 +964,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   ${htmlTable(["Status", "Meaning"], assignmentResultMeanings)}
   <h3>Assignment corrections vs older drafts</h3>
   ${htmlTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts)}
-  <div class="note"><strong>Status progression:</strong> assign writes Up Coming (25) when StartAt &gt; now, else Not Attempted (24). Reassign of an attempted student resets to the same window status. Start → In Progress (23). Submit → Under Review (22) or Completed (21). ExpireOverdueUnattemptedAsync promotes Upcoming → Not Attempted (including reassigned rows that already have prior attempts) and expires past-window unattempted rows. Overdue InProgress attempts are auto-evaluated and AutoSubmitted. Student list status follows the current window (Upcoming / Open Now) when attempts remain; prior attempts stay in the Result column.</div>
+  <div class="note"><strong>Status progression:</strong> assign writes Up Coming (25) when StartAt &gt; now, else Not Attempted (24). Start → In Progress (23). Submit → Under Review (22) or Completed (21). ExpireOverdueUnattemptedAsync promotes Upcoming → Not Attempted and expires past-window unattempted rows. Overdue InProgress attempts are auto-evaluated and AutoSubmitted. Student list is Upcoming / Open Now while unused, then Attempted after submit. View result is only after the due date.</div>
 
   <h2>9. Student attempt flow</h2>
   <h3>Step-by-step student journey</h3>
@@ -1025,7 +1021,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
     "Instructions required; DB max 1000. Non-empty instructions require InstructionsAcknowledged on start.",
     "Class / Subject / Topic / Difficulty required on create (UI); difficulty Easy/Medium/Hard (2001–2003).",
     "TimeLimitMinutes optional; derived from Σ EstimatedTimeSeconds on question changes (no manual create/edit field); server-enforced on submit.",
-    "Quiz AllowedAttempts is always 1 on create/update/duplicate. Extra attempts exist only on the assignment via Allow retry or reassign.",
+    "Quiz AllowedAttempts is always 1 on create/update/duplicate. Assignment and audience quotas are clamped to 1. There is no Allow retry or reassign.",
     "Question marks > 0; publish/assign/duplicate need ≥1 question; no hard max count.",
     "Submitted text DB max 1000.",
     "ApplyCreateDefaults: AllowedAttempts is always 1; navigation nullables fall back to type defaults; ReviewDisplayMode always Full; TimeLimitMinutes stays null until questions recalculate totals; ShuffleQuestions / ShuffleOptions / IsReviewRequired from client are never OR’d with defaults.",
@@ -1049,7 +1045,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
     "/parent/quiz-dashboard, children history/result — parent flows.",
     "/parent/children — create and manage parent child groups for assign mode=group.",
     "/reports — Teacher / Coordinator (own) / SchoolAdmin (school) / PortalAdmin (all) analytics.",
-    "Mobile /quizzes (Teacher/Coordinator/Parent) — create (Parent → school-type), manage, submit for approval, assign (campus or linked audiences), duplicate/cancel/allow-retry, pending reviews, mark + finalize. Archive of Published/Assigned is PortalAdmin only (hidden for other roles).",
+    "Mobile /quizzes (Teacher/Coordinator/Parent) — create (Parent → school-type), manage, submit for approval, assign (campus or linked audiences), duplicate/cancel, pending reviews, mark + finalize. Archive of Published/Assigned is PortalAdmin only (hidden for other roles).",
     "Mobile /quizzes/approvals — SchoolAdmin/PortalAdmin pending quiz approvals.",
     "Mobile /quizzes/monitoring/:quizId — assignment progress board.",
     "Mobile /reports (Student) + Quizzes history — GET /reports/students/{id}/quiz-history (History self).",
@@ -1241,9 +1237,8 @@ const docChildren = [
   docTable(["Mode", "Who", "Audience"], assignmentModes),
   ...[
     "Lifecycle Published or Assigned required; Pending Approval blocked; teacher quizzes need Approved.",
-    "EndAt > StartAt. Assignment AllowedAttempts starts at 1 (no form field).",
-    "Cancel removes future assignments only; restore Assigned or Published.",
-    "Allow-retry after finalize adds ExtraAttempts.",
+    "EndAt > StartAt. Assignment AllowedAttempts is always 1 (no form field). Existing students are skipped; the picker locks them.",
+    "Cancel removes future unused assignments only; restore Assigned or Published.",
   ].map(docBullet),
   docHeading("QuizAssignment table", HeadingLevel.HEADING_2),
   docParagraph(
@@ -1255,7 +1250,7 @@ const docChildren = [
   docHeading("Assignment corrections vs older drafts", HeadingLevel.HEADING_2),
   docTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts),
   docParagraph(
-    "Status progression: assign writes Up Coming when StartAt > now else Not Attempted; reassign of an attempted student resets to that same window status; start → In Progress; submit → Under Review or Completed; ExpireOverdue promotes Upcoming (including prior attempts) and expires past-window unattempted rows; overdue InProgress is auto-evaluated and AutoSubmitted. Student list follows the current window (Upcoming / Open Now) when attempts remain.",
+    "Status progression: assign writes Up Coming when StartAt > now else Not Attempted; start → In Progress; submit → Under Review or Completed; ExpireOverdue promotes Upcoming and expires past-window unattempted rows; overdue InProgress is auto-evaluated and AutoSubmitted. Student list is Upcoming / Open Now while unused, then Attempted after submit.",
     { run: { bold: true, color: "92400E" } },
   ),
 
@@ -1339,7 +1334,7 @@ const docChildren = [
     "/parent/quiz-dashboard and child history/result.",
     "/parent/children — create and manage parent child groups for assign mode=group.",
     "/reports for Teacher/Coordinator (own) / SchoolAdmin / PortalAdmin analytics.",
-    "Mobile /quizzes (Teacher/Coordinator/Parent): create, manage, submit for approval, campus or linked assign modes, duplicate/cancel/allow-retry, pending reviews, mark + finalize. Archive of Published/Assigned is PortalAdmin only.",
+    "Mobile /quizzes (Teacher/Coordinator/Parent): create, manage, submit for approval, campus or linked assign modes, duplicate/cancel, pending reviews, mark + finalize. Archive of Published/Assigned is PortalAdmin only.",
     "Mobile /quizzes/approvals and /quizzes/monitoring/:quizId for admin approval and monitoring.",
     "Mobile /reports (Student) + Quizzes history: student self quiz history.",
   ].map(docBullet),

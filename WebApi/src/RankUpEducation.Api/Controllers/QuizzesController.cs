@@ -403,18 +403,6 @@ public sealed class QuizzesController : ControllerBase
         return Ok(ApiResponse<UnarchiveQuizResponse>.Ok(response, "Quiz unarchived."));
     }
 
-    /// <summary>Grants additional attempts after review is finalized.</summary>
-    [HttpPost("{quizId:long}/assignments/{assignmentId:long}/allow-retry")]
-    public async Task<ActionResult<ApiResponse<AllowRetryResponse>>> AllowRetryAsync(
-        long quizId,
-        long assignmentId,
-        [FromBody] AllowRetryRequest request,
-        CancellationToken cancellationToken)
-    {
-        var response = await _quizAssignService.AllowRetryAsync(quizId, assignmentId, request, cancellationToken);
-        return Ok(ApiResponse<AllowRetryResponse>.Ok(response, "Retry allowed."));
-    }
-
     /// <summary>School, campus, or portal admin approves a teacher quiz.</summary>
     [HttpPost("{quizId:long}/approve")]
     [Authorize(Roles = "PortalAdmin,SchoolAdmin,CampusAdmin")]

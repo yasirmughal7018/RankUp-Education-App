@@ -314,31 +314,6 @@ export function useCancelQuizAssignmentsMutation(quizId: number) {
   });
 }
 
-/** Grant extra attempts on assignment. */
-export function useAllowRetryMutation(quizId: number) {
-  const invalidate = useInvalidateQuizDetail(quizId);
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      assignmentId,
-      extraAttempts = 1,
-    }: {
-      assignmentId: number;
-      extraAttempts?: number;
-    }) => quizApi.allowRetry(quizId, assignmentId, extraAttempts),
-    onSuccess: () => {
-      invalidate();
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.quizMonitoring(quizId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.assignmentBoard(),
-      });
-    },
-  });
-}
-
 /** Update quiz metadata. */
 export function useUpdateQuizMutation(quizId: number) {
   const invalidate = useInvalidateQuizDetail(quizId);

@@ -82,6 +82,9 @@ public sealed class QuizAssignmentConfiguration : IEntityTypeConfiguration<QuizA
         builder.Property(assignment => assignment.CreatedDate).HasColumnName("created_date");
         builder.Property(assignment => assignment.ModifiedDate).HasColumnName("modified_date");
         builder.HasIndex(assignment => assignment.StudentId).HasDatabaseName("idx_quiz_assignments_student");
+        builder.HasIndex(assignment => new { assignment.QuizId, assignment.StudentId })
+            .IsUnique()
+            .HasDatabaseName("ux_quiz_assignments_quiz_student");
     }
 }
 

@@ -600,7 +600,6 @@ class TeacherQuizAssignedView extends StatelessWidget {
     required this.onBack,
     required this.onRefresh,
     required this.assignedPeopleLabel,
-    this.onAllowRetry,
     super.key,
   });
 
@@ -608,7 +607,6 @@ class TeacherQuizAssignedView extends StatelessWidget {
   final VoidCallback onBack;
   final Future<void> Function() onRefresh;
   final String assignedPeopleLabel;
-  final ValueChanged<String>? onAllowRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -708,13 +706,6 @@ class TeacherQuizAssignedView extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (_canAllowQuizRetry(assignment) && onAllowRetry != null)
-                        TextButton(
-                          onPressed: state.isSaving
-                              ? null
-                              : () => onAllowRetry!(assignment.assignmentId),
-                          child: const Text('Allow retry'),
-                        ),
                     ],
                   ),
                 ),
@@ -1262,13 +1253,7 @@ Future<QuestionSummaryModel?> showAttachBankQuestionDialog(
   );
 }
 
-bool _canReassignQuizAssignment(QuizAssignmentItem _) => true;
-
-bool _canAllowQuizRetry(QuizAssignmentItem assignment) {
-  return assignment.attemptCount > 0;
-}
-
-bool _isActiveQuizAssignment(QuizAssignmentItem _) => false;
+bool _isActiveQuizAssignment(QuizAssignmentItem _) => true;
 
 class _AssignSheet extends ConsumerStatefulWidget {
   const _AssignSheet({
@@ -1518,21 +1503,13 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                           final assignment = _assignmentFor(student.studentId);
                           final alreadyAssigned = assignment != null &&
                               _isActiveQuizAssignment(assignment);
-                          final canReassign = assignment != null &&
-                              _canReassignQuizAssignment(assignment);
-                          final previouslyAttempted =
-                              canReassign && assignment.attemptCount > 0;
                           return CheckboxListTile(
                             value: selected,
                             title: Text(student.fullName),
                             subtitle: Text(
                               alreadyAssigned
                                   ? 'Already assigned'
-                                  : canReassign
-                                      ? previouslyAttempted
-                                          ? 'Previously attempted — can reassign\nGrade ${student.grade} · ${student.section}'
-                                          : 'Already assigned — can reassign\nGrade ${student.grade} · ${student.section}'
-                                      : 'Grade ${student.grade} · ${student.section}',
+                                  : 'Grade ${student.grade} · ${student.section}',
                             ),
                             enabled: !alreadyAssigned,
                             onChanged: alreadyAssigned

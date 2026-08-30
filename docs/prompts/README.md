@@ -14,5 +14,6 @@ Each implementation / spec prompt is stored as its own file. Casual chat follow-
 | 2026-08-30 | [2026-08-30-quiz-one-allowed-attempt.md](./2026-08-30-quiz-one-allowed-attempt.md) | Quiz definition always allows one attempt; no Allowed Attempts field |
 | 2026-08-30 | [2026-08-30-reassign-student-window-status.md](./2026-08-30-reassign-student-window-status.md) | After reassign, student list follows the new window (Upcoming / Open Now) |
 | 2026-08-30 | [2026-08-30-view-result-after-due-date.md](./2026-08-30-view-result-after-due-date.md) | View result only after due date; View quiz while results are pending |
+| 2026-08-30 | [2026-08-30-remove-reassign-retry.md](./2026-08-30-remove-reassign-retry.md) | Remove reattempt, multiple attempts, and reassign of the same quiz |
 
 New spec prompts go here as `YYYY-MM-DD-short-kebab-slug.md`.

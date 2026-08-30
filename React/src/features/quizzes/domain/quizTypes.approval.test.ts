@@ -230,52 +230,52 @@ describe("expired assignment reassign", () => {
     ).toBe(true);
   });
 
-  it("never locks a student in the assign picker", () => {
+  it("locks every existing assignment in the assign picker", () => {
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Not Attempted", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Completed", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Expired", endAt: "2025-12-01T00:00:00Z" },
         now,
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("allows reassign for any existing assignment", () => {
+  it("does not allow reassign of an existing assignment", () => {
     expect(
       canReassignQuizAssignment(
         { resultStatus: "Completed", endAt: "2025-12-01T00:00:00Z" },
         now,
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canReassignQuizAssignment(
         { resultStatus: "Not Attempted", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("allows retry after any submitted attempt", () => {
+  it("does not allow retry after an attempt", () => {
     expect(
       canAllowQuizRetry({ attemptCount: 1, allowedAttempts: 1 }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canAllowQuizRetry({ attemptCount: 0, allowedAttempts: 1 }),
     ).toBe(false);
     expect(
       canAllowQuizRetry({ attemptCount: 1, allowedAttempts: 2 }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

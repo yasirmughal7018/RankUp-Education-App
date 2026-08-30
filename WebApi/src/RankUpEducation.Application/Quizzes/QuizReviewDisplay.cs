@@ -42,6 +42,26 @@ public static class QuizReviewDisplay
             : submittedAt.Value;
     }
 
+    /// <summary>
+    /// Prior-window attempts (submitted before the current StartAt) already passed their due date.
+    /// Historical attempts submitted before a later assignment window still announce
+    /// from their own submit time so leftover second-attempt rows stay readable.
+    /// </summary>
+    public static DateTimeOffset? ResolveAttemptAssignmentEnd(
+        DateTimeOffset? submittedAt,
+        DateTimeOffset? assignmentStartAt,
+        DateTimeOffset? assignmentEndAt)
+    {
+        if (submittedAt is not null
+            && assignmentStartAt is not null
+            && submittedAt.Value < assignmentStartAt.Value)
+        {
+            return submittedAt;
+        }
+
+        return assignmentEndAt;
+    }
+
     public static short ComputeAnnouncedPercent(
         IReadOnlyList<(bool IsAutoGraded, short Marks)> questions,
         bool objectiveReleased,

@@ -969,7 +969,7 @@ function normalizeAssignmentResultStatus(status: string): string {
   return status.trim().toLowerCase();
 }
 
-/** True when the window ended unused or the result is Expired — student can be reassigned. */
+/** True when the window ended unused or the result is Expired. */
 export function isExpiredQuizAssignment(
   assignment: { resultStatus: string; endAt: string },
   now: number = Date.now(),
@@ -991,28 +991,28 @@ export function isExpiredQuizAssignment(
   );
 }
 
-/** Parent/teacher may assign any existing student again. Prior attempts stay. */
+/** Reassign of an existing assignment is not allowed. */
 export function canReassignQuizAssignment(
   _assignment?: { resultStatus: string; endAt: string },
   _now: number = Date.now(),
 ): boolean {
-  return true;
+  return false;
 }
 
-/** Allow retry after the student has at least one attempt. */
-export function canAllowQuizRetry(assignment: {
+/** Extra attempts are not granted after the first attempt. */
+export function canAllowQuizRetry(_assignment: {
   attemptCount: number;
   allowedAttempts?: number;
 }): boolean {
-  return assignment.attemptCount > 0;
+  return false;
 }
 
-/** Students are never locked in the assign picker — reassign is always allowed. */
+/** Any existing assignment row locks the student in the assign picker. */
 export function isActiveQuizAssignment(
   _assignment: { resultStatus: string; endAt: string },
   _now: number = Date.now(),
 ): boolean {
-  return false;
+  return true;
 }
 
 /**

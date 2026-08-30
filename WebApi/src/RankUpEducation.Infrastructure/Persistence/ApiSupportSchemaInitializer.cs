@@ -66,6 +66,7 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(RemapTutorRoleToParentSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionEditRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizEditRequestSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(QuizSingleAttemptQuotaSupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
 
@@ -535,6 +536,37 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         CREATE INDEX IF NOT EXISTS ix_app_approval_quiz_edit_pending
             ON public.app_approval (request_id)
             WHERE entity_type = 2106 AND approved_at IS NULL AND is_approved IS NULL;
+        """;
+
+    private const string QuizSingleAttemptQuotaSupportSql = """
+        UPDATE public.quizzes
+        SET allowed_attempts = 1
+        WHERE allowed_attempts IS DISTINCT FROM 1;
+
+        UPDATE public.quizzes
+        SET audience_allowed_attempts = 1
+        WHERE audience_allowed_attempts IS NOT NULL
+          AND audience_allowed_attempts IS DISTINCT FROM 1;
+
+        ALTER TABLE public.quizzes
+            ALTER COLUMN allowed_attempts SET DEFAULT 1;
+
+        UPDATE public.quiz_assignments
+        SET allowed_attempts = 1
+        WHERE allowed_attempts IS DISTINCT FROM 1;
+
+        ALTER TABLE public.quiz_assignments
+            ALTER COLUMN allowed_attempts SET DEFAULT 1;
+
+        DELETE FROM public.quiz_assignments a
+        WHERE a.id NOT IN (
+            SELECT MAX(keep.id)
+            FROM public.quiz_assignments keep
+            GROUP BY keep.quiz_id, keep.student_id
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_quiz_assignments_quiz_student
+            ON public.quiz_assignments (quiz_id, student_id);
         """;
 
     private const string SchoolSoftDeleteSupportSql = """

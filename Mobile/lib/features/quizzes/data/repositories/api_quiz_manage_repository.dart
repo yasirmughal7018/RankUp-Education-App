@@ -106,18 +106,6 @@ class ApiQuizManageRepository implements QuizManageRepository {
       _remote.cancelAssignments(quizId);
 
   @override
-  Future<void> allowRetry({
-    required String quizId,
-    required String assignmentId,
-    int extraAttempts = 1,
-  }) =>
-      _remote.allowRetry(
-        quizId: quizId,
-        assignmentId: assignmentId,
-        extraAttempts: extraAttempts,
-      );
-
-  @override
   Future<QuizMonitoringSnapshot> getMonitoring(String quizId) =>
       _remote.getMonitoring(quizId);
 

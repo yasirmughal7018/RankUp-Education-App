@@ -1,16 +1,13 @@
 ---
-description: Reassign and retry after a student already attempted a quiz
-globs: WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,React/src/features/quizzes/**/*.{ts,tsx},React/src/features/student/**/*.{ts,tsx}
+description: One assignment and one attempt per student per quiz — no retry or reassign
+globs: WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,React/src/features/quizzes/**/*.{ts,tsx},React/src/features/student/**/*.{ts,tsx},Mobile/lib/features/quizzes/**/*.dart
 alwaysApply: false
 ---
 
-# Quiz reassign and retry
+# Quiz attempts — one per student
 
-- Every quiz definition allows **exactly one** attempt. Do not collect Allowed attempts on create, edit, or assign. Assignment quota starts at 1.
-- Parent, teacher, or any assigner may **reassign** any existing student on a quiz. The assign picker does not lock students.
-- **Allow retry** is available after the student has at least one attempt. Do not require `IsReviewDone` or a used-up quota.
-- Do **not** delete or rewrite existing `QuizAttempt` rows or their scores. `IsReviewDone` stays on reassign/retry of attempted students.
-- Unused rows use `ReopenForReassign`. Attempted students use `GrantReassignAttempts` (quota = old count + 1). Extra attempts exist only on the assignment.
-- Reassign of an attempted student resets `QuizResultStatus` to **Up Coming** (StartAt > now) or **Not Attempted** (window open), same as a new assign. Prior attempts and `IsReviewDone` stay.
-- Student `/student/quizzes` status follows the current window: future start → **Upcoming**; open window with remaining attempts → **Open Now**. Do not keep **Attempted** while the new window is unused. The Result column stays empty (same as a new assignment) until the student submits in this window and the due date ends.
-- The next start creates a **new** attempt. Student quiz detail lists all submitted attempts, results, and the attempt count.
+- Every quiz allows **exactly one** attempt. Do not collect Allowed attempts on create, edit, settings, or assign. Quiz, audience, and assignment quotas are always **1**.
+- Do **not** reassign a student who already has a `QuizAssignment` row for that quiz. The assign picker **locks** those students. Assign skips existing rows; if every selected student already has a row, return the existing error.
+- There is **no Allow retry**. Do not add extra attempts on the assignment. Do not expose retry APIs or UI.
+- Cancel still hard-deletes **future unused** assignments created by the caller. After that row is gone, the student may be assigned again (new row). That is not in-place reassign.
+- Keep historical `QuizAttempt` rows. Students cannot start a second attempt. Student list status is Upcoming / Open Now while unused, then Attempted after submit. View result stays after the due date.

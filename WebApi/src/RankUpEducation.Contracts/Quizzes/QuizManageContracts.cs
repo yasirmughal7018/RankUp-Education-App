@@ -179,19 +179,6 @@ public sealed record UnarchiveQuizResponse(
     long QuizId,
     string LifecycleStatus);
 
-/// <summary>Extra attempts to grant after review finalization.</summary>
-public sealed record AllowRetryRequest(short ExtraAttempts = 1);
-
-/// <summary>Updated assignment quotas after a retry grant.</summary>
-public sealed record AllowRetryResponse(
-    long AssignmentId,
-    long QuizId,
-    long StudentId,
-    string StudentName,
-    short AllowedAttempts,
-    int AttemptCount,
-    bool IsReviewDone);
-
 /// <summary>School-admin approval confirmation.</summary>
 public sealed record ApproveQuizResponse(
     long QuizId,

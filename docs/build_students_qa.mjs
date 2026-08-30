@@ -115,7 +115,7 @@ const quizStudentApis = [
 const quizAttemptRules = [
   ["Device lock", "Attempt bound to starting deviceId; mismatch → locked to starting device"],
   ["Window", "Assignment StartDateTime–EndDateTime enforced"],
-  ["Attempts", "One attempt by default; Allow Retry or reassign may add extras"],
+  ["Attempts", "Exactly one attempt. Retry and reassign of the same quiz are not allowed"],
   ["Instructions", "Non-empty instructions require acknowledge on start"],
   ["Offline", "Draft/submit sync supported with clientSyncId / isOfflineSync"],
   ["Students do not assign", "AssignedById is Teacher/Parent; students only take"],

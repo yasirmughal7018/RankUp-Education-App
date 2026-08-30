@@ -312,35 +312,16 @@ function isStudentQuizWindowClosed(
   return quiz.dueAt != null && new Date(quiz.dueAt) < now;
 }
 
-/** True when the student submitted during the current assignment window. */
-function hasSubmitInCurrentWindow(quiz: StudentQuizListItemLike): boolean {
-  const start = quiz.startAt ? new Date(quiz.startAt) : null;
-  const completed = quiz.completedAt ? new Date(quiz.completedAt) : null;
-  if (start && completed && completed < start) {
-    return false;
-  }
-
-  return quiz.lastAttemptId != null || completed != null;
-}
-
-function hasRemainingAttempts(quiz: StudentQuizListItemLike): boolean {
-  if (
-    typeof quiz.attemptsUsed === "number" &&
-    typeof quiz.attemptLimit === "number" &&
-    quiz.attemptLimit > 0
-  ) {
-    return quiz.attemptsUsed < quiz.attemptLimit;
-  }
-
-  const listStatus = normalizeStudentQuizStatus(quiz.status ?? "");
-  return listStatus === "available" || listStatus === "assigned";
+/** True when the student already submitted this quiz. */
+function hasSubmittedAttempt(quiz: StudentQuizListItemLike): boolean {
+  return quiz.lastAttemptId != null || quiz.completedAt != null;
 }
 
 export function isStudentQuizUpcoming(
   quiz: StudentQuizListItemLike,
   now = new Date(),
 ): boolean {
-  if (hasInProgressAttempt(quiz)) {
+  if (hasInProgressAttempt(quiz) || hasSubmittedAttempt(quiz)) {
     return false;
   }
 
@@ -351,7 +332,7 @@ export function isStudentQuizAttempted(
   quiz: StudentQuizListItemLike,
   now = new Date(),
 ): boolean {
-  if (hasInProgressAttempt(quiz) || isStudentQuizWindowUpcoming(quiz, now)) {
+  if (hasInProgressAttempt(quiz)) {
     return false;
   }
 
@@ -360,11 +341,7 @@ export function isStudentQuizAttempted(
     return false;
   }
 
-  if (!isStudentQuizWindowClosed(quiz, now) && hasRemainingAttempts(quiz)) {
-    return false;
-  }
-
-  return hasSubmitInCurrentWindow(quiz);
+  return hasSubmittedAttempt(quiz);
 }
 
 export function isStudentQuizExpired(
@@ -518,6 +495,20 @@ export function formatStudentQuizListResult(
   }
 
   return { label: "Pending", detail: status.length > 0 ? status : null };
+}
+
+/** Attempt scores stay hidden until the assignment due date. */
+export function isStudentAttemptResultVisible(
+  attempt: { submittedAt: string | null },
+  quiz: { startAt: string | null; dueAt: string | null },
+  now = new Date(),
+): boolean {
+  const submitted = attempt.submittedAt ? new Date(attempt.submittedAt) : null;
+  if (!submitted || Number.isNaN(submitted.getTime())) {
+    return false;
+  }
+
+  return quiz.dueAt != null && new Date(quiz.dueAt) <= now;
 }
 
 /** Show the other-attempts control when a quiz has more than two submitted runs. */

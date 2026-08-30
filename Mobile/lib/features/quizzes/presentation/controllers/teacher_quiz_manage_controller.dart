@@ -491,37 +491,6 @@ class TeacherQuizManageController
     }
   }
 
-  Future<bool> allowRetry({
-    required String quizId,
-    required String assignmentId,
-    int extraAttempts = 1,
-  }) async {
-    state = state.copyWith(isSaving: true, clearError: true, clearSuccess: true);
-    try {
-      await _repository.allowRetry(
-        quizId: quizId,
-        assignmentId: assignmentId,
-        extraAttempts: extraAttempts,
-      );
-      final assignments = await _repository.getAssignments(quizId);
-      state = state.copyWith(
-        assignments: assignments,
-        isSaving: false,
-        successMessage: 'Retry allowed.',
-      );
-      return true;
-    } on AppException catch (error) {
-      state = state.copyWith(isSaving: false, errorMessage: error.message);
-      return false;
-    } catch (_) {
-      state = state.copyWith(
-        isSaving: false,
-        errorMessage: 'Unable to allow retry.',
-      );
-      return false;
-    }
-  }
-
   Future<QuizMonitoringSnapshot?> loadMonitoring(String quizId) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {

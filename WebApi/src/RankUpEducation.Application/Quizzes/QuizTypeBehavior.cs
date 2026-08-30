@@ -15,7 +15,7 @@ public static class QuizTypeBehavior
     /// <summary>Maximum how far ahead a Surprise StartAt may be scheduled from now.</summary>
     public static readonly TimeSpan SurpriseMaxAdvanceNotice = TimeSpan.FromHours(24);
 
-    /// <summary>Every quiz definition allows exactly one attempt. Extra attempts are assignment-only (retry / reassign).</summary>
+    /// <summary>Every quiz definition and assignment allows exactly one attempt.</summary>
     public const short SingleAllowedAttempt = 1;
 
     public sealed record TypeDefaults(

@@ -59,12 +59,6 @@ abstract class QuizManageRepository {
 
   Future<void> cancelAssignments(String quizId);
 
-  Future<void> allowRetry({
-    required String quizId,
-    required String assignmentId,
-    int extraAttempts = 1,
-  });
-
   Future<QuizMonitoringSnapshot> getMonitoring(String quizId);
 
   Future<List<PendingQuizApprovalItem>> listPendingQuizApprovals();

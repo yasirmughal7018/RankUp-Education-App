@@ -274,22 +274,6 @@ class QuizManageRemoteDataSource {
     }
   }
 
-  Future<void> allowRetry({
-    required String quizId,
-    required String assignmentId,
-    int extraAttempts = 1,
-  }) async {
-    try {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/quizzes/$quizId/assignments/$assignmentId/allow-retry',
-        data: {'extraAttempts': extraAttempts},
-      );
-      _ensureSuccess(response.data);
-    } on DioException catch (error) {
-      throw mapDioException(error);
-    }
-  }
-
   Future<QuizMonitoringSnapshot> getMonitoring(String quizId) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(

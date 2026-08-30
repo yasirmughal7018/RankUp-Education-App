@@ -1,5 +1,6 @@
 import {
   classifyStudentQuiz,
+  isStudentAttemptResultVisible,
   isStudentQuizInLastMonth,
   canSwitchOtherQuizAttempts,
   formatStudentQuizListResult,
@@ -67,7 +68,7 @@ describe("classifyStudentQuiz", () => {
     ).toBe("expired");
   });
 
-  it("treats a reassigned future window as upcoming even after a prior attempt", () => {
+  it("keeps a submitted quiz attempted even if a leftover future window exists", () => {
     expect(
       classifyStudentQuiz(
         quiz({
@@ -80,10 +81,10 @@ describe("classifyStudentQuiz", () => {
         }),
         now,
       ),
-    ).toBe("upcoming");
+    ).toBe("attempted");
   });
 
-  it("treats a reassigned open window as open now even after a prior attempt", () => {
+  it("keeps a submitted quiz attempted while the window is still open", () => {
     expect(
       classifyStudentQuiz(
         quiz({
@@ -97,7 +98,7 @@ describe("classifyStudentQuiz", () => {
         }),
         now,
       ),
-    ).toBe("active");
+    ).toBe("attempted");
   });
 });
 
@@ -125,7 +126,7 @@ describe("resolveStudentQuizAction", () => {
     ).toBe("Open");
   });
 
-  it("starts a reassigned open quiz instead of viewing the old result", () => {
+  it("hides the action after a submitted quiz until the due date", () => {
     expect(
       resolveStudentQuizAction(
         quiz({
@@ -137,8 +138,8 @@ describe("resolveStudentQuizAction", () => {
           lastAttemptId: 44,
         }),
         now,
-      ).label,
-    ).toBe("Start quiz");
+      ),
+    ).toBeNull();
   });
 
   it("hides the action while the due date is still ahead", () => {
@@ -227,7 +228,7 @@ describe("formatStudentQuizListResult", () => {
     });
   });
 
-  it("keeps the result empty for a reassigned open window", () => {
+  it("keeps the result empty until the due date after a submit", () => {
     expect(
       formatStudentQuizListResult(
         {
@@ -281,5 +282,33 @@ describe("formatStudentQuizListResult", () => {
         now,
       ),
     ).toEqual({ label: "Partial results", detail: "40% announced" });
+  });
+});
+
+describe("isStudentAttemptResultVisible", () => {
+  it("hides an attempt submitted before the due date", () => {
+    expect(
+      isStudentAttemptResultVisible(
+        { submittedAt: "2026-08-14T10:00:00Z" },
+        quiz({
+          startAt: "2026-08-15T08:00:00Z",
+          dueAt: "2026-08-20T18:00:00Z",
+        }),
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("hides the current-window attempt until the due date", () => {
+    expect(
+      isStudentAttemptResultVisible(
+        { submittedAt: "2026-08-15T09:00:00Z" },
+        quiz({
+          startAt: "2026-08-15T08:00:00Z",
+          dueAt: "2026-08-20T18:00:00Z",
+        }),
+        now,
+      ),
+    ).toBe(false);
   });
 });

@@ -11,8 +11,8 @@ using RankUpEducation.Domain.Quizzes;
 namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>
-/// Assigns published quizzes to students (one, selected, group, grade, or all linked children),
-/// cancels future assignments, and grants retries after review.
+/// Assigns published quizzes to students (one, selected, group, grade, or all linked children)
+/// and cancels future unused assignments. One assignment and one attempt per student.
 /// </summary>
 public interface IQuizAssignService
 {
@@ -24,13 +24,6 @@ public interface IQuizAssignService
 
     /// <summary>Removes upcoming assignments created by the caller. Quiz stays Published.</summary>
     Task<CancelQuizResponse> CancelAsync(long quizId, CancellationToken cancellationToken);
-
-    /// <summary>Grants extra attempts after the student used their quota. Does not overwrite prior attempts.</summary>
-    Task<AllowRetryResponse> AllowRetryAsync(
-        long quizId,
-        long assignmentId,
-        AllowRetryRequest request,
-        CancellationToken cancellationToken);
 }
 
 /// <inheritdoc cref="IQuizAssignService"/>
@@ -38,10 +31,8 @@ public sealed class QuizAssignService : IQuizAssignService
 {
     private readonly IQuizRepository _quizzes;
     private readonly IQuizAssignmentRepository _assignments;
-    private readonly IQuizAttemptRepository _attempts;
     private readonly ILookupRepository _lookups;
     private readonly IStudentScopeRepository _studentScope;
-    private readonly IUserRepository _users;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -51,10 +42,8 @@ public sealed class QuizAssignService : IQuizAssignService
     public QuizAssignService(
         IQuizRepository quizzes,
         IQuizAssignmentRepository assignments,
-        IQuizAttemptRepository attempts,
         ILookupRepository lookups,
         IStudentScopeRepository studentScope,
-        IUserRepository users,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
@@ -63,10 +52,8 @@ public sealed class QuizAssignService : IQuizAssignService
     {
         _quizzes = quizzes;
         _assignments = assignments;
-        _attempts = attempts;
         _lookups = lookups;
         _studentScope = studentScope;
-        _users = users;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
@@ -156,46 +143,13 @@ public sealed class QuizAssignService : IQuizAssignService
 
         var created = new List<QuizAssignment>();
         var notifyStudentIds = new List<long>();
-        var reopenedCount = 0;
         var isGroupAssign = request.Mode.Equals("group", StringComparison.OrdinalIgnoreCase)
             && request.GroupId is not null;
 
         foreach (var studentId in studentIds)
         {
-            if (existingByStudent.TryGetValue(studentId, out var existing))
+            if (existingByStudent.ContainsKey(studentId))
             {
-                var attemptCount = await _attempts.CountAttemptsAsync(quizId, studentId, cancellationToken);
-                var quota = (short)Math.Min(
-                    short.MaxValue,
-                    QuizTypeBehavior.SingleAllowedAttempt + attemptCount);
-                if (attemptCount > 0)
-                {
-                    existing.GrantReassignAttempts(
-                        scope.UserId,
-                        scope.Role,
-                        request.StartAt,
-                        request.EndAt,
-                        quota,
-                        resultStatusId);
-                }
-                else
-                {
-                    existing.ReopenForReassign(
-                        scope.UserId,
-                        scope.Role,
-                        request.StartAt,
-                        request.EndAt,
-                        quota,
-                        resultStatusId);
-                }
-
-                if (isGroupAssign)
-                {
-                    existing.AssignToGroup(request.GroupId!.Value);
-                }
-
-                reopenedCount++;
-                notifyStudentIds.Add(studentId);
                 continue;
             }
 
@@ -218,7 +172,7 @@ public sealed class QuizAssignService : IQuizAssignService
             notifyStudentIds.Add(studentId);
         }
 
-        if (created.Count == 0 && reopenedCount == 0)
+        if (created.Count == 0)
         {
             throw new BusinessRuleException(
                 "All selected students already have active assignments for this quiz.");
@@ -253,7 +207,7 @@ public sealed class QuizAssignService : IQuizAssignService
         return new AssignQuizResponse(
             quizId,
             lifecycleName,
-            created.Count + reopenedCount,
+            created.Count,
             createdAssignments.Select(item => QuizManageMapping.ToAssignmentResponse(item, scope.Role)).ToArray());
     }
 
@@ -309,58 +263,6 @@ public sealed class QuizAssignService : IQuizAssignService
 
         var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
         return new CancelQuizResponse(quizId, lifecycleName, removed);
-    }
-
-    public async Task<AllowRetryResponse> AllowRetryAsync(
-        long quizId,
-        long assignmentId,
-        AllowRetryRequest request,
-        CancellationToken cancellationToken)
-    {
-        var scope = QuizScopeResolver.RequireManageScope(_currentUser);
-        var quiz = await RequireViewableQuizAsync(quizId, scope, cancellationToken);
-        await EnsureNotArchivedAsync(quiz, cancellationToken);
-
-        var assignment = await _assignments.GetAssignmentEntityByIdAsync(assignmentId, quizId, cancellationToken)
-            ?? throw new NotFoundAppException("Assignment was not found.");
-
-        await QuizScopeResolver.EnsureCanViewAssignedStudentAsync(
-            _studentScope,
-            scope,
-            assignment.StudentId,
-            assignment.AssignedById,
-            cancellationToken);
-
-        var attemptCount = await _attempts.CountAttemptsAsync(quizId, assignment.StudentId, cancellationToken);
-        if (attemptCount <= 0)
-        {
-            throw new BusinessRuleException("The student has not attempted this quiz yet.");
-        }
-
-        var extraAttempts = request.ExtraAttempts <= 0 ? (short)1 : request.ExtraAttempts;
-        assignment.GrantRetry(extraAttempts);
-
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var student = await _users.GetByIdAsync(assignment.StudentId, cancellationToken);
-
-        return new AllowRetryResponse(
-            assignment.Id,
-            quizId,
-            assignment.StudentId,
-            student?.FullName ?? $"Student {assignment.StudentId}",
-            assignment.AllowedAttempts,
-            attemptCount,
-            assignment.IsReviewDone);
-    }
-
-    private async Task EnsureNotArchivedAsync(Quiz quiz, CancellationToken cancellationToken)
-    {
-        var lifecycleName = await _lookups.GetLookupNameAsync(quiz.LifecycleStatusId, cancellationToken);
-        if (lifecycleName.Equals("Archived", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new BusinessRuleException("Archived quizzes are read-only.");
-        }
     }
 
     private async Task<Quiz> RequireAssignableQuizAsync(

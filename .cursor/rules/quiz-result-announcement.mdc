@@ -8,7 +8,7 @@ alwaysApply: false
 
 - **Window open:** 0% announced. Hide marks, correctness, and correct answers. After submit, the student list has **no View result button** until the due date ends.
 - **Due date passed:** announce auto-graded questions (known correct answer on the item). Status = Partial results. Show `resultAnnouncedPercent`. Student action is **View result**; the result screen follows the same announcement rules.
-- **Owner Completed:** `IsReviewDone` via finalize-review. Status = Completed. Announced percent = 100. Teacher-review questions become visible. After that, marks and feedback are locked on the review page and `PUT .../answers` is rejected. Allow Retry resets `IsReviewDone` so a new attempt can be reviewed.
+- **Owner Completed:** `IsReviewDone` via finalize-review. Status = Completed. Announced percent = 100. Teacher-review questions become visible. After that, marks and feedback are locked on the review page and `PUT .../answers` is rejected. There is no retry that reopens review.
 
 Quiz completion for announcement is the later of `SubmittedAt` and assignment `EndDateTime`. Do not add an extra hour after the due date.
 

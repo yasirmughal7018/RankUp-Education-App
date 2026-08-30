@@ -297,26 +297,3 @@ export async function cancelQuizAssignments(quizId: number): Promise<void> {
   await apiRequest(`/quizzes/${quizId}/cancel`, { method: "POST" });
 }
 
-export interface AllowRetryResponse {
-  assignmentId: number;
-  quizId: number;
-  studentId: number;
-  allowedAttempts: number;
-  attemptCount: number;
-  isReviewDone: boolean;
-}
-
-/** Grant extra attempts on a specific assignment. */
-export async function allowRetry(
-  quizId: number,
-  assignmentId: number,
-  extraAttempts = 1,
-): Promise<AllowRetryResponse> {
-  return apiRequest<AllowRetryResponse>(
-    `/quizzes/${quizId}/assignments/${assignmentId}/allow-retry`,
-    {
-      method: "POST",
-      body: { extraAttempts },
-    },
-  );
-}
