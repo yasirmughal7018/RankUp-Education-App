@@ -76,6 +76,7 @@ class QuizDetail extends QuizSummary {
     this.attemptsUsed = 0,
     this.shuffleQuestions = false,
     this.shuffleOptions = false,
+    this.attempts = const [],
   });
 
   factory QuizDetail.fromSummary(QuizSummary summary) {
@@ -113,6 +114,24 @@ class QuizDetail extends QuizSummary {
   final int attemptsUsed;
   final bool shuffleQuestions;
   final bool shuffleOptions;
+  final List<QuizAttemptHistoryItem> attempts;
+}
+
+/// Submitted attempt row shown on quiz details.
+class QuizAttemptHistoryItem {
+  const QuizAttemptHistoryItem({
+    required this.attemptId,
+    required this.attemptNumber,
+    required this.status,
+    required this.percentage,
+    required this.submittedAt,
+  });
+
+  final String attemptId;
+  final int attemptNumber;
+  final String status;
+  final int percentage;
+  final DateTime? submittedAt;
 }
 
 /// Locally cached answer draft before submit or sync.

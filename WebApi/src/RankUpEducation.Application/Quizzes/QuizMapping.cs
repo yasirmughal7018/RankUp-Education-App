@@ -73,7 +73,10 @@ internal static class QuizMapping
             item.LastAttemptId);
     }
 
-    public static QuizDetailResponse ToDetailResponse(QuizDetailItem item, DateTimeOffset now)
+    public static QuizDetailResponse ToDetailResponse(
+        QuizDetailItem item,
+        DateTimeOffset now,
+        IReadOnlyList<QuizAttemptSummaryItem>? attempts = null)
     {
         var attemptLimit = item.AllowedAttempts <= 0 ? (short)1 : item.AllowedAttempts;
         var status = QuizStatusCalculator.ResolveListStatus(
@@ -131,7 +134,15 @@ internal static class QuizMapping
             scorePercent,
             item.RandomQuestionCount ?? item.TotalQuestions,
             announcedPercent,
-            item.LastAttemptId);
+            item.LastAttemptId,
+            (attempts ?? Array.Empty<QuizAttemptSummaryItem>())
+                .Select(attempt => new QuizAttemptSummaryResponse(
+                    attempt.AttemptId,
+                    attempt.AttemptNumber,
+                    attempt.StatusName,
+                    attempt.Percentage,
+                    attempt.SubmittedAt))
+                .ToArray());
     }
 
     private static string ResolveResultStatusName(

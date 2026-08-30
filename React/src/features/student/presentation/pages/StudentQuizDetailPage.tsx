@@ -356,6 +356,48 @@ export function StudentQuizDetailPage() {
         </p>
       ) : null}
 
+      {quiz.attempts && quiz.attempts.length > 0 ? (
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-900">
+              Your attempts
+            </h2>
+            <p className="text-xs font-semibold tabular-nums text-slate-500">
+              {quiz.attempts.length}{" "}
+              {quiz.attempts.length === 1 ? "attempt" : "attempts"}
+            </p>
+          </div>
+          <ul className="space-y-2">
+            {quiz.attempts.map((attempt) => {
+              const resultTo = `/student/quizzes/${quiz.id}/attempts/${attempt.attemptId}/result`;
+              const showScore = quiz.resultPercent != null;
+              return (
+                <li key={attempt.attemptId}>
+                  <Link
+                    to={resultTo}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 transition hover:border-brand-300 hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-900">
+                        Attempt #{attempt.attemptNumber}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {formatDateTime(attempt.submittedAt)}
+                        {showScore ? ` · ${attempt.percentage}%` : ""}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      label={attempt.status}
+                      tone={getQuestionStatusTone(attempt.status, true)}
+                    />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="flex flex-col gap-3 sm:flex-row">
         {bucket === "attempted" && resultPath ? (
           <Button className="flex-1" asChild>

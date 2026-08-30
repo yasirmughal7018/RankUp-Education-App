@@ -9,5 +9,6 @@ Each implementation / spec prompt is stored as its own file. Casual chat follow-
 | 2026-08-29 | [2026-08-29-partial-marks-mc-match-order.md](./2026-08-29-partial-marks-mc-match-order.md) | Partial marks for Multiple Choice, Match, and Order |
 | 2026-08-30 | [2026-08-30-quiz-result-announcement.md](./2026-08-30-quiz-result-announcement.md) | Announce auto-graded answers at due date; owner Completed for full release |
 | 2026-08-30 | [2026-08-30-lock-completed-quiz-review.md](./2026-08-30-lock-completed-quiz-review.md) | After Completed, review marks and feedback stay read-only |
+| 2026-08-30 | [2026-08-30-reassign-keep-attempts.md](./2026-08-30-reassign-keep-attempts.md) | Reassign keeps old attempts/results and adds a new attempt |
 
 New spec prompts go here as `YYYY-MM-DD-short-kebab-slug.md`.

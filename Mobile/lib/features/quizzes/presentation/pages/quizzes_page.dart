@@ -471,6 +471,9 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
             onReview: () {
               unawaited(_openReview());
             },
+            onOpenAttempt: (attemptId) {
+              unawaited(_openReviewAttempt(attemptId));
+            },
             onCancel: () => setState(() => _view = _QuizView.list),
           ),
         _QuizView.attempt => _QuizAttemptView(
@@ -592,6 +595,27 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     setState(() {
       _selectedQuiz = quiz;
       _reviewReturnView = _QuizView.history;
+      _view = _QuizView.review;
+    });
+  }
+
+  Future<void> _openReviewAttempt(String attemptId) async {
+    final quiz = _selectedQuiz;
+    if (quiz == null || attemptId.isEmpty) {
+      return;
+    }
+
+    await ref.read(quizzesControllerProvider.notifier).loadAttemptResult(
+          quizId: quiz.id,
+          attemptId: attemptId,
+        );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _reviewReturnView = _QuizView.details;
       _view = _QuizView.review;
     });
   }
@@ -719,7 +743,8 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     if (selectedQuiz == null ||
         studentQuizStatus(selectedQuiz) == 'Expired' ||
         selectedQuiz.status == QuizStatus.upcoming ||
-        studentQuizStatus(selectedQuiz) == 'Completed') {
+        (studentQuizStatus(selectedQuiz) == 'Completed' &&
+            !hasRemainingQuizAttempts(selectedQuiz))) {
       return;
     }
 
@@ -2232,6 +2257,7 @@ class _QuizDetailsView extends StatelessWidget {
     required this.onInstructionsAcknowledgedChanged,
     required this.onStart,
     required this.onReview,
+    required this.onOpenAttempt,
     required this.onCancel,
   });
 
@@ -2241,6 +2267,7 @@ class _QuizDetailsView extends StatelessWidget {
   final ValueChanged<bool> onInstructionsAcknowledgedChanged;
   final VoidCallback onStart;
   final VoidCallback onReview;
+  final ValueChanged<String> onOpenAttempt;
   final VoidCallback onCancel;
 
   @override
@@ -2251,9 +2278,9 @@ class _QuizDetailsView extends StatelessWidget {
 
     final studentStatus = studentQuizStatus(quiz);
     final continueQuiz = studentStatus == 'In Progress';
-    final canStart = studentStatus != 'Completed' &&
-        studentStatus != 'Expired' &&
-        quiz.status != QuizStatus.upcoming;
+    final canStart = studentStatus != 'Expired' &&
+        quiz.status != QuizStatus.upcoming &&
+        (studentStatus != 'Completed' || hasRemainingQuizAttempts(quiz));
     final requiresInstructionsAck =
         canStart && !continueQuiz && quiz.instructions.isNotEmpty;
     final canClickStart =
@@ -2312,8 +2339,42 @@ class _QuizDetailsView extends StatelessWidget {
                 value: _dateLabel(quiz.completedAt, fallback: 'Not completed'),
               ),
             _DetailRow(label: 'Created by', value: _createdByLabel(quiz)),
+            if (quiz is QuizDetail)
+              _DetailRow(
+                label: 'Attempts',
+                value: quiz.attemptLimit <= 0
+                    ? '${quiz.attemptsUsed} used'
+                    : '${quiz.attemptsUsed} used · ${quiz.attemptLimit - quiz.attemptsUsed} left',
+              ),
           ],
         ),
+        if (quiz is QuizDetail && quiz.attempts.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _DetailSection(
+            title: 'Your attempts (${quiz.attempts.length})',
+            children: [
+              for (final attempt in quiz.attempts)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Attempt #${attempt.attemptNumber}'),
+                    subtitle: Text(
+                      [
+                        if (attempt.submittedAt != null)
+                          _dateLabel(attempt.submittedAt),
+                        if (quiz.resultPercent != null)
+                          '${attempt.percentage}%',
+                        attempt.status,
+                      ].where((part) => part.trim().isNotEmpty).join(' · '),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onOpenAttempt(attempt.attemptId),
+                  ),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 12),
         _DetailSection(
           title: 'Instructions',
@@ -2380,20 +2441,26 @@ class _QuizDetailsView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        if (quiz.status == QuizStatus.completed)
+        if (studentStatus == 'Completed' || quiz.status == QuizStatus.completed)
           FilledButton.icon(
             onPressed: quiz.reviewAvailable ? onReview : null,
             icon: const Icon(Icons.rate_review_outlined),
             label: Text(
               _isReviewComplete(quiz) ? 'Review Answers' : 'View Review Status',
             ),
-          )
-        else ...[
+          ),
+        if (canStart) ...[
+          if (studentStatus == 'Completed' || quiz.status == QuizStatus.completed)
+            const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: canClickStart ? onStart : null,
             icon: const Icon(Icons.play_arrow),
             label: Text(
-              continueQuiz ? 'Continue Quiz' : 'Start Quiz',
+              continueQuiz
+                  ? 'Continue Quiz'
+                  : studentStatus == 'Completed'
+                      ? 'Start another attempt'
+                      : 'Start Quiz',
             ),
           ),
           if (requiresInstructionsAck && !instructionsAcknowledged)

@@ -1,0 +1,13 @@
+---
+description: Reassigning a quiz after a student already attempted it
+globs: WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,React/src/features/quizzes/**/*.{ts,tsx},React/src/features/student/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Quiz reassign keeps attempts
+
+- After the assignment window ends, parent/teacher may assign the same quiz again (including Completed / Under Review).
+- Do **not** delete or rewrite existing `QuizAttempt` rows or their scores.
+- Unused expired rows may `ReopenForReassign`. Attempted students use `GrantReassignAttempts` (new window + quota = old attempt count + new grant). `IsReviewDone` stays.
+- The next start creates a **new** attempt. Student quiz detail lists all submitted attempts, their results, and the attempt count.
+- While the window is still open, use Allow Retry instead of reassign.

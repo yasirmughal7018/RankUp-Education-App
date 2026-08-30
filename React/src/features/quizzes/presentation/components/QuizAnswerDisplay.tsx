@@ -7,6 +7,7 @@ import {
   normalizeQuestionType,
 } from "@/features/questions/domain/questionTypes";
 import type { QuizAnswerDisplayInput } from "@/features/quizzes/domain/quizAnswerDisplayTypes";
+import { TONE_BADGE_CLASS, type StatusTone } from "@/lib/constants/status-colors";
 import { cn } from "@/lib/utils";
 
 function resolveSelectedIds(question: QuizAnswerDisplayInput): number[] {
@@ -32,6 +33,25 @@ function optionLabel(
 
 function optionLetter(index: number): string {
   return String.fromCharCode(65 + (index % 26));
+}
+
+function OptionStatusChip({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: Extract<StatusTone, "success" | "danger" | "primary">;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+        TONE_BADGE_CLASS[tone],
+      )}
+    >
+      {label}
+    </span>
+  );
 }
 
 function FieldLabel({ children }: { children: string }) {
@@ -202,50 +222,57 @@ function ChoiceOptionCards({
     <div className="space-y-2.5">
       {options.map((option, optionIndex) => {
         const selected = selectedIds.includes(option.id);
-        const isCorrect = Boolean(showCorrectAnswers && option.isCorrect);
+        const yourCorrect = Boolean(
+          showCorrectAnswers && selected && option.isCorrect,
+        );
+        const keyCorrect = Boolean(
+          showCorrectAnswers && option.isCorrect && !selected,
+        );
         const wrongSelected = Boolean(
           showCorrectAnswers && selected && !option.isCorrect,
         );
 
-        const statusLabel = showCorrectAnswers
-          ? isCorrect && selected
-            ? "Your Answer - Correct"
-            : isCorrect
-              ? "Correct Answer"
-              : wrongSelected
-                ? "Your Answer - Wrong"
-                : null
-          : selected
-            ? "Your Answer"
-            : null;
+        const status = yourCorrect
+          ? { label: "Your Answer - Correct", tone: "success" as const }
+          : keyCorrect
+            ? { label: "Correct Answer", tone: "primary" as const }
+            : wrongSelected
+              ? { label: "Your Answer - Wrong", tone: "danger" as const }
+              : selected && !showCorrectAnswers
+                ? { label: "Your Answer", tone: "primary" as const }
+                : null;
 
         return (
           <div
             key={option.id}
             className={cn(
               "flex items-center gap-3 rounded-xl border px-4 py-3.5",
-              isCorrect &&
+              yourCorrect &&
                 "border-[hsl(var(--success))]/40 bg-[hsl(var(--success-light))]",
+              keyCorrect && "border-primary/35 bg-primary/5",
               wrongSelected &&
                 "border-destructive/40 bg-[hsl(var(--destructive-light))]",
               selected &&
                 !showCorrectAnswers &&
                 "border-primary/40 bg-primary/10 ring-2 ring-primary/15",
               !selected &&
-                !isCorrect &&
+                !yourCorrect &&
+                !keyCorrect &&
                 "border-border/80 bg-card",
             )}
           >
             <span
               className={cn(
                 "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold",
-                isCorrect
+                yourCorrect
                   ? "bg-[hsl(var(--success))] text-white"
-                  : wrongSelected
-                    ? "bg-destructive text-destructive-foreground"
-                    : selected
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground",
+                  : keyCorrect
+                    ? "bg-primary text-primary-foreground"
+                    : wrongSelected
+                      ? "bg-destructive text-destructive-foreground"
+                      : selected
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
               )}
             >
               {optionLetter(optionIndex)}
@@ -262,19 +289,8 @@ function ChoiceOptionCards({
                 />
               ) : null}
             </div>
-            {statusLabel ? (
-              <p
-                className={cn(
-                  "shrink-0 whitespace-nowrap text-right text-xs font-semibold",
-                  isCorrect
-                    ? "text-[hsl(var(--success))]"
-                    : wrongSelected
-                      ? "text-destructive"
-                      : "text-primary",
-                )}
-              >
-                {statusLabel}
-              </p>
+            {status ? (
+              <OptionStatusChip label={status.label} tone={status.tone} />
             ) : null}
           </div>
         );

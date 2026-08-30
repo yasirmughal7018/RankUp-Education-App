@@ -29,4 +29,5 @@ public sealed record QuizDetailResponse(
     short? ResultPercent,
     short? QuestionsPerAttempt = null,
     short? ResultAnnouncedPercent = null,
-    long? LastAttemptId = null);
+    long? LastAttemptId = null,
+    IReadOnlyList<QuizAttemptSummaryResponse>? Attempts = null);

@@ -305,6 +305,7 @@ owner action.
 | `resultsAnnounceAt` | Attempt result | When auto-graded results become visible |
 | `resultPending` | Each result question | Hide marks / correctness / answers until announced |
 | `resultPercent` | List / detail | Student score; omitted until the owner marks Completed |
+| `attempts` | Student quiz detail | Submitted attempts for this student (id, number, status, %, submittedAt). Reassign does not replace these rows. |
 
 Student UI labels: `Results pending` (window open), `Partial results` (due date
 passed), then `Completed` after the owner action. Always show announced percent.

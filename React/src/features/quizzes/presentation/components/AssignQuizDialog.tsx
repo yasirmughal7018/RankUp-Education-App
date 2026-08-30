@@ -20,9 +20,9 @@ import {
 import type { AssignQuizInput, QuizAssignment } from "@/features/quizzes/domain/quizTypes";
 import {
   assignModesForRole,
+  canReassignQuizAssignment,
   defaultAssignModeForRole,
   isActiveQuizAssignment,
-  isExpiredQuizAssignment,
 } from "@/features/quizzes/domain/quizTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 
@@ -701,8 +701,10 @@ export function AssignQuizDialog({
                       );
                       const alreadyAssigned =
                         existing != null && isActiveQuizAssignment(existing);
-                      const expiredAssigned =
-                        existing != null && isExpiredQuizAssignment(existing);
+                      const canReassign =
+                        existing != null && canReassignQuizAssignment(existing);
+                      const previouslyAttempted =
+                        canReassign && (existing?.attemptCount ?? 0) > 0;
                       return (
                         <li key={student.studentId}>
                           <label
@@ -729,9 +731,11 @@ export function AssignQuizDialog({
                                     Already assigned
                                   </span>
                                 ) : null}
-                                {expiredAssigned ? (
+                                {canReassign ? (
                                   <span className="max-w-[55%] shrink-0 text-right text-xs font-medium text-[var(--status-pending-text)]">
-                                    Previous assignment expired — can reassign
+                                    {previouslyAttempted
+                                      ? "Previously attempted — can reassign"
+                                      : "Previous assignment expired — can reassign"}
                                   </span>
                                 ) : null}
                               </span>

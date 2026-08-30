@@ -167,13 +167,26 @@ public sealed class QuizAssignService : IQuizAssignService
 
                 var attemptCount = await _attempts.CountAttemptsAsync(quizId, studentId, cancellationToken);
                 var quota = (short)Math.Min(short.MaxValue, request.AllowedAttempts + attemptCount);
-                existing.ReopenForReassign(
-                    scope.UserId,
-                    scope.Role,
-                    request.StartAt,
-                    request.EndAt,
-                    quota,
-                    resultStatusId);
+                if (attemptCount > 0)
+                {
+                    existing.GrantReassignAttempts(
+                        scope.UserId,
+                        scope.Role,
+                        request.StartAt,
+                        request.EndAt,
+                        quota);
+                }
+                else
+                {
+                    existing.ReopenForReassign(
+                        scope.UserId,
+                        scope.Role,
+                        request.StartAt,
+                        request.EndAt,
+                        quota,
+                        resultStatusId);
+                }
+
                 if (isGroupAssign)
                 {
                     existing.AssignToGroup(request.GroupId!.Value);
@@ -787,15 +800,7 @@ public sealed class QuizAssignService : IQuizAssignService
             return true;
         }
 
-        if (assignment.EndDateTime >= now)
-        {
-            return false;
-        }
-
-        return assignment.QuizResultStatus is
-            LookupNames.QuizResultStatusIds.NotAttempted
-            or LookupNames.QuizResultStatusIds.Upcoming
-            or LookupNames.QuizResultStatusIds.InProgress;
+        return assignment.EndDateTime < now;
     }
 
     private static bool IsAssignableLifecycle(string lifecycleName)

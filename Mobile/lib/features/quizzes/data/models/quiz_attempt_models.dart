@@ -35,6 +35,7 @@ class QuizDetailModel extends QuizDetail {
     super.attemptsUsed,
     super.shuffleQuestions,
     super.shuffleOptions,
+    super.attempts,
   });
 
   factory QuizDetailModel.fromJson(Map<String, dynamic> json) {
@@ -70,8 +71,27 @@ class QuizDetailModel extends QuizDetail {
       attemptsUsed: _readInt(json, ['attemptsUsed']),
       shuffleQuestions: _readBool(json, ['shuffleQuestions']),
       shuffleOptions: _readBool(json, ['shuffleOptions']),
+      attempts: _readAttemptHistory(json['attempts']),
     );
   }
+}
+
+List<QuizAttemptHistoryItem> _readAttemptHistory(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+
+  return [
+    for (final item in value)
+      if (item is Map<String, dynamic>)
+        QuizAttemptHistoryItem(
+          attemptId: '${_readInt(item, ['attemptId'])}',
+          attemptNumber: _readInt(item, ['attemptNumber']),
+          status: item['status']?.toString() ?? '',
+          percentage: _readInt(item, ['percentage']),
+          submittedAt: _readDate(item, ['submittedAt']),
+        ),
+  ];
 }
 
 /// JSON model for [QuizQuestion].

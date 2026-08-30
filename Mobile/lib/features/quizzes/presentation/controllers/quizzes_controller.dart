@@ -663,6 +663,18 @@ String studentQuizStatus(QuizSummary quiz, [DateTime? currentTime]) {
   return _studentStatus(quiz, currentTime ?? DateTime.now());
 }
 
+bool hasRemainingQuizAttempts(QuizSummary quiz) {
+  if (quiz is! QuizDetail) {
+    return false;
+  }
+
+  if (quiz.attemptLimit <= 0) {
+    return true;
+  }
+
+  return quiz.attemptsUsed < quiz.attemptLimit;
+}
+
 String _studentStatus(QuizSummary quiz, DateTime now) {
   final normalizedResultStatus =
       quiz.resultStatus.toLowerCase().replaceAll(' ', '');

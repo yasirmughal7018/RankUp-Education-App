@@ -28,6 +28,7 @@ export interface QuizDetail {
   /** Questions presented per attempt when random subset is enabled. */
   questionsPerAttempt?: number | null;
   lastAttemptId?: number | null;
+  attempts?: QuizAttemptSummary[];
 }
 
 export interface QuizAttemptOption {

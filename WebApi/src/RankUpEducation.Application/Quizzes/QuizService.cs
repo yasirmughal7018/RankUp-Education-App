@@ -209,8 +209,9 @@ public sealed class QuizService : IQuizService
             var studentId = RequireStudentId();
             var detail = await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken)
                 ?? throw new NotFoundAppException("Quiz was not found for this student.");
+            var attempts = await _attempts.ListCompletedAttemptsAsync(quizId, studentId, cancellationToken);
 
-            return QuizMapping.ToDetailResponse(detail, now);
+            return QuizMapping.ToDetailResponse(detail, now, attempts);
         }
 
         if (role == UserRole.Parent)
@@ -467,9 +468,12 @@ public sealed class QuizService : IQuizService
 
         var assignment = await _assignments.GetAssignmentEntityAsync(quizId, studentId, cancellationToken);
         if (assignment is not null
-            && (assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.NotAttempted
-                || assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Upcoming
-                || assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Expired))
+            && assignment.QuizResultStatus is
+                LookupNames.QuizResultStatusIds.NotAttempted
+                or LookupNames.QuizResultStatusIds.Upcoming
+                or LookupNames.QuizResultStatusIds.Expired
+                or LookupNames.QuizResultStatusIds.Completed
+                or LookupNames.QuizResultStatusIds.UnderReview)
         {
             var inProgressResultId = await _lookups.ResolveLookupIdAsync(
                 LookupNames.QuizResultStatus,

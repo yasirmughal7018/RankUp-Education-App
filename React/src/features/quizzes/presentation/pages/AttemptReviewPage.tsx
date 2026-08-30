@@ -84,7 +84,7 @@ function ReviewMarksChip({
   return (
     <div
       className={cn(
-        "inline-flex min-w-[6.75rem] shrink-0 flex-col items-end rounded-2xl border px-3 py-2 shadow-sm",
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold tabular-nums",
         full
           ? "border-[hsl(var(--success))]/30 bg-[hsl(var(--success-light))]"
           : empty
@@ -92,41 +92,28 @@ function ReviewMarksChip({
             : "border-primary/25 bg-primary/5",
       )}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Marks
-      </span>
-      <div className="mt-0.5 flex items-baseline gap-1">
-        {readOnly ? (
-          <span
-            className={cn(
-              "font-display text-xl font-semibold tabular-nums tracking-tight",
-              awardedClass,
-            )}
-          >
-            {awarded}
-          </span>
-        ) : (
-          <input
-            id={id}
-            type="number"
-            min={0}
-            max={maxMarks}
-            value={awarded}
-            disabled={disabled}
-            onChange={(event) => onChange(Number(event.target.value))}
-            aria-label={`Awarded marks out of ${maxMarks}`}
-            className={cn(
-              "h-8 w-11 bg-transparent p-0 text-right font-display text-xl font-semibold tabular-nums tracking-tight outline-none",
-              "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
-              awardedClass,
-              "focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-80",
-            )}
-          />
-        )}
-        <span className="text-sm font-medium tabular-nums text-muted-foreground">
-          / {maxMarks}
-        </span>
-      </div>
+      <span className="sr-only">Marks</span>
+      {readOnly ? (
+        <span className={cn("tabular-nums", awardedClass)}>{awarded}</span>
+      ) : (
+        <input
+          id={id}
+          type="number"
+          min={0}
+          max={maxMarks}
+          value={awarded}
+          disabled={disabled}
+          onChange={(event) => onChange(Number(event.target.value))}
+          aria-label={`Awarded marks out of ${maxMarks}`}
+          className={cn(
+            "h-4 w-6 bg-transparent p-0 text-right text-xs font-semibold tabular-nums outline-none",
+            "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+            awardedClass,
+            "focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-80",
+          )}
+        />
+      )}
+      <span className="text-muted-foreground">/{maxMarks}</span>
     </div>
   );
 }
@@ -371,15 +358,13 @@ export function AttemptReviewPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-2">
-                <div className="flex flex-wrap justify-end gap-1.5">
-                  {question.requiresReview ? (
-                    <AppStatusBadge status="pending" label="Needs review" />
-                  ) : null}
-                  {question.isCorrect ? (
-                    <AppStatusBadge status="approved" label="Auto-correct" />
-                  ) : null}
-                </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                {question.requiresReview ? (
+                  <AppStatusBadge status="pending" label="Needs review" />
+                ) : null}
+                {question.isCorrect ? (
+                  <AppStatusBadge status="approved" label="Auto-correct" />
+                ) : null}
                 <ReviewMarksChip
                   id={`review-marks-${question.questionId}`}
                   awarded={marks[question.questionId] ?? 0}

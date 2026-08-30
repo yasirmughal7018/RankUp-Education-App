@@ -1280,21 +1280,16 @@ Future<QuestionSummaryModel?> showAttachBankQuestionDialog(
   );
 }
 
-bool _isExpiredQuizAssignment(QuizAssignmentItem assignment) {
+bool _canReassignQuizAssignment(QuizAssignmentItem assignment) {
   final status = assignment.resultStatus.trim().toLowerCase();
   if (status == 'expired') {
     return true;
   }
-  final ended = assignment.endAt.toUtc().isBefore(DateTime.now().toUtc());
-  return ended &&
-      (status == 'not attempted' ||
-          status == 'upcoming' ||
-          status == 'up coming' ||
-          status == 'in progress');
+  return assignment.endAt.toUtc().isBefore(DateTime.now().toUtc());
 }
 
 bool _isActiveQuizAssignment(QuizAssignmentItem assignment) =>
-    !_isExpiredQuizAssignment(assignment);
+    !_canReassignQuizAssignment(assignment);
 
 class _AssignSheet extends ConsumerStatefulWidget {
   const _AssignSheet({
@@ -1548,16 +1543,20 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                           final assignment = _assignmentFor(student.studentId);
                           final alreadyAssigned = assignment != null &&
                               _isActiveQuizAssignment(assignment);
-                          final expiredAssigned = assignment != null &&
-                              _isExpiredQuizAssignment(assignment);
+                          final canReassign = assignment != null &&
+                              _canReassignQuizAssignment(assignment);
+                          final previouslyAttempted =
+                              canReassign && assignment.attemptCount > 0;
                           return CheckboxListTile(
                             value: selected,
                             title: Text(student.fullName),
                             subtitle: Text(
                               alreadyAssigned
                                   ? 'Already assigned'
-                                  : expiredAssigned
-                                      ? 'Previous assignment expired — can reassign\nGrade ${student.grade} · ${student.section}'
+                                  : canReassign
+                                      ? previouslyAttempted
+                                          ? 'Previously attempted — can reassign\nGrade ${student.grade} · ${student.section}'
+                                          : 'Previous assignment expired — can reassign\nGrade ${student.grade} · ${student.section}'
                                       : 'Grade ${student.grade} · ${student.section}',
                             ),
                             enabled: !alreadyAssigned,

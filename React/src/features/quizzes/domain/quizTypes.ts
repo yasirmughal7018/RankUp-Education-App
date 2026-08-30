@@ -991,12 +991,24 @@ export function isExpiredQuizAssignment(
   );
 }
 
-/** True when the student still has an active assignment that should stay locked in the picker. */
+/** True when the assignment window ended or expired — reassign keeps existing attempts. */
+export function canReassignQuizAssignment(
+  assignment: { resultStatus: string; endAt: string },
+  now: number = Date.now(),
+): boolean {
+  if (normalizeAssignmentResultStatus(assignment.resultStatus) === "expired") {
+    return true;
+  }
+
+  return new Date(assignment.endAt).getTime() < now;
+}
+
+/** True when the student still has an open assignment that should stay locked in the picker. */
 export function isActiveQuizAssignment(
   assignment: { resultStatus: string; endAt: string },
   now: number = Date.now(),
 ): boolean {
-  return !isExpiredQuizAssignment(assignment, now);
+  return !canReassignQuizAssignment(assignment, now);
 }
 
 /**

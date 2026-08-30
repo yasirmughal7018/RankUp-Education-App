@@ -58,7 +58,8 @@ public sealed class QuizAssignment : BaseEntity
     }
 
     /// <summary>
-    /// Reopens an expired (or past-window unused) assignment with a new schedule.
+    /// Reopens an unused expired assignment with a new schedule.
+    /// Do not use when the student already has attempts — those rows must stay intact.
     /// </summary>
     public void ReopenForReassign(
         long assignedById,
@@ -80,6 +81,35 @@ public sealed class QuizAssignment : BaseEntity
         AllowedAttempts = allowedAttempts;
         QuizResultStatus = quizResultStatus;
         IsReviewDone = false;
+        ModifiedDate = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Opens a new attempt window after the student already attempted.
+    /// Existing attempt rows, scores, and review-done stay unchanged.
+    /// </summary>
+    public void GrantReassignAttempts(
+        long assignedById,
+        UserRole assignedByRole,
+        DateTimeOffset startDateTime,
+        DateTimeOffset endDateTime,
+        short allowedAttempts)
+    {
+        if (endDateTime <= startDateTime)
+        {
+            throw new BusinessRuleException("Quiz assignment end date must be after start date.");
+        }
+
+        if (allowedAttempts <= 0)
+        {
+            throw new BusinessRuleException("Allowed attempts must be greater than zero.");
+        }
+
+        AssignedById = assignedById;
+        AssignedByRole = assignedByRole;
+        StartDateTime = startDateTime;
+        EndDateTime = endDateTime;
+        AllowedAttempts = allowedAttempts;
         ModifiedDate = DateTimeOffset.UtcNow;
     }
 

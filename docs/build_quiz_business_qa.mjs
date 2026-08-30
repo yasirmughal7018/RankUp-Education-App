@@ -328,7 +328,7 @@ const audienceVisibilityRules = [
 const staffQuizCatalogVisibility = quizListVisibilityRules;
 
 const studentAttemptFlow = [
-  ["1", "Student opens quiz details", "Covered", "/student/quizzes detail; assignment row or Public catalog quiz."],
+  ["1", "Student opens quiz details", "Covered", "/student/quizzes detail; assignment row or Public catalog quiz. Shows attempt count and each submitted attempt with its result."],
   ["2", "System checks eligibility", "Covered", "Assignment (or Public window), quiz IsActive, now within window, attempt quota, DeviceId, optional instructions ack."],
   ["3", "Student reads instructions", "Covered", "When Instructions are set, start requires InstructionsAcknowledged=true (API + student detail checkbox)."],
   ["4", "Student starts the quiz", "Covered", "POST .../attempts starts a new attempt or resumes an InProgress one."],
@@ -369,6 +369,7 @@ const attemptRules = [
   "Assignment required; quiz IsActive; now within [StartDateTime, EndDateTime].",
   "If an InProgress attempt exists → resume (no new attempt).",
   "New start blocked when ExistingAttemptCount ≥ AllowedAttempts.",
+  "Reassign after the window ends does not delete or rewrite prior attempts. The next start inserts a new QuizAttempt. Student quiz detail returns attempts[] (number, status, result, submitted time).",
   "DeviceId required (non-empty).",
   "Time limit returned to client; UI countdown + auto-submit. Server enforces TimeLimitMinutes (with grace for IsAutoSubmit) and assignment EndDateTime.",
   "On start: create QuizAttempt and snapshot QuizAttemptQuestion rows (text, marks, options; shuffled order when ShuffleQuestions is on).",
@@ -498,7 +499,7 @@ const apiMap = [
   ["GET/POST /api/parents/me/groups", "Parent-only child groups (list/create). Used by My children and Parent assign mode=group."],
   ["PUT/DELETE /api/parents/me/groups/{groupId}", "Parent update or deactivate own group."],
   ["POST/DELETE /api/parents/me/groups/{groupId}/members", "Add/remove linked children only."],
-  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published (legacy Assigned still allowed). Not Draft. Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle stays Published. Parent mode=group uses a parent-owned group id."],
+  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published (legacy Assigned still allowed). Not Draft. Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle stays Published. Parent mode=group uses a parent-owned group id. Reassign after the window ends keeps prior attempts and adds a new attempt grant."],
   ["POST /api/quizzes/{id}/cancel", "Remove upcoming assignments; quiz stays Published."],
   ["POST /api/quizzes/{id}/archive", "PortalAdmin only when lifecycle is Published or Assigned (any student/child assignment). Other roles: own Draft delete only. No assignments → hard delete; else Archived + Inactive."],
   ["POST /api/quizzes/{id}/unarchive", "PortalAdmin only. Restore Published."],
@@ -714,6 +715,12 @@ const scenarios = [
     "Matching unmatched slot stays index-aligned",
     "Student matches pair 1 and pair 3 correctly and leaves pair 2 unmatched on a 3-mark Matching with 3 pairs.",
     "CorrectComponents=2, TotalComponents=3, CalculatedMarks=2, AwardedMarks=2. Pair 3 is scored against pair 3, not shifted onto pair 2.",
+  ],
+  [
+    "QZ-31",
+    "Reassign after an attempted quiz keeps old results",
+    "Student submits quiz 36. After the due date a parent or teacher assigns the same quiz again. Student opens quiz details and starts.",
+    "Existing QuizAttempt rows and scores stay. Assignment AllowedAttempts = old count + new grant. Start creates attempt #2. Detail shows attempt count and each prior result.",
   ],
 ];
 
@@ -940,9 +947,12 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   ${htmlList([
     "Prerequisites: Lifecycle Published or Assigned (not Draft); Approval gates met; not Archived; ≥1 question.",
     "EndAt > StartAt; AllowedAttempts > 0.",
-    "Existing (quiz, student) assignment → skip; if all skipped → validation error.",
+    "Existing (quiz, student) assignment with an open window → skip. After the window ends (including Completed / Under Review), parent or teacher may reassign.",
+    "Reassign of a student who already attempted does not overwrite attempt rows or scores. AllowedAttempts becomes existing attempt count + new grant; IsReviewDone and stored attempt results stay. The next start creates a new QuizAttempt.",
+    "Unused expired assignments still reopen the same row (new window, reset result status).",
+    "If every selected student still has an open assignment → validation error.",
     "Cancel: hard-delete future assignments only; restore lifecycle Assigned or Published (never Cancelled).",
-    "Allow retry: review must be finalized; attempt count ≥ allowed; ExtraAttempts += 1 (default); IsReviewDone=false. Archived blocked.",
+    "Allow retry: review must be finalized; attempt count ≥ allowed; ExtraAttempts += 1 (default); IsReviewDone=false. Archived blocked. Use this while the window is still open; use reassign after the window ends.",
     "Parent group assign: groups come from /parents/me/groups (created on My children). Dropdown by group name; members must be linked children.",
   ])}
   <h3>QuizAssignment table</h3>

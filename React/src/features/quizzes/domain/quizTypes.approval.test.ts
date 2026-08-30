@@ -6,6 +6,7 @@ import {
   canAssignQuiz,
   canAuthorQuizzes,
   canCancelOwnUpcomingAssignments,
+  canReassignQuizAssignment,
   isActiveQuizAssignment,
   isExpiredQuizAssignment,
   canDeleteOrArchiveQuiz,
@@ -228,7 +229,7 @@ describe("expired assignment reassign", () => {
     ).toBe(true);
   });
 
-  it("locks students who still have an active assignment", () => {
+  it("locks students who still have an open assignment", () => {
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Not Attempted", endAt: "2099-01-01T00:00:00Z" },
@@ -237,13 +238,34 @@ describe("expired assignment reassign", () => {
     ).toBe(true);
     expect(
       isActiveQuizAssignment(
-        { resultStatus: "Completed", endAt: "2025-12-01T00:00:00Z" },
+        { resultStatus: "Completed", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
     ).toBe(true);
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Expired", endAt: "2025-12-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("allows reassign after the window ends without overwriting past attempts", () => {
+    expect(
+      canReassignQuizAssignment(
+        { resultStatus: "Completed", endAt: "2025-12-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      canReassignQuizAssignment(
+        { resultStatus: "Under Review", endAt: "2025-12-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      canReassignQuizAssignment(
+        { resultStatus: "Completed", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
     ).toBe(false);
