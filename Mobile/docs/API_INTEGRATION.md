@@ -291,22 +291,23 @@ For multi-select questions, send **all** chosen ids in `selectedOptionIds`.
 `selectedOptionId` remains for single-choice / true-false.
 Submit uses the same answer shape as draft.
 
-### Delayed result announcement
+### Result announcement
 
 After submit, auto-graded questions (known correct answer already on the item) are
-announced **1 hour after quiz completion** (later of `submittedAt` and assignment
-`endDateTime`). Descriptive / file-upload questions stay pending until teacher
-finalize.
+announced **when the assignment due date ends** (later of `submittedAt` and
+`endDateTime`). Descriptive / file-upload questions stay pending until the owner
+marks the attempt **Completed**. Full student status Completed also waits for that
+owner action.
 
 | Field | Where | Meaning |
 | --- | --- | --- |
 | `resultAnnouncedPercent` | List, detail, attempt result | Share of marks whose results are announced (not the student’s score) |
 | `resultsAnnounceAt` | Attempt result | When auto-graded results become visible |
 | `resultPending` | Each result question | Hide marks / correctness / answers until announced |
-| `resultPercent` | List / detail | Student score; omitted until announced percent is 100 |
+| `resultPercent` | List / detail | Student score; omitted until the owner marks Completed |
 
-Student UI labels: `Results pending` (0%), `Partial results` (1–99%), then the
-stored completed/reviewed status at 100%.
+Student UI labels: `Results pending` (window open), `Partial results` (due date
+passed), then `Completed` after the owner action. Always show announced percent.
 
 ## Quiz manage / approval (teacher & admin)
 

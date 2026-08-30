@@ -3035,7 +3035,7 @@ class _SubmissionConfirmationView extends StatelessWidget {
                   ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Your attempt was submitted successfully. Auto-graded answers are announced 1 hour after the quiz ends. Teacher-review questions stay pending until they are marked.',
+                  'Your attempt was submitted successfully. Auto-graded answers are announced when the quiz due date ends. The owner marks the quiz Completed to release the full result.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
@@ -3097,7 +3097,7 @@ class _QuizReviewView extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   announcedPercent <= 0
-                      ? 'Auto-graded answers (questions with a known correct answer) are announced 1 hour after the quiz ends. Teacher-review questions stay pending until they are marked.'
+                      ? 'Auto-graded answers (questions with a known correct answer) are announced when the quiz due date ends. The owner marks the quiz Completed to release the full result.'
                       : announcedPercent < 100
                           ? '$announcedPercent% of this result is announced (auto-graded questions). The rest stays pending until a teacher publishes review.'
                           : 'Reviewed answers, explanations, and feedback are available for this quiz.',

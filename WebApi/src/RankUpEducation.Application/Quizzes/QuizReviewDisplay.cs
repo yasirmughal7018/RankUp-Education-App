@@ -2,14 +2,12 @@ namespace RankUpEducation.Application.Quizzes;
 
 /// <summary>
 /// Resolves what students may see on the post-submit result screen.
-/// Auto-graded questions (correct answers already on the item) are announced
-/// 1 hour after the quiz window completes. Teacher-review items stay pending
-/// until review is published.
+/// Auto-graded questions announce when the assignment window ends.
+/// Full Completed status waits until the owner marks the attempt completed.
 /// </summary>
 public static class QuizReviewDisplay
 {
     public const string Full = "Full";
-    public const int ObjectiveAnnouncementDelayHours = 1;
 
     public sealed record Visibility(
         string Mode,
@@ -27,9 +25,8 @@ public static class QuizReviewDisplay
     }
 
     /// <summary>
-    /// Quiz completion is the later of submit and assignment end, then +1 hour.
-    /// If the student submits before the window ends, answers stay hidden until
-    /// the quiz completes and the delay elapses.
+    /// Quiz completion is the later of submit and assignment end.
+    /// Early submitters stay hidden until the due date.
     /// </summary>
     public static DateTimeOffset? ResolveAnnouncementAt(
         DateTimeOffset? submittedAt,
@@ -40,11 +37,9 @@ public static class QuizReviewDisplay
             return null;
         }
 
-        var completedAt = assignmentEndAt is { } end && end > submittedAt.Value
+        return assignmentEndAt is { } end && end > submittedAt.Value
             ? end
             : submittedAt.Value;
-
-        return completedAt.AddHours(ObjectiveAnnouncementDelayHours);
     }
 
     public static short ComputeAnnouncedPercent(
@@ -89,7 +84,7 @@ public static class QuizReviewDisplay
             questions,
             objectiveReleased,
             isReviewDone);
-        var reviewPending = announcedPercent < 100;
+        var reviewPending = !isReviewDone;
 
         return new Visibility(
             Full,
@@ -140,10 +135,15 @@ public static class QuizReviewDisplay
         return visibility.AnnouncedPercent;
     }
 
-    /// <summary>Attempt result status while scores are still rolling out.</summary>
-    public static string? ResolveResultStatusOverride(short announcedPercent)
+    /// <summary>
+    /// Attempt result status: pending while the window is open, partial after
+    /// due-date announcement, Completed only after the owner marks it done.
+    /// </summary>
+    public static string? ResolveResultStatusOverride(
+        short announcedPercent,
+        bool isReviewDone)
     {
-        if (announcedPercent >= 100)
+        if (isReviewDone)
         {
             return null;
         }
@@ -152,17 +152,20 @@ public static class QuizReviewDisplay
     }
 
     /// <summary>
-    /// List/detail status: pending until the delay, then partial, then the stored
-    /// completed/reviewed name (or Completed if the stored value is still a review label).
+    /// List/detail status: pending until the due date, then partial, then
+    /// Completed only after the owner marks the attempt completed.
     /// </summary>
-    public static string ApplyListResultStatus(string storedStatus, short? announcedPercent)
+    public static string ApplyListResultStatus(
+        string storedStatus,
+        short? announcedPercent,
+        bool isReviewDone = false)
     {
         if (announcedPercent is null)
         {
             return storedStatus;
         }
 
-        var pendingLabel = ResolveResultStatusOverride(announcedPercent.Value);
+        var pendingLabel = ResolveResultStatusOverride(announcedPercent.Value, isReviewDone);
         if (pendingLabel is not null)
         {
             return pendingLabel;

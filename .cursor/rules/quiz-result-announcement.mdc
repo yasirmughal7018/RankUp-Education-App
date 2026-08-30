@@ -1,0 +1,15 @@
+---
+description: When student quiz results are announced
+globs: WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,React/src/features/student/**/*.{ts,tsx},React/src/features/quizzes/presentation/pages/{AttemptReviewPage,QuizMonitoringPage}.tsx
+alwaysApply: false
+---
+
+# Quiz result announcement
+
+- **Window open:** 0% announced. Hide marks, correctness, and correct answers.
+- **Due date passed:** announce auto-graded questions (known correct answer on the item). Status = Partial results. Show `resultAnnouncedPercent`.
+- **Owner Completed:** `IsReviewDone` via finalize-review. Status = Completed. Announced percent = 100. Teacher-review questions become visible.
+
+Quiz completion for announcement is the later of `SubmittedAt` and assignment `EndDateTime`. Do not add an extra hour after the due date.
+
+Announced percent = announced question marks / total marks (not the student score).

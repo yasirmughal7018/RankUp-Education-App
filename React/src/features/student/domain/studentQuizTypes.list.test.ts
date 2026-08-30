@@ -176,11 +176,11 @@ describe("formatStudentQuizListResult", () => {
     expect(
       formatStudentQuizListResult({
         ...quiz({
-          resultStatus: "Under Review",
+          resultStatus: "Partial results",
           lastAttemptId: 9,
         }),
         resultAnnouncedPercent: 40,
       }),
-    ).toEqual({ label: "Pending", detail: "40% announced" });
+    ).toEqual({ label: "Partial results", detail: "40% announced" });
   });
 });

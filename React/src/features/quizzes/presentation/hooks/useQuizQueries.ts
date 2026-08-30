@@ -419,7 +419,7 @@ export function useMarkAttemptAnswersMutation(quizId: number, attemptId: number)
   });
 }
 
-/** Finalize review and release results. */
+/** Finalize review and release the full result (owner Completed). */
 export function useFinalizeAttemptReviewMutation(quizId: number, attemptId: number) {
   const queryClient = useQueryClient();
 
@@ -429,6 +429,27 @@ export function useFinalizeAttemptReviewMutation(quizId: number, attemptId: numb
       void queryClient.invalidateQueries({
         queryKey: queryKeys.attemptReview(quizId, attemptId),
       });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.pendingReviews(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.quizMonitoring(quizId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.assignmentBoard(),
+      });
+    },
+  });
+}
+
+/** Mark any submitted attempt Completed from the monitoring board. */
+export function useCompleteQuizAttemptMutation(quizId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (attemptId: number) =>
+      quizMonitorApi.finalizeAttemptReview(quizId, attemptId),
+    onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.pendingReviews(),
       });

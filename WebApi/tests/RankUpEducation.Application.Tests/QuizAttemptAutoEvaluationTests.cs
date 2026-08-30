@@ -152,6 +152,26 @@ public sealed class QuizAttemptAutoEvaluationTests
         Assert.Equal((short)1, result.AwardedMarks);
     }
 
+    [Fact]
+    public void MultipleChoice_ThreeMarks_OneCorrectAndOneWrong_AwardsOne()
+    {
+        var result = QuizAttemptAutoEvaluation.Evaluate(
+            "Multiple Choice",
+            3,
+            [107, 109],
+            null,
+            [
+                new QuizQuestionOptionItem(107, "2", null, true),
+                new QuizQuestionOptionItem(108, "5", null, true),
+                new QuizQuestionOptionItem(109, "6", null, false),
+                new QuizQuestionOptionItem(110, "4", null, false)
+            ],
+            []);
+
+        Assert.False(result.IsCorrect);
+        Assert.Equal((short)1, result.AwardedMarks);
+    }
+
     private static QuestionAcceptedAnswerScoreItem Accepted(
         string text,
         bool isCaseSensitive = false,

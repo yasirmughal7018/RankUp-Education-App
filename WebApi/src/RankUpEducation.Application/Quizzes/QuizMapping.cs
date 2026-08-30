@@ -34,7 +34,7 @@ internal static class QuizMapping
             item.IsReviewDone,
             item.AutoGradedMarks ?? totalMarks,
             totalMarks);
-        var scorePercent = announcedPercent == 100 ? item.BestPercentage : null;
+        var scorePercent = item.IsReviewDone ? item.BestPercentage : null;
         var resultStatus = QuizReviewDisplay.ApplyListResultStatus(
             ResolveResultStatusName(
                 item.QuizResultStatusName,
@@ -42,7 +42,8 @@ internal static class QuizMapping
                 attemptLimit,
                 item.BestPercentage,
                 item.LastSubmittedAt),
-            announcedPercent);
+            announcedPercent,
+            item.IsReviewDone);
 
         return new QuizSummaryResponse(
             item.QuizId,
@@ -91,7 +92,7 @@ internal static class QuizMapping
             item.IsReviewDone,
             item.AutoGradedMarks ?? totalMarks,
             totalMarks);
-        var scorePercent = announcedPercent == 100 ? item.BestPercentage : null;
+        var scorePercent = item.IsReviewDone ? item.BestPercentage : null;
         var resultStatus = QuizReviewDisplay.ApplyListResultStatus(
             ResolveResultStatusName(
                 item.QuizResultStatusName,
@@ -99,7 +100,8 @@ internal static class QuizMapping
                 attemptLimit,
                 item.BestPercentage,
                 item.LastSubmittedAt),
-            announcedPercent);
+            announcedPercent,
+            item.IsReviewDone);
 
         return new QuizDetailResponse(
             item.QuizId,

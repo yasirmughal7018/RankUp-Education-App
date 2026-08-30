@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PageHeader } from "@/core/components/PageHeader";
+import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { downloadCsv } from "@/core/utils/csv";
 import {
   buildQuizMonitoringCsv,
@@ -11,7 +13,10 @@ import {
   attemptReviewActionLabel,
   hasAttemptScoreAccess,
 } from "@/features/quizzes/domain/quizMonitorTypes";
-import { useQuizMonitoringQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
+import {
+  useCompleteQuizAttemptMutation,
+  useQuizMonitoringQuery,
+} from "@/features/quizzes/presentation/hooks/useQuizQueries";
 import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
 
 function formatDateTime(value: string | null): string {
@@ -37,6 +42,10 @@ export function QuizMonitoringPage() {
     refetch,
     isFetching,
   } = useQuizMonitoringQuery(numericQuizId);
+  const completeAttempt = useCompleteQuizAttemptMutation(numericQuizId);
+  const [completeAttemptId, setCompleteAttemptId] = useState<number | null>(
+    null,
+  );
 
   if (isLoading) {
     return (
@@ -220,7 +229,18 @@ export function QuizMonitoringPage() {
                             )}
                           </Link>
                           {student.isReviewDone ? (
-                            <StatusBadge label="Reviewed" tone="success" />
+                            <StatusBadge label="Completed" tone="success" />
+                          ) : hasAttemptScoreAccess(student.canScore) ? (
+                            <button
+                              type="button"
+                              disabled={completeAttempt.isPending}
+                              onClick={() =>
+                                setCompleteAttemptId(student.lastAttemptId)
+                              }
+                              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
+                            >
+                              Completed
+                            </button>
                           ) : null}
                         </div>
                       ) : (
@@ -234,6 +254,27 @@ export function QuizMonitoringPage() {
           </div>
         )}
       </div>
+
+      <AppConfirmDialog
+        open={completeAttemptId != null}
+        onOpenChange={(open) => {
+          if (!open && !completeAttempt.isPending) {
+            setCompleteAttemptId(null);
+          }
+        }}
+        title="Mark quiz completed"
+        description="This releases the full result to the student. Auto-graded answers already visible after the due date stay visible."
+        confirmLabel="Completed"
+        loading={completeAttempt.isPending}
+        onConfirm={() => {
+          if (completeAttemptId == null) {
+            return;
+          }
+          void completeAttempt
+            .mutateAsync(completeAttemptId)
+            .then(() => setCompleteAttemptId(null));
+        }}
+      />
     </div>
   );
 }

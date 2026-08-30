@@ -936,7 +936,8 @@ public sealed class QuizService : IQuizService
             assignment?.EndDateTime,
             questionShares);
         var resultStatusOverride = QuizReviewDisplay.ResolveResultStatusOverride(
-            visibility.AnnouncedPercent);
+            visibility.AnnouncedPercent,
+            visibility.ReviewDone);
 
         return QuizMapping.ToAttemptResult(
             result,
@@ -1082,7 +1083,8 @@ public sealed class QuizService : IQuizService
             assignment?.EndDateTime,
             questionShares);
         var resultStatusOverride = QuizReviewDisplay.ResolveResultStatusOverride(
-            visibility.AnnouncedPercent);
+            visibility.AnnouncedPercent,
+            visibility.ReviewDone);
 
         return QuizMapping.ToAttemptResult(
             result,

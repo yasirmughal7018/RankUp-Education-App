@@ -21,17 +21,18 @@ function announcedPercentOf(result: QuizAttemptResult): number {
   return result.reviewPending ? 0 : 100;
 }
 
-/** Resolve result visibility, including the 1-hour auto-graded announcement delay. */
+/** Resolve result visibility: auto-graded after due date; full Completed after owner action. */
 export function resolveQuizResultDisplay(
   result: QuizAttemptResult,
 ): QuizResultDisplayFlags {
   const announcedPercent = announcedPercentOf(result);
   const announcesAt = result.resultsAnnounceAt?.trim() || null;
+  const ownerPending = result.reviewPending === true;
 
   if (announcedPercent <= 0) {
     const when = announcesAt
-      ? ` Auto-graded answers (questions with a known correct answer) are announced 1 hour after the quiz ends${formatAnnounceWhen(announcesAt)}.`
-      : " Auto-graded answers (questions with a known correct answer) are announced 1 hour after the quiz ends.";
+      ? ` Auto-graded answers (questions with a known correct answer) are announced when the quiz due date ends${formatAnnounceWhen(announcesAt)}.`
+      : " Auto-graded answers (questions with a known correct answer) are announced when the quiz due date ends.";
     return {
       mode: "Full",
       reviewPending: true,
@@ -41,11 +42,11 @@ export function resolveQuizResultDisplay(
       showExplanations: false,
       announcedPercent: 0,
       announcesAt,
-      modeNote: `Results are pending.${when} Teacher-review questions stay pending until they are marked.`,
+      modeNote: `Results are pending.${when} The owner marks the quiz Completed to release the full result.`,
     };
   }
 
-  if (announcedPercent < 100) {
+  if (ownerPending || announcedPercent < 100) {
     return {
       mode: "Full",
       reviewPending: true,
@@ -55,7 +56,10 @@ export function resolveQuizResultDisplay(
       showExplanations: true,
       announcedPercent,
       announcesAt,
-      modeNote: `${announcedPercent}% of this result is announced (auto-graded questions). The rest stays pending until a teacher publishes review.`,
+      modeNote:
+        announcedPercent < 100
+          ? `${announcedPercent}% of this result is announced (auto-graded questions). The rest stays pending until the owner marks the quiz Completed.`
+          : "Auto-graded answers are announced. The owner has not marked this quiz Completed yet.",
     };
   }
 

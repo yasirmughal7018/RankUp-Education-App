@@ -459,8 +459,11 @@ export function formatStudentQuizListResult(quiz: {
   }
 
   const announced = quiz.resultAnnouncedPercent;
-  if (typeof announced === "number" && announced > 0 && announced < 100) {
-    return { label: "Pending", detail: `${announced}% announced` };
+  if (typeof announced === "number") {
+    return {
+      label: status.length > 0 ? status : "Pending",
+      detail: `${Math.round(announced)}% announced`,
+    };
   }
 
   return { label: "Pending", detail: status.length > 0 ? status : null };

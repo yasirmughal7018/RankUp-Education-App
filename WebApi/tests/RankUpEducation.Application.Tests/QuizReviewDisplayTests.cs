@@ -2,19 +2,20 @@ using RankUpEducation.Application.Quizzes;
 
 namespace RankUpEducation.Application.Tests;
 
-/// <summary>Auto-graded results announce 1 hour after quiz completion; subjective stay pending.</summary>
+/// <summary>Auto-graded results announce when the due date ends; full Completed waits for the owner.</summary>
 public sealed class QuizReviewDisplayTests
 {
     private static readonly DateTimeOffset Submitted = new(2026, 8, 24, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Resolve_BeforeDelay_HidesAllResults()
+    public void Resolve_BeforeWindowEnds_HidesAllResults()
     {
+        var windowEnd = Submitted.AddHours(2);
         var visibility = QuizReviewDisplay.Resolve(
             isReviewDone: false,
             now: Submitted.AddMinutes(30),
             submittedAt: Submitted,
-            assignmentEndAt: Submitted,
+            assignmentEndAt: windowEnd,
             questions: [(true, 10), (false, 10)]);
 
         Assert.False(visibility.ObjectiveReleased);
@@ -25,11 +26,11 @@ public sealed class QuizReviewDisplayTests
     }
 
     [Fact]
-    public void Resolve_AfterDelay_AnnouncesAutoGradedOnly()
+    public void Resolve_AfterDueDate_AnnouncesAutoGradedOnly()
     {
         var visibility = QuizReviewDisplay.Resolve(
             isReviewDone: false,
-            now: Submitted.AddHours(1).AddMinutes(1),
+            now: Submitted.AddMinutes(1),
             submittedAt: Submitted,
             assignmentEndAt: Submitted,
             questions: [(true, 70), (false, 30)]);
@@ -43,38 +44,39 @@ public sealed class QuizReviewDisplayTests
     }
 
     [Fact]
-    public void Resolve_WaitsUntilAssignmentWindowEndsPlusOneHour()
+    public void Resolve_WaitsUntilAssignmentWindowEnds()
     {
         var windowEnd = Submitted.AddHours(2);
-        var visibility = QuizReviewDisplay.Resolve(
+        var duringWindow = QuizReviewDisplay.Resolve(
             isReviewDone: false,
-            now: Submitted.AddHours(2).AddMinutes(30),
+            now: Submitted.AddHours(2).AddMinutes(-1),
             submittedAt: Submitted,
             assignmentEndAt: windowEnd,
             questions: [(true, 10)]);
 
-        Assert.False(visibility.ObjectiveReleased);
-        Assert.Equal(0, visibility.AnnouncedPercent);
+        Assert.False(duringWindow.ObjectiveReleased);
+        Assert.Equal(0, duringWindow.AnnouncedPercent);
 
-        var afterDelay = QuizReviewDisplay.Resolve(
+        var afterDue = QuizReviewDisplay.Resolve(
             isReviewDone: false,
-            now: windowEnd.AddHours(1),
+            now: windowEnd,
             submittedAt: Submitted,
             assignmentEndAt: windowEnd,
             questions: [(true, 10)]);
 
-        Assert.True(afterDelay.ObjectiveReleased);
-        Assert.Equal(100, afterDelay.AnnouncedPercent);
+        Assert.True(afterDue.ObjectiveReleased);
+        Assert.Equal(100, afterDue.AnnouncedPercent);
+        Assert.True(afterDue.ReviewPending);
     }
 
     [Fact]
-    public void Resolve_WhenReviewDone_ShowsFullResults()
+    public void Resolve_WhenOwnerMarksCompleted_ShowsFullResults()
     {
         var visibility = QuizReviewDisplay.Resolve(
             isReviewDone: true,
             now: Submitted.AddMinutes(5),
             submittedAt: Submitted,
-            assignmentEndAt: Submitted,
+            assignmentEndAt: Submitted.AddHours(2),
             questions: [(true, 8), (false, 2)]);
 
         Assert.False(visibility.ReviewPending);
@@ -97,12 +99,13 @@ public sealed class QuizReviewDisplayTests
     }
 
     [Fact]
-    public void ApplyListResultStatus_UsesPendingPartialAndCompletedLabels()
+    public void ApplyListResultStatus_UsesPendingPartialUntilOwnerCompletes()
     {
         Assert.Equal("Not Started", QuizReviewDisplay.ApplyListResultStatus("Not Started", null));
         Assert.Equal("Results pending", QuizReviewDisplay.ApplyListResultStatus("Under Review", 0));
         Assert.Equal("Partial results", QuizReviewDisplay.ApplyListResultStatus("Under Review", 70));
-        Assert.Equal("Completed", QuizReviewDisplay.ApplyListResultStatus("Under Review", 100));
-        Assert.Equal("Reviewed", QuizReviewDisplay.ApplyListResultStatus("Reviewed", 100));
+        Assert.Equal("Partial results", QuizReviewDisplay.ApplyListResultStatus("Under Review", 100));
+        Assert.Equal("Completed", QuizReviewDisplay.ApplyListResultStatus("Under Review", 100, isReviewDone: true));
+        Assert.Equal("Reviewed", QuizReviewDisplay.ApplyListResultStatus("Reviewed", 100, isReviewDone: true));
     }
 }

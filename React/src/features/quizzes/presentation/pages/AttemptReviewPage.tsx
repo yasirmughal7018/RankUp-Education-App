@@ -230,7 +230,7 @@ export function AttemptReviewPage() {
     } catch (caught) {
       setFinalizeOpen(false);
       const apiError = caught as { message?: string };
-      setActionError(apiError.message || "Unable to finalize review.");
+      setActionError(apiError.message || "Unable to mark this quiz completed.");
     }
   }
 
@@ -474,7 +474,7 @@ export function AttemptReviewPage() {
               disabled={isSubmitting}
               onClick={() => setFinalizeOpen(true)}
             >
-              Finalize review
+              Completed
             </Button>
           ) : null}
         </section>
@@ -487,9 +487,9 @@ export function AttemptReviewPage() {
             setFinalizeOpen(false);
           }
         }}
-        title="Finalize review"
-        description="This saves the marks and releases the result to the student. You can still update scores later if needed."
-        confirmLabel="Finalize"
+        title="Mark quiz completed"
+        description="This releases the full result to the student (announced percent 100%). Auto-graded answers already visible after the due date stay visible."
+        confirmLabel="Completed"
         loading={isSubmitting}
         onConfirm={() => {
           void handleFinalize();
