@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IQuizService, QuizService>();
+        services.AddScoped<IQuizOverdueAttemptCloser, QuizOverdueAttemptCloser>();
         services.AddScoped<IQuizManageService, QuizManageService>();
         services.AddScoped<IQuestionService, QuestionService>();
         services.AddScoped<IQuestionEditRequestService, QuestionEditRequestService>();

@@ -27,6 +27,11 @@ public interface IQuizAttemptRepository
 
     Task<QuizAttemptDetailItem?> GetAttemptDetailAsync(long attemptId, long studentId, CancellationToken cancellationToken);
 
+    /// <summary>In-progress attempts whose assignment window has already ended.</summary>
+    Task<IReadOnlyList<(long AttemptId, long QuizId, long StudentId)>> ListOverdueInProgressAttemptsAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken);
+
     /// <summary>Submitted (not in-progress) attempts for a student on one quiz, oldest first.</summary>
     Task<IReadOnlyList<QuizAttemptSummaryItem>> ListCompletedAttemptsAsync(
         long quizId,

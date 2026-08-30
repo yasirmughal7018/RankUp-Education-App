@@ -194,16 +194,16 @@ class QuizRemoteDataSource {
         'selectedOptionId': int.tryParse(primaryId) ?? primaryId,
       if (selectedIds.length > 1)
         'selectedOptionIds': [
-          for (final id in selectedIds) int.tryParse(id) ?? id,
+          for (final id in selectedIds) int.tryParse(id) ?? 0,
         ],
       if (selectedIds.length == 1 && primaryId == null)
         'selectedOptionIds': [
-          for (final id in selectedIds) int.tryParse(id) ?? id,
+          for (final id in selectedIds) int.tryParse(id) ?? 0,
         ],
       if (selectedIds.length > 1 ||
           (selectedIds.length == 1 && answer.selectedOptionIds != null))
         'selectedOptionIds': [
-          for (final id in selectedIds) int.tryParse(id) ?? id,
+          for (final id in selectedIds) int.tryParse(id) ?? 0,
         ],
       if (answer.submittedText != null &&
           answer.submittedText!.trim().isNotEmpty)

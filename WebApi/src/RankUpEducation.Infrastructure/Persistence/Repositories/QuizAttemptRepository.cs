@@ -99,6 +99,17 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
         var frozenAccepted = await _dbContext.QuizAttemptAcceptedAnswers.AsNoTracking()
             .Where(answer => attemptQuestionIds.Contains(answer.QuizAttemptQuestionId))
             .ToListAsync(cancellationToken);
+        var fillQuestionIdsWithoutSnapshot = attemptQuestions
+            .Where(item => QuizQuestionHelper.IsFillBlankType(item.QuestionTypeName)
+                && !frozenAccepted.Any(answer => answer.QuizAttemptQuestionId == item.Id))
+            .Select(item => item.QuestionId)
+            .Distinct()
+            .ToArray();
+        var bankAccepted = fillQuestionIdsWithoutSnapshot.Length == 0
+            ? []
+            : await _dbContext.QuestionAcceptedAnswers.AsNoTracking()
+                .Where(answer => fillQuestionIdsWithoutSnapshot.Contains(answer.QuestionId))
+                .ToListAsync(cancellationToken);
 
         // Fallback for pre-freeze attempts: live bank options.
         var legacyQuestionIds = attemptQuestions
@@ -156,13 +167,14 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
             {
                 var questionAnswers = answers
                     .Where(row => row.QuizAttemptQuestionId == item.Id)
+                    .OrderBy(row => row.Id)
                     .ToArray();
-                var selectedOptionIds = QuizAnswerSelection.AggregateSelectedOptionIds(
-                    questionAnswers.Select(row => row.QuestionOptionId));
+                var selectedOptionIds = QuizAnswerSelection.AggregateComponentIds(
+                    questionAnswers.Select(row => row.QuestionOptionId),
+                    item.QuestionTypeName);
                 var primaryAnswer = questionAnswers.FirstOrDefault();
                 var awardedMarks = questionAnswers.Sum(row => (int)row.AwardedMarks);
-                var isCorrect = questionAnswers.Any(row => row.IsCorrect)
-                    && awardedMarks > 0;
+                var isCorrect = questionAnswers.Any(row => row.IsCorrect);
 
                 if (questionAnswers.Length > 1)
                 {
@@ -220,6 +232,22 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                         answer.AllowAiReview,
                         answer.AllowTeacherReview))
                     .ToArray();
+                if (accepted.Length == 0 && QuizQuestionHelper.IsFillBlankType(item.QuestionTypeName))
+                {
+                    accepted = bankAccepted
+                        .Where(answer => answer.QuestionId == item.QuestionId)
+                        .Select(answer => new QuestionAcceptedAnswerScoreItem(
+                            answer.Id,
+                            answer.AnswerText,
+                            answer.IsCaseSensitive,
+                            answer.AllowPartialMatch,
+                            answer.NormalizedAnswer,
+                            answer.MinimumLength,
+                            answer.MaximumLength,
+                            answer.AllowAiReview,
+                            answer.AllowTeacherReview))
+                        .ToArray();
+                }
 
                 string? teacherFeedback = null;
                 string? parentFeedback = null;
@@ -255,6 +283,21 @@ public sealed class QuizAttemptRepository : IQuizAttemptRepository
                     parentFeedback,
                     aiFeedback);
             }).ToArray());
+    }
+
+    public async Task<IReadOnlyList<(long AttemptId, long QuizId, long StudentId)>> ListOverdueInProgressAttemptsAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        return await (
+            from attempt in _dbContext.QuizAttempts
+            join assignment in _dbContext.QuizAssignments
+                on new { attempt.QuizId, attempt.StudentId }
+                equals new { assignment.QuizId, assignment.StudentId }
+            where attempt.StatusId == LookupNames.QuizAttemptStatusIds.InProgress
+                && assignment.EndDateTime < now
+            select new ValueTuple<long, long, long>(attempt.Id, attempt.QuizId, attempt.StudentId))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<QuizAttemptSummaryItem>> ListCompletedAttemptsAsync(

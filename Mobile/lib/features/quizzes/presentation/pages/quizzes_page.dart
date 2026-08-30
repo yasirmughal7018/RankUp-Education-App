@@ -1033,8 +1033,10 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
         if (saved.selectedOptionId != null &&
             !saved.selectedOptionIds.contains(saved.selectedOptionId))
           saved.selectedOptionId!,
-      ];
-      if (optionIds.isNotEmpty) {
+      ]
+          .map((id) => id == '0' ? '' : id)
+          .toList();
+      if (optionIds.any((id) => id.isNotEmpty)) {
         _selectedOptionIds[index] = optionIds;
         _answeredQuestions.add(index);
       }
@@ -1117,16 +1119,22 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
     final selectedIds = _selectedOptionIds[index] ?? const <String>[];
     final textAnswer = _textAnswers[index];
     final typeId = question.questionTypeId;
-    final usesOrderedIds = typeId == 41 || typeId == 46 || typeId == 47;
-    final cleanedIds =
-        selectedIds.where((id) => id.trim().isNotEmpty).toList(growable: false);
+    final usesAlignedSlots = typeId == 46 || typeId == 47;
+    final usesListIds = typeId == 41 || usesAlignedSlots;
+    final payloadIds = usesAlignedSlots
+        ? selectedIds
+            .map((id) => id.trim().isEmpty ? '0' : id.trim())
+            .toList(growable: false)
+        : selectedIds
+            .where((id) => id.trim().isNotEmpty)
+            .toList(growable: false);
 
     return QuizAnswerSubmission(
       questionId: question.id,
       selectedOptionId:
-          usesOrderedIds || cleanedIds.isEmpty ? null : cleanedIds.first,
+          usesListIds || payloadIds.isEmpty ? null : payloadIds.first,
       selectedOptionIds:
-          usesOrderedIds && cleanedIds.isNotEmpty ? cleanedIds : null,
+          usesListIds && payloadIds.isNotEmpty ? payloadIds : null,
       submittedText: textAnswer,
       isMarkedForReview: _markedQuestions.contains(index),
       timeSpentSeconds: (_questionTimeSpent[index] ?? 0) > 0

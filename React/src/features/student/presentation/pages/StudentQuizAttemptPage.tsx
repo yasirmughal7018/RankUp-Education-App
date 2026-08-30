@@ -310,12 +310,20 @@ function toSubmitAnswer(
   answer: AnswerState | undefined,
   isMarkedForReview?: boolean,
   timeSpentSeconds?: number,
+  questionType?: string,
 ): SubmitQuizAnswer {
-  const selectedOptionIds = (answer?.selectedOptionIds ?? []).filter(
-    (id) => id > 0,
-  );
+  const rawIds = answer?.selectedOptionIds ?? [];
+  const preserveSlots =
+    questionType != null &&
+    (isMatchingQuestionType(questionType) ||
+      isOrderingQuestionType(questionType));
+  const selectedOptionIds = preserveSlots
+    ? rawIds.map((id) => (id > 0 ? id : 0))
+    : rawIds.filter((id) => id > 0);
   const selectedOptionId =
-    selectedOptionIds[0] ?? answer?.selectedOptionId ?? null;
+    selectedOptionIds.find((id) => id > 0) ??
+    answer?.selectedOptionId ??
+    null;
   const submittedText = answer?.submittedText?.trim()
     ? answer.submittedText.trim()
     : null;
@@ -730,6 +738,7 @@ export function StudentQuizAttemptPage() {
         currentAnswers[question.id],
         currentReview[question.id],
         times[question.id] ?? 0,
+        question.questionType,
       ),
     );
   }, [orderedQuestions]);
@@ -850,6 +859,7 @@ export function StudentQuizAttemptPage() {
         answersRef.current[question.id],
         markedForReviewRef.current[question.id],
         times[question.id] ?? 0,
+        question.questionType,
       ),
     );
 
@@ -1297,7 +1307,8 @@ export function StudentQuizAttemptPage() {
                     Match each left item to a right item.
                   </p>
                   {lefts.map((left, index) => {
-                    const selectedRightId = selectedIds[index] ?? null;
+                    const selectedRightId =
+                      (selectedIds[index] ?? 0) > 0 ? selectedIds[index] : null;
                     const usedRights = new Set(
                       selectedIds.filter(
                         (id, rightIndex) =>

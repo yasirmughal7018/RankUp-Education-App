@@ -46,6 +46,7 @@ public sealed class QuizAssignService : IQuizAssignService
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly INotificationService _notifications;
+    private readonly IQuizOverdueAttemptCloser _overdueCloser;
 
     public QuizAssignService(
         IQuizRepository quizzes,
@@ -57,7 +58,8 @@ public sealed class QuizAssignService : IQuizAssignService
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
-        INotificationService notifications)
+        INotificationService notifications,
+        IQuizOverdueAttemptCloser overdueCloser)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -69,6 +71,7 @@ public sealed class QuizAssignService : IQuizAssignService
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _notifications = notifications;
+        _overdueCloser = overdueCloser;
     }
 
     public async Task<AssignQuizResponse> AssignAsync(
@@ -125,6 +128,8 @@ public sealed class QuizAssignService : IQuizAssignService
                 expiredMaintenance.NewlyOpenedSurpriseAssignments,
                 cancellationToken);
         }
+
+        await _overdueCloser.CloseOverdueInProgressAttemptsAsync(now, cancellationToken);
 
         var resultStatusId = request.StartAt > now
             ? await _lookups.ResolveLookupIdByNamesAsync(
@@ -244,7 +249,8 @@ public sealed class QuizAssignService : IQuizAssignService
         var scope = QuizScopeResolver.RequireAssignScope(_currentUser);
         await RequireViewableQuizAsync(quizId, scope, cancellationToken);
 
-        var expired = await _assignments.ExpireOverdueUnattemptedAsync(_dateTimeProvider.UtcNow, cancellationToken);
+        var now = _dateTimeProvider.UtcNow;
+        var expired = await _assignments.ExpireOverdueUnattemptedAsync(now, cancellationToken);
         if (expired.ChangedCount > 0)
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -253,6 +259,8 @@ public sealed class QuizAssignService : IQuizAssignService
                 expired.NewlyOpenedSurpriseAssignments,
                 cancellationToken);
         }
+
+        await _overdueCloser.CloseOverdueInProgressAttemptsAsync(now, cancellationToken);
 
         var assignments = await ListScopedAssignmentsAsync(quizId, scope, cancellationToken);
         return new QuizAssignmentListResponse(assignments.Select(item => QuizManageMapping.ToAssignmentResponse(item, scope.Role)).ToArray());

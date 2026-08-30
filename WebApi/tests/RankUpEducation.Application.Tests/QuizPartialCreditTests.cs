@@ -134,6 +134,15 @@ public sealed class QuizPartialCreditTests
     }
 
     [Fact]
+    public void Matching_UnmatchedMiddleSlot_DoesNotShiftLaterPairs()
+    {
+        var result = QuizAnswerSelection.ScoreMatching([10, 0, 30], [10, 20, 30], 3);
+        Assert.Equal(2, result.CorrectComponents);
+        Assert.Equal(3, result.TotalComponents);
+        Assert.Equal((short)2, result.AwardedMarks);
+    }
+
+    [Fact]
     public void ZeroCorrectComponents_ProduceZeroMarks()
     {
         var result = QuizPartialCredit.Award(8, 0, 4);

@@ -25,6 +25,65 @@ public static class QuizAnswerSelection
     }
 
     /// <summary>
+    /// Match/Order slots in submitted order. Empty slots stay 0 so pair/position indexes do not shift.
+    /// </summary>
+    public static IReadOnlyList<long> ResolveAlignedComponentIds(SubmitQuizAnswerRequest answer)
+    {
+        if (answer.SelectedOptionIds is { Count: > 0 })
+        {
+            return answer.SelectedOptionIds
+                .Select(id => id > 0 ? id : 0L)
+                .ToArray();
+        }
+
+        if (answer.SelectedOptionId is long singleId && singleId > 0)
+        {
+            return [singleId];
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Restores Match/Order component order from persisted answer rows (including unmatched slots).
+    /// </summary>
+    public static IReadOnlyList<long> AggregateAlignedComponentIds(
+        IEnumerable<long?> optionIds)
+    {
+        return optionIds
+            .Select(id => id is > 0 ? id.Value : 0L)
+            .ToArray();
+    }
+
+    /// <summary>Match and Order score each slot independently; empty slots must stay in place.</summary>
+    public static bool UsesAlignedSlots(string? questionTypeName)
+    {
+        var typeName = questionTypeName ?? string.Empty;
+        return QuizQuestionHelper.IsMatchingType(typeName)
+            || QuizQuestionHelper.IsOrderingType(typeName);
+    }
+
+    /// <summary>Resolves submitted option ids using set semantics for MC and slot order for Match/Order.</summary>
+    public static IReadOnlyList<long> ResolveComponentIds(
+        SubmitQuizAnswerRequest answer,
+        string? questionTypeName)
+        => UsesAlignedSlots(questionTypeName)
+            ? ResolveAlignedComponentIds(answer)
+            : ResolveSelectedOptionIds(answer);
+
+    /// <summary>Rebuilds selected option ids from persisted rows (caller must pass rows in slot order).</summary>
+    public static IReadOnlyList<long> AggregateComponentIds(
+        IEnumerable<long?> optionIds,
+        string? questionTypeName)
+        => UsesAlignedSlots(questionTypeName)
+            ? AggregateAlignedComponentIds(optionIds)
+            : AggregateSelectedOptionIds(optionIds);
+
+    /// <summary>Empty Match/Order slots persist as null so the option FK stays valid.</summary>
+    public static long? ToPersistedOptionId(long optionId)
+        => optionId > 0 ? optionId : null;
+
+    /// <summary>
     /// Partial-credit multi-select: each expected correct option is one component.
     /// Extra incorrect selections are not extra components and do not count as correct.
     /// </summary>

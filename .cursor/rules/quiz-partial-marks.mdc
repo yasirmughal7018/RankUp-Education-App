@@ -1,0 +1,33 @@
+---
+description: Auto-scoring and partial marks for quiz questions
+globs: WebApi/src/RankUpEducation.*/Quizzes/**/*.cs,React/src/features/student/**/*.{ts,tsx},Mobile/lib/features/quizzes/**/*.dart
+alwaysApply: false
+---
+
+# Quiz auto-scoring and partial marks
+
+Canonical formula (`QuizPartialCredit.Award`, `05_RankUp_Quiz_Business_QA` Auto-scoring and partial Marks):
+
+```
+CorrectPercentage = Floor((CorrectComponents / TotalComponents) × 100)
+CalculatedMarks   = MaximumMarks × (CorrectComponents / TotalComponents)
+AwardedMarks      = Floor(CalculatedMarks)
+```
+
+Always floor/truncate. Never `Math.Round`. 1.5→1, 1.9→1, 2.0→2.
+
+| Type | Total components | Correct components |
+|---|---|---|
+| Multiple Choice | Expected correct options (not all options) | How many of those the student selected |
+| Matching | Required pairs | Pairs matched correctly (index-aligned) |
+| Ordering | Items that must be placed | Items in the correct position |
+
+## Slot alignment (Match / Order)
+
+`selectedOptionIds` is right-ids (Match) or option-ids (Order) **in slot order**. Unmatched/empty slots stay `0` (persisted as `null`). Do **not** drop zeros or `Distinct()` these lists — that shifts later pairs onto earlier slots.
+
+Multiple Choice uses set semantics (`Distinct`, `id > 0`). Extra wrong MC selections are not extra components.
+
+## Out of scope
+
+Single Choice, True/False, Media: all-or-nothing. Fill in the Blanks: full accepted-answer match only. Essay / File Upload: never auto-marked.

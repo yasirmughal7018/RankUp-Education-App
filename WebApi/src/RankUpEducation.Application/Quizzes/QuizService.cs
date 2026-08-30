@@ -7,7 +7,6 @@ using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
-using RankUpEducation.Domain.Questions;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
@@ -95,6 +94,7 @@ public sealed class QuizService : IQuizService
     private readonly IQuizAiReviewService _aiReview;
     private readonly INotificationService _notifications;
     private readonly IFileStorageService _fileStorage;
+    private readonly IQuizOverdueAttemptCloser _overdueCloser;
 
     public QuizService(
         IQuizRepository quizzes,
@@ -109,7 +109,8 @@ public sealed class QuizService : IQuizService
         IUnitOfWork unitOfWork,
         IQuizAiReviewService aiReview,
         RankUpEducation.Application.Notifications.INotificationService notifications,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage,
+        IQuizOverdueAttemptCloser overdueCloser)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -124,6 +125,7 @@ public sealed class QuizService : IQuizService
         _aiReview = aiReview;
         _notifications = notifications;
         _fileStorage = fileStorage;
+        _overdueCloser = overdueCloser;
     }
 
     public async Task<QuizListResponse> ListAsync(
@@ -146,6 +148,8 @@ public sealed class QuizService : IQuizService
                     expired.NewlyOpenedSurpriseAssignments,
                     cancellationToken);
             }
+
+            await _overdueCloser.CloseOverdueInProgressAttemptsAsync(now, cancellationToken);
         }
 
         IReadOnlyList<QuizListItem> items = role switch
@@ -201,6 +205,7 @@ public sealed class QuizService : IQuizService
 
         if (role == UserRole.Student)
         {
+            await _overdueCloser.CloseOverdueInProgressAttemptsAsync(now, cancellationToken);
             var studentId = RequireStudentId();
             var detail = await _quizzes.GetDetailForStudentAsync(quizId, studentId, cancellationToken)
                 ?? throw new NotFoundAppException("Quiz was not found for this student.");
@@ -328,6 +333,7 @@ public sealed class QuizService : IQuizService
         }
 
         var now = _dateTimeProvider.UtcNow;
+        await _overdueCloser.CloseOverdueInProgressAttemptsAsync(now, cancellationToken);
 
         var inProgressStatusId = await _lookups.ResolveLookupIdAsync(
             AttemptStatusType,
@@ -616,7 +622,9 @@ public sealed class QuizService : IQuizService
                 attemptQuestion.UpdateTimeSpent(spent);
             }
 
-            var selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
+            var selectedOptionIds = QuizAnswerSelection.ResolveComponentIds(
+                submitted,
+                attemptQuestion.QuestionTypeName);
             if (submitted.IsMarkedForReview is bool marked)
             {
                 attemptQuestion.SetMarkedForReview(marked);
@@ -752,25 +760,23 @@ public sealed class QuizService : IQuizService
 
         foreach (var attemptQuestion in attemptDetail.Questions)
         {
-            if (!answersByQuestionId.TryGetValue(attemptQuestion.QuestionId, out var submitted))
-            {
-                continue;
-            }
+            answersByQuestionId.TryGetValue(attemptQuestion.QuestionId, out var submitted);
 
             var attemptQuestionEntity = await _attempts.GetAttemptQuestionEntityAsync(
                 attemptId,
                 attemptQuestion.QuestionId,
                 cancellationToken);
 
-            var rejectLateAnswer = attemptQuestion.EstimatedTimeSeconds > 0
+            var rejectLateAnswer = submitted is not null
+                && attemptQuestion.EstimatedTimeSeconds > 0
                 && IsPerQuestionTimeExceeded(
                     attemptQuestion.EstimatedTimeSeconds,
                     submitted.TimeSpentSeconds,
                     attemptQuestion.TimeSpentSeconds);
 
-            var useDraftSnapshot = rejectLateAnswer || freezeAnswersForIntegrity;
+            var useDraftSnapshot = submitted is null || rejectLateAnswer || freezeAnswersForIntegrity;
 
-            if (attemptQuestionEntity is not null)
+            if (attemptQuestionEntity is not null && submitted is not null)
             {
                 if (!useDraftSnapshot && submitted.IsMarkedForReview is bool marked)
                 {
@@ -790,7 +796,7 @@ public sealed class QuizService : IQuizService
                 }
             }
 
-            // Late / integrity-frozen answers use the last in-budget draft snapshot.
+            // Missing / late / integrity-frozen answers use the last in-budget draft snapshot.
             IReadOnlyList<long> selectedOptionIds;
             string? submittedText;
             if (useDraftSnapshot)
@@ -804,131 +810,24 @@ public sealed class QuizService : IQuizService
             }
             else
             {
-                selectedOptionIds = QuizAnswerSelection.ResolveSelectedOptionIds(submitted);
-                submittedText = submitted.SubmittedText;
+                selectedOptionIds = QuizAnswerSelection.ResolveComponentIds(
+                    submitted!,
+                    attemptQuestion.QuestionTypeName);
+                submittedText = submitted!.SubmittedText;
             }
 
-            var questionMarks = attemptQuestion.Marks;
-            var isCorrect = false;
-            short awardedMarks = 0;
-            var typeName = attemptQuestion.QuestionTypeName;
-            var isMultiSelect = QuizQuestionHelper.IsMultiSelectType(typeName);
-            var isFillBlank = QuizQuestionHelper.IsFillBlankType(typeName);
-            var isMatching = QuizQuestionHelper.IsMatchingType(typeName);
-            var isOrdering = QuizQuestionHelper.IsOrderingType(typeName);
-            var isFileUpload = QuizQuestionHelper.IsFileUploadType(typeName);
-            var isDescriptive = QuizQuestionHelper.IsDescriptiveType(typeName)
-                || isFileUpload
-                || (!isFillBlank
-                    && !isMatching
-                    && !isOrdering
-                    && selectedOptionIds.Count == 0
-                    && submittedText.HasTrimmedText());
-            var acceptedAnswers = attemptQuestion.AcceptedAnswers
-                ?? Array.Empty<QuestionAcceptedAnswerScoreItem>();
-
-            // Matching/Ordering options are frozen in bank DisplayOrder (never shuffled).
-            // Matching: first half = lefts, second half = rights; answer = right ids in left order.
-            // Ordering: answer = option ids in correct sequence.
-            if (isMatching && selectedOptionIds.Count > 0)
+            var evaluation = QuizAttemptAutoEvaluation.Evaluate(
+                attemptQuestion.QuestionTypeName,
+                attemptQuestion.Marks,
+                selectedOptionIds,
+                submittedText,
+                attemptQuestion.Options,
+                attemptQuestion.AcceptedAnswers ?? Array.Empty<QuestionAcceptedAnswerScoreItem>());
+            var isCorrect = evaluation.IsCorrect;
+            var awardedMarks = evaluation.AwardedMarks;
+            obtainedMarks += awardedMarks;
+            if (evaluation.HasSubjectiveAnswers)
             {
-                var orderedOptions = attemptQuestion.Options.ToArray();
-                if (orderedOptions.Length >= 4 && orderedOptions.Length % 2 == 0)
-                {
-                    var half = orderedOptions.Length / 2;
-                    var correctRights = orderedOptions.Skip(half).Select(option => option.OptionId).ToArray();
-                    var matchScore = QuizAnswerSelection.ScoreMatching(
-                        selectedOptionIds,
-                        correctRights,
-                        questionMarks);
-                    isCorrect = matchScore.IsFullyCorrect;
-                    awardedMarks = matchScore.AwardedMarks;
-                }
-
-                obtainedMarks += awardedMarks;
-            }
-            else if (isOrdering && selectedOptionIds.Count > 0)
-            {
-                var correctOrder = attemptQuestion.Options.Select(option => option.OptionId).ToArray();
-                var orderScore = QuizAnswerSelection.ScoreOrdering(
-                    selectedOptionIds,
-                    correctOrder,
-                    questionMarks);
-                isCorrect = orderScore.IsFullyCorrect;
-                awardedMarks = orderScore.AwardedMarks;
-                obtainedMarks += awardedMarks;
-            }
-            else if (isMultiSelect && selectedOptionIds.Count > 0)
-            {
-                var correctOptionIds = attemptQuestion.Options
-                    .Where(option => option.IsCorrect)
-                    .Select(option => option.OptionId)
-                    .ToArray();
-                var multiScore = QuizAnswerSelection.ScoreMultiSelect(
-                    selectedOptionIds,
-                    correctOptionIds,
-                    questionMarks);
-                isCorrect = multiScore.IsFullyCorrect;
-                awardedMarks = multiScore.AwardedMarks;
-                obtainedMarks += awardedMarks;
-            }
-            else if (isFillBlank && submittedText.HasTrimmedText())
-            {
-                var fillText = submittedText.AsTrimmedString();
-                var fillResult = FillBlankAnswerMatching.Evaluate(
-                    fillText,
-                    acceptedAnswers.Select(answer => new FillBlankAcceptedAnswer(
-                        answer.AnswerText,
-                        answer.IsCaseSensitive,
-                        answer.AllowPartialMatch,
-                        answer.MinimumLength,
-                        answer.MaximumLength,
-                        answer.AllowAiReview,
-                        answer.AllowTeacherReview)));
-                isCorrect = fillResult.IsFullyCorrect;
-                awardedMarks = isCorrect ? questionMarks : (short)0;
-                obtainedMarks += awardedMarks;
-
-                if (fillResult.NeedsTeacherReview)
-                {
-                    hasSubjectiveAnswers = true;
-                }
-
-                await ReplaceAttemptAnswersAsync(
-                    attemptQuestion.AttemptQuestionId,
-                    selectedOptionIds,
-                    submittedText,
-                    awardedMarks,
-                    isCorrect,
-                    cancellationToken);
-
-                if (fillResult.NeedsAiReview && !rejectLateAnswer)
-                {
-                    await EnsureAiReviewAsync(
-                        attemptId,
-                        attemptQuestion.QuestionId,
-                        bankQuestionText: attemptQuestion.QuestionText,
-                        submittedText: submittedText ?? string.Empty,
-                        isCorrect,
-                        awardedMarks,
-                        questionMarks,
-                        acceptedAnswers.Select(answer => answer.AnswerText).ToArray(),
-                        cancellationToken);
-                }
-
-                continue;
-            }
-            else if (selectedOptionIds.Count > 0)
-            {
-                var selectedOptionId = selectedOptionIds[0];
-                var selectedOption = attemptQuestion.Options.FirstOrDefault(option => option.OptionId == selectedOptionId);
-                isCorrect = selectedOption?.IsCorrect ?? false;
-                awardedMarks = isCorrect ? questionMarks : (short)0;
-                obtainedMarks += awardedMarks;
-            }
-            else if (isDescriptive)
-            {
-                // Essay / descriptive / file: never auto-mark from a predefined answer.
                 hasSubjectiveAnswers = true;
             }
 
@@ -940,11 +839,12 @@ public sealed class QuizService : IQuizService
                 isCorrect,
                 cancellationToken);
 
-            // Descriptive always gets an AI suggestion when answered (teacher still finalizes).
-            if (!rejectLateAnswer
-                && !freezeAnswersForIntegrity
-                && QuizQuestionHelper.IsDescriptiveType(typeName)
-                && submittedText.HasTrimmedText())
+            if (rejectLateAnswer || freezeAnswersForIntegrity)
+            {
+                continue;
+            }
+
+            if (evaluation.FillResult is { NeedsAiReview: true })
             {
                 await EnsureAiReviewAsync(
                     attemptId,
@@ -953,7 +853,22 @@ public sealed class QuizService : IQuizService
                     submittedText: submittedText ?? string.Empty,
                     isCorrect,
                     awardedMarks,
-                    questionMarks,
+                    attemptQuestion.Marks,
+                    (attemptQuestion.AcceptedAnswers ?? Array.Empty<QuestionAcceptedAnswerScoreItem>())
+                        .Select(answer => answer.AnswerText)
+                        .ToArray(),
+                    cancellationToken);
+            }
+            else if (evaluation.NeedsAiReview && submittedText.HasTrimmedText())
+            {
+                await EnsureAiReviewAsync(
+                    attemptId,
+                    attemptQuestion.QuestionId,
+                    bankQuestionText: attemptQuestion.QuestionText,
+                    submittedText: submittedText ?? string.Empty,
+                    isCorrect,
+                    awardedMarks,
+                    attemptQuestion.Marks,
                     Array.Empty<string>(),
                     cancellationToken);
             }
@@ -1140,6 +1055,7 @@ public sealed class QuizService : IQuizService
         CancellationToken cancellationToken)
     {
         var studentId = await ResolveResultViewerStudentIdAsync(quizId, attemptId, cancellationToken);
+        await _overdueCloser.CloseOverdueInProgressAttemptsAsync(_dateTimeProvider.UtcNow, cancellationToken);
 
         var result = await _attempts.GetAttemptDetailAsync(attemptId, studentId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
@@ -1258,7 +1174,7 @@ public sealed class QuizService : IQuizService
     {
         await _attempts.RemoveAttemptAnswersAsync(attemptQuestionId, cancellationToken);
 
-        if (selectedOptionIds.Count == 0 && !submittedText.HasTrimmedText())
+        if (!selectedOptionIds.Any(id => id > 0) && !submittedText.HasTrimmedText())
         {
             return;
         }
@@ -1266,11 +1182,7 @@ public sealed class QuizService : IQuizService
         if (selectedOptionIds.Count == 0)
         {
             var textAnswer = new QuizAttemptAnswer(attemptQuestionId, null, submittedText);
-            if (awardedMarks > 0 || isCorrect)
-            {
-                textAnswer.Mark(awardedMarks, isCorrect);
-            }
-
+            textAnswer.Mark(awardedMarks, isCorrect);
             await _attempts.AddAttemptAnswersAsync([textAnswer], cancellationToken);
             return;
         }
@@ -1280,9 +1192,9 @@ public sealed class QuizService : IQuizService
             {
                 var row = new QuizAttemptAnswer(
                     attemptQuestionId,
-                    optionId,
+                    QuizAnswerSelection.ToPersistedOptionId(optionId),
                     index == 0 ? submittedText : null);
-                if (index == 0 && (awardedMarks > 0 || isCorrect))
+                if (index == 0)
                 {
                     row.Mark(awardedMarks, isCorrect);
                 }

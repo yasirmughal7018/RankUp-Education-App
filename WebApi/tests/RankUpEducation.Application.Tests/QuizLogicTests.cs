@@ -64,6 +64,31 @@ public sealed class QuizAnswerSelectionTests
             new SubmitQuizAnswerRequest(10, SelectedOptionId: 7, SubmittedText: null));
         Assert.Equal([7L], fromSingle);
     }
+
+    [Fact]
+    public void ResolveAlignedComponentIds_KeepsEmptySlotsInPlace()
+    {
+        var aligned = QuizAnswerSelection.ResolveAlignedComponentIds(
+            new SubmitQuizAnswerRequest(10, SelectedOptionId: null, SubmittedText: null, SelectedOptionIds: [10, 0, 30]));
+        Assert.Equal([10L, 0L, 30L], aligned);
+
+        var compacted = QuizAnswerSelection.ResolveSelectedOptionIds(
+            new SubmitQuizAnswerRequest(10, SelectedOptionId: null, SubmittedText: null, SelectedOptionIds: [10, 0, 30]));
+        Assert.Equal([10L, 30L], compacted);
+    }
+
+    [Fact]
+    public void ResolveComponentIds_UsesAlignedSlotsForMatching()
+    {
+        var request = new SubmitQuizAnswerRequest(
+            10,
+            SelectedOptionId: null,
+            SubmittedText: null,
+            SelectedOptionIds: [10, 0, 30]);
+
+        Assert.Equal([10L, 0L, 30L], QuizAnswerSelection.ResolveComponentIds(request, "Matching"));
+        Assert.Equal([10L, 30L], QuizAnswerSelection.ResolveComponentIds(request, "Multiple Choice"));
+    }
 }
 
 public sealed class QuizQuestionOrderTests

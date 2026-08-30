@@ -328,17 +328,19 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
             attempt.SubmittedDate,
             attemptQuestions.Select(item =>
             {
-                var questionAnswers = answers
-                    .Where(row => row.QuizAttemptQuestionId == item.Id)
-                    .ToArray();
-                var selectedOptionIds = QuizAnswerSelection.AggregateSelectedOptionIds(
-                    questionAnswers.Select(row => row.QuestionOptionId));
-                var primaryAnswer = questionAnswers.FirstOrDefault();
-                var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
-                    ?? primaryAnswer;
                 var typeName = !string.IsNullOrWhiteSpace(item.AttemptQuestionTypeName)
                     ? item.AttemptQuestionTypeName
                     : typeNames.GetValueOrDefault(item.QuestionTypeId, "Multiple Choice");
+                var questionAnswers = answers
+                    .Where(row => row.QuizAttemptQuestionId == item.Id)
+                    .OrderBy(row => row.Id)
+                    .ToArray();
+                var selectedOptionIds = QuizAnswerSelection.AggregateComponentIds(
+                    questionAnswers.Select(row => row.QuestionOptionId),
+                    typeName);
+                var primaryAnswer = questionAnswers.FirstOrDefault();
+                var marked = questionAnswers.FirstOrDefault(row => row.AwardedMarks > 0 || row.IsCorrect)
+                    ?? primaryAnswer;
                 var isFillBlank = QuizQuestionHelper.IsFillBlankType(typeName);
                 var requiresReview = QuizQuestionHelper.IsDescriptiveType(typeName)
                     || QuizQuestionHelper.IsFileUploadType(typeName)

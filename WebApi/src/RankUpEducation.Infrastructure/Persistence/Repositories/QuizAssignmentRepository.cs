@@ -363,28 +363,6 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             changed++;
         }
 
-        var overdueInProgress = await (
-            from attempt in _dbContext.QuizAttempts
-            join assignment in _dbContext.QuizAssignments
-                on new { attempt.QuizId, attempt.StudentId }
-                equals new { assignment.QuizId, assignment.StudentId }
-            where attempt.StatusId == LookupNames.QuizAttemptStatusIds.InProgress
-                && assignment.EndDateTime < now
-            select new { attempt, assignment }).ToListAsync(cancellationToken);
-
-        foreach (var row in overdueInProgress)
-        {
-            row.attempt.MarkExpired(LookupNames.QuizAttemptStatusIds.Expired);
-            if (row.assignment.QuizResultStatus is LookupNames.QuizResultStatusIds.InProgress
-                or LookupNames.QuizResultStatusIds.NotAttempted
-                or LookupNames.QuizResultStatusIds.Upcoming)
-            {
-                row.assignment.SetResultStatus(LookupNames.QuizResultStatusIds.Expired);
-            }
-
-            changed++;
-        }
-
         return new QuizAssignmentLifecycleMaintenanceResult(changed, newlyOpenedSurprise);
     }
 

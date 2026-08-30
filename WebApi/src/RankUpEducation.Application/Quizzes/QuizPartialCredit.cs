@@ -33,9 +33,8 @@ public static class QuizPartialCredit
             return new QuizPartialCreditResult(maximumMarks, correct, total, 0, 0);
         }
 
-        // Integer division is equivalent to Floor for non-negative marks.
-        var percentage = (short)(100L * correct / total);
-        var awarded = (short)((long)maximumMarks * correct / total);
+        var percentage = (short)Math.Floor(100m * correct / total);
+        var awarded = (short)Math.Floor(maximumMarks * (decimal)correct / total);
         return new QuizPartialCreditResult(maximumMarks, correct, total, percentage, awarded);
     }
 }

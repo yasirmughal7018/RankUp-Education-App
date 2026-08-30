@@ -3,11 +3,21 @@ description: Update related docs and prompt rules whenever behavior changes
 alwaysApply: true
 ---
 
-# Update documents with every change
+# Update documents and save prompts with every change
 
 When implementing, changing, or fixing behavior, update the related documentation in the **same turn**. Do not wait for the user to ask.
 
-## What to update
+## Save the user prompt
+
+If the user message is a feature/spec prompt (rules, formulas, acceptance criteria, or a titled `# Implement …` brief), save the **verbatim prompt** as its own file before or while implementing:
+
+- Path: `docs/prompts/YYYY-MM-DD-short-kebab-slug.md`
+- One prompt per file. Do not append into another prompt file.
+- Use the prompt date from the user message when present; otherwise today's date.
+- Add a row to `docs/prompts/README.md`.
+- Skip casual follow-ups (“fix this”, “run tests”, “update the document”) unless they introduce new product rules.
+
+## What else to update
 
 1. **Business / QA guides** in `docs/` — edit the generator (`docs/build_*.mjs`), then rebuild HTML and DOCX (`npm run build:quiz-qa`, `build:questions-qa`, etc. from `docs/`).
 2. **Cursor / prompt rules** in `.cursor/rules/` when the change affects a documented convention (approval, quiz lifecycle, scoring, page headers, etc.).
@@ -26,5 +36,5 @@ If no generator exists, edit the existing HTML/DOCX source that already document
 ## Do not
 
 - Skip docs because the user only asked for code
-- Invent new standalone markdown files unless they asked for a new document
+- Invent extra markdown outside `docs/prompts/` unless they asked for a new document
 - Leave scoring, permissions, or workflow rules only in code comments

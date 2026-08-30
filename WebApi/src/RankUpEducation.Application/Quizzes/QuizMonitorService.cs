@@ -27,6 +27,7 @@ public sealed class QuizMonitorService : IQuizMonitorService
     private readonly ILookupRepository _lookups;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IQuizOverdueAttemptCloser _overdueCloser;
 
     public QuizMonitorService(
         IQuizRepository quizzes,
@@ -35,7 +36,8 @@ public sealed class QuizMonitorService : IQuizMonitorService
         IStudentScopeRepository studentScope,
         ILookupRepository lookups,
         ICurrentUserService currentUser,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IQuizOverdueAttemptCloser overdueCloser)
     {
         _quizzes = quizzes;
         _assignments = assignments;
@@ -44,6 +46,7 @@ public sealed class QuizMonitorService : IQuizMonitorService
         _lookups = lookups;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
+        _overdueCloser = overdueCloser;
     }
 
     public async Task<QuizAssignmentBoardResponse> ListAssignmentsAsync(
@@ -51,6 +54,9 @@ public sealed class QuizMonitorService : IQuizMonitorService
         CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
+        await _overdueCloser.CloseOverdueInProgressAttemptsAsync(
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
         if (studentId is > 0)
         {
             await QuizScopeResolver.EnsureCanAccessStudentAsync(
@@ -97,6 +103,9 @@ public sealed class QuizMonitorService : IQuizMonitorService
     public async Task<QuizMonitoringResponse> GetMonitoringAsync(long quizId, CancellationToken cancellationToken)
     {
         var scope = QuizScopeResolver.RequireManageScope(_currentUser);
+        await _overdueCloser.CloseOverdueInProgressAttemptsAsync(
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
         if (quizId <= 0)
         {
             throw new NotFoundAppException("Quiz was not found.");

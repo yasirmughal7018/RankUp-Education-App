@@ -71,12 +71,12 @@ const attemptStatuses = [
   ["81", "InProgress", "Student started; draft answers may be saved. Canonical fallback is now 81."],
   ["82", "Submitted", "Manual submit + auto-score. Canonical fallback is now 82."],
   ["83", "AutoSubmitted", "Written when submit carries IsAutoSubmit=true (UI/server time-budget expiry). Server also enforces TimeLimitMinutes with grace."],
-  ["84", "Expired", "Written by ExpireOverdueUnattemptedAsync when an InProgress attempt’s assignment EndDateTime has passed; also blocked on start outside the window."],
+  ["84", "Expired", "Written only for unattempted assignments whose window has passed (no QuizAttempt). InProgress attempts are auto-evaluated from the last draft and AutoSubmitted (83) when the window ends — they are not silently Expired without scores."],
   ["85", "Reviewed", "Teacher/Parent finalized subjective review; results released."],
 ];
 
 const resultStatuses = [
-  ["20", "Expired", "Written when EndDateTime passed with no completed attempt (unattempted or overdue InProgress). ExpireOverdue runs on student list and assign list."],
+  ["20", "Expired", "Written when EndDateTime passed with no started attempt. Overdue InProgress attempts are auto-evaluated and AutoSubmitted instead. ExpireOverdue / overdue closer run on student list, assign list, monitoring, and review."],
   ["21", "Completed", "Written on submit when review is not pending (no subjective / review already done). Student UI may still show Results pending until the 1-hour auto-graded delay elapses."],
   ["22", "Under Review", "Written on submit when subjective teacher-review answers remain (IsReviewDone=false). Student UI overlays Results pending / Partial results from resultAnnouncedPercent until 100% is announced."],
   ["23", "In Progress", "Written when the student starts an attempt that is not yet submitted."],
@@ -339,8 +339,8 @@ const studentAttemptFlow = [
   ["9", "Student may mark questions for review", "Covered", "IsMarkedForReview on draft/submit; navigator groups marked questions."],
   ["10", "Student submits manually", "Covered", "POST .../attempts/{id}/submit auto-scores then MarkSubmitted; resubmission blocked."],
   ["11", "System auto-submits when time expires", "Covered", "Client auto-submit with IsAutoSubmit=true → AutoSubmitted (83). Server rejects over-budget submits (grace for auto-submit)."],
-  ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83) → Reviewed (85) after finalize. Expired (84) via overdue job."],
-  ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse: first option, all-or-nothing. Multiple Choice / Matching / Ordering: proportional floored marks per correct component. Fill: full accepted-answer match only."],
+  ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83, including window-end auto-eval) → Reviewed (85) after finalize. Expired (84) only when the window ends with no attempt started."],
+  ["13", "Objective answers checked automatically", "Covered", "On submit and when the assignment window ends (overdue InProgress auto-submit). Single/TrueFalse: first option, all-or-nothing. Multiple Choice / Matching / Ordering: proportional floored marks. Fill: full accepted-answer match only. Every attempt question is scored from the submit payload or the last draft — missing payload answers are not skipped."],
   ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive/Essay: AI suggestion on submit + teacher finalize when answered. File Upload (link/path) requires teacher review. Fill: only a non-full match with AllowTeacherReview / AllowAiReview (OpenAI or heuristic)."],
   ["15", "Student sees the permitted review screen", "Covered", "Auto-graded questions (known correct answer already on the item) announce 1 hour after quiz completion (later of submit and assignment EndDateTime). Teacher-review questions stay pending until finalize. List/detail/result show resultAnnouncedPercent. ReviewDisplayMode modes are retired."],
   ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true. AI suggests; teacher confirms when required."],
@@ -385,7 +385,7 @@ const quizAttemptFields = [
   ["QuizId", "Quiz definition being attempted."],
   ["StudentId", "Student taking the attempt."],
   ["AttemptNumber", "1-based attempt ordinal for this student on this quiz (API name). Entity property AttemptNumber maps to DB column number_of_question_attempt (legacy name — not question count)."],
-  ["StatusId", "QuizAttemptStatus: Started (80), InProgress (81), Submitted (82), AutoSubmitted (83), Expired (84), Reviewed (85). Start writes InProgress; overdue InProgress → Expired."],
+  ["StatusId", "QuizAttemptStatus: Started (80), InProgress (81), Submitted (82), AutoSubmitted (83), Expired (84), Reviewed (85). Start writes InProgress; overdue InProgress is auto-evaluated then AutoSubmitted."],
   ["StartedDate", "When the attempt began / resumed."],
   ["SubmittedDate", "When submitted (or placeholder until submit)."],
   ["TimeSpentSeconds", "Elapsed time recorded on the attempt."],
@@ -444,8 +444,8 @@ const scoring = [
   ["Fill in the Blanks", "A full accepted-answer match (exact text; case-sensitive when configured; min/max length) auto-scores full marks and skips AI/teacher review. AllowPartialMatch is never treated as fully correct. A non-full match is not auto-marked; AI/teacher review runs only when AllowAiReview / AllowTeacherReview is on."],
   ["Descriptive / Essay", "Never auto-marked from a predefined answer. Marks 0 on auto-score; always subjective when answered; AI suggestion written to QuizReview.AiReviewComment on submit; teacher/parent finalize required."],
   ["File Upload", "MVP: student pastes a file URL/path into SubmittedText (no binary blob upload/storage). Marks 0 on auto-score; RequiresReview like Descriptive when answered."],
-  ["Matching", "Partial credit. selectedOptionIds = right option ids in left order. Each required pair is one component. AwardedMarks = Floor(MaxMarks × correct pairs / total pairs). Storage remains lefts-then-rights (even count ≥4). Option shuffle disabled. Fully correct → full marks; zero correct pairs → 0."],
-  ["Ordering", "Partial credit. selectedOptionIds = option ids in required DisplayOrder. Each required position is one component. AwardedMarks = Floor(MaxMarks × correctly placed items / total items). Option shuffle disabled. Fully correct → full marks; zero correct positions → 0."],
+  ["Matching", "Partial credit. selectedOptionIds = right option ids in left order, including 0 for unmatched lefts so later pairs keep their index. Each required pair is one component (missing = that pair wrong). AwardedMarks = Floor(MaxMarks × correct pairs / total pairs). Storage remains lefts-then-rights (even count ≥4). Option shuffle disabled. Fully correct → full marks; zero correct pairs → 0."],
+  ["Ordering", "Partial credit. selectedOptionIds = option ids in required DisplayOrder (empty positions stay 0). Each required position is one component. AwardedMarks = Floor(MaxMarks × correctly placed items / total items). Option shuffle disabled. Fully correct → full marks; zero correct positions → 0."],
   ["Media", "Scored like Single Choice (all-or-nothing). Each option requires OptionImageUrl (caption text optional); image snapped onto QuizAttemptQuestionOption."],
 ];
 
@@ -456,8 +456,8 @@ const partialCreditRules = [
   ["Fully correct", "CorrectComponents = TotalComponents → award full question marks. IsCorrect = true."],
   ["Completely incorrect", "CorrectComponents = 0 → award 0 marks."],
   ["Multiple Choice total", "Number of expected selectable (correct) answers — not the count of all options, and not selected options."],
-  ["Matching total", "Number of required matching pairs."],
-  ["Ordering total", "Number of items that must be placed correctly."],
+  ["Matching total", "Number of required matching pairs. Empty/unmatched left slots stay in position (0); they are not dropped, so later pairs are not scored against earlier slots."],
+  ["Ordering total", "Number of items that must be placed correctly. Empty positions stay in place."],
   ["Result fields", "MaximumMarks, CorrectComponents, TotalComponents, CorrectPercentage, AwardedMarks (QuizPartialCredit)."],
 ];
 
@@ -466,6 +466,7 @@ const partialCreditExamples = [
   ["Decimal floor", "Max 3; 1 of 2 components correct", "1.5 → award 1 (never 2)"],
   ["Matching", "Max 4; 3 of 4 pairs correct", "award 3"],
   ["Matching floor", "Max 5; 3 of 4 pairs correct", "3.75 → award 3"],
+  ["Matching gap", "Max 3; pairs 1 and 3 correct, pair 2 unmatched", "2/3 → award 2 (pair 3 not shifted onto pair 2)"],
   ["Ordering", "Max 4; 3 of 4 positions correct", "award 3"],
   ["Ordering floor", "Max 5; 3 of 4 positions correct", "3.75 → award 3"],
 ];
@@ -664,7 +665,7 @@ const scenarios = [
     "QZ-19",
     "No time limit still respects availability window",
     "Student starts a quiz with TimeLimitMinutes null after EndDateTime has passed.",
-    "No countdown UI, but start/submit is still rejected; overdue InProgress attempts transition to Expired (84).",
+    "No countdown UI, but a new start is still rejected. An overdue InProgress attempt is auto-evaluated and AutoSubmitted (83) from the last draft — not Expired-without-score.",
   ],
   [
     "QZ-20",
@@ -701,6 +702,18 @@ const scenarios = [
     "Partial marks for Multiple Choice, Match, and Order",
     "Student submits a 2-mark Multiple Choice with 2 expected correct options and selects 1 correctly; a 5-mark Matching with 3 of 4 pairs correct; a 4-mark Ordering with all items in place. Fill-blank is a full accepted-answer match. Essay is free text.",
     "Multiple Choice awards 1 (50%, floored). Matching awards 3 (5×3/4=3.75 floored). Ordering awards 4. Fill-blank awards full marks with no AI/teacher review. Essay stays 0 pending teacher/AI review. 1.5 and 1.9 never round up.",
+  ],
+  [
+    "QZ-29",
+    "Window end auto-evaluates an in-progress attempt",
+    "Student starts a quiz, saves drafts (including a full Fill-in-the-Blanks match), does not tap Submit. Assignment EndDateTime passes. Student or staff opens list / result / Check.",
+    "Attempt is AutoSubmitted with auto-evaluated marks (Fill full match = full marks; MC/Match/Order scored; Essay stays 0 pending review). Status is not Expired-without-score.",
+  ],
+  [
+    "QZ-30",
+    "Matching unmatched slot stays index-aligned",
+    "Student matches pair 1 and pair 3 correctly and leaves pair 2 unmatched on a 3-mark Matching with 3 pairs.",
+    "CorrectComponents=2, TotalComponents=3, CalculatedMarks=2, AwardedMarks=2. Pair 3 is scored against pair 3, not shifted onto pair 2.",
   ],
 ];
 
@@ -740,7 +753,7 @@ const checklist = [
   "InProgress resumes; TimeLimitMinutes enforced client + server; AutoSubmitted on IsAutoSubmit.",
   "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time banner (≤5m) + modal/audio at ≤60s (web + mobile).",
   "On attempt start, QuizAttemptQuestion freezes text/marks/options/order; answers store per attempt.",
-  "Scoring: single/TF all-or-nothing; Multiple Choice / Matching / Ordering proportional floored marks per correct component; Fill full accepted-answer match only; Essay never auto-marked.",
+  "Scoring: on submit and when the assignment window ends (overdue InProgress auto-submit from last draft). Single/TF all-or-nothing; Multiple Choice / Matching / Ordering proportional floored marks; Fill full accepted-answer match only; Essay never auto-marked.",
   "After submit, auto-graded results announce 1 hour after quiz completion (later of submit and assignment end). Teacher-review questions stay pending until finalize. Show resultAnnouncedPercent with the quiz.",
   "ApplyCreateDefaults: nullable fallbacks only; bools never OR’d.",
   "Allow-retry only after IsReviewDone; adds ExtraAttempts.",
@@ -832,7 +845,7 @@ const html = `<!doctype html>
     <p class="subtitle">Intended rules for quiz lifecycle, approval, questions, assignment, student attempts, review, roles, APIs, and QA.</p>
     <div class="meta">
       <span class="chip">Quiz module v1</span>
-      <span class="chip">29 Aug 2026</span>
+      <span class="chip">30 Aug 2026</span>
       <span class="chip">Teacher + Parent</span>
       <span class="chip">Approval ≠ Publish</span>
     </div>
@@ -939,7 +952,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   ${htmlTable(["Status", "Meaning"], assignmentResultMeanings)}
   <h3>Assignment corrections vs older drafts</h3>
   ${htmlTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts)}
-  <div class="note"><strong>Status progression:</strong> assign writes Up Coming (25) when StartAt &gt; now, else Not Attempted (24). Start → In Progress (23). Submit → Under Review (22) or Completed (21). ExpireOverdueUnattemptedAsync promotes Upcoming → Not Attempted, expires past-window unattempted rows, and marks overdue InProgress attempts Expired (84). Student list prefers the stored QuizResultStatusName over a client calculator.</div>
+  <div class="note"><strong>Status progression:</strong> assign writes Up Coming (25) when StartAt &gt; now, else Not Attempted (24). Start → In Progress (23). Submit → Under Review (22) or Completed (21). ExpireOverdueUnattemptedAsync promotes Upcoming → Not Attempted and expires past-window unattempted rows. Overdue InProgress attempts are auto-evaluated and AutoSubmitted. Student list prefers the stored QuizResultStatusName over a client calculator.</div>
 
   <h2>9. Student attempt flow</h2>
   <h3>Step-by-step student journey</h3>
@@ -1112,7 +1125,7 @@ function docTable(headers, rows) {
 
 const docChildren = [
   docHeading("RankUp Education — Quizzes Business & QA Guide", HeadingLevel.TITLE),
-  docParagraph("Current implemented rules · 29 Aug 2026", {
+  docParagraph("Current implemented rules · 30 Aug 2026", {
     run: { italics: true, color: "475569" },
   }),
   docParagraph(
@@ -1226,7 +1239,7 @@ const docChildren = [
   docHeading("Assignment corrections vs older drafts", HeadingLevel.HEADING_2),
   docTable(["Older draft idea", "Canonical rule", "Why"], assignmentStatusConflicts),
   docParagraph(
-    "Status progression: assign writes Up Coming when StartAt > now else Not Attempted; start → In Progress; submit → Under Review or Completed; ExpireOverdue promotes Upcoming and expires past-window / overdue InProgress. Student list prefers stored QuizResultStatusName.",
+    "Status progression: assign writes Up Coming when StartAt > now else Not Attempted; start → In Progress; submit → Under Review or Completed; ExpireOverdue promotes Upcoming and expires past-window unattempted rows; overdue InProgress is auto-evaluated and AutoSubmitted. Student list prefers stored QuizResultStatusName.",
     { run: { bold: true, color: "92400E" } },
   ),
 

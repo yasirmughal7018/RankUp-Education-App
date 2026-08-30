@@ -51,6 +51,8 @@ public sealed class QuizReviewService : IQuizReviewService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly INotificationService _notifications;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IQuizOverdueAttemptCloser _overdueCloser;
 
     public QuizReviewService(
         IQuizRepository quizzes,
@@ -61,7 +63,9 @@ public sealed class QuizReviewService : IQuizReviewService
         IStudentScopeRepository studentScope,
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        INotificationService notifications)
+        INotificationService notifications,
+        IDateTimeProvider dateTimeProvider,
+        IQuizOverdueAttemptCloser overdueCloser)
     {
         _quizzes = quizzes;
         _reviews = reviews;
@@ -72,6 +76,8 @@ public sealed class QuizReviewService : IQuizReviewService
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _notifications = notifications;
+        _dateTimeProvider = dateTimeProvider;
+        _overdueCloser = overdueCloser;
     }
 
     public async Task<PendingReviewListResponse> ListPendingAsync(CancellationToken cancellationToken)
@@ -106,6 +112,9 @@ public sealed class QuizReviewService : IQuizReviewService
         long attemptId,
         CancellationToken cancellationToken)
     {
+        await _overdueCloser.CloseOverdueInProgressAttemptsAsync(
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
         var (scope, assignment) = await EnsureReviewViewAccessAsync(quizId, attemptId, cancellationToken);
         var detail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
