@@ -215,7 +215,7 @@ internal static class QuizMapping
                 ResultPending: !announced,
                 TeacherFeedback: showReviewNotes ? question.TeacherFeedback : null,
                 ParentFeedback: showReviewNotes ? question.ParentFeedback : null,
-                AiFeedback: showReviewNotes ? question.AiFeedback : null);
+                AiFeedback: null);
         }).ToArray();
 
         var displayedObtained = visibility.ShowScore

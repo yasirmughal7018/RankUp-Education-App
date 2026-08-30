@@ -294,7 +294,7 @@ class TeacherQuizManageController
     String? feedback,
   }) {
     final review = state.attemptReview;
-    if (review == null) {
+    if (review == null || review.isReviewDone) {
       return;
     }
 
@@ -332,7 +332,7 @@ class TeacherQuizManageController
     required String attemptId,
   }) async {
     final review = state.attemptReview;
-    if (review == null) {
+    if (review == null || review.isReviewDone) {
       return false;
     }
 
@@ -374,6 +374,10 @@ class TeacherQuizManageController
     required String quizId,
     required String attemptId,
   }) async {
+    if (state.attemptReview?.isReviewDone == true) {
+      return false;
+    }
+
     state = state.copyWith(isSaving: true, clearError: true, clearSuccess: true);
     try {
       await _repository.finalizeAttemptReview(

@@ -207,11 +207,23 @@ function ChoiceOptionCards({
           showCorrectAnswers && selected && !option.isCorrect,
         );
 
+        const statusLabel = showCorrectAnswers
+          ? isCorrect && selected
+            ? "Your Answer - Correct"
+            : isCorrect
+              ? "Correct Answer"
+              : wrongSelected
+                ? "Your Answer - Wrong"
+                : null
+          : selected
+            ? "Your Answer"
+            : null;
+
         return (
           <div
             key={option.id}
             className={cn(
-              "flex items-start gap-3 rounded-xl border px-4 py-3.5",
+              "flex items-center gap-3 rounded-xl border px-4 py-3.5",
               isCorrect &&
                 "border-[hsl(var(--success))]/40 bg-[hsl(var(--success-light))]",
               wrongSelected &&
@@ -226,7 +238,7 @@ function ChoiceOptionCards({
           >
             <span
               className={cn(
-                "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold",
+                "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold",
                 isCorrect
                   ? "bg-[hsl(var(--success))] text-white"
                   : wrongSelected
@@ -249,20 +261,21 @@ function ChoiceOptionCards({
                   className="mt-2 max-h-40 rounded-xl border border-border object-contain"
                 />
               ) : null}
-              {showCorrectAnswers && (isCorrect || selected) ? (
-                <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                  {isCorrect && selected
-                    ? "Your answer · Correct"
-                    : isCorrect
-                      ? "Correct answer"
-                      : "Your answer"}
-                </p>
-              ) : selected && !showCorrectAnswers ? (
-                <p className="mt-1 text-xs font-semibold text-primary">
-                  Your answer
-                </p>
-              ) : null}
             </div>
+            {statusLabel ? (
+              <p
+                className={cn(
+                  "shrink-0 whitespace-nowrap text-right text-xs font-semibold",
+                  isCorrect
+                    ? "text-[hsl(var(--success))]"
+                    : wrongSelected
+                      ? "text-destructive"
+                      : "text-primary",
+                )}
+              >
+                {statusLabel}
+              </p>
+            ) : null}
           </div>
         );
       })}

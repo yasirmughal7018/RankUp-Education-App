@@ -219,13 +219,15 @@ export function QuizMonitoringPage() {
                               "monitoring",
                             )}
                             className={
-                              hasAttemptScoreAccess(student.canScore)
+                              hasAttemptScoreAccess(student.canScore) &&
+                              !student.isReviewDone
                                 ? "rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
                                 : "rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                             }
                           >
                             {attemptReviewActionLabel(
                               hasAttemptScoreAccess(student.canScore),
+                              student.isReviewDone,
                             )}
                           </Link>
                           {student.isReviewDone ? (

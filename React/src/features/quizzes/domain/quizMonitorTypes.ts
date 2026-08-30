@@ -275,8 +275,11 @@ export function hasAttemptScoreAccess(canScore: boolean | null | undefined): boo
   return canScore === true;
 }
 
-export function attemptReviewActionLabel(canScore: boolean): "Check" | "View" {
-  return canScore ? "Check" : "View";
+export function attemptReviewActionLabel(
+  canScore: boolean,
+  isReviewDone = false,
+): "Check" | "View" {
+  return canScore && !isReviewDone ? "Check" : "View";
 }
 
 export function attemptReviewScoreHint(

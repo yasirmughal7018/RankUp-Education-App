@@ -3198,10 +3198,6 @@ class _ReviewQuestionCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text('Checker feedback: ${question.parentFeedback}'),
             ],
-            if ((question.aiFeedback ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text('AI review: ${question.aiFeedback}'),
-            ],
             if (reviewComplete) ...[
               const SizedBox(height: 8),
               Text('Feedback: ${answerState.feedback}'),

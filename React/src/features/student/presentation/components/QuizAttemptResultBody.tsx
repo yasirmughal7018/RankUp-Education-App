@@ -1,11 +1,10 @@
-import { Award, Percent, Megaphone, MessageSquare, UserCheck, Sparkles, Hash } from "lucide-react";
+import { Award, Percent, Megaphone, MessageSquare, UserCheck, Hash } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AppCard } from "@/components/ui/app-card";
 import { AppSectionHeader } from "@/components/ui/app-section-header";
 import { AppStatCard } from "@/components/ui/app-stat-card";
 import { AppStatusBadge } from "@/components/ui/app-status-badge";
 import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuizAnswerDisplay } from "@/features/quizzes/presentation/components/QuizAnswerDisplay";
 import { QuizOtherAttemptsControl } from "@/features/student/presentation/components/QuizOtherAttemptsDialog";
 import type { QuizAttemptResult } from "@/features/student/domain/studentQuizTypes";
@@ -48,12 +47,10 @@ function ReviewNote({
 function QuestionReviewNotes({
   teacherFeedback,
   checkerFeedback,
-  aiFeedback,
   hideUntilAnnounced,
 }: {
   teacherFeedback?: string | null;
   checkerFeedback?: string | null;
-  aiFeedback?: string | null;
   hideUntilAnnounced: boolean;
 }) {
   if (hideUntilAnnounced) {
@@ -62,8 +59,7 @@ function QuestionReviewNotes({
 
   const teacher = teacherFeedback?.trim() ?? "";
   const checker = checkerFeedback?.trim() ?? "";
-  const ai = aiFeedback?.trim() ?? "";
-  if (!teacher && !checker && !ai) {
+  if (!teacher && !checker) {
     return null;
   }
 
@@ -80,12 +76,6 @@ function QuestionReviewNotes({
         body={checker}
         icon={UserCheck}
         className="border-[hsl(var(--achievement))]/25 bg-[hsl(var(--achievement-light))]"
-      />
-      <ReviewNote
-        title="AI review"
-        body={ai}
-        icon={Sparkles}
-        className="border-[hsl(var(--ai))]/25 bg-[hsl(var(--ai-light))]"
       />
     </div>
   );
@@ -106,12 +96,14 @@ export function QuizAttemptResultBody({
 
   return (
     <>
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AppStatCard
+          compact
+          className="h-full"
           title="Attempt"
           value={`#${result.attemptNumber}`}
           icon={Hash}
-          colorVariant="neutral"
+          colorVariant="primary"
           description={
             submittedCount > 0
               ? `${result.attemptNumber} of ${submittedCount} submitted`
@@ -129,6 +121,8 @@ export function QuizAttemptResultBody({
           }
         />
         <AppStatCard
+          compact
+          className="h-full"
           title={scoreLabel}
           value={
             display.showScore
@@ -136,7 +130,7 @@ export function QuizAttemptResultBody({
               : "—"
           }
           icon={Award}
-          colorVariant="primary"
+          colorVariant="success"
           description={
             display.showScore
               ? "Marks from announced questions"
@@ -144,6 +138,8 @@ export function QuizAttemptResultBody({
           }
         />
         <AppStatCard
+          compact
+          className="h-full"
           title="Percentage"
           value={display.showScore ? `${result.percentage}%` : "—"}
           icon={Percent}
@@ -155,6 +151,8 @@ export function QuizAttemptResultBody({
           }
         />
         <AppStatCard
+          compact
+          className="h-full"
           title="Results announced"
           value={`${display.announcedPercent}%`}
           icon={Megaphone}
@@ -167,33 +165,42 @@ export function QuizAttemptResultBody({
         />
       </section>
 
-      <AppCard className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Status</p>
-          <div className="mt-2">
-            <AppStatusBadge
-              status={result.resultStatus}
-              label={formatMonitorStatus(result.resultStatus)}
-            />
+      <AppCard>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground sm:text-sm">
+              Status
+            </p>
+            <div className="mt-2">
+              <AppStatusBadge
+                status={result.resultStatus}
+                label={formatMonitorStatus(result.resultStatus)}
+              />
+            </div>
           </div>
-        </div>
-        <div className="min-w-[12rem] flex-1">
-          <p className="mb-2 text-sm font-medium text-muted-foreground">
-            Announcement progress
-          </p>
-          <Progress value={display.announcedPercent} className="h-3" />
+          <div className="min-w-0 flex-1 sm:max-w-md">
+            <p className="mb-2 text-xs font-medium text-muted-foreground sm:text-sm">
+              Announcement progress
+            </p>
+            <Progress value={display.announcedPercent} className="h-3" />
+            <p className="mt-2 text-sm text-muted-foreground">
+              {display.announcedPercent}% results announced
+            </p>
+          </div>
         </div>
       </AppCard>
 
       {display.modeNote ? (
-        <Alert>
-          <AlertTitle>
+        <AppCard className="border-primary/20 bg-primary/5">
+          <p className="text-sm font-semibold text-foreground">
             {display.announcedPercent <= 0
               ? "Results pending"
               : "Partial results"}
-          </AlertTitle>
-          <AlertDescription>{display.modeNote}</AlertDescription>
-        </Alert>
+          </p>
+          <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+            {display.modeNote}
+          </p>
+        </AppCard>
       ) : null}
 
       <section>
@@ -262,7 +269,6 @@ export function QuizAttemptResultBody({
                 <QuestionReviewNotes
                   teacherFeedback={question.teacherFeedback}
                   checkerFeedback={question.parentFeedback}
-                  aiFeedback={question.aiFeedback}
                   hideUntilAnnounced={pending && !display.showExplanations}
                 />
               </AppCard>

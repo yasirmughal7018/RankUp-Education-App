@@ -198,7 +198,7 @@ export function AttemptReviewPage() {
   const isSubmitting = markAnswers.isPending || finalizeReview.isPending;
 
   async function handleSaveMarks() {
-    if (!review) {
+    if (!review || review.isReviewDone) {
       return;
     }
 
@@ -207,7 +207,7 @@ export function AttemptReviewPage() {
 
     try {
       await markAnswers.mutateAsync(buildAnswers());
-      setSuccessMessage(review.isReviewDone ? "Marks updated." : "Marks saved.");
+      setSuccessMessage("Marks saved.");
     } catch (caught) {
       const apiError = caught as { message?: string };
       setActionError(apiError.message || "Unable to save marks.");
@@ -215,7 +215,7 @@ export function AttemptReviewPage() {
   }
 
   async function handleFinalize() {
-    if (!review) {
+    if (!review || review.isReviewDone) {
       return;
     }
 
@@ -272,7 +272,9 @@ export function AttemptReviewPage() {
     hasAttemptScoreAccess(review.canScore) &&
     (!review.assignedByRole ||
       canScoreQuizAssignment(user?.role, review.assignedByRole));
-  const scoringDisabled = !canScore || isSubmitting;
+  const reviewLocked = review.isReviewDone;
+  const scoringDisabled = !canScore || reviewLocked || isSubmitting;
+  const marksReadOnly = !canScore || reviewLocked;
   const scoreHint = attemptReviewScoreHint(canScore, review.assignedByRole);
 
   return (
@@ -323,7 +325,11 @@ export function AttemptReviewPage() {
         </div>
       ) : null}
 
-      {scoreHint ? (
+      {reviewLocked ? (
+        <div className="mb-4 rounded-xl border border-[hsl(var(--success))]/25 bg-[hsl(var(--success-light))] px-4 py-3 text-sm text-foreground">
+          This result is completed. Marks and feedback cannot be changed.
+        </div>
+      ) : scoreHint ? (
         <div className="mb-4 rounded-xl border border-border/80 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
           {scoreHint}
         </div>
@@ -379,7 +385,7 @@ export function AttemptReviewPage() {
                   awarded={marks[question.questionId] ?? 0}
                   maxMarks={question.maxMarks}
                   disabled={scoringDisabled}
-                  readOnly={!canScore}
+                  readOnly={marksReadOnly}
                   onChange={(value) =>
                     setMarks((current) => ({
                       ...current,
@@ -398,7 +404,7 @@ export function AttemptReviewPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--ai))]">
                     AI suggestion
                   </p>
-                  {canScore ? (
+                  {canScore && !reviewLocked ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -417,7 +423,7 @@ export function AttemptReviewPage() {
                   ) : null}
                 </div>
                 <p className="whitespace-pre-wrap">{question.aiFeedback}</p>
-                {canScore ? (
+                {canScore && !reviewLocked ? (
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     Suggestion only — confirm marks and feedback before finalizing.
                   </p>
@@ -425,7 +431,7 @@ export function AttemptReviewPage() {
               </div>
             ) : null}
 
-            {canScore ? (
+            {canScore && !reviewLocked ? (
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground">
                   Feedback
@@ -458,7 +464,7 @@ export function AttemptReviewPage() {
         ))}
       </div>
 
-      {canScore ? (
+      {canScore && !reviewLocked ? (
         <section className="mt-6 flex flex-wrap gap-3">
           <Button
             type="button"
@@ -468,15 +474,13 @@ export function AttemptReviewPage() {
           >
             {isSubmitting ? "Saving..." : "Save marks"}
           </Button>
-          {!review.isReviewDone ? (
-            <Button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => setFinalizeOpen(true)}
-            >
-              Completed
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => setFinalizeOpen(true)}
+          >
+            Completed
+          </Button>
         </section>
       ) : null}
 

@@ -205,12 +205,19 @@ export function QuizAssignedPeoplePage() {
                             {checkPath ? (
                               <Button
                                 size="sm"
-                                variant={canScore ? "default" : "outline"}
+                                variant={
+                                  canScore && !assignment.isReviewDone
+                                    ? "default"
+                                    : "outline"
+                                }
                                 className="h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none"
                                 asChild
                               >
                                 <Link to={checkPath}>
-                                  {attemptReviewActionLabel(canScore)}
+                                  {attemptReviewActionLabel(
+                                    canScore,
+                                    assignment.isReviewDone,
+                                  )}
                                 </Link>
                               </Button>
                             ) : null}

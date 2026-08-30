@@ -71,7 +71,7 @@ export function AppStatCard({
       onClick={onClick}
       animate={animate}
       padded={!compact}
-      className={cn("min-w-0", compact && "px-4 py-3", className)}
+      className={cn("h-full min-w-0", compact && "px-4 py-3", className)}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">

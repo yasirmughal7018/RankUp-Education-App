@@ -61,6 +61,7 @@ interface AttemptRecord {
   result: string;
   checkTo: string | null;
   canScore: boolean;
+  isReviewDone: boolean;
 }
 
 function buildAttemptRecords(
@@ -84,6 +85,7 @@ function buildAttemptRecords(
         result: assignment.resultStatus || "Not Attempted",
         checkTo: null,
         canScore,
+        isReviewDone: assignment.isReviewDone,
       },
     ];
   }
@@ -99,6 +101,7 @@ function buildAttemptRecords(
         ? studentAttemptCheckPath(quizId, attempt.attemptId, "assigned")
         : null,
     canScore,
+    isReviewDone: assignment.isReviewDone,
   }));
 }
 
@@ -185,12 +188,19 @@ export function QuizAssignmentAttemptsDialog({
                         {record.checkTo ? (
                           <Button
                             size="sm"
-                            variant={record.canScore ? "default" : "outline"}
+                            variant={
+                              record.canScore && !record.isReviewDone
+                                ? "default"
+                                : "outline"
+                            }
                             className="h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none"
                             asChild
                           >
                             <Link to={record.checkTo} onClick={() => onOpenChange(false)}>
-                              {attemptReviewActionLabel(record.canScore)}
+                              {attemptReviewActionLabel(
+                                record.canScore,
+                                record.isReviewDone,
+                              )}
                             </Link>
                           </Button>
                         ) : (

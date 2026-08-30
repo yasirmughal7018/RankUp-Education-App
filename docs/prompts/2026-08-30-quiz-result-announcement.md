@@ -8,6 +8,7 @@ When a student has attempted a quiz and the due date has finished, answers that 
 - When the due date has passed: auto-graded / matched answers are announced (partial results). Show the announced percentage with the quiz (for example `70% results announced`).
 - Full announcement and student status **Completed** happen only when the quiz owner opens the quiz and clicks **Completed**.
 - Teacher-review questions (essay / file upload) stay pending until that owner Completed action.
+- After Completed, do not change marks or feedback on the review page.
 
 ## Formula
 

@@ -237,7 +237,7 @@ Timed attempts show a countdown and auto-submit when time expires. Answers are r
 - `GET /api/quizzes/reviews/pending`
 - `GET /api/quizzes/{id}/monitoring`
 - `GET /api/quizzes/{id}/attempts/{attemptId}/review`
-- `PUT /api/quizzes/{id}/attempts/{attemptId}/answers`
+- `PUT /api/quizzes/{id}/attempts/{attemptId}/answers` (rejected after Completed)
 - `POST /api/quizzes/{id}/attempts/{attemptId}/finalize-review`
 
 ## Authentication Flow

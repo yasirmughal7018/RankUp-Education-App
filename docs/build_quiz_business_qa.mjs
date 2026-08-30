@@ -474,8 +474,8 @@ const partialCreditExamples = [
 const reviewRules = [
   "Pending reviews: owned quizzes with IsReviewRequired, assignment not review-done, attempt Submitted/AutoSubmitted.",
   "RequiresReview per question: Descriptive/Essay OR File Upload OR (Fill + AllowTeacherReview + submitted text that is not a full accepted-answer match).",
-  "Mark answers: awarded marks in [0, MaxMarks]; not if already finalized.",
-  "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true.",
+  "Mark answers: awarded marks in [0, MaxMarks]. After owner Completed (IsReviewDone), mark/feedback updates are rejected and the review workspace is read-only until Allow Retry.",
+  "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true. Completed results cannot be edited again on the review page.",
   "Quiz completion = later of student SubmittedAt and assignment EndDateTime. Auto-graded questions (known correct answer already on the item: MCQ, T/F, multi-select, matching, ordering, media, fill-blank) announce when that moment is reached. Early submitters do not see answers while the window is still open.",
   "Teacher-review questions (Descriptive, File Upload) stay pending until the owner marks the attempt Completed (IsReviewDone). Full student status Completed also waits for that owner action.",
   "Announced percent = marks of announced questions / total marks (not the student’s score %). Exposed as resultAnnouncedPercent on list, detail, and attempt result. Show it with the quiz (e.g. 70% results announced).",
@@ -483,7 +483,7 @@ const reviewRules = [
   "Per-question ResultPending hides marks, correctness, correct answers, and explanations until that question is announced. List/detail hide the student’s score percent until the owner marks Completed.",
   "QuizReviewDisplay.Resolve applies on submit, get-result, list, and detail. It replaces the old all-or-nothing hide of every score while IsReviewRequired.",
   "ReviewDisplayMode modes are retired; create/update always persist Full. Bools never OR’d with type defaults.",
-  "AI review: Descriptive/Essay always; Fill when AllowAiReview and the answer is not a full accepted-answer match. OpenAI when configured, else heuristic. AI comment shown on teacher review screen; teacher still finalizes when required.",
+  "AI review: Descriptive/Essay always; Fill when AllowAiReview and the answer is not a full accepted-answer match. OpenAI when configured, else heuristic. AI comment is shown only on the teacher/owner review screen. Student and parent result screens show teacher/checker feedback only — never AI.",
 ];
 
 const apiMap = [
@@ -513,7 +513,7 @@ const apiMap = [
   ["GET .../attempts/{id}/result", "Student own; Parent linked child; Teacher/Coordinator roster student; CampusAdmin campus; SchoolAdmin school; PortalAdmin any. Same announcement rule as submit (resultAnnouncedPercent, resultsAnnounceAt, ResultPending)."],
   ["GET /api/quizzes/assignments", "Assignment board scoped to the caller’s students/children: Parent linked children; Teacher/Coordinator roster; CampusAdmin campus; SchoolAdmin school; PortalAdmin all. Optional studentId must be in that scope."],
   ["GET .../monitoring", "Progress board for in-scope students on a viewable quiz (catalog or owned). Does not list other teachers’ students."],
-  ["GET/PUT .../review|answers + finalize-review", "Subjective marking and release for in-scope students on a viewable quiz."],
+  ["GET/PUT .../review|answers + finalize-review", "Subjective marking and release for in-scope students on a viewable quiz. PUT answers is rejected after Completed."],
   ["GET /api/quizzes/pending-approval", "API queue still exists for clients. Web UI does not use a separate approvals page — SchoolAdmin/CampusAdmin/PortalAdmin open submitted drafts from the /quizzes Draft tile. Pending rows require Submit for approval. SchoolAdmin queue: Teacher/Coordinator/CampusAdmin created. CampusAdmin queue: Teacher/Coordinator created only. PortalAdmin also includes SchoolApproved and SchoolAdmin/school-type Pending."],
   ["POST /api/quizzes/{id}/edit-requests", "Owner requests edit of SchoolApproved/Approved/Published/Assigned quiz (reason ≥10 chars). Teacher/Coordinator: queue SchoolAdmin + CampusAdmin + PortalAdmin. SchoolAdmin/CampusAdmin/Parent: PortalAdmin only. Decisions in app_approval (entity_type QuizEditRequest = 2106); request row in app_quiz_edit_request."],
   ["GET /api/quizzes/edit-requests", "Pending edit requests queued to the current SchoolAdmin/CampusAdmin/PortalAdmin."],
@@ -581,7 +581,7 @@ const scenarios = [
     "QZ-10",
     "Finalize review releases results",
     "Teacher marks all RequiresReview items and finalizes.",
-    "Attempt→Reviewed; IsReviewDone=true; announced percent becomes 100%; student/parent see full scores/answers including previously pending teacher-review questions.",
+    "Attempt→Reviewed; IsReviewDone=true; announced percent becomes 100%; student/parent see full scores/answers including previously pending teacher-review questions. After Completed, marks and feedback cannot be changed on the review page.",
   ],
   [
     "QZ-11",

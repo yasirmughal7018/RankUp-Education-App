@@ -25,7 +25,7 @@ public interface IQuizReviewService
         long attemptId,
         CancellationToken cancellationToken);
 
-    /// <summary>Adjusts awarded marks and records teacher/parent feedback per question.</summary>
+    /// <summary>Adjusts awarded marks and records teacher/parent feedback per question. Rejected after Completed.</summary>
     Task<AttemptReviewResponse> MarkAnswersAsync(
         long quizId,
         long attemptId,
@@ -132,6 +132,10 @@ public sealed class QuizReviewService : IQuizReviewService
         CancellationToken cancellationToken)
     {
         var (scope, assignment) = await EnsureReviewScoreAccessAsync(quizId, attemptId, cancellationToken);
+        if (assignment.IsReviewDone)
+        {
+            throw new BusinessRuleException("This quiz result is completed and cannot be changed.");
+        }
 
         var reviewDetail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
@@ -181,11 +185,6 @@ public sealed class QuizReviewService : IQuizReviewService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        if (assignment.IsReviewDone)
-        {
-            await ApplyReviewedScoreAsync(quizId, attemptId, cancellationToken);
-        }
 
         var updated = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
             ?? throw new NotFoundAppException("Quiz attempt was not found.");
@@ -313,26 +312,6 @@ public sealed class QuizReviewService : IQuizReviewService
         }
 
         return (scope, assignment);
-    }
-
-    private async Task ApplyReviewedScoreAsync(
-        long quizId,
-        long attemptId,
-        CancellationToken cancellationToken)
-    {
-        var attempt = await _attempts.GetAttemptEntityByIdAsync(attemptId, quizId, cancellationToken)
-            ?? throw new NotFoundAppException("Quiz attempt was not found.");
-        var reviewDetail = await _reviews.GetAttemptReviewDetailAsync(quizId, attemptId, cancellationToken)
-            ?? throw new NotFoundAppException("Quiz attempt was not found.");
-
-        var obtainedMarks = (short)reviewDetail.Questions.Sum(question => question.AwardedMarks);
-        var reviewedStatusId = await _lookups.ResolveLookupIdByNamesAsync(
-            "QuizAttemptStatus",
-            LookupNames.ReviewedAttemptStatusNames,
-            fallback: attempt.StatusId,
-            cancellationToken);
-        attempt.ApplyReviewedScore(obtainedMarks, reviewDetail.TotalMarks, reviewedStatusId);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     private async Task UpsertReviewFeedbackAsync(

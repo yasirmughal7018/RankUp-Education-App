@@ -92,6 +92,11 @@ describe("attemptReviewActionLabel", () => {
     expect(attemptReviewActionLabel(true)).toBe("Check");
     expect(attemptReviewActionLabel(false)).toBe("View");
   });
+
+  it("uses View after the result is completed", () => {
+    expect(attemptReviewActionLabel(true, true)).toBe("View");
+    expect(attemptReviewActionLabel(false, true)).toBe("View");
+  });
 });
 
 describe("hasAttemptScoreAccess", () => {
