@@ -1,0 +1,30 @@
+---
+description: Update related docs and prompt rules whenever behavior changes
+alwaysApply: true
+---
+
+# Update documents with every change
+
+When implementing, changing, or fixing behavior, update the related documentation in the **same turn**. Do not wait for the user to ask.
+
+## What to update
+
+1. **Business / QA guides** in `docs/` — edit the generator (`docs/build_*.mjs`), then rebuild HTML and DOCX (`npm run build:quiz-qa`, `build:questions-qa`, etc. from `docs/`).
+2. **Cursor / prompt rules** in `.cursor/rules/` when the change affects a documented convention (approval, quiz lifecycle, scoring, page headers, etc.).
+3. **Module READMEs or API notes** (`WebApi/README.md`, `Mobile/docs/`, `React/README.md`) only when they already describe the same rule and would otherwise be wrong.
+
+## How to decide which docs
+
+- Quiz scoring, attempts, review, assignment, lifecycle → `docs/build_quiz_business_qa.mjs`
+- Question bank types, approval, import → `docs/build_questions_business_qa.mjs`
+- Auth / login → `docs/build_authentication_logic_docx.mjs` and the matching HTML
+- Registration / school change → `docs/build_user_creation_qa_docx.mjs`
+- Students / groups → `docs/build_students_qa.mjs`
+
+If no generator exists, edit the existing HTML/DOCX source that already documents that topic.
+
+## Do not
+
+- Skip docs because the user only asked for code
+- Invent new standalone markdown files unless they asked for a new document
+- Leave scoring, permissions, or workflow rules only in code comments
