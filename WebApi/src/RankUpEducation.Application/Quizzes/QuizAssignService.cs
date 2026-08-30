@@ -87,7 +87,7 @@ public sealed class QuizAssignService : IQuizAssignService
         QuizTypeBehavior.EnsureAssignable(
             quizTypeName,
             quiz.TimeLimitMinutes,
-            request.AllowedAttempts,
+            QuizTypeBehavior.SingleAllowedAttempt,
             request.StartAt,
             request.EndAt,
             _dateTimeProvider.UtcNow);
@@ -101,7 +101,11 @@ public sealed class QuizAssignService : IQuizAssignService
                     "Only portal administrators can publish public catalog quizzes.");
             }
 
-            quiz.SetAudienceAccess("Public", request.StartAt, request.EndAt, request.AllowedAttempts);
+            quiz.SetAudienceAccess(
+                "Public",
+                request.StartAt,
+                request.EndAt,
+                QuizTypeBehavior.SingleAllowedAttempt);
             var publishedLifecycleId = await RequireLookupAsync(
                 LookupNames.QuizLifecycleStatus,
                 LookupNames.PublishedLifecycleNames,
@@ -161,7 +165,9 @@ public sealed class QuizAssignService : IQuizAssignService
             if (existingByStudent.TryGetValue(studentId, out var existing))
             {
                 var attemptCount = await _attempts.CountAttemptsAsync(quizId, studentId, cancellationToken);
-                var quota = (short)Math.Min(short.MaxValue, request.AllowedAttempts + attemptCount);
+                var quota = (short)Math.Min(
+                    short.MaxValue,
+                    QuizTypeBehavior.SingleAllowedAttempt + attemptCount);
                 if (attemptCount > 0)
                 {
                     existing.GrantReassignAttempts(
@@ -169,7 +175,8 @@ public sealed class QuizAssignService : IQuizAssignService
                         scope.Role,
                         request.StartAt,
                         request.EndAt,
-                        quota);
+                        quota,
+                        resultStatusId);
                 }
                 else
                 {
@@ -199,7 +206,7 @@ public sealed class QuizAssignService : IQuizAssignService
                 scope.Role,
                 request.StartAt,
                 request.EndAt,
-                request.AllowedAttempts,
+                QuizTypeBehavior.SingleAllowedAttempt,
                 resultStatusId);
 
             if (isGroupAssign)
@@ -789,11 +796,6 @@ public sealed class QuizAssignService : IQuizAssignService
         if (request.EndAt <= request.StartAt)
         {
             errors.Add("End time must be after start time.");
-        }
-
-        if (request.AllowedAttempts <= 0)
-        {
-            errors.Add("Allowed attempts must be greater than zero.");
         }
 
         if (errors.Count > 0)

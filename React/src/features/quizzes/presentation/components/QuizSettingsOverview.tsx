@@ -168,14 +168,6 @@ export function QuizSettingsOverview({ quiz }: { quiz: ManageQuiz }) {
           }
         />
         <SettingsTile
-          label="Allowed attempts"
-          value={
-            quiz.allowedAttempts != null && quiz.allowedAttempts > 0
-              ? String(quiz.allowedAttempts)
-              : "—"
-          }
-        />
-        <SettingsTile
           label="Random questions per attempt"
           value={
             randomCount != null && randomCount > 0

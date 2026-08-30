@@ -1197,7 +1197,7 @@ export function resolveQuizTypeDefaults(quizTypeName: string): Pick<
 
   if (name === "practice") {
     return {
-      allowedAttempts: 3,
+      allowedAttempts: 1,
       timeLimitMinutes: null,
       shuffleQuestions: false,
       shuffleOptions: false,
@@ -1280,7 +1280,7 @@ export function buildQuizPayload(values: QuizFormValues) {
     quizTypeId: values.quizTypeId > 0 ? values.quizTypeId : null,
     instructions: values.instructions.trim(),
     timeLimitMinutes: null,
-    allowedAttempts: values.allowedAttempts,
+    allowedAttempts: 1,
     shuffleQuestions: values.shuffleQuestions,
     shuffleOptions: values.shuffleOptions,
     randomQuestionCount: values.randomQuestionCount,

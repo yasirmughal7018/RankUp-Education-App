@@ -11,5 +11,8 @@ Each implementation / spec prompt is stored as its own file. Casual chat follow-
 | 2026-08-30 | [2026-08-30-lock-completed-quiz-review.md](./2026-08-30-lock-completed-quiz-review.md) | After Completed, review marks and feedback stay read-only |
 | 2026-08-30 | [2026-08-30-reassign-keep-attempts.md](./2026-08-30-reassign-keep-attempts.md) | Reassign keeps old attempts/results and adds a new attempt |
 | 2026-08-30 | [2026-08-30-reassign-reattempt-anyone.md](./2026-08-30-reassign-reattempt-anyone.md) | Parent/teacher can reassign or allow retry without waiting for review/window |
+| 2026-08-30 | [2026-08-30-quiz-one-allowed-attempt.md](./2026-08-30-quiz-one-allowed-attempt.md) | Quiz definition always allows one attempt; no Allowed Attempts field |
+| 2026-08-30 | [2026-08-30-reassign-student-window-status.md](./2026-08-30-reassign-student-window-status.md) | After reassign, student list follows the new window (Upcoming / Open Now) |
+| 2026-08-30 | [2026-08-30-view-result-after-due-date.md](./2026-08-30-view-result-after-due-date.md) | View result only after due date; View quiz while results are pending |
 
 New spec prompts go here as `YYYY-MM-DD-short-kebab-slug.md`.

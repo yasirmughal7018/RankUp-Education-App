@@ -675,9 +675,31 @@ bool hasRemainingQuizAttempts(QuizSummary quiz) {
   return quiz.attemptsUsed < quiz.attemptLimit;
 }
 
+bool studentQuizResultsReleased(QuizSummary quiz, [DateTime? currentTime]) {
+  final now = currentTime ?? DateTime.now();
+  return quiz.dueAt != null && !quiz.dueAt!.isAfter(now);
+}
+
 String _studentStatus(QuizSummary quiz, DateTime now) {
   final normalizedResultStatus =
       quiz.resultStatus.toLowerCase().replaceAll(' ', '');
+  final submittedInCurrentWindow = quiz.completedAt != null &&
+      (quiz.startAt == null || !quiz.completedAt!.isBefore(quiz.startAt!));
+  final windowOpen = quiz.dueAt == null || !quiz.dueAt!.isBefore(now);
+
+  if (normalizedResultStatus == 'inprogress') {
+    return 'InProgress';
+  }
+
+  if (quiz.status == QuizStatus.upcoming ||
+      (quiz.startAt != null && quiz.startAt!.isAfter(now))) {
+    return 'Up Coming';
+  }
+
+  if (windowOpen &&
+      (!submittedInCurrentWindow || quiz.status == QuizStatus.available)) {
+    return 'Not Attempted';
+  }
 
   if (quiz.resultPercent != null || normalizedResultStatus == 'reviewed') {
     return 'Completed';
@@ -696,15 +718,6 @@ String _studentStatus(QuizSummary quiz, DateTime now) {
       normalizedResultStatus == 'resultspending' ||
       normalizedResultStatus == 'partialresults') {
     return 'Under Review';
-  }
-
-  if (normalizedResultStatus == 'inprogress') {
-    return 'InProgress';
-  }
-
-  if (quiz.status == QuizStatus.upcoming ||
-      (quiz.startAt != null && quiz.startAt!.isAfter(now))) {
-    return 'Up Coming';
   }
 
   return 'Not Attempted';

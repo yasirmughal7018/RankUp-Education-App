@@ -93,7 +93,8 @@ public sealed class QuizAssignment : BaseEntity
         UserRole assignedByRole,
         DateTimeOffset startDateTime,
         DateTimeOffset endDateTime,
-        short allowedAttempts)
+        short allowedAttempts,
+        short quizResultStatus)
     {
         if (endDateTime <= startDateTime)
         {
@@ -110,6 +111,7 @@ public sealed class QuizAssignment : BaseEntity
         StartDateTime = startDateTime;
         EndDateTime = endDateTime;
         AllowedAttempts = allowedAttempts;
+        QuizResultStatus = quizResultStatus;
         ModifiedDate = DateTimeOffset.UtcNow;
     }
 

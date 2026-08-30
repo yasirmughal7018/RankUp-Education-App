@@ -30,13 +30,11 @@ interface AssignQuizDialogProps {
   isSubmitting: boolean;
   /** Quiz class lookup id — prefills Grade. */
   classId?: number | null;
-  /** Quiz allowed attempts — prefills Allowed attempts. */
-  allowedAttempts?: number | null;
   /** Quiz school id when known. */
   schoolId?: number | null;
   /** Quiz campus id when known. */
   campusId?: number | null;
-  /** When Surprise, defaults to open-now / short window and clamps attempts. */
+  /** When Surprise, defaults to open-now / short window. */
   quizType?: string;
   /** Existing per-student assignments — used to lock active rows and allow expired reassign. */
   existingAssignments?: QuizAssignment[];
@@ -73,24 +71,10 @@ function isSurpriseQuizType(quizType?: string): boolean {
   return (quizType ?? "").trim().toLowerCase() === "surprise";
 }
 
-function resolveInitialAttempts(
-  quizAttempts: number | null | undefined,
-  surprise: boolean,
-): number {
-  if (surprise) {
-    return 1;
-  }
-  if (quizAttempts != null && quizAttempts > 0) {
-    return quizAttempts;
-  }
-  return 1;
-}
-
 /** Modal to assign a quiz to students, a group, or a school audience with a schedule. */
 export function AssignQuizDialog({
   isSubmitting,
   classId: quizClassId,
-  allowedAttempts: quizAllowedAttempts,
   schoolId: quizSchoolId,
   campusId: quizCampusId,
   quizType,
@@ -157,9 +141,6 @@ export function AssignQuizDialog({
   const [endAt, setEndAt] = useState(() =>
     surprise ? defaultDateTimeMinutesFromNow(2 * 60) : defaultDateTime(24),
   );
-  const [allowedAttempts, setAllowedAttempts] = useState(() =>
-    resolveInitialAttempts(quizAllowedAttempts, surprise),
-  );
   const [error, setError] = useState<string | null>(null);
 
   const showAudienceScope =
@@ -206,10 +187,6 @@ export function AssignQuizDialog({
       setGradeId(quizClassId);
     }
   }, [quizClassId]);
-
-  useEffect(() => {
-    setAllowedAttempts(resolveInitialAttempts(quizAllowedAttempts, surprise));
-  }, [quizAllowedAttempts, surprise]);
 
   useEffect(() => {
     if (lockedSchoolId && lockedSchoolId > 0) {
@@ -440,10 +417,6 @@ export function AssignQuizDialog({
         );
         return;
       }
-      if (allowedAttempts > 1) {
-        setError("Surprise quizzes allow at most one attempt.");
-        return;
-      }
     }
 
     const schoolIds =
@@ -465,7 +438,7 @@ export function AssignQuizDialog({
         groupId: groupId ? Number(groupId) : null,
         startAt: startDate.toISOString(),
         endAt: endDate.toISOString(),
-        allowedAttempts: surprise ? 1 : allowedAttempts,
+        allowedAttempts: 1,
         gradeId:
           mode === "allingrade" ||
           mode === "allinsection" ||
@@ -933,31 +906,6 @@ export function AssignQuizDialog({
                 required
               />
             </div>
-          </div>
-
-          <div>
-            <FieldLabel htmlFor="allowedAttempts" required>
-              Allowed attempts
-            </FieldLabel>
-            <input
-              id="allowedAttempts"
-              type="number"
-              value={allowedAttempts}
-              disabled={isSubmitting || surprise}
-              onChange={(event) =>
-                setAllowedAttempts(Number(event.target.value))
-              }
-              className={inputClassName}
-              min={1}
-              required
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Prefills from the quiz
-              {quizAllowedAttempts != null && quizAllowedAttempts > 0
-                ? ` (${quizAllowedAttempts})`
-                : ""}
-              {surprise ? "; Surprise quizzes are limited to 1." : "."}
-            </p>
           </div>
 
           <div className="flex justify-end gap-3">

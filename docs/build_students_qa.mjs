@@ -115,7 +115,7 @@ const quizStudentApis = [
 const quizAttemptRules = [
   ["Device lock", "Attempt bound to starting deviceId; mismatch → locked to starting device"],
   ["Window", "Assignment StartDateTime–EndDateTime enforced"],
-  ["Attempts", "AllowedAttempts quota; Allow Retry may add extras"],
+  ["Attempts", "One attempt by default; Allow Retry or reassign may add extras"],
   ["Instructions", "Non-empty instructions require acknowledge on start"],
   ["Offline", "Draft/submit sync supported with clientSyncId / isOfflineSync"],
   ["Students do not assign", "AssignedById is Teacher/Parent; students only take"],
@@ -144,10 +144,10 @@ const schoolChangeRules = [
 
 const webRoutes = [
   ["/student/dashboard", "Learning dashboard"],
-  ["/student/quizzes", "Assigned quizzes"],
-  ["/student/quizzes/:quizId", "Detail / start"],
+  ["/student/quizzes", "Assigned quizzes. After submit, no View result until the due date; View result after the window ends."],
+  ["/student/quizzes/:quizId", "Detail / start. Your attempts list is collapsed until the student shows it. View result only after the due date."],
   ["/student/quizzes/:quizId/attempts/:attemptId", "Take attempt"],
-  ["/student/quizzes/:quizId/attempts/:attemptId/result", "Result"],
+  ["/student/quizzes/:quizId/attempts/:attemptId/result", "Result (auto-graded after due date; full after owner Completed)"],
   ["/student/history", "Self quiz history"],
   ["/student/rankings", "Class / school peer rankings"],
   ["/admin/directory/students", "Admin directory (not student session)"],

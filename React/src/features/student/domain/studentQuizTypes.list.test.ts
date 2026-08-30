@@ -66,6 +66,39 @@ describe("classifyStudentQuiz", () => {
       ),
     ).toBe("expired");
   });
+
+  it("treats a reassigned future window as upcoming even after a prior attempt", () => {
+    expect(
+      classifyStudentQuiz(
+        quiz({
+          resultStatus: "Upcoming",
+          status: "upcoming",
+          startAt: "2026-08-20T08:00:00Z",
+          dueAt: "2026-08-22T18:00:00Z",
+          completedAt: "2026-08-14T10:00:00Z",
+          lastAttemptId: 44,
+        }),
+        now,
+      ),
+    ).toBe("upcoming");
+  });
+
+  it("treats a reassigned open window as open now even after a prior attempt", () => {
+    expect(
+      classifyStudentQuiz(
+        quiz({
+          resultStatus: "Not Attempted",
+          status: "available",
+          startAt: "2026-08-15T08:00:00Z",
+          dueAt: "2026-08-20T18:00:00Z",
+          completedAt: "2026-08-14T10:00:00Z",
+          lastAttemptId: 44,
+          attemptLimit: 2,
+        }),
+        now,
+      ),
+    ).toBe("active");
+  });
 });
 
 describe("resolveStudentQuizAction", () => {
@@ -92,19 +125,53 @@ describe("resolveStudentQuizAction", () => {
     ).toBe("Open");
   });
 
-  it("opens quiz settings for attempted quizzes", () => {
+  it("starts a reassigned open quiz instead of viewing the old result", () => {
+    expect(
+      resolveStudentQuizAction(
+        quiz({
+          resultStatus: "Not Attempted",
+          status: "available",
+          startAt: "2026-08-15T08:00:00Z",
+          dueAt: "2026-08-20T18:00:00Z",
+          completedAt: "2026-08-14T10:00:00Z",
+          lastAttemptId: 44,
+        }),
+        now,
+      ).label,
+    ).toBe("Start quiz");
+  });
+
+  it("hides the action while the due date is still ahead", () => {
     expect(
       resolveStudentQuizAction(
         quiz({
           resultStatus: "Under Review",
           completedAt: "2026-08-14T10:00:00Z",
           lastAttemptId: 9,
+          resultAnnouncedPercent: 70,
+          resultPercent: 88,
+        }),
+        now,
+      ),
+    ).toBeNull();
+  });
+
+  it("opens the result after the due date", () => {
+    expect(
+      resolveStudentQuizAction(
+        quiz({
+          resultStatus: "Partial results",
+          startAt: "2026-08-01T08:00:00Z",
+          dueAt: "2026-08-14T18:00:00Z",
+          completedAt: "2026-08-14T10:00:00Z",
+          lastAttemptId: 9,
+          resultAnnouncedPercent: 70,
         }),
         now,
       ),
     ).toEqual({
       label: "View result",
-      to: "/student/quizzes/1",
+      to: "/student/quizzes/1/attempts/9/result",
       variant: "default",
     });
   });
@@ -154,33 +221,65 @@ describe("canSwitchOtherQuizAttempts", () => {
 
 describe("formatStudentQuizListResult", () => {
   it("hides a score when the quiz has not been attempted", () => {
-    expect(formatStudentQuizListResult(quiz())).toEqual({
+    expect(formatStudentQuizListResult(quiz(), now)).toEqual({
       label: "—",
       detail: null,
     });
   });
 
-  it("shows the announced percentage for a completed quiz", () => {
+  it("keeps the result empty for a reassigned open window", () => {
     expect(
-      formatStudentQuizListResult({
-        ...quiz({
-          resultStatus: "Completed",
-          lastAttemptId: 9,
-        }),
-        resultPercent: 87,
-      }),
+      formatStudentQuizListResult(
+        {
+          ...quiz({
+            resultStatus: "Completed",
+            status: "available",
+            startAt: "2026-08-15T08:00:00Z",
+            dueAt: "2026-08-20T18:00:00Z",
+            completedAt: "2026-08-14T10:00:00Z",
+            lastAttemptId: 9,
+          }),
+          resultPercent: 87,
+          resultAnnouncedPercent: 100,
+        },
+        now,
+      ),
+    ).toEqual({ label: "—", detail: null });
+  });
+
+  it("shows the announced percentage after the due date", () => {
+    expect(
+      formatStudentQuizListResult(
+        {
+          ...quiz({
+            resultStatus: "Completed",
+            startAt: "2026-08-01T08:00:00Z",
+            dueAt: "2026-08-14T18:00:00Z",
+            completedAt: "2026-08-14T10:00:00Z",
+            lastAttemptId: 9,
+          }),
+          resultPercent: 87,
+        },
+        now,
+      ),
     ).toEqual({ label: "87%", detail: null });
   });
 
   it("shows pending with announced share until the full score is released", () => {
     expect(
-      formatStudentQuizListResult({
-        ...quiz({
-          resultStatus: "Partial results",
-          lastAttemptId: 9,
-        }),
-        resultAnnouncedPercent: 40,
-      }),
+      formatStudentQuizListResult(
+        {
+          ...quiz({
+            resultStatus: "Partial results",
+            startAt: "2026-08-01T08:00:00Z",
+            dueAt: "2026-08-14T18:00:00Z",
+            completedAt: "2026-08-14T10:00:00Z",
+            lastAttemptId: 9,
+          }),
+          resultAnnouncedPercent: 40,
+        },
+        now,
+      ),
     ).toEqual({ label: "Partial results", detail: "40% announced" });
   });
 });

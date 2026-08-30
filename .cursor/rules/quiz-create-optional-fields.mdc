@@ -27,3 +27,7 @@ Do not block create for missing Topic, Difficulty, School (PortalAdmin), or Camp
 
 - Title, Instructions, Class, Subject
 - Quiz type when the create form shows it (`requireQuizType`)
+
+## Not collected
+
+- **Allowed attempts** — every quiz allows exactly one attempt. Do not show this field on create, edit, settings, or assign. Extra attempts come only from Allow retry or reassign on the assignment.

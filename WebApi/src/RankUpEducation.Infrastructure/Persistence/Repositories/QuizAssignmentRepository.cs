@@ -330,16 +330,20 @@ public sealed class QuizAssignmentRepository : IQuizAssignmentRepository
             where assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Upcoming
                 && assignment.StartDateTime <= now
                 && assignment.EndDateTime >= now
-                && !_dbContext.QuizAttempts.Any(attempt =>
-                    attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId)
-            select new { assignment, quiz }).ToListAsync(cancellationToken);
+            select new
+            {
+                assignment,
+                quiz,
+                HasAttempts = _dbContext.QuizAttempts.Any(attempt =>
+                    attempt.QuizId == assignment.QuizId && attempt.StudentId == assignment.StudentId),
+            }).ToListAsync(cancellationToken);
 
         foreach (var row in dueUpcoming)
         {
             row.assignment.SetResultStatus(LookupNames.QuizResultStatusIds.NotAttempted);
             changed++;
 
-            if (row.quiz.QuizTypeId == LookupNames.QuizTypeIds.Surprise)
+            if (!row.HasAttempts && row.quiz.QuizTypeId == LookupNames.QuizTypeIds.Surprise)
             {
                 newlyOpenedSurprise.Add(new QuizAssignmentOpenedNotice(
                     row.quiz.Id,

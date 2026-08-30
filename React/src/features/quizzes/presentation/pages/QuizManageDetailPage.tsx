@@ -1371,7 +1371,6 @@ export function QuizManageDetailPage() {
         <AssignQuizDialog
           isSubmitting={assignQuiz.isPending}
           classId={quiz.classId}
-          allowedAttempts={quiz.allowedAttempts}
           schoolId={quiz.schoolId}
           campusId={quiz.campusId}
           quizType={quiz.quizType}

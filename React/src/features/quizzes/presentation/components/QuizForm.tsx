@@ -244,28 +244,6 @@ export function QuizForm({
           </div>
         ) : null}
 
-        <div>
-          <FieldLabel htmlFor="allowedAttempts" optional>
-            Allowed attempts
-          </FieldLabel>
-          <input
-            id="allowedAttempts"
-            type="number"
-            value={values.allowedAttempts ?? ""}
-            disabled={isSubmitting}
-            onChange={(event) =>
-              setValues((current) => ({
-                ...current,
-                allowedAttempts: event.target.value
-                  ? Number(event.target.value)
-                  : null,
-              }))
-            }
-            className={inputClassName}
-            min={1}
-          />
-        </div>
-
         {showContextStudentId ? (
           <div>
             <FieldLabel htmlFor="contextStudentId" optional>

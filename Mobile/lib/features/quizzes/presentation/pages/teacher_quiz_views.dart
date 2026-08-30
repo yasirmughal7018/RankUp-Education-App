@@ -158,7 +158,6 @@ class _TeacherQuizCreateViewState extends ConsumerState<TeacherQuizCreateView> {
   int? _topicId;
   int? _difficultyId;
   int? _quizTypeId;
-  int _allowedAttempts = 1;
   bool _shuffleQuestions = false;
   bool _shuffleOptions = true;
   bool _isReviewRequired = true;
@@ -204,7 +203,7 @@ class _TeacherQuizCreateViewState extends ConsumerState<TeacherQuizCreateView> {
         difficultyLevelId: _difficultyId!,
         quizTypeId: _quizTypeId!,
         instructions: _instructionsController.text,
-        allowedAttempts: _allowedAttempts,
+        allowedAttempts: 1,
         shuffleQuestions: _shuffleQuestions,
         shuffleOptions: _shuffleOptions,
         isReviewRequired: _isReviewRequired,
@@ -302,15 +301,6 @@ class _TeacherQuizCreateViewState extends ConsumerState<TeacherQuizCreateView> {
           decoration: const InputDecoration(labelText: 'Instructions *'),
         ),
         const SizedBox(height: 12),
-        TextFormField(
-          initialValue: _allowedAttempts.toString(),
-          enabled: !widget.isSaving,
-          decoration: const InputDecoration(labelText: 'Attempts'),
-          keyboardType: TextInputType.number,
-          onChanged: (value) {
-            _allowedAttempts = int.tryParse(value) ?? 1;
-          },
-        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Shuffle questions'),
@@ -1119,12 +1109,6 @@ class _QuizSettingsSheet extends StatelessWidget {
             : 'No limit',
       ),
       (
-        'Allowed attempts',
-        quiz.allowedAttempts != null && quiz.allowedAttempts! > 0
-            ? '${quiz.allowedAttempts}'
-            : '—',
-      ),
-      (
         'Random questions per attempt',
         randomCount != null && randomCount > 0
             ? '$randomCount'
@@ -1243,7 +1227,6 @@ Future<AssignQuizInput?> showTeacherAssignSheet(
   BuildContext context, {
   required UserRole role,
   required String defaultGradeLabel,
-  int? defaultAllowedAttempts,
   List<QuizAssignmentItem> existingAssignments = const [],
 }) {
   return showModalBottomSheet<AssignQuizInput>(
@@ -1253,7 +1236,6 @@ Future<AssignQuizInput?> showTeacherAssignSheet(
       return _AssignSheet(
         role: role,
         defaultGradeLabel: defaultGradeLabel,
-        defaultAllowedAttempts: defaultAllowedAttempts ?? 1,
         existingAssignments: existingAssignments,
       );
     },
@@ -1292,13 +1274,11 @@ class _AssignSheet extends ConsumerStatefulWidget {
   const _AssignSheet({
     required this.role,
     required this.defaultGradeLabel,
-    required this.defaultAllowedAttempts,
     this.existingAssignments = const [],
   });
 
   final UserRole role;
   final String defaultGradeLabel;
-  final int defaultAllowedAttempts;
   final List<QuizAssignmentItem> existingAssignments;
 
   @override
@@ -1315,7 +1295,6 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
   final Set<String> _selectedIds = {};
   late DateTime _startAt;
   late DateTime _endAt;
-  late int _allowedAttempts;
   String? _error;
 
   @override
@@ -1325,7 +1304,6 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
     final now = DateTime.now();
     _startAt = now.add(const Duration(hours: 1));
     _endAt = now.add(const Duration(hours: 25));
-    _allowedAttempts = widget.defaultAllowedAttempts;
     Future.microtask(() {
       if (widget.role == UserRole.parent) {
         return;
@@ -1415,7 +1393,7 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
         groupId: _mode == 'group' ? groupId : null,
         startAt: _startAt,
         endAt: _endAt,
-        allowedAttempts: _allowedAttempts,
+        allowedAttempts: 1,
         gradeId: _mode == 'allingrade' || _mode == 'allinsection'
             ? _parseGrade()
             : null,
@@ -1651,14 +1629,6 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                   }
                 },
               ),
-            ),
-            TextFormField(
-              initialValue: _allowedAttempts.toString(),
-              decoration: const InputDecoration(labelText: 'Allowed attempts'),
-              keyboardType: TextInputType.number,
-              onChanged: (value) {
-                _allowedAttempts = int.tryParse(value) ?? 1;
-              },
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),

@@ -75,10 +75,10 @@ function bucketThemeKey(bucket: StudentQuizBucket): ApprovalStatusKey {
 }
 
 function actionIcon(label: string) {
-  if (label.startsWith("View")) {
+  if (label === "View result") {
     return CheckCircle2;
   }
-  if (label === "Open") {
+  if (label === "View quiz" || label === "Open") {
     return Eye;
   }
   return PlayCircle;
@@ -381,14 +381,14 @@ function StudentQuizTableRow({
 }) {
   const bucket = classifyStudentQuiz(quiz, now);
   const action = resolveStudentQuizAction(quiz, now);
-  const result = formatStudentQuizListResult(quiz);
-  const Icon = actionIcon(action.label);
+  const result = formatStudentQuizListResult(quiz, now);
+  const Icon = action ? actionIcon(action.label) : Eye;
 
   return (
     <tr className="hover:bg-muted/30">
       <td className="px-4 py-2 align-middle">
         <Link
-          to={action.to}
+          to={`/student/quizzes/${quiz.id}`}
           className="font-display font-semibold text-foreground hover:text-primary"
         >
           {quiz.title}
@@ -422,17 +422,19 @@ function StudentQuizTableRow({
       </td>
       <td className="px-4 py-2 align-middle">
         <div className="flex justify-end">
-          <Button
-            size="sm"
-            variant={action.variant}
-            className="h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none"
-            asChild
-          >
-            <Link to={action.to}>
-              <Icon className="h-3 w-3" />
-              {action.label}
-            </Link>
-          </Button>
+          {action ? (
+            <Button
+              size="sm"
+              variant={action.variant}
+              className="h-7 rounded-full px-2.5 text-[11px] font-semibold leading-none"
+              asChild
+            >
+              <Link to={action.to}>
+                <Icon className="h-3 w-3" />
+                {action.label}
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </td>
     </tr>

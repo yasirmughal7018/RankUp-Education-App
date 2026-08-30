@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/core/components/PageHeader";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/features/student/domain/offlineAttemptSession";
 import { formatAnnouncedResultsLabel } from "@/features/student/domain/quizResultDisplay";
 import {
+  areStudentQuizResultsReleased,
   classifyStudentQuiz,
   hasInProgressAttempt,
 } from "@/features/student/domain/studentQuizTypes";
@@ -38,6 +40,7 @@ export function StudentQuizDetailPage() {
   const numericQuizId = Number(quizId);
   const [instructionsAcknowledged, setInstructionsAcknowledged] = useState(false);
   const [offlineStartError, setOfflineStartError] = useState<string | null>(null);
+  const [attemptsExpanded, setAttemptsExpanded] = useState(false);
 
   const { data: quiz, isLoading, error } = useStudentQuizDetailQuery(numericQuizId);
   const startAttempt = useStartQuizAttemptMutation(numericQuizId);
@@ -109,6 +112,8 @@ export function StudentQuizDetailPage() {
         startAt: quiz.startAt,
         dueAt: quiz.dueAt,
         lastAttemptId: quiz.lastAttemptId,
+        attemptLimit: quiz.attemptLimit,
+        attemptsUsed: quiz.attemptsUsed,
       },
       new Date(),
     );
@@ -190,14 +195,12 @@ export function StudentQuizDetailPage() {
     );
   }
 
-  const announcedLabel = formatAnnouncedResultsLabel(
-    quiz.resultAnnouncedPercent,
-  );
   const attemptsRemaining =
     quiz.attemptLimit > 0
       ? Math.max(quiz.attemptLimit - quiz.attemptsUsed, 0)
       : null;
   const continueQuiz = hasInProgressAttempt(quiz);
+  const now = new Date();
   const bucket = classifyStudentQuiz(
     {
       id: quiz.id,
@@ -206,9 +209,18 @@ export function StudentQuizDetailPage() {
       startAt: quiz.startAt,
       dueAt: quiz.dueAt,
       lastAttemptId: quiz.lastAttemptId,
+      attemptLimit: quiz.attemptLimit,
+      attemptsUsed: quiz.attemptsUsed,
+      resultAnnouncedPercent: quiz.resultAnnouncedPercent,
+      resultPercent: quiz.resultPercent,
     },
-    new Date(),
+    now,
   );
+  const resultsReleased = areStudentQuizResultsReleased(quiz, now);
+  const announcedLabel =
+    resultsReleased && bucket === "attempted"
+      ? formatAnnouncedResultsLabel(quiz.resultAnnouncedPercent)
+      : null;
   const settingsOnly = bucket === "upcoming" || bucket === "expired";
   const canStart =
     !settingsOnly &&
@@ -358,25 +370,42 @@ export function StudentQuizDetailPage() {
 
       {quiz.attempts && quiz.attempts.length > 0 ? (
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Your attempts
-            </h2>
-            <p className="text-xs font-semibold tabular-nums text-slate-500">
-              {quiz.attempts.length}{" "}
-              {quiz.attempts.length === 1 ? "attempt" : "attempts"}
-            </p>
-          </div>
-          <ul className="space-y-2">
-            {quiz.attempts.map((attempt) => {
-              const resultTo = `/student/quizzes/${quiz.id}/attempts/${attempt.attemptId}/result`;
-              const showScore = quiz.resultPercent != null;
-              return (
-                <li key={attempt.attemptId}>
-                  <Link
-                    to={resultTo}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 transition hover:border-brand-300 hover:bg-slate-50"
-                  >
+          <button
+            type="button"
+            aria-expanded={attemptsExpanded}
+            aria-controls="student-quiz-attempts"
+            onClick={() => setAttemptsExpanded((open) => !open)}
+            className="flex w-full items-center justify-between gap-3 text-left"
+          >
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-slate-900">
+                Your attempts
+                <span className="ml-2 font-normal text-slate-500">
+                  ({quiz.attempts.length})
+                </span>
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {attemptsExpanded
+                  ? "Hide previous attempts"
+                  : "Show previous attempts"}
+              </p>
+            </div>
+            <ChevronDown
+              aria-hidden
+              className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${
+                attemptsExpanded ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {attemptsExpanded ? (
+            <ul id="student-quiz-attempts" className="mt-4 space-y-2">
+              {quiz.attempts.map((attempt) => {
+                const resultTo = `/student/quizzes/${quiz.id}/attempts/${attempt.attemptId}/result`;
+                const showScore = resultsReleased && quiz.resultPercent != null;
+                const rowClassName =
+                  "flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3";
+                const body = (
+                  <>
                     <div className="min-w-0">
                       <p className="font-medium text-slate-900">
                         Attempt #{attempt.attemptNumber}
@@ -390,18 +419,32 @@ export function StudentQuizDetailPage() {
                       label={attempt.status}
                       tone={getQuestionStatusTone(attempt.status, true)}
                     />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                  </>
+                );
+                return (
+                  <li key={attempt.attemptId}>
+                    {resultsReleased ? (
+                      <Link
+                        to={resultTo}
+                        className={`${rowClassName} transition hover:border-brand-300 hover:bg-slate-50`}
+                      >
+                        {body}
+                      </Link>
+                    ) : (
+                      <div className={rowClassName}>{body}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </section>
       ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        {bucket === "attempted" && resultPath ? (
+        {bucket === "attempted" && resultsReleased && resultPath ? (
           <Button className="flex-1" asChild>
-            <Link to={resultPath}>View last result</Link>
+            <Link to={resultPath}>View result</Link>
           </Button>
         ) : null}
 

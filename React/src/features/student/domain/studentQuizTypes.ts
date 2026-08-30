@@ -288,29 +288,55 @@ export interface StudentQuizListItemLike {
   dueAt: string | null;
   completedAt?: string | null;
   lastAttemptId?: number | null;
+  attemptLimit?: number | null;
+  attemptsUsed?: number | null;
+  resultAnnouncedPercent?: number | null;
+  resultPercent?: number | null;
 }
 
 function normalizeStudentQuizStatus(value: string): string {
   return value.toLowerCase().replace(/[_\s-]/g, "");
 }
 
-export function isStudentQuizUpcoming(
+function isStudentQuizWindowUpcoming(
   quiz: StudentQuizListItemLike,
-  now = new Date(),
+  now: Date,
 ): boolean {
-  if (hasInProgressAttempt(quiz) || isStudentQuizAttempted(quiz, now)) {
-    return false;
-  }
-
-  const result = normalizeStudentQuizStatus(quiz.resultStatus);
-  if (result.includes("upcoming") || result.includes("coming")) {
-    return true;
-  }
-
   return quiz.startAt != null && new Date(quiz.startAt) > now;
 }
 
-export function isStudentQuizAttempted(
+function isStudentQuizWindowClosed(
+  quiz: StudentQuizListItemLike,
+  now: Date,
+): boolean {
+  return quiz.dueAt != null && new Date(quiz.dueAt) < now;
+}
+
+/** True when the student submitted during the current assignment window. */
+function hasSubmitInCurrentWindow(quiz: StudentQuizListItemLike): boolean {
+  const start = quiz.startAt ? new Date(quiz.startAt) : null;
+  const completed = quiz.completedAt ? new Date(quiz.completedAt) : null;
+  if (start && completed && completed < start) {
+    return false;
+  }
+
+  return quiz.lastAttemptId != null || completed != null;
+}
+
+function hasRemainingAttempts(quiz: StudentQuizListItemLike): boolean {
+  if (
+    typeof quiz.attemptsUsed === "number" &&
+    typeof quiz.attemptLimit === "number" &&
+    quiz.attemptLimit > 0
+  ) {
+    return quiz.attemptsUsed < quiz.attemptLimit;
+  }
+
+  const listStatus = normalizeStudentQuizStatus(quiz.status ?? "");
+  return listStatus === "available" || listStatus === "assigned";
+}
+
+export function isStudentQuizUpcoming(
   quiz: StudentQuizListItemLike,
   now = new Date(),
 ): boolean {
@@ -318,32 +344,38 @@ export function isStudentQuizAttempted(
     return false;
   }
 
+  return isStudentQuizWindowUpcoming(quiz, now);
+}
+
+export function isStudentQuizAttempted(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): boolean {
+  if (hasInProgressAttempt(quiz) || isStudentQuizWindowUpcoming(quiz, now)) {
+    return false;
+  }
+
   const result = normalizeStudentQuizStatus(quiz.resultStatus);
   if (result.includes("expir")) {
     return false;
   }
 
-  if (quiz.lastAttemptId != null) {
-    return true;
+  if (!isStudentQuizWindowClosed(quiz, now) && hasRemainingAttempts(quiz)) {
+    return false;
   }
 
-  if (
-    result.includes("complete") ||
-    result.includes("review") ||
-    result.includes("submit") ||
-    result.includes("result")
-  ) {
-    return true;
-  }
-
-  return quiz.completedAt != null && new Date(quiz.completedAt) <= now;
+  return hasSubmitInCurrentWindow(quiz);
 }
 
 export function isStudentQuizExpired(
   quiz: StudentQuizListItemLike,
   now = new Date(),
 ): boolean {
-  if (hasInProgressAttempt(quiz) || isStudentQuizAttempted(quiz, now)) {
+  if (
+    hasInProgressAttempt(quiz) ||
+    isStudentQuizUpcoming(quiz, now) ||
+    isStudentQuizAttempted(quiz, now)
+  ) {
     return false;
   }
 
@@ -352,11 +384,7 @@ export function isStudentQuizExpired(
     return true;
   }
 
-  if (isStudentQuizUpcoming(quiz, now)) {
-    return false;
-  }
-
-  return quiz.dueAt != null && new Date(quiz.dueAt) < now;
+  return isStudentQuizWindowClosed(quiz, now);
 }
 
 export function classifyStudentQuiz(
@@ -408,10 +436,18 @@ export function isStudentQuizInLastMonth(
   );
 }
 
+/** True when the assignment window has ended — View result is allowed only then. */
+export function areStudentQuizResultsReleased(
+  quiz: Pick<StudentQuizListItemLike, "dueAt">,
+  now = new Date(),
+): boolean {
+  return quiz.dueAt != null && new Date(quiz.dueAt) <= now;
+}
+
 export function resolveStudentQuizAction(
   quiz: StudentQuizListItemLike,
   now = new Date(),
-): { label: string; to: string; variant: "default" | "outline" } {
+): { label: string; to: string; variant: "default" | "outline" } | null {
   const bucket = classifyStudentQuiz(quiz, now);
   const detailPath = `/student/quizzes/${quiz.id}`;
 
@@ -420,7 +456,15 @@ export function resolveStudentQuizAction(
   }
 
   if (bucket === "attempted") {
-    return { label: "View result", to: detailPath, variant: "default" };
+    if (areStudentQuizResultsReleased(quiz, now) && quiz.lastAttemptId != null) {
+      return {
+        label: "View result",
+        to: `/student/quizzes/${quiz.id}/attempts/${quiz.lastAttemptId}/result`,
+        variant: "default",
+      };
+    }
+
+    return null;
   }
 
   if (bucket === "active") {
@@ -431,12 +475,18 @@ export function resolveStudentQuizAction(
 }
 
 /** Compact score/pending label for the student quiz list Result column. */
-export function formatStudentQuizListResult(quiz: {
-  resultStatus: string;
-  resultPercent?: number | null;
-  resultAnnouncedPercent?: number | null;
-  lastAttemptId?: number | null;
-}): { label: string; detail: string | null } {
+export function formatStudentQuizListResult(
+  quiz: StudentQuizListItemLike,
+  now = new Date(),
+): { label: string; detail: string | null } {
+  if (classifyStudentQuiz(quiz, now) !== "attempted") {
+    return { label: "—", detail: null };
+  }
+
+  if (!areStudentQuizResultsReleased(quiz, now)) {
+    return { label: "—", detail: null };
+  }
+
   const hasAttempt =
     quiz.lastAttemptId != null || typeof quiz.resultPercent === "number";
   const status = quiz.resultStatus.trim();

@@ -15,6 +15,9 @@ public static class QuizTypeBehavior
     /// <summary>Maximum how far ahead a Surprise StartAt may be scheduled from now.</summary>
     public static readonly TimeSpan SurpriseMaxAdvanceNotice = TimeSpan.FromHours(24);
 
+    /// <summary>Every quiz definition allows exactly one attempt. Extra attempts are assignment-only (retry / reassign).</summary>
+    public const short SingleAllowedAttempt = 1;
+
     public sealed record TypeDefaults(
         short? AllowedAttempts,
         short? TimeLimitMinutes,
@@ -42,21 +45,21 @@ public static class QuizTypeBehavior
         var name = quizTypeName.Trim();
         if (name.Equals("Practice", StringComparison.OrdinalIgnoreCase))
         {
-            return new TypeDefaults(3, null, false, false, false, "Free");
+            return new TypeDefaults(SingleAllowedAttempt, null, false, false, false, "Free");
         }
 
         if (name.Equals("Competition", StringComparison.OrdinalIgnoreCase))
         {
-            return new TypeDefaults(1, 30, true, true, false, "Locked");
+            return new TypeDefaults(SingleAllowedAttempt, 30, true, true, false, "Locked");
         }
 
         if (IsSurprise(name))
         {
-            return new TypeDefaults(1, 15, true, true, false, "Sequential");
+            return new TypeDefaults(SingleAllowedAttempt, 15, true, true, false, "Sequential");
         }
 
         // Assessment (default school type)
-        return new TypeDefaults(1, 45, false, true, true, "Free");
+        return new TypeDefaults(SingleAllowedAttempt, 45, false, true, true, "Free");
     }
 
     /// <summary>
@@ -85,7 +88,7 @@ public static class QuizTypeBehavior
             quiz.DifficultyLevelId,
             quiz.Instructions,
             quiz.TimeLimitMinutes,
-            quiz.AllowedAttempts ?? defaults.AllowedAttempts,
+            SingleAllowedAttempt,
             quiz.ShuffleQuestions,
             quiz.ShuffleOptions,
             quiz.IsReviewRequired,

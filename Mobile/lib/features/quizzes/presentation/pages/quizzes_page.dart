@@ -1570,7 +1570,6 @@ class _QuizzesPageState extends ConsumerState<QuizzesPage>
       context,
       role: _role,
       defaultGradeLabel: manage?.grade ?? quiz.grade,
-      defaultAllowedAttempts: manage?.allowedAttempts ?? quiz.attemptLimit,
       existingAssignments:
           ref.read(teacherQuizManageControllerProvider).assignments,
     );
@@ -2101,7 +2100,11 @@ class _QuizCard extends StatelessWidget {
                     status: status,
                     quizStatus: quiz.status,
                     onPressed: onOpen,
-                    showButton: !expired,
+                    showButton: !expired &&
+                        (status == 'InProgress' ||
+                            status == 'Not Attempted' ||
+                            status == 'Up Coming' ||
+                            studentQuizResultsReleased(quiz)),
                   ),
                 ],
               ),
@@ -2134,13 +2137,16 @@ class _QuizCard extends StatelessWidget {
                       icon: Icons.event_available_outlined,
                       label: _dateLabel(quiz.dueAt, fallback: 'No due date'),
                     ),
-                  if (quiz.resultAnnouncedPercent != null)
+                  if (studentQuizResultsReleased(quiz) &&
+                      quiz.resultAnnouncedPercent != null)
                     _InfoChip(
                       icon: Icons.campaign_outlined,
                       label:
                           '${quiz.resultAnnouncedPercent}% results announced',
                     )
-                  else if (completed && quiz.resultPercent != null)
+                  else if (studentQuizResultsReleased(quiz) &&
+                      completed &&
+                      quiz.resultPercent != null)
                     _InfoChip(
                       icon: Icons.fact_check_outlined,
                       label: 'Result: ${quiz.resultPercent}%',
@@ -2350,29 +2356,38 @@ class _QuizDetailsView extends StatelessWidget {
         ),
         if (quiz is QuizDetail && quiz.attempts.isNotEmpty) ...[
           const SizedBox(height: 12),
-          _DetailSection(
-            title: 'Your attempts (${quiz.attempts.length})',
-            children: [
-              for (final attempt in quiz.attempts)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('Attempt #${attempt.attemptNumber}'),
-                    subtitle: Text(
-                      [
-                        if (attempt.submittedAt != null)
-                          _dateLabel(attempt.submittedAt),
-                        if (quiz.resultPercent != null)
-                          '${attempt.percentage}%',
-                        attempt.status,
-                      ].where((part) => part.trim().isNotEmpty).join(' · '),
+          Card(
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              title: Text(
+                'Your attempts (${quiz.attempts.length})',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => onOpenAttempt(attempt.attemptId),
+              ),
+              children: [
+                for (final attempt in quiz.attempts)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Attempt #${attempt.attemptNumber}'),
+                      subtitle: Text(
+                        [
+                          if (attempt.submittedAt != null)
+                            _dateLabel(attempt.submittedAt),
+                          if (quiz.resultPercent != null)
+                            '${attempt.percentage}%',
+                          attempt.status,
+                        ].where((part) => part.trim().isNotEmpty).join(' · '),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => onOpenAttempt(attempt.attemptId),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
         const SizedBox(height: 12),
@@ -2441,12 +2456,14 @@ class _QuizDetailsView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        if (studentStatus == 'Completed' || quiz.status == QuizStatus.completed)
+        if ((studentStatus == 'Completed' ||
+                quiz.status == QuizStatus.completed) &&
+            studentQuizResultsReleased(quiz))
           FilledButton.icon(
             onPressed: quiz.reviewAvailable ? onReview : null,
             icon: const Icon(Icons.rate_review_outlined),
             label: Text(
-              _isReviewComplete(quiz) ? 'Review Answers' : 'View Review Status',
+              _isReviewComplete(quiz) ? 'Review Answers' : 'View result',
             ),
           ),
         if (canStart) ...[
@@ -4507,12 +4524,12 @@ String _formatSeconds(int totalSeconds) {
 }
 
 String _actionLabelForStatus(String status) {
-  if (status == 'Up Coming' || status == 'Completed') {
+  if (status == 'Up Coming') {
     return 'View';
   }
 
-  if (status == 'Under Review') {
-    return 'Review';
+  if (status == 'Completed' || status == 'Under Review') {
+    return 'View result';
   }
 
   return 'Start';
