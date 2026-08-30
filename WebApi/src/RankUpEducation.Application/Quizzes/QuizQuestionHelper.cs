@@ -168,6 +168,11 @@ public static class QuizQuestionHelper
             var isFillBlank = IsFillBlankType(typeName);
             if (isFillBlank)
             {
+                if (question.IsCorrect)
+                {
+                    continue;
+                }
+
                 var accepted = question.AcceptedAnswers ?? Array.Empty<QuestionAcceptedAnswerScoreItem>();
                 if (accepted.Any(answer => answer.AllowTeacherReview))
                 {

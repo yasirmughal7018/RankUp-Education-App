@@ -49,39 +49,25 @@ public sealed class QuestionAcceptedAnswer : BaseEntity
     public bool AllowAiReview { get; private set; }
     public bool AllowTeacherReview { get; private set; }
 
-    /// <summary>Evaluates a submitted fill answer against length, case, and partial-match rules.</summary>
+    /// <summary>
+    /// True when the submission matches this accepted answer (full match, or partial if allowed).
+    /// Partial matches are not treated as fully correct by quiz auto-grading.
+    /// </summary>
     public bool Matches(string submittedText)
-    {
-        if (string.IsNullOrWhiteSpace(submittedText))
-        {
-            return false;
-        }
+        => FillBlankAnswerMatching.Classify(
+            submittedText,
+            AnswerText,
+            IsCaseSensitive,
+            AllowPartialMatch,
+            MinimumLength,
+            MaximumLength) != FillBlankMatchKind.None;
 
-        var submitted = submittedText.AsTrimmedString();
-        if (MinimumLength > 0 && submitted.Length < MinimumLength)
-        {
-            return false;
-        }
-
-        if (MaximumLength > 0 && submitted.Length > MaximumLength)
-        {
-            return false;
-        }
-
-        if (AllowPartialMatch)
-        {
-            if (IsCaseSensitive)
-            {
-                return submitted.Contains(AnswerText, StringComparison.Ordinal)
-                    || AnswerText.Contains(submitted, StringComparison.Ordinal);
-            }
-
-            return submitted.Contains(AnswerText, StringComparison.OrdinalIgnoreCase)
-                || AnswerText.Contains(submitted, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return IsCaseSensitive
-            ? string.Equals(AnswerText, submitted, StringComparison.Ordinal)
-            : string.Equals(NormalizedAnswer, submitted.AsLowercase(), StringComparison.Ordinal);
-    }
+    public bool IsFullMatch(string submittedText)
+        => FillBlankAnswerMatching.Classify(
+            submittedText,
+            AnswerText,
+            IsCaseSensitive,
+            AllowPartialMatch,
+            MinimumLength,
+            MaximumLength) == FillBlankMatchKind.Full;
 }

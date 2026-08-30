@@ -340,8 +340,8 @@ const studentAttemptFlow = [
   ["10", "Student submits manually", "Covered", "POST .../attempts/{id}/submit auto-scores then MarkSubmitted; resubmission blocked."],
   ["11", "System auto-submits when time expires", "Covered", "Client auto-submit with IsAutoSubmit=true → AutoSubmitted (83). Server rejects over-budget submits (grace for auto-submit)."],
   ["12", "The attempt status is updated", "Covered", "InProgress (81) → Submitted (82) or AutoSubmitted (83) → Reviewed (85) after finalize. Expired (84) via overdue job."],
-  ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse first option; Multiple exact set; Fill accepted-answer rules."],
-  ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive: AI suggestion on submit + teacher finalize when answered. File Upload (link/path) requires teacher review. Fill + AllowTeacherReview / AllowAiReview (OpenAI or heuristic)."],
+  ["13", "Objective answers checked automatically", "Covered", "Single/TrueFalse: first option, all-or-nothing. Multiple Choice / Matching / Ordering: proportional floored marks per correct component. Fill: full accepted-answer match only."],
+  ["14", "Descriptive answers go to AI or teacher review", "Covered", "Descriptive/Essay: AI suggestion on submit + teacher finalize when answered. File Upload (link/path) requires teacher review. Fill: only a non-full match with AllowTeacherReview / AllowAiReview (OpenAI or heuristic)."],
   ["15", "Student sees the permitted review screen", "Covered", "Auto-graded questions (known correct answer already on the item) announce 1 hour after quiz completion (later of submit and assignment EndDateTime). Teacher-review questions stay pending until finalize. List/detail/result show resultAnnouncedPercent. ReviewDisplayMode modes are retired."],
   ["16", "Parent/Teacher/AI finalize marks and feedback", "Covered", "Mark answers + finalize-review → attempt Reviewed, assignment IsReviewDone=true. AI suggests; teacher confirms when required."],
   ["17", "Student views own quiz history", "Covered", "/student/history (web) and Mobile /reports or Quizzes history; GET /reports/students/{id}/quiz-history scoped to own profileId (History self — not full analytics)."],
@@ -439,19 +439,40 @@ const attemptStatusConflicts = [
 ];
 
 const scoring = [
-  ["Single Choice / TrueFalse", "First selected option; full marks if IsCorrect, else 0."],
-  ["Multiple Choice", "Exact set match of correct option IDs → full marks; else 0."],
-  ["Fill in the Blanks", "Match any accepted answer (case / partial / min-max length) OR correct option text (case-insensitive). If AllowTeacherReview → subjective for review masking. If AllowAiReview → OpenAI or heuristic suggestion."],
-  ["Descriptive / free text", "Marks 0 on auto-score; always subjective when answered; AI suggestion written to QuizReview.AiReviewComment on submit; teacher finalize required."],
+  ["Single Choice / TrueFalse", "First selected option; full marks if IsCorrect, else 0. No partial marks."],
+  ["Multiple Choice", "Partial credit. Total components = number of expected correct options (not all available options). Correct components = how many of those expected options the student selected. Extra incorrect selections are not extra components and do not reduce marks if every expected correct option is selected. AwardedMarks = Floor(MaxMarks × Correct / Total). Fully correct → full marks and IsCorrect=true; zero correct → 0."],
+  ["Fill in the Blanks", "A full accepted-answer match (exact text; case-sensitive when configured; min/max length) auto-scores full marks and skips AI/teacher review. AllowPartialMatch is never treated as fully correct. A non-full match is not auto-marked; AI/teacher review runs only when AllowAiReview / AllowTeacherReview is on."],
+  ["Descriptive / Essay", "Never auto-marked from a predefined answer. Marks 0 on auto-score; always subjective when answered; AI suggestion written to QuizReview.AiReviewComment on submit; teacher/parent finalize required."],
   ["File Upload", "MVP: student pastes a file URL/path into SubmittedText (no binary blob upload/storage). Marks 0 on auto-score; RequiresReview like Descriptive when answered."],
-  ["Matching", "selectedOptionIds = right option ids in left order; exact sequence match awards full marks. Authoring UI edits pairs; storage remains lefts-then-rights (even count ≥4). Option shuffle disabled."],
-  ["Ordering", "selectedOptionIds = option ids in correct order; exact sequence match awards full marks."],
-  ["Media", "Scored like Single Choice. Each option requires OptionImageUrl (caption text optional); image snapped onto QuizAttemptQuestionOption."],
+  ["Matching", "Partial credit. selectedOptionIds = right option ids in left order. Each required pair is one component. AwardedMarks = Floor(MaxMarks × correct pairs / total pairs). Storage remains lefts-then-rights (even count ≥4). Option shuffle disabled. Fully correct → full marks; zero correct pairs → 0."],
+  ["Ordering", "Partial credit. selectedOptionIds = option ids in required DisplayOrder. Each required position is one component. AwardedMarks = Floor(MaxMarks × correctly placed items / total items). Option shuffle disabled. Fully correct → full marks; zero correct positions → 0."],
+  ["Media", "Scored like Single Choice (all-or-nothing). Each option requires OptionImageUrl (caption text optional); image snapped onto QuizAttemptQuestionOption."],
+];
+
+const partialCreditRules = [
+  ["Applies to", "Multiple Choice, Matching, and Ordering only. Not Single Choice, True/False, Fill in the Blanks, Essay, File Upload, or Media."],
+  ["Formula", "CorrectPercentage = (CorrectComponents / TotalComponents) × 100. CalculatedMarks = MaximumMarks × (CorrectComponents / TotalComponents). AwardedMarks = Floor(CalculatedMarks)."],
+  ["Rounding", "Always floor/truncate. Never Math.Round. 1.0→1, 1.1→1, 1.5→1, 1.9→1, 2.0→2, 2.9→2."],
+  ["Fully correct", "CorrectComponents = TotalComponents → award full question marks. IsCorrect = true."],
+  ["Completely incorrect", "CorrectComponents = 0 → award 0 marks."],
+  ["Multiple Choice total", "Number of expected selectable (correct) answers — not the count of all options, and not selected options."],
+  ["Matching total", "Number of required matching pairs."],
+  ["Ordering total", "Number of items that must be placed correctly."],
+  ["Result fields", "MaximumMarks, CorrectComponents, TotalComponents, CorrectPercentage, AwardedMarks (QuizPartialCredit)."],
+];
+
+const partialCreditExamples = [
+  ["Multiple Choice", "Max 2; 2 expected correct; student selects 1 correct and 1 wrong", "1/2 → 50% → award 1"],
+  ["Decimal floor", "Max 3; 1 of 2 components correct", "1.5 → award 1 (never 2)"],
+  ["Matching", "Max 4; 3 of 4 pairs correct", "award 3"],
+  ["Matching floor", "Max 5; 3 of 4 pairs correct", "3.75 → award 3"],
+  ["Ordering", "Max 4; 3 of 4 positions correct", "award 3"],
+  ["Ordering floor", "Max 5; 3 of 4 positions correct", "3.75 → award 3"],
 ];
 
 const reviewRules = [
   "Pending reviews: owned quizzes with IsReviewRequired, assignment not review-done, attempt Submitted/AutoSubmitted.",
-  "RequiresReview per question: Descriptive OR File Upload OR (Fill + AllowTeacherReview + submitted text).",
+  "RequiresReview per question: Descriptive/Essay OR File Upload OR (Fill + AllowTeacherReview + submitted text that is not a full accepted-answer match).",
   "Mark answers: awarded marks in [0, MaxMarks]; not if already finalized.",
   "Finalize: all RequiresReview questions with text must have human feedback; attempt → Reviewed; assignment.IsReviewDone = true.",
   "Quiz completion = later of student SubmittedAt and assignment EndDateTime. Auto-graded questions (known correct answer already on the item: MCQ, T/F, multi-select, matching, ordering, media, fill-blank) announce 1 hour after that (QuizReviewDisplay.ObjectiveAnnouncementDelayHours = 1). Early submitters do not see answers while the window is still open.",
@@ -461,7 +482,7 @@ const reviewRules = [
   "Per-question ResultPending hides marks, correctness, correct answers, and explanations until that question is announced. List/detail hide resultPercent until announced percent is 100.",
   "QuizReviewDisplay.Resolve applies on submit, get-result, list, and detail. It replaces the old all-or-nothing hide of every score while IsReviewRequired.",
   "ReviewDisplayMode modes are retired; create/update always persist Full. Bools never OR’d with type defaults.",
-  "AI review: Descriptive always; Fill when AllowAiReview. OpenAI when configured, else heuristic. AI comment shown on teacher review screen; teacher still finalizes when required.",
+  "AI review: Descriptive/Essay always; Fill when AllowAiReview and the answer is not a full accepted-answer match. OpenAI when configured, else heuristic. AI comment shown on teacher review screen; teacher still finalizes when required.",
 ];
 
 const apiMap = [
@@ -675,6 +696,12 @@ const scenarios = [
     "Student submits a mixed quiz 30 minutes before assignment EndDateTime, then opens the result immediately and again after EndDateTime + 1 hour (review not finalized).",
     "Immediate result: Results pending, 0% announced, no correct answers. After End + 1 hour: auto-graded share announces (Partial results if subjective marks remain); descriptive/file stay pending; student score still hidden until 100% announced or teacher finalize.",
   ],
+  [
+    "QZ-28",
+    "Partial marks for Multiple Choice, Match, and Order",
+    "Student submits a 2-mark Multiple Choice with 2 expected correct options and selects 1 correctly; a 5-mark Matching with 3 of 4 pairs correct; a 4-mark Ordering with all items in place. Fill-blank is a full accepted-answer match. Essay is free text.",
+    "Multiple Choice awards 1 (50%, floored). Matching awards 3 (5×3/4=3.75 floored). Ordering awards 4. Fill-blank awards full marks with no AI/teacher review. Essay stays 0 pending teacher/AI review. 1.5 and 1.9 never round up.",
+  ],
 ];
 
 const checklist = [
@@ -713,7 +740,7 @@ const checklist = [
   "InProgress resumes; TimeLimitMinutes enforced client + server; AutoSubmitted on IsAutoSubmit.",
   "Time management: Σ EstimatedTimeSeconds → TimeLimitMinutes on question changes; per-question hard timer; assignment window; low-time banner (≤5m) + modal/audio at ≤60s (web + mobile).",
   "On attempt start, QuizAttemptQuestion freezes text/marks/options/order; answers store per attempt.",
-  "Scoring: single/TF one correct; multi exact set; Fill accepted-answer rules.",
+  "Scoring: single/TF all-or-nothing; Multiple Choice / Matching / Ordering proportional floored marks per correct component; Fill full accepted-answer match only; Essay never auto-marked.",
   "After submit, auto-graded results announce 1 hour after quiz completion (later of submit and assignment end). Teacher-review questions stay pending until finalize. Show resultAnnouncedPercent with the quiz.",
   "ApplyCreateDefaults: nullable fallbacks only; bools never OR’d.",
   "Allow-retry only after IsReviewDone; adds ExtraAttempts.",
@@ -805,7 +832,7 @@ const html = `<!doctype html>
     <p class="subtitle">Intended rules for quiz lifecycle, approval, questions, assignment, student attempts, review, roles, APIs, and QA.</p>
     <div class="meta">
       <span class="chip">Quiz module v1</span>
-      <span class="chip">23 Aug 2026</span>
+      <span class="chip">29 Aug 2026</span>
       <span class="chip">Teacher + Parent</span>
       <span class="chip">Approval ≠ Publish</span>
     </div>
@@ -931,6 +958,10 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   ${htmlTable(["Older draft idea", "Canonical rule", "Why"], attemptStatusConflicts)}
   <h3>Auto-scoring</h3>
   ${htmlTable(["Type", "Rule"], scoring)}
+  <h3>Partial marks (Multiple Choice, Matching, Ordering)</h3>
+  <p>Questions with multiple scorable components award marks in proportion to correctly answered components. Final awarded marks are always rounded down.</p>
+  ${htmlTable(["Rule", "Detail"], partialCreditRules)}
+  ${htmlTable(["Example", "Inputs", "Awarded"], partialCreditExamples)}
 
   <h2>10. Time Management</h2>
   <p>Status legend: <strong>Covered</strong> = implemented today; <strong>Partial</strong> = implemented with limitations; <strong>Gap</strong> = documented business intent, not built yet.</p>
@@ -1081,7 +1112,7 @@ function docTable(headers, rows) {
 
 const docChildren = [
   docHeading("RankUp Education — Quizzes Business & QA Guide", HeadingLevel.TITLE),
-  docParagraph("Current implemented rules · 23 Aug 2026", {
+  docParagraph("Current implemented rules · 29 Aug 2026", {
     run: { italics: true, color: "475569" },
   }),
   docParagraph(
@@ -1222,6 +1253,12 @@ const docChildren = [
   docTable(["Older draft idea", "Canonical rule", "Why"], attemptStatusConflicts),
   docHeading("Auto-scoring", HeadingLevel.HEADING_2),
   docTable(["Type", "Rule"], scoring),
+  docHeading("Partial marks (Multiple Choice, Matching, Ordering)", HeadingLevel.HEADING_2),
+  docParagraph(
+    "Questions with multiple scorable components award marks in proportion to correctly answered components. Final awarded marks are always rounded down.",
+  ),
+  docTable(["Rule", "Detail"], partialCreditRules),
+  docTable(["Example", "Inputs", "Awarded"], partialCreditExamples),
 
   docHeading("10. Time Management"),
   docParagraph(

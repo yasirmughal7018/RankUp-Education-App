@@ -7,6 +7,7 @@ using RankUpEducation.Common.Utilities;
 using RankUpEducation.Contracts.Quizzes;
 using RankUpEducation.Domain.Auth;
 using RankUpEducation.Domain.Common;
+using RankUpEducation.Domain.Questions;
 using RankUpEducation.Domain.Quizzes;
 
 namespace RankUpEducation.Application.Quizzes;
@@ -836,19 +837,25 @@ public sealed class QuizService : IQuizService
                 {
                     var half = orderedOptions.Length / 2;
                     var correctRights = orderedOptions.Skip(half).Select(option => option.OptionId).ToArray();
-                    isCorrect = selectedOptionIds.Count == half
-                        && selectedOptionIds.SequenceEqual(correctRights);
+                    var matchScore = QuizAnswerSelection.ScoreMatching(
+                        selectedOptionIds,
+                        correctRights,
+                        questionMarks);
+                    isCorrect = matchScore.IsFullyCorrect;
+                    awardedMarks = matchScore.AwardedMarks;
                 }
 
-                awardedMarks = isCorrect ? questionMarks : (short)0;
                 obtainedMarks += awardedMarks;
             }
             else if (isOrdering && selectedOptionIds.Count > 0)
             {
                 var correctOrder = attemptQuestion.Options.Select(option => option.OptionId).ToArray();
-                isCorrect = selectedOptionIds.Count == correctOrder.Length
-                    && selectedOptionIds.SequenceEqual(correctOrder);
-                awardedMarks = isCorrect ? questionMarks : (short)0;
+                var orderScore = QuizAnswerSelection.ScoreOrdering(
+                    selectedOptionIds,
+                    correctOrder,
+                    questionMarks);
+                isCorrect = orderScore.IsFullyCorrect;
+                awardedMarks = orderScore.AwardedMarks;
                 obtainedMarks += awardedMarks;
             }
             else if (isMultiSelect && selectedOptionIds.Count > 0)
@@ -857,28 +864,32 @@ public sealed class QuizService : IQuizService
                     .Where(option => option.IsCorrect)
                     .Select(option => option.OptionId)
                     .ToArray();
-                (isCorrect, awardedMarks) = QuizAnswerSelection.ScoreMultiSelect(
+                var multiScore = QuizAnswerSelection.ScoreMultiSelect(
                     selectedOptionIds,
                     correctOptionIds,
                     questionMarks);
+                isCorrect = multiScore.IsFullyCorrect;
+                awardedMarks = multiScore.AwardedMarks;
                 obtainedMarks += awardedMarks;
             }
             else if (isFillBlank && submittedText.HasTrimmedText())
             {
                 var fillText = submittedText.AsTrimmedString();
-                isCorrect = acceptedAnswers.Any(answer => MatchesAcceptedAnswer(answer, fillText))
-                    || attemptQuestion.Options.Any(option =>
-                        option.IsCorrect
-                        && string.Equals(
-                            option.OptionText.AsTrimmedString(),
-                            fillText,
-                            StringComparison.OrdinalIgnoreCase));
+                var fillResult = FillBlankAnswerMatching.Evaluate(
+                    fillText,
+                    acceptedAnswers.Select(answer => new FillBlankAcceptedAnswer(
+                        answer.AnswerText,
+                        answer.IsCaseSensitive,
+                        answer.AllowPartialMatch,
+                        answer.MinimumLength,
+                        answer.MaximumLength,
+                        answer.AllowAiReview,
+                        answer.AllowTeacherReview)));
+                isCorrect = fillResult.IsFullyCorrect;
                 awardedMarks = isCorrect ? questionMarks : (short)0;
                 obtainedMarks += awardedMarks;
 
-                var allowTeacherReview = acceptedAnswers.Any(answer => answer.AllowTeacherReview);
-                var allowAiReview = acceptedAnswers.Any(answer => answer.AllowAiReview);
-                if (allowTeacherReview)
+                if (fillResult.NeedsTeacherReview)
                 {
                     hasSubjectiveAnswers = true;
                 }
@@ -891,7 +902,7 @@ public sealed class QuizService : IQuizService
                     isCorrect,
                     cancellationToken);
 
-                if (allowAiReview && !rejectLateAnswer)
+                if (fillResult.NeedsAiReview && !rejectLateAnswer)
                 {
                     await EnsureAiReviewAsync(
                         attemptId,
@@ -917,6 +928,7 @@ public sealed class QuizService : IQuizService
             }
             else if (isDescriptive)
             {
+                // Essay / descriptive / file: never auto-mark from a predefined answer.
                 hasSubjectiveAnswers = true;
             }
 
@@ -1737,32 +1749,6 @@ public sealed class QuizService : IQuizService
         await _reviews.AddReviewAsync(review, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         attemptQuestion.LinkReview(review.Id);
-    }
-
-    private static bool MatchesAcceptedAnswer(QuestionAcceptedAnswerScoreItem answer, string submittedText)
-    {
-        if (answer.MinimumLength > 0 && submittedText.Length < answer.MinimumLength)
-        {
-            return false;
-        }
-
-        if (answer.MaximumLength > 0 && submittedText.Length > answer.MaximumLength)
-        {
-            return false;
-        }
-
-        if (answer.AllowPartialMatch)
-        {
-            return answer.IsCaseSensitive
-                ? submittedText.Contains(answer.AnswerText, StringComparison.Ordinal)
-                    || answer.AnswerText.Contains(submittedText, StringComparison.Ordinal)
-                : submittedText.Contains(answer.AnswerText, StringComparison.OrdinalIgnoreCase)
-                    || answer.AnswerText.Contains(submittedText, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return answer.IsCaseSensitive
-            ? string.Equals(answer.AnswerText, submittedText, StringComparison.Ordinal)
-            : string.Equals(answer.NormalizedAnswer, submittedText.AsLowercase(), StringComparison.Ordinal);
     }
 
     private static UserRole ParseRole(string? role)

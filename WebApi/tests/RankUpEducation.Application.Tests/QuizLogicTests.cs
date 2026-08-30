@@ -8,25 +8,49 @@ public sealed class QuizAnswerSelectionTests
     [Fact]
     public void ScoreMultiSelect_ExactMatch_AwardsFullMarks()
     {
-        var (isCorrect, awarded) = QuizAnswerSelection.ScoreMultiSelect(
+        var result = QuizAnswerSelection.ScoreMultiSelect(
             selectedOptionIds: [1, 3],
             correctOptionIds: [3, 1],
             marks: 5);
 
-        Assert.True(isCorrect);
-        Assert.Equal((short)5, awarded);
+        Assert.True(result.IsFullyCorrect);
+        Assert.Equal((short)5, result.AwardedMarks);
+        Assert.Equal(2, result.CorrectComponents);
+        Assert.Equal(2, result.TotalComponents);
     }
 
     [Fact]
-    public void ScoreMultiSelect_MissingOrExtraOption_AwardsZero()
+    public void ScoreMultiSelect_PartiallyCorrect_AwardsProportionalFloorMarks()
     {
-        var missing = QuizAnswerSelection.ScoreMultiSelect([1], [1, 2], 5);
-        Assert.False(missing.IsCorrect);
-        Assert.Equal((short)0, missing.AwardedMarks);
+        var result = QuizAnswerSelection.ScoreMultiSelect(
+            selectedOptionIds: [1],
+            correctOptionIds: [1, 2],
+            marks: 2);
 
-        var extra = QuizAnswerSelection.ScoreMultiSelect([1, 2, 3], [1, 2], 5);
-        Assert.False(extra.IsCorrect);
-        Assert.Equal((short)0, extra.AwardedMarks);
+        Assert.False(result.IsFullyCorrect);
+        Assert.Equal(1, result.CorrectComponents);
+        Assert.Equal(2, result.TotalComponents);
+        Assert.Equal((short)50, result.CorrectPercentage);
+        Assert.Equal((short)1, result.AwardedMarks);
+    }
+
+    [Fact]
+    public void ScoreMultiSelect_CompletelyIncorrect_AwardsZero()
+    {
+        var result = QuizAnswerSelection.ScoreMultiSelect([3], [1, 2], 5);
+        Assert.False(result.IsFullyCorrect);
+        Assert.Equal((short)0, result.AwardedMarks);
+        Assert.Equal(0, result.CorrectComponents);
+    }
+
+    [Fact]
+    public void ScoreMultiSelect_ExtraIncorrectOption_DoesNotCountAsAComponent()
+    {
+        var result = QuizAnswerSelection.ScoreMultiSelect([1, 2, 3], [1, 2], 4);
+        Assert.True(result.IsFullyCorrect);
+        Assert.Equal((short)4, result.AwardedMarks);
+        Assert.Equal(2, result.TotalComponents);
+        Assert.Equal(2, result.CorrectComponents);
     }
 
     [Fact]

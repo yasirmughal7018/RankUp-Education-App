@@ -187,19 +187,19 @@ const permissions = [
 
 const questionTypes = [
   ["100", "Single Choice", "Now", "At least 2 options; exactly 1 correct."],
-  ["101", "Multiple Choice", "Now", "At least 2 options; at least 1 correct."],
+  ["101", "Multiple Choice", "Now", "At least 2 options; at least 1 correct. Quiz scoring awards floored proportional marks per correctly selected expected option (see Quizzes QA)."],
   ["102", "True/False", "Now", "Exactly True and False; exactly 1 correct."],
   [
     "103",
     "Fill in the Blanks",
     "Now",
-    "At least 1 accepted answer; accepted answers hidden before attempt submission.",
+    "At least 1 accepted answer; accepted answers hidden before attempt submission. Quiz scoring: a full accepted-answer match auto-awards full marks; a non-full match is not auto-marked and follows AllowAiReview / AllowTeacherReview (see Quizzes QA).",
   ],
   [
     "104",
     "Descriptive",
     "Now",
-    "Open text; no options required. Teacher/AI review on quiz attempts (see Quizzes QA).",
+    "Open text; no options required. Never auto-marked from a predefined answer. Teacher/AI review on quiz attempts (see Quizzes QA).",
   ],
   [
     "105",
@@ -211,13 +211,13 @@ const questionTypes = [
     "106",
     "Matching",
     "Now",
-    "Even option count (≥4); lefts first, then matching rights. Authoring uses pair rows (left ↔ right). Option shuffle disabled.",
+    "Even option count (≥4); lefts first, then matching rights. Authoring uses pair rows (left ↔ right). Option shuffle disabled. Quiz scoring awards floored proportional marks per correctly matched pair (see Quizzes QA).",
   ],
   [
     "107",
     "Ordering",
     "Now",
-    "At least 2 ordered items (top to bottom). Option shuffle disabled.",
+    "At least 2 ordered items (top to bottom). Option shuffle disabled. Quiz scoring awards floored proportional marks per correctly placed item (see Quizzes QA).",
   ],
   [
     "108",
@@ -497,7 +497,7 @@ const html = `<!doctype html>
     <p class="subtitle">Intended rules for question status, activity, visibility, role-based approval hierarchy, import, and QA.</p>
     <div class="meta">
       <span class="chip">Approval model v2</span>
-      <span class="chip">26 Jul 2026</span>
+      <span class="chip">29 Aug 2026</span>
       <span class="chip">PortalAdmin-only publish</span>
       <span class="chip">Approval history trail</span>
     </div>
@@ -700,7 +700,7 @@ function docTable(headers, rows) {
 
 const docChildren = [
   docHeading("RankUp Education — Questions Business & QA Guide", HeadingLevel.TITLE),
-  docParagraph("Current implemented rules · 26 Jul 2026", {
+  docParagraph("Current implemented rules · 29 Aug 2026", {
     run: { italics: true, color: "475569" },
   }),
   docParagraph(

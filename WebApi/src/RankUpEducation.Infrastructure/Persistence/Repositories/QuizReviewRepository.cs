@@ -344,7 +344,8 @@ public sealed class QuizReviewRepository : IQuizReviewRepository
                     || QuizQuestionHelper.IsFileUploadType(typeName)
                     || (isFillBlank
                         && teacherReviewFlags.GetValueOrDefault(item.QuestionId)
-                        && !string.IsNullOrWhiteSpace(primaryAnswer?.SubmittedText));
+                        && !string.IsNullOrWhiteSpace(primaryAnswer?.SubmittedText)
+                        && marked?.IsCorrect != true);
 
                 string? feedback = null;
                 string? aiFeedback = null;

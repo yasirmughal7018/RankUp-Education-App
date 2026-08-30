@@ -250,7 +250,8 @@ public static class LookupNames
     [
         "Descriptive",
         "Short Answer",
-        "ShortAnswer"
+        "ShortAnswer",
+        "Essay",
     ];
 
     public static readonly string[] FileUploadQuestionTypeNames =
