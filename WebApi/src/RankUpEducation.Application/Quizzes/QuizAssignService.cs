@@ -25,7 +25,7 @@ public interface IQuizAssignService
     /// <summary>Removes upcoming assignments created by the caller. Quiz stays Published.</summary>
     Task<CancelQuizResponse> CancelAsync(long quizId, CancellationToken cancellationToken);
 
-    /// <summary>Grants extra attempts after review is done and all allowed attempts were used.</summary>
+    /// <summary>Grants extra attempts after the student used their quota. Does not overwrite prior attempts.</summary>
     Task<AllowRetryResponse> AllowRetryAsync(
         long quizId,
         long assignmentId,
@@ -329,12 +329,12 @@ public sealed class QuizAssignService : IQuizAssignService
             assignment.AssignedById,
             cancellationToken);
 
-        if (!assignment.IsReviewDone)
+        var attemptCount = await _attempts.CountAttemptsAsync(quizId, assignment.StudentId, cancellationToken);
+        if (attemptCount <= 0)
         {
-            throw new BusinessRuleException("Review must be finalized before allowing a retry.");
+            throw new BusinessRuleException("The student has not attempted this quiz yet.");
         }
 
-        var attemptCount = await _attempts.CountAttemptsAsync(quizId, assignment.StudentId, cancellationToken);
         if (attemptCount < assignment.AllowedAttempts)
         {
             throw new BusinessRuleException("Student still has remaining attempts on this assignment.");
@@ -342,14 +342,6 @@ public sealed class QuizAssignService : IQuizAssignService
 
         var extraAttempts = request.ExtraAttempts <= 0 ? (short)1 : request.ExtraAttempts;
         assignment.GrantRetry(extraAttempts);
-
-        // Retry quota is open, but the student has not started the new attempt yet.
-        var notAttemptedResultId = await _lookups.ResolveLookupIdByNamesAsync(
-            LookupNames.QuizResultStatus,
-            LookupNames.AssignedResultNames,
-            LookupNames.QuizResultStatusIds.NotAttempted,
-            cancellationToken);
-        assignment.SetResultStatus(notAttemptedResultId);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -800,7 +792,14 @@ public sealed class QuizAssignService : IQuizAssignService
             return true;
         }
 
-        return assignment.EndDateTime < now;
+        if (assignment.EndDateTime < now)
+        {
+            return true;
+        }
+
+        return assignment.QuizResultStatus is
+            LookupNames.QuizResultStatusIds.Completed
+            or LookupNames.QuizResultStatusIds.UnderReview;
     }
 
     private static bool IsAssignableLifecycle(string lifecycleName)

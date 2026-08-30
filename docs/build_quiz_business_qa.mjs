@@ -359,7 +359,7 @@ const timeManagementAppBehaviors = [
   ["Warn when time is low", "Covered", "At ≤5 min: dismissible banner. At ≤60s: urgent (red) countdown chip, modal dialog, and short alert (web beep; mobile system sound + haptic). Per-question timer turns amber at ≤10s. Autosave: 1.2s debounce + 15s interval + Save now (web + mobile)."],
   ["Auto-submit on expiry", "Covered", "Client submits with IsAutoSubmit=true → AutoSubmitted (83). Server enforces TimeLimitMinutes with grace for auto-submit path."],
   ["Save answers before auto-submission", "Covered", "Autosave flush runs before submit/auto-submit (web + mobile)."],
-  ["Prevent reopening after expiry unless allowed", "Covered", "Assignment window expiry blocks/expires attempts. Allow Retry grants ExtraAttempts after review; does not reopen EndDateTime by itself."],
+  ["Prevent reopening after expiry unless allowed", "Covered", "Assignment window expiry blocks/expires attempts. Allow Retry grants ExtraAttempts after quota is used (review finalize not required). Reassign can also open a new window. Prior attempts stay."],
 ];
 
 const timeManagementGaps = [];
@@ -499,12 +499,12 @@ const apiMap = [
   ["GET/POST /api/parents/me/groups", "Parent-only child groups (list/create). Used by My children and Parent assign mode=group."],
   ["PUT/DELETE /api/parents/me/groups/{groupId}", "Parent update or deactivate own group."],
   ["POST/DELETE /api/parents/me/groups/{groupId}/members", "Add/remove linked children only."],
-  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published (legacy Assigned still allowed). Not Draft. Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle stays Published. Parent mode=group uses a parent-owned group id. Reassign after the window ends keeps prior attempts and adds a new attempt grant."],
+  ["POST /api/quizzes/{id}/assign", "Requires Lifecycle Published (legacy Assigned still allowed). Not Draft. Pending Approval blocked. Teacher quizzes need Approval=Approved. Creates assignments; lifecycle stays Published. Parent mode=group uses a parent-owned group id. Reassign is allowed after the window ends, or while it is open if the student already attempted. Prior attempts stay."],
   ["POST /api/quizzes/{id}/cancel", "Remove upcoming assignments; quiz stays Published."],
   ["POST /api/quizzes/{id}/archive", "PortalAdmin only when lifecycle is Published or Assigned (any student/child assignment). Other roles: own Draft delete only. No assignments → hard delete; else Archived + Inactive."],
   ["POST /api/quizzes/{id}/unarchive", "PortalAdmin only. Restore Published."],
   ["POST /api/quizzes/{id}/duplicate", "Deep-copy to new Draft + Pending."],
-  ["POST .../assignments/{id}/allow-retry", "After review finalized; ExtraAttempts (+1 default)."],
+  ["POST .../assignments/{id}/allow-retry", "After quota is used (attempt count ≥ allowed). ExtraAttempts (+1 default). Does not require IsReviewDone and does not overwrite prior attempts."],
   ["GET /api/questions/{id}/quizzes", "Question-manage: quizzes currently using this bank question (same CanView as question detail)."],
   ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove; TimeLimitMinutes recalculated from EstimatedTimeSeconds."],
   ["POST .../attempts", "Student start/resume; instructions ack gate when Instructions set."],
@@ -721,6 +721,12 @@ const scenarios = [
     "Reassign after an attempted quiz keeps old results",
     "Student submits quiz 36. After the due date a parent or teacher assigns the same quiz again. Student opens quiz details and starts.",
     "Existing QuizAttempt rows and scores stay. Assignment AllowedAttempts = old count + new grant. Start creates attempt #2. Detail shows attempt count and each prior result.",
+  ],
+  [
+    "QZ-32",
+    "Reassign or Allow retry without waiting for Completed",
+    "Student submitted quiz 36 (Under Review or Completed). Window is still open. Parent or teacher opens Assign or Assigned people.",
+    "Student is selectable for reassign (not locked as Already assigned). Allow retry is shown when quota is used, without requiring IsReviewDone. Old attempt #1 stays; student can start attempt #2.",
   ],
 ];
 
@@ -947,12 +953,12 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   ${htmlList([
     "Prerequisites: Lifecycle Published or Assigned (not Draft); Approval gates met; not Archived; ≥1 question.",
     "EndAt > StartAt; AllowedAttempts > 0.",
-    "Existing (quiz, student) assignment with an open window → skip. After the window ends (including Completed / Under Review), parent or teacher may reassign.",
+    "Existing unused open assignment (Upcoming / Not Attempted / In Progress) → skip. Parent, teacher, or any assigner may reassign after the window ends, or while the window is open if the student already attempted (Completed / Under Review).",
     "Reassign of a student who already attempted does not overwrite attempt rows or scores. AllowedAttempts becomes existing attempt count + new grant; IsReviewDone and stored attempt results stay. The next start creates a new QuizAttempt.",
     "Unused expired assignments still reopen the same row (new window, reset result status).",
-    "If every selected student still has an open assignment → validation error.",
+    "If every selected student still has an unused open assignment → validation error.",
     "Cancel: hard-delete future assignments only; restore lifecycle Assigned or Published (never Cancelled).",
-    "Allow retry: review must be finalized; attempt count ≥ allowed; ExtraAttempts += 1 (default); IsReviewDone=false. Archived blocked. Use this while the window is still open; use reassign after the window ends.",
+    "Allow retry: available to any assigner after the student used their quota (attempt count ≥ allowed). Does not require IsReviewDone. ExtraAttempts += 1 (default). Does not reset IsReviewDone or overwrite prior attempts. Archived blocked.",
     "Parent group assign: groups come from /parents/me/groups (created on My children). Dropdown by group name; members must be linked children.",
   ])}
   <h3>QuizAssignment table</h3>

@@ -12,6 +12,7 @@ import {
   hasAttemptScoreAccess,
 } from "@/features/quizzes/domain/quizMonitorTypes";
 import type { QuizAssignment } from "@/features/quizzes/domain/quizTypes";
+import { canAllowQuizRetry } from "@/features/quizzes/domain/quizTypes";
 import { QuizAssignmentAttemptsDialog } from "@/features/quizzes/presentation/components/QuizAssignmentAttemptsDialog";
 import {
   useAllowRetryMutation,
@@ -24,17 +25,6 @@ function formatDateTime(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function canAllowRetry(assignment: {
-  isReviewDone: boolean;
-  attemptCount: number;
-  allowedAttempts: number;
-}): boolean {
-  return (
-    assignment.isReviewDone &&
-    assignment.attemptCount >= assignment.allowedAttempts
-  );
 }
 
 /** Per-quiz list of assigned students or children. */
@@ -194,7 +184,7 @@ export function QuizAssignedPeoplePage() {
                               )
                             : null;
                         const canScore = hasAttemptScoreAccess(assignment.canScore);
-                        const retry = canAllowRetry(assignment);
+                        const retry = canAllowQuizRetry(assignment);
 
                         if (!checkPath && !retry) {
                           return <span className="text-slate-400">—</span>;

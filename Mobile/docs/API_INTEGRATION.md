@@ -326,6 +326,7 @@ passed), then `Completed` after the owner action. Always show announced percent.
 | Attempt review | `GET` | `/api/quizzes/{quizId}/attempts/{attemptId}/review` |
 | Mark answers | `PUT` | `/api/quizzes/{quizId}/attempts/{attemptId}/answers` (rejected after Completed) |
 | Finalize review | `POST` | `/api/quizzes/{quizId}/attempts/{attemptId}/finalize-review` |
+| Allow retry | `POST` | `/api/quizzes/{quizId}/assignments/{assignmentId}/allow-retry` (after quota is used; review finalize not required) |
 | Pending quiz approval | `GET` | `/api/quizzes/pending-approval` |
 | Reject quiz | `POST` | `/api/quizzes/{quizId}/reject` |
 

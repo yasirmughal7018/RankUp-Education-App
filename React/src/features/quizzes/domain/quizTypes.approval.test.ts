@@ -6,6 +6,7 @@ import {
   canAssignQuiz,
   canAuthorQuizzes,
   canCancelOwnUpcomingAssignments,
+  canAllowQuizRetry,
   canReassignQuizAssignment,
   isActiveQuizAssignment,
   isExpiredQuizAssignment,
@@ -241,7 +242,7 @@ describe("expired assignment reassign", () => {
         { resultStatus: "Completed", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Expired", endAt: "2025-12-01T00:00:00Z" },
@@ -268,6 +269,24 @@ describe("expired assignment reassign", () => {
         { resultStatus: "Completed", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
+    ).toBe(true);
+    expect(
+      canReassignQuizAssignment(
+        { resultStatus: "Not Attempted", endAt: "2099-01-01T00:00:00Z" },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("allows retry after quota is used without waiting for review finalize", () => {
+    expect(
+      canAllowQuizRetry({ attemptCount: 1, allowedAttempts: 1 }),
+    ).toBe(true);
+    expect(
+      canAllowQuizRetry({ attemptCount: 0, allowedAttempts: 1 }),
+    ).toBe(false);
+    expect(
+      canAllowQuizRetry({ attemptCount: 1, allowedAttempts: 2 }),
     ).toBe(false);
   });
 });

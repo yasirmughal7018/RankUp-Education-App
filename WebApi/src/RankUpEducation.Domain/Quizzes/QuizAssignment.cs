@@ -127,7 +127,7 @@ public sealed class QuizAssignment : BaseEntity
         ModifiedDate = DateTimeOffset.UtcNow;
     }
 
-    /// <summary>Extends attempt allowance and reopens review after all attempts were exhausted.</summary>
+    /// <summary>Adds extra attempts after quota is used. Prior attempts and review-done stay unchanged.</summary>
     public void GrantRetry(short additionalAttempts)
     {
         if (additionalAttempts <= 0)
@@ -136,7 +136,6 @@ public sealed class QuizAssignment : BaseEntity
         }
 
         AllowedAttempts += additionalAttempts;
-        IsReviewDone = false;
         ModifiedDate = DateTimeOffset.UtcNow;
     }
 }

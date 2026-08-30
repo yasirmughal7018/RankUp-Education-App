@@ -718,7 +718,7 @@ class TeacherQuizAssignedView extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (assignment.isReviewDone && onAllowRetry != null)
+                      if (_canAllowQuizRetry(assignment) && onAllowRetry != null)
                         TextButton(
                           onPressed: state.isSaving
                               ? null
@@ -1285,7 +1285,18 @@ bool _canReassignQuizAssignment(QuizAssignmentItem assignment) {
   if (status == 'expired') {
     return true;
   }
-  return assignment.endAt.toUtc().isBefore(DateTime.now().toUtc());
+  if (assignment.endAt.toUtc().isBefore(DateTime.now().toUtc())) {
+    return true;
+  }
+  return status == 'completed' ||
+      status == 'under review' ||
+      status == 'reviewed' ||
+      status == 'partial results';
+}
+
+bool _canAllowQuizRetry(QuizAssignmentItem assignment) {
+  return assignment.attemptCount > 0 &&
+      assignment.attemptCount >= assignment.allowedAttempts;
 }
 
 bool _isActiveQuizAssignment(QuizAssignmentItem assignment) =>
