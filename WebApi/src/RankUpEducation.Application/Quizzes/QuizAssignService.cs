@@ -160,11 +160,6 @@ public sealed class QuizAssignService : IQuizAssignService
         {
             if (existingByStudent.TryGetValue(studentId, out var existing))
             {
-                if (!IsReassignable(existing, now))
-                {
-                    continue;
-                }
-
                 var attemptCount = await _attempts.CountAttemptsAsync(quizId, studentId, cancellationToken);
                 var quota = (short)Math.Min(short.MaxValue, request.AllowedAttempts + attemptCount);
                 if (attemptCount > 0)
@@ -333,11 +328,6 @@ public sealed class QuizAssignService : IQuizAssignService
         if (attemptCount <= 0)
         {
             throw new BusinessRuleException("The student has not attempted this quiz yet.");
-        }
-
-        if (attemptCount < assignment.AllowedAttempts)
-        {
-            throw new BusinessRuleException("Student still has remaining attempts on this assignment.");
         }
 
         var extraAttempts = request.ExtraAttempts <= 0 ? (short)1 : request.ExtraAttempts;
@@ -783,23 +773,6 @@ public sealed class QuizAssignService : IQuizAssignService
         }
 
         return (schoolId, campusId);
-    }
-
-    private static bool IsReassignable(QuizAssignment assignment, DateTimeOffset now)
-    {
-        if (assignment.QuizResultStatus == LookupNames.QuizResultStatusIds.Expired)
-        {
-            return true;
-        }
-
-        if (assignment.EndDateTime < now)
-        {
-            return true;
-        }
-
-        return assignment.QuizResultStatus is
-            LookupNames.QuizResultStatusIds.Completed
-            or LookupNames.QuizResultStatusIds.UnderReview;
     }
 
     private static bool IsAssignableLifecycle(string lifecycleName)

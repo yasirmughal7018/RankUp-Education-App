@@ -991,45 +991,28 @@ export function isExpiredQuizAssignment(
   );
 }
 
-/** True when parent/teacher may assign this student again without overwriting attempts. */
+/** Parent/teacher may assign any existing student again. Prior attempts stay. */
 export function canReassignQuizAssignment(
-  assignment: { resultStatus: string; endAt: string },
-  now: number = Date.now(),
+  _assignment?: { resultStatus: string; endAt: string },
+  _now: number = Date.now(),
 ): boolean {
-  const status = normalizeAssignmentResultStatus(assignment.resultStatus);
-  if (status === "expired") {
-    return true;
-  }
-
-  if (new Date(assignment.endAt).getTime() < now) {
-    return true;
-  }
-
-  return (
-    status === "completed" ||
-    status === "under review" ||
-    status === "reviewed" ||
-    status === "partial results"
-  );
+  return true;
 }
 
-/** True when quota is used and another attempt can be granted. */
+/** Allow retry after the student has at least one attempt. */
 export function canAllowQuizRetry(assignment: {
   attemptCount: number;
-  allowedAttempts: number;
+  allowedAttempts?: number;
 }): boolean {
-  return (
-    assignment.attemptCount > 0 &&
-    assignment.attemptCount >= assignment.allowedAttempts
-  );
+  return assignment.attemptCount > 0;
 }
 
-/** True when the student still has an open assignment that should stay locked in the picker. */
+/** Students are never locked in the assign picker — reassign is always allowed. */
 export function isActiveQuizAssignment(
-  assignment: { resultStatus: string; endAt: string },
-  now: number = Date.now(),
+  _assignment: { resultStatus: string; endAt: string },
+  _now: number = Date.now(),
 ): boolean {
-  return !canReassignQuizAssignment(assignment, now);
+  return false;
 }
 
 /**

@@ -1280,27 +1280,13 @@ Future<QuestionSummaryModel?> showAttachBankQuestionDialog(
   );
 }
 
-bool _canReassignQuizAssignment(QuizAssignmentItem assignment) {
-  final status = assignment.resultStatus.trim().toLowerCase();
-  if (status == 'expired') {
-    return true;
-  }
-  if (assignment.endAt.toUtc().isBefore(DateTime.now().toUtc())) {
-    return true;
-  }
-  return status == 'completed' ||
-      status == 'under review' ||
-      status == 'reviewed' ||
-      status == 'partial results';
-}
+bool _canReassignQuizAssignment(QuizAssignmentItem _) => true;
 
 bool _canAllowQuizRetry(QuizAssignmentItem assignment) {
-  return assignment.attemptCount > 0 &&
-      assignment.attemptCount >= assignment.allowedAttempts;
+  return assignment.attemptCount > 0;
 }
 
-bool _isActiveQuizAssignment(QuizAssignmentItem assignment) =>
-    !_canReassignQuizAssignment(assignment);
+bool _isActiveQuizAssignment(QuizAssignmentItem _) => false;
 
 class _AssignSheet extends ConsumerStatefulWidget {
   const _AssignSheet({
@@ -1567,7 +1553,7 @@ class _AssignSheetState extends ConsumerState<_AssignSheet> {
                                   : canReassign
                                       ? previouslyAttempted
                                           ? 'Previously attempted — can reassign\nGrade ${student.grade} · ${student.section}'
-                                          : 'Previous assignment expired — can reassign\nGrade ${student.grade} · ${student.section}'
+                                          : 'Already assigned — can reassign\nGrade ${student.grade} · ${student.section}'
                                       : 'Grade ${student.grade} · ${student.section}',
                             ),
                             enabled: !alreadyAssigned,

@@ -504,7 +504,7 @@ const apiMap = [
   ["POST /api/quizzes/{id}/archive", "PortalAdmin only when lifecycle is Published or Assigned (any student/child assignment). Other roles: own Draft delete only. No assignments → hard delete; else Archived + Inactive."],
   ["POST /api/quizzes/{id}/unarchive", "PortalAdmin only. Restore Published."],
   ["POST /api/quizzes/{id}/duplicate", "Deep-copy to new Draft + Pending."],
-  ["POST .../assignments/{id}/allow-retry", "After quota is used (attempt count ≥ allowed). ExtraAttempts (+1 default). Does not require IsReviewDone and does not overwrite prior attempts."],
+  ["POST .../assignments/{id}/allow-retry", "After the student has at least one attempt. ExtraAttempts (+1 default). Does not require IsReviewDone and does not overwrite prior attempts."],
   ["GET /api/questions/{id}/quizzes", "Question-manage: quizzes currently using this bank question (same CanView as question detail)."],
   ["GET/POST/PUT/DELETE .../questions*", "Inline create, attach bank, edit, remove; TimeLimitMinutes recalculated from EstimatedTimeSeconds."],
   ["POST .../attempts", "Student start/resume; instructions ack gate when Instructions set."],
@@ -726,7 +726,7 @@ const scenarios = [
     "QZ-32",
     "Reassign or Allow retry without waiting for Completed",
     "Student submitted quiz 36 (Under Review or Completed). Window is still open. Parent or teacher opens Assign or Assigned people.",
-    "Student is selectable for reassign (not locked as Already assigned). Allow retry is shown when quota is used, without requiring IsReviewDone. Old attempt #1 stays; student can start attempt #2.",
+    "Student is selectable for reassign. Allow retry is shown after any attempt. Old attempt #1 stays; student can start attempt #2.",
   ],
 ];
 
@@ -953,12 +953,11 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   ${htmlList([
     "Prerequisites: Lifecycle Published or Assigned (not Draft); Approval gates met; not Archived; ≥1 question.",
     "EndAt > StartAt; AllowedAttempts > 0.",
-    "Existing unused open assignment (Upcoming / Not Attempted / In Progress) → skip. Parent, teacher, or any assigner may reassign after the window ends, or while the window is open if the student already attempted (Completed / Under Review).",
+    "Parent, teacher, or any assigner may reassign any existing student. The assign picker does not lock students. Prior attempts stay.",
     "Reassign of a student who already attempted does not overwrite attempt rows or scores. AllowedAttempts becomes existing attempt count + new grant; IsReviewDone and stored attempt results stay. The next start creates a new QuizAttempt.",
-    "Unused expired assignments still reopen the same row (new window, reset result status).",
-    "If every selected student still has an unused open assignment → validation error.",
+    "Unused existing rows reopen the same row with the new window.",
     "Cancel: hard-delete future assignments only; restore lifecycle Assigned or Published (never Cancelled).",
-    "Allow retry: available to any assigner after the student used their quota (attempt count ≥ allowed). Does not require IsReviewDone. ExtraAttempts += 1 (default). Does not reset IsReviewDone or overwrite prior attempts. Archived blocked.",
+    "Allow retry: available to any assigner after the student has at least one attempt. Does not require IsReviewDone or a used-up quota. ExtraAttempts += 1 (default). Does not reset IsReviewDone or overwrite prior attempts. Archived blocked.",
     "Parent group assign: groups come from /parents/me/groups (created on My children). Dropdown by group name; members must be linked children.",
   ])}
   <h3>QuizAssignment table</h3>

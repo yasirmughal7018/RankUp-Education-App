@@ -230,13 +230,13 @@ describe("expired assignment reassign", () => {
     ).toBe(true);
   });
 
-  it("locks students who still have an open assignment", () => {
+  it("never locks a student in the assign picker", () => {
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Not Attempted", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isActiveQuizAssignment(
         { resultStatus: "Completed", endAt: "2099-01-01T00:00:00Z" },
@@ -251,7 +251,7 @@ describe("expired assignment reassign", () => {
     ).toBe(false);
   });
 
-  it("allows reassign after the window ends without overwriting past attempts", () => {
+  it("allows reassign for any existing assignment", () => {
     expect(
       canReassignQuizAssignment(
         { resultStatus: "Completed", endAt: "2025-12-01T00:00:00Z" },
@@ -260,25 +260,13 @@ describe("expired assignment reassign", () => {
     ).toBe(true);
     expect(
       canReassignQuizAssignment(
-        { resultStatus: "Under Review", endAt: "2025-12-01T00:00:00Z" },
-        now,
-      ),
-    ).toBe(true);
-    expect(
-      canReassignQuizAssignment(
-        { resultStatus: "Completed", endAt: "2099-01-01T00:00:00Z" },
-        now,
-      ),
-    ).toBe(true);
-    expect(
-      canReassignQuizAssignment(
         { resultStatus: "Not Attempted", endAt: "2099-01-01T00:00:00Z" },
         now,
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("allows retry after quota is used without waiting for review finalize", () => {
+  it("allows retry after any submitted attempt", () => {
     expect(
       canAllowQuizRetry({ attemptCount: 1, allowedAttempts: 1 }),
     ).toBe(true);
@@ -287,7 +275,7 @@ describe("expired assignment reassign", () => {
     ).toBe(false);
     expect(
       canAllowQuizRetry({ attemptCount: 1, allowedAttempts: 2 }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 

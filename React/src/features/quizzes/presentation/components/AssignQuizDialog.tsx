@@ -735,7 +735,7 @@ export function AssignQuizDialog({
                                   <span className="max-w-[55%] shrink-0 text-right text-xs font-medium text-[var(--status-pending-text)]">
                                     {previouslyAttempted
                                       ? "Previously attempted — can reassign"
-                                      : "Previous assignment expired — can reassign"}
+                                      : "Already assigned — can reassign"}
                                   </span>
                                 ) : null}
                               </span>

@@ -6,8 +6,8 @@ alwaysApply: false
 
 # Quiz reassign and retry
 
-- Parent, teacher, or any assigner may **reassign** a student who already attempted (Completed / Under Review), even while the window is still open. Unused open assignments stay locked. Expired / past-window rows are always reassignable.
-- **Allow retry** is available once quota is used. Do not require `IsReviewDone`.
+- Parent, teacher, or any assigner may **reassign** any existing student on a quiz. The assign picker does not lock students.
+- **Allow retry** is available after the student has at least one attempt. Do not require `IsReviewDone` or a used-up quota.
 - Do **not** delete or rewrite existing `QuizAttempt` rows or their scores. `IsReviewDone` stays on reassign/retry of attempted students.
-- Unused expired rows may `ReopenForReassign`. Attempted students use `GrantReassignAttempts` (quota = old count + new grant).
+- Unused rows use `ReopenForReassign`. Attempted students use `GrantReassignAttempts` (quota = old count + new grant).
 - The next start creates a **new** attempt. Student quiz detail lists all submitted attempts, results, and the attempt count.
