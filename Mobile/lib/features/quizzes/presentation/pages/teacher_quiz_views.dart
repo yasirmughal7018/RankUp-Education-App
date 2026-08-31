@@ -691,18 +691,6 @@ class TeacherQuizAssignedView extends StatelessWidget {
                               'Window ${_formatAssignmentDateTime(assignment.startAt)} – ${_formatAssignmentDateTime(assignment.endAt)}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
-                            TextButton(
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () =>
-                                  showAssignmentAttemptsSheet(context, assignment),
-                              child: Text(
-                                'Attempts ${assignment.attemptCount}/${assignment.allowedAttempts}',
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -959,95 +947,6 @@ String _quizReviewDisplayLabel(String mode) {
     default:
       return 'Full results';
   }
-}
-
-/// Nested attempt history for one assigned student.
-Future<void> showAssignmentAttemptsSheet(
-  BuildContext context,
-  QuizAssignmentItem assignment,
-) {
-  final assigned = assignment.assignedAt == null
-      ? '—'
-      : _formatAssignmentDateTime(assignment.assignedAt!);
-  final rows = assignment.attempts.isEmpty
-      ? <(String, String, String, String)>[
-          (
-            assigned,
-            '0 / ${assignment.allowedAttempts}',
-            '—',
-            assignment.resultStatus.isEmpty
-                ? 'Not Attempted'
-                : assignment.resultStatus,
-          ),
-        ]
-      : assignment.attempts
-          .map(
-            (attempt) => (
-              assigned,
-              '${attempt.attemptNumber} / ${assignment.allowedAttempts}',
-              _formatAssignmentDateTime(attempt.occurredAt),
-              attempt.status.isEmpty ? assignment.resultStatus : attempt.status,
-            ),
-          )
-          .toList();
-
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Attempts',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Assigned, attempt dates, and results for ${assignment.studentName}.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('Assigned')),
-                  DataColumn(label: Text('Attempts')),
-                  DataColumn(label: Text('Attempted Date')),
-                  DataColumn(label: Text('Result')),
-                ],
-                rows: [
-                  for (final row in rows)
-                    DataRow(
-                      cells: [
-                        DataCell(Text(row.$1)),
-                        DataCell(Text(row.$2)),
-                        DataCell(Text(row.$3)),
-                        DataCell(Text(row.$4)),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
 }
 
 /// Read-only sheet of every manage-quiz setting.

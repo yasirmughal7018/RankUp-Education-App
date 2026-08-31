@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/core/components/PageHeader";
@@ -11,8 +10,6 @@ import {
   attemptReviewActionLabel,
   hasAttemptScoreAccess,
 } from "@/features/quizzes/domain/quizMonitorTypes";
-import type { QuizAssignment } from "@/features/quizzes/domain/quizTypes";
-import { QuizAssignmentAttemptsDialog } from "@/features/quizzes/presentation/components/QuizAssignmentAttemptsDialog";
 import {
   useManageQuizQuery,
   useQuizAssignmentsQuery,
@@ -32,8 +29,6 @@ export function QuizAssignedPeoplePage() {
   const numericQuizId = Number(quizId);
   const assignedPeopleLabel =
     user?.role === "Parent" ? "Assigned children" : "Assigned students";
-  const [attemptsAssignment, setAttemptsAssignment] =
-    useState<QuizAssignment | null>(null);
 
   const {
     data: quiz,
@@ -100,9 +95,6 @@ export function QuizAssignedPeoplePage() {
                     Window
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Attempts
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
                     Result
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-slate-600">
@@ -119,17 +111,6 @@ export function QuizAssignedPeoplePage() {
                     <td className="px-4 py-3 text-slate-700">
                       {formatDateTime(assignment.startAt)} -{" "}
                       {formatDateTime(assignment.endAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-label={`View attempts for ${assignment.studentName?.trim() || assignment.studentId}`}
-                        onClick={() => setAttemptsAssignment(assignment)}
-                      >
-                        {assignment.attemptCount}/{assignment.allowedAttempts}
-                      </Button>
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge
@@ -194,16 +175,6 @@ export function QuizAssignedPeoplePage() {
           </p>
         )}
       </div>
-
-      <QuizAssignmentAttemptsDialog
-        quizId={numericQuizId}
-        assignment={attemptsAssignment}
-        onOpenChange={(open) => {
-          if (!open) {
-            setAttemptsAssignment(null);
-          }
-        }}
-      />
     </div>
   );
 }

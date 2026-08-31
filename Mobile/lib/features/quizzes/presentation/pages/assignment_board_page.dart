@@ -273,9 +273,7 @@ class _AssignmentBoardCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Attempts ${item.attemptCount}/${item.allowedAttempts}'
-              ' · ${item.resultStatus}'
-              ' · ${item.monitorStatus}',
+              '${item.resultStatus} · ${item.monitorStatus}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),

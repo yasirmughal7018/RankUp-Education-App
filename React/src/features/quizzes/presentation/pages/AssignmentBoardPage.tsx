@@ -1,21 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { PageHeader } from "@/core/components/PageHeader";
+import {
+  BookOpenCheck,
+  ClipboardList,
+  Eye,
+  Monitor,
+  RefreshCw,
+  Users,
+} from "lucide-react";
+import { AppPageHeader } from "@/components/ui/app-page-header";
+import { AppEmptyState } from "@/components/ui/app-empty-state";
+import { AppErrorState } from "@/components/ui/app-error-state";
+import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
+import { AppSectionHeader } from "@/components/ui/app-section-header";
+import { AppStatusBadge } from "@/components/ui/app-status-badge";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { formatStudentLabel } from "@/features/parent/domain/parentTypes";
 import { useLinkedStudentsQuery } from "@/features/parent/presentation/hooks/useParentQueries";
 import {
   displayStudentName,
   formatMonitorStatus,
-  getMonitorStatusTone,
   studentAttemptCheckPath,
   attemptReviewActionLabel,
   hasAttemptScoreAccess,
 } from "@/features/quizzes/domain/quizMonitorTypes";
 import { useAssignmentBoardQuery } from "@/features/quizzes/presentation/hooks/useQuizQueries";
-import { StatusBadge } from "@/features/questions/presentation/components/StatusBadge";
 import { formatRosterStudent } from "@/features/teacher/domain/teacherTypes";
 import { useTeacherRosterQuery } from "@/features/teacher/presentation/hooks/useTeacherQueries";
+import { cn } from "@/lib/utils";
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -23,6 +36,47 @@ function formatDateTime(value: string): string {
     timeStyle: "short",
   }).format(new Date(value));
 }
+
+function normalizeStatusKey(value: string): string {
+  return value.toLowerCase().replace(/[_\s-]/g, "");
+}
+
+const summaryRows: Array<{
+  key: "total" | "completed" | "inProgress" | "needsReview";
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  iconClass: string;
+  valueClass: string;
+}> = [
+  {
+    key: "total",
+    label: "Assignments",
+    icon: ClipboardList,
+    iconClass: "bg-[hsl(var(--primary-light))] text-primary",
+    valueClass: "text-primary",
+  },
+  {
+    key: "completed",
+    label: "Completed",
+    icon: BookOpenCheck,
+    iconClass: "bg-[hsl(var(--success-light))] text-[hsl(var(--success))]",
+    valueClass: "text-[hsl(var(--success))]",
+  },
+  {
+    key: "inProgress",
+    label: "In progress",
+    icon: Users,
+    iconClass: "bg-[hsl(var(--warning-light))] text-[hsl(var(--warning))]",
+    valueClass: "text-[hsl(var(--warning))]",
+  },
+  {
+    key: "needsReview",
+    label: "Needs review",
+    icon: Eye,
+    iconClass: "bg-[hsl(var(--ai-light))] text-[hsl(var(--ai))]",
+    valueClass: "text-[hsl(var(--ai))]",
+  },
+];
 
 /** Cross-quiz assignment board filtered by the caller's students or children. */
 export function AssignmentBoardPage() {
@@ -62,6 +116,11 @@ export function AssignmentBoardPage() {
       ? "All roster students"
       : "All students";
   const studentId = studentFilter === "" ? null : studentFilter;
+  const selectedStudentLabel =
+    studentFilter === ""
+      ? null
+      : scopedStudents.find((student) => student.id === studentFilter)?.label ??
+        `Student ${studentFilter}`;
 
   function updateStudentFilter(value: number | "") {
     setStudentFilter(value);
@@ -76,180 +135,292 @@ export function AssignmentBoardPage() {
   const { data: items = [], isLoading, error, refetch, isFetching } =
     useAssignmentBoardQuery(studentId);
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <PageHeader
-        title="Assignment board"
-        description="Quiz assignments for your students or children, according to your role."
-        backTo="/quizzes"
-        backAriaLabel="Back to quizzes"
-        action={
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-70"
-          >
-            Refresh
-          </button>
-        }
-      />
+  const stats = useMemo(() => {
+    let completed = 0;
+    let inProgress = 0;
+    let needsReview = 0;
+    for (const item of items) {
+      const result = normalizeStatusKey(item.resultStatus);
+      const monitor = normalizeStatusKey(item.monitorStatus);
+      if (result.includes("complete") || result.includes("reviewed")) {
+        completed += 1;
+      } else if (
+        result.includes("inprogress") ||
+        monitor.includes("inprogress")
+      ) {
+        inProgress += 1;
+      }
+      if (
+        !item.isReviewDone &&
+        (result.includes("review") ||
+          monitor.includes("review") ||
+          hasAttemptScoreAccess(item.canScore))
+      ) {
+        needsReview += 1;
+      }
+    }
+    return {
+      total: items.length,
+      completed,
+      inProgress,
+      needsReview,
+    };
+  }, [items]);
 
-      <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
-        <label className="mb-1 block text-sm font-medium text-slate-700">
-          Filter by student
-        </label>
-        {scopedStudents.length > 0 ? (
-          <select
-            value={studentFilter === "" ? "" : String(studentFilter)}
-            onChange={(event) =>
-              updateStudentFilter(
-                event.target.value ? Number(event.target.value) : "",
-              )
-            }
-            className="w-full max-w-md rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
-          >
-            <option value="">{allStudentsLabel}</option>
-            {scopedStudents.map((student) => (
-              <option key={student.id} value={student.id}>
-                {student.label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="number"
-            min={1}
-            value={studentFilter === "" ? "" : studentFilter}
-            onChange={(event) =>
-              updateStudentFilter(
-                event.target.value ? Number(event.target.value) : "",
-              )
-            }
-            placeholder="Optional student ID"
-            className="w-full max-w-md rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <AppPageHeader
+            title="Assignment board"
+            eyebrow={selectedStudentLabel ?? undefined}
+            subtitle="Quiz assignments for your students or children, according to your role."
+            backTo="/quizzes"
+            backAriaLabel="Back to quizzes"
+            className="mb-4 space-y-0 [&_h1]:text-lg sm:[&_h1]:text-xl"
           />
-        )}
-      </section>
+
+          <div className="mt-1 max-w-md pl-[2.875rem] sm:pl-12">
+            <label
+              htmlFor="assignment-board-student"
+              className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              Filter by student
+            </label>
+            {scopedStudents.length > 0 ? (
+              <select
+                id="assignment-board-student"
+                value={studentFilter === "" ? "" : String(studentFilter)}
+                onChange={(event) =>
+                  updateStudentFilter(
+                    event.target.value ? Number(event.target.value) : "",
+                  )
+                }
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring"
+              >
+                <option value="">{allStudentsLabel}</option>
+                {scopedStudents.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="assignment-board-student"
+                type="number"
+                min={1}
+                value={studentFilter === "" ? "" : studentFilter}
+                onChange={(event) =>
+                  updateStudentFilter(
+                    event.target.value ? Number(event.target.value) : "",
+                  )
+                }
+                placeholder="Optional student ID"
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
+              />
+            )}
+          </div>
+        </div>
+
+        <aside className="flex w-full shrink-0 flex-col items-stretch gap-3 lg:w-72">
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-border/80 bg-card/90 p-4 shadow-sm">
+            {isLoading ? (
+              <AppLoadingSkeleton count={2} />
+            ) : (
+              <ul className="space-y-2.5">
+                {summaryRows.map((row) => {
+                  const Icon = row.icon;
+                  return (
+                    <li
+                      key={row.key}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className={cn(
+                            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                            row.iconClass,
+                          )}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden />
+                        </span>
+                        <span className="truncate text-sm text-foreground">
+                          {row.label}
+                        </span>
+                      </span>
+                      <span
+                        className={cn(
+                          "tabular-nums text-sm font-semibold",
+                          row.valueClass,
+                        )}
+                      >
+                        {stats[row.key]}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </aside>
+      </div>
 
       {error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error.message}
-        </div>
+        <AppErrorState
+          message={error.message}
+          onRetry={() => void refetch()}
+        />
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section>
+        <AppSectionHeader
+          title="Assignments"
+          description="Open Check or Monitor for a student when an attempt exists."
+          className="mb-3 [&_h2]:text-base"
+        />
+
         {isLoading ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            Loading assignments...
-          </div>
+          <AppLoadingSkeleton variant="table" count={5} />
         ) : items.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-slate-600">
-            No assignments found for your students or children.
-          </div>
+          <AppEmptyState
+            icon={ClipboardList}
+            title="No assignments found"
+            description="No quiz assignments match this student filter yet."
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Quiz
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Student
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Window
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Attempts
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Result
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-slate-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {items.map((item) => (
-                  <tr key={item.assignmentId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/quizzes/${item.quizId}`}
-                        className="font-medium text-brand-700 hover:text-brand-800"
-                      >
-                        {item.quizTitle}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {displayStudentName(item.studentName, item.studentId)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      <p>{formatDateTime(item.startAt)}</p>
-                      <p className="text-xs text-slate-500">
-                        to {formatDateTime(item.endAt)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {item.attemptCount}/{item.allowedAttempts}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        label={formatMonitorStatus(item.resultStatus)}
-                        tone={getMonitorStatusTone(item.resultStatus)}
-                      />
-                      {item.isReviewDone ? (
-                        <p className="mt-1 text-xs text-emerald-700">Reviewed</p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        label={formatMonitorStatus(item.monitorStatus)}
-                        tone={getMonitorStatusTone(item.monitorStatus)}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        {item.lastAttemptId ? (
-                          <Link
-                            to={studentAttemptCheckPath(
-                              item.quizId,
-                              item.lastAttemptId,
-                              "board",
-                            )}
-                            className={
-                              hasAttemptScoreAccess(item.canScore) &&
-                              !item.isReviewDone
-                                ? "rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700"
-                                : "rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                            }
-                          >
-                            {attemptReviewActionLabel(
-                              hasAttemptScoreAccess(item.canScore),
-                              item.isReviewDone,
-                            )}
-                          </Link>
-                        ) : null}
-                        <Link
-                          to={`/quizzes/${item.quizId}/monitoring`}
-                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                        >
-                          Monitor
-                        </Link>
-                      </div>
-                    </td>
+          <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-border text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Quiz
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Student
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Window
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Result
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border/70">
+                  {items.map((item) => {
+                    const canScore =
+                      hasAttemptScoreAccess(item.canScore) &&
+                      !item.isReviewDone;
+                    return (
+                      <tr
+                        key={item.assignmentId}
+                        className="hover:bg-muted/40"
+                      >
+                        <td className="px-4 py-3">
+                          <Link
+                            to={`/quizzes/${item.quizId}`}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {item.quizTitle}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-foreground">
+                          {displayStudentName(item.studentName, item.studentId)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          <p className="text-foreground">
+                            {formatDateTime(item.startAt)}
+                          </p>
+                          <p className="text-xs">
+                            to {formatDateTime(item.endAt)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                            <AppStatusBadge
+                              status={item.resultStatus}
+                              label={formatMonitorStatus(item.resultStatus)}
+                            />
+                            {item.isReviewDone ? (
+                              <span className="text-xs text-muted-foreground">
+                                – Reviewed
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <AppStatusBadge
+                            status={item.monitorStatus}
+                            label={formatMonitorStatus(item.monitorStatus)}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            {item.lastAttemptId ? (
+                              <Button
+                                size="sm"
+                                variant={canScore ? "default" : "outline"}
+                                className="h-7 gap-1.5 rounded-full px-2.5 text-[11px] font-semibold leading-none"
+                                asChild
+                              >
+                                <Link
+                                  to={studentAttemptCheckPath(
+                                    item.quizId,
+                                    item.lastAttemptId,
+                                    "board",
+                                  )}
+                                >
+                                  <Eye className="!size-3.5" aria-hidden />
+                                  {attemptReviewActionLabel(
+                                    hasAttemptScoreAccess(item.canScore),
+                                    item.isReviewDone,
+                                  )}
+                                </Link>
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1.5 rounded-full px-2.5 text-[11px] font-semibold leading-none"
+                              asChild
+                            >
+                              <Link to={`/quizzes/${item.quizId}/monitoring`}>
+                                <Monitor className="!size-3.5" aria-hidden />
+                                Monitor
+                              </Link>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

@@ -248,40 +248,40 @@ function MatchingPairsPanel({ options }: { options: QuizAnswerOption[] }) {
   );
 
   return (
-    <ul className="space-y-2 text-xs text-foreground">
-      {Array.from({ length: pairCount }, (_, pairIndex) => {
-        const left = options[pairIndex];
-        const right = options[pairCount + pairIndex];
-        if (!left || !right) {
-          return null;
-        }
+    <div className="overflow-hidden rounded-md border border-border">
+      <table className="w-full table-fixed text-xs text-foreground">
+        <thead className="bg-muted/70">
+          <tr>
+            <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Left
+            </th>
+            <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Right
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {Array.from({ length: pairCount }, (_, pairIndex) => {
+            const left = options[pairIndex];
+            const right = options[pairCount + pairIndex];
+            if (!left || !right) {
+              return null;
+            }
 
-        return (
-          <li
-            key={`pair-${pairIndex}`}
-            className="rounded-md border border-border bg-muted/50 p-2"
-          >
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
-              Pair {pairIndex + 1}
-            </p>
-            <div className="space-y-1">
-              <p className="flex items-start gap-1.5 leading-snug">
-                <span className="shrink-0 rounded-full bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  L{pairIndex + 1}
-                </span>
-                <span className="min-w-0">{left.optionText.trim() || "—"}</span>
-              </p>
-              <p className="flex items-start gap-1.5 leading-snug">
-                <span className="shrink-0 rounded-full bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  R{pairIndex + 1}
-                </span>
-                <span className="min-w-0">{right.optionText.trim() || "—"}</span>
-              </p>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+            return (
+              <tr key={`pair-${pairIndex}`} className="bg-muted/30">
+                <td className="px-2 py-1.5 align-top leading-snug">
+                  {left.optionText.trim() || "—"}
+                </td>
+                <td className="px-2 py-1.5 align-top leading-snug">
+                  {right.optionText.trim() || "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

@@ -153,6 +153,7 @@ const webRoutes = [
   ["/admin/directory/students", "Admin directory (not student session)"],
   ["/request-access", "Public register (grade+section for Student)"],
   ["/parent/children", "Parent: Children and Groups tabs"],
+  ["/parent/children/:studentId/history", "Linked-child quiz history: compact header/stats + themed table (Quiz, Best %, Result, Last submitted, Actions). No Attempts column."],
 ];
 
 const mobileRoutes = [
@@ -164,6 +165,7 @@ const mobileRoutes = [
   ["/profile, /settings, /notifications", "Profile/settings real; notifications API"],
   ["/messages, /worksheets, /discussions", "Stub / placeholder"],
   ["/parent/children", "Parent: linked children + Groups tab"],
+  ["/parent/children/:studentId/history", "Linked-child quiz history. No Attempts count (one attempt)."],
 ];
 
 const webNav = [

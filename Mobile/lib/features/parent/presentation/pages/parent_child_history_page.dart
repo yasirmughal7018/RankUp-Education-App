@@ -86,8 +86,6 @@ class ParentChildHistoryPage extends ConsumerWidget {
                         if (item.bestPercentage != null)
                           'Best ${item.bestPercentage}%',
                         item.resultStatus,
-                        if (item.attemptCount > 0)
-                          '${item.attemptCount} attempt(s)',
                       ].join(' · '),
                     ),
                     trailing: item.attemptId == null
