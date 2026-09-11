@@ -28,7 +28,6 @@ interface QuizFormProps {
   initialValues: QuizFormValues;
   submitLabel: string;
   isSubmitting?: boolean;
-  showContextStudentId?: boolean;
   authorRole?: UserRole;
   /** When true, quiz type is required (create). Edit hides the field because API update omits type. */
   requireQuizType?: boolean;
@@ -43,7 +42,6 @@ export function QuizForm({
   initialValues,
   submitLabel,
   isSubmitting = false,
-  showContextStudentId = false,
   authorRole,
   requireQuizType = false,
   onSubmit,
@@ -241,30 +239,6 @@ export function QuizForm({
                 in the shared catalog after publish.
               </p>
             ) : null}
-          </div>
-        ) : null}
-
-        {showContextStudentId ? (
-          <div>
-            <FieldLabel htmlFor="contextStudentId" optional>
-              Context student ID
-            </FieldLabel>
-            <input
-              id="contextStudentId"
-              type="number"
-              value={values.contextStudentId ?? ""}
-              disabled={isSubmitting}
-              onChange={(event) =>
-                setValues((current) => ({
-                  ...current,
-                  contextStudentId: event.target.value
-                    ? Number(event.target.value)
-                    : null,
-                }))
-              }
-              className={inputClassName}
-              min={1}
-            />
           </div>
         ) : null}
 

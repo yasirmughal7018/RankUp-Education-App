@@ -74,6 +74,7 @@ const approvalActivation = [
 
 const directoryRules = [
   ["GET /directory/students", "Filters: schoolId, campusId, grade, search, paging. Scope by admin school/campus. Search name/username/roll. List payload may include teacherNames, parentNames for assigned-people UI."],
+  ["Directory student quiz history UI", "On `/admin/directory?tab=students` tiles and `/admin/directory/students` rows: History icon opens dialog of that student’s quiz history via GET /api/reports/students/{id}/quiz-history. View result → attempt review when attemptId present."],
   ["POST /directory/students", "Requires FullName, email/username, RollNumber, Grade (>0), Section, SchoolId, CampusId. Creates active Student ready for password setup. Does not re-validate Class lookup (unlike register)."],
   ["PUT /directory/students/{id}", "Update name, campus (same school), roll, grade, section (and school/campus where allowed)."],
   ["Activate / deactivate / bulk-deactivate", "Scope-checked; deactivate revokes refresh tokens."],
@@ -150,7 +151,8 @@ const webRoutes = [
   ["/student/quizzes/:quizId/attempts/:attemptId/result", "Result (auto-graded after due date; full after owner Completed)"],
   ["/student/history", "Self quiz history"],
   ["/student/rankings", "Class / school peer rankings"],
-  ["/admin/directory/students", "Admin directory (not student session)"],
+  ["/admin/directory/students", "Admin directory (not student session). History icon → student quiz history dialog."],
+  ["/admin/directory?tab=students", "School Directory students tab: History icon on each active student tile → quiz history dialog."],
   ["/request-access", "Public register (grade+section for Student)"],
   ["/parent/children", "Parent: Children and Groups tabs"],
   ["/parent/children/:studentId/history", "Linked-child quiz history: compact header/stats + themed table (Quiz, Best %, Result, Last submitted, Actions). No Attempts column."],

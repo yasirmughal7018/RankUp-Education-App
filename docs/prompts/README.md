@@ -15,5 +15,8 @@ Each implementation / spec prompt is stored as its own file. Casual chat follow-
 | 2026-08-30 | [2026-08-30-reassign-student-window-status.md](./2026-08-30-reassign-student-window-status.md) | After reassign, student list follows the new window (Upcoming / Open Now) |
 | 2026-08-30 | [2026-08-30-view-result-after-due-date.md](./2026-08-30-view-result-after-due-date.md) | View result only after due date; View quiz while results are pending |
 | 2026-08-30 | [2026-08-30-remove-reassign-retry.md](./2026-08-30-remove-reassign-retry.md) | Remove reattempt, multiple attempts, and reassign of the same quiz |
+| 2026-08-31 | [2026-08-31-directory-student-quiz-history.md](./2026-08-31-directory-student-quiz-history.md) | School Directory student row: open full quiz history |
+| 2026-08-31 | [2026-08-31-assignment-board-filter-username.md](./2026-08-31-assignment-board-filter-username.md) | Assignment board admin filter by username |
+| 2026-08-31 | [2026-08-31-remove-quiz-context-student-id.md](./2026-08-31-remove-quiz-context-student-id.md) | Remove Context Student ID from create quiz |
 
 New spec prompts go here as `YYYY-MM-DD-short-kebab-slug.md`.

@@ -27,7 +27,6 @@ export function QuizCreatePage() {
           submitLabel="Create quiz"
           isSubmitting={isSubmitting}
           authorRole={user?.role}
-          showContextStudentId={user?.role === "Parent"}
           requireQuizType
           onSubmit={async (values) => {
             setIsSubmitting(true);

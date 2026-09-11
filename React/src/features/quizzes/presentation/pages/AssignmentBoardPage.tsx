@@ -7,6 +7,7 @@ import {
   Monitor,
   RefreshCw,
   Users,
+  X,
 } from "lucide-react";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { AppEmptyState } from "@/components/ui/app-empty-state";
@@ -15,7 +16,9 @@ import { AppLoadingSkeleton } from "@/components/ui/app-loading-skeleton";
 import { AppSectionHeader } from "@/components/ui/app-section-header";
 import { AppStatusBadge } from "@/components/ui/app-status-badge";
 import { Button } from "@/components/ui/button";
+import { isAdminRole } from "@/core/api/types";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
+import { useDirectoryStudentsQuery } from "@/features/directory/presentation/hooks/useDirectoryQueries";
 import { formatStudentLabel } from "@/features/parent/domain/parentTypes";
 import { useLinkedStudentsQuery } from "@/features/parent/presentation/hooks/useParentQueries";
 import {
@@ -85,9 +88,15 @@ export function AssignmentBoardPage() {
   const isParent = user?.role === "Parent";
   const isRosterViewer =
     user?.role === "Teacher" || user?.role === "Coordinator";
+  const isAdminViewer = user != null && isAdminRole(user.role);
   const queryStudentId = Number(searchParams.get("studentId"));
   const [studentFilter, setStudentFilter] = useState<number | "">(
     queryStudentId > 0 ? queryStudentId : "",
+  );
+  const [adminUsernameSearch, setAdminUsernameSearch] = useState("");
+  const [debouncedAdminSearch, setDebouncedAdminSearch] = useState("");
+  const [adminSelectedLabel, setAdminSelectedLabel] = useState<string | null>(
+    null,
   );
 
   useEffect(() => {
@@ -96,9 +105,27 @@ export function AssignmentBoardPage() {
     }
   }, [queryStudentId]);
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedAdminSearch(adminUsernameSearch.trim());
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [adminUsernameSearch]);
+
   const { data: parentLinkedStudents = [] } = useLinkedStudentsQuery(isParent);
   const { data: roster } = useTeacherRosterQuery(isRosterViewer);
   const rosterStudents = roster?.students ?? [];
+  const { data: adminStudentsPage, isFetching: adminStudentsFetching } =
+    useDirectoryStudentsQuery(
+      {
+        search: debouncedAdminSearch || undefined,
+        pageNumber: 1,
+        pageSize: 30,
+      },
+      isAdminViewer && debouncedAdminSearch.length > 0,
+    );
+  const adminStudentMatches = adminStudentsPage?.items ?? [];
+
   const scopedStudents = isParent
     ? parentLinkedStudents.map((student) => ({
         id: student.studentId,
@@ -119,14 +146,22 @@ export function AssignmentBoardPage() {
   const selectedStudentLabel =
     studentFilter === ""
       ? null
-      : scopedStudents.find((student) => student.id === studentFilter)?.label ??
-        `Student ${studentFilter}`;
+      : isAdminViewer
+        ? (adminSelectedLabel ?? `Student ${studentFilter}`)
+        : (scopedStudents.find((student) => student.id === studentFilter)
+            ?.label ?? `Student ${studentFilter}`);
 
-  function updateStudentFilter(value: number | "") {
+  function updateStudentFilter(value: number | "", label?: string | null) {
     setStudentFilter(value);
     if (value === "") {
+      setAdminSelectedLabel(null);
+      setAdminUsernameSearch("");
+      setDebouncedAdminSearch("");
       searchParams.delete("studentId");
     } else {
+      if (label != null) {
+        setAdminSelectedLabel(label);
+      }
       searchParams.set("studentId", String(value));
     }
     setSearchParams(searchParams, { replace: true });
@@ -134,6 +169,16 @@ export function AssignmentBoardPage() {
 
   const { data: items = [], isLoading, error, refetch, isFetching } =
     useAssignmentBoardQuery(studentId);
+
+  useEffect(() => {
+    if (!isAdminViewer || studentFilter === "" || adminSelectedLabel) {
+      return;
+    }
+    const fromBoard = items.find((item) => item.studentId === studentFilter);
+    if (fromBoard?.studentName) {
+      setAdminSelectedLabel(fromBoard.studentName);
+    }
+  }, [isAdminViewer, studentFilter, adminSelectedLabel, items]);
 
   const stats = useMemo(() => {
     let completed = 0;
@@ -168,7 +213,7 @@ export function AssignmentBoardPage() {
   }, [items]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <AppPageHeader
@@ -180,7 +225,7 @@ export function AssignmentBoardPage() {
             className="mb-4 space-y-0 [&_h1]:text-lg sm:[&_h1]:text-xl"
           />
 
-          <div className="mt-1 max-w-md pl-[2.875rem] sm:pl-12">
+          <div className="mt-8 max-w-md pl-[2.875rem] sm:mt-10 sm:pl-12">
             <label
               htmlFor="assignment-board-student"
               className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
@@ -205,20 +250,88 @@ export function AssignmentBoardPage() {
                   </option>
                 ))}
               </select>
+            ) : isAdminViewer ? (
+              <div className="space-y-2">
+                {studentFilter !== "" ? (
+                  <div className="flex items-center gap-2">
+                    <p
+                      id="assignment-board-student"
+                      className="min-w-0 flex-1 truncate rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+                      title={selectedStudentLabel ?? undefined}
+                    >
+                      {selectedStudentLabel}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => updateStudentFilter("")}
+                      aria-label="Clear student filter"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      id="assignment-board-student"
+                      type="search"
+                      autoComplete="off"
+                      value={adminUsernameSearch}
+                      onChange={(event) =>
+                        setAdminUsernameSearch(event.target.value)
+                      }
+                      placeholder="Search by username"
+                      className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
+                    />
+                    {debouncedAdminSearch.length > 0 ? (
+                      <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-card shadow-sm">
+                        {adminStudentsFetching ? (
+                          <p className="px-3 py-2 text-sm text-muted-foreground">
+                            Searching…
+                          </p>
+                        ) : adminStudentMatches.length === 0 ? (
+                          <p className="px-3 py-2 text-sm text-muted-foreground">
+                            No students match that username.
+                          </p>
+                        ) : (
+                          <ul className="divide-y divide-border/70 py-1">
+                            {adminStudentMatches.map((student) => (
+                              <li key={student.studentId}>
+                                <button
+                                  type="button"
+                                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition hover:bg-muted/60"
+                                  onClick={() =>
+                                    updateStudentFilter(
+                                      student.studentId,
+                                      student.username,
+                                    )
+                                  }
+                                >
+                                  <span className="text-sm font-medium text-foreground">
+                                    {student.username}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {student.fullName}
+                                    {student.grade
+                                      ? ` · Grade ${student.grade}${student.section ?? ""}`
+                                      : ""}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
             ) : (
-              <input
-                id="assignment-board-student"
-                type="number"
-                min={1}
-                value={studentFilter === "" ? "" : studentFilter}
-                onChange={(event) =>
-                  updateStudentFilter(
-                    event.target.value ? Number(event.target.value) : "",
-                  )
-                }
-                placeholder="Optional student ID"
-                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-ring"
-              />
+              <p className="rounded-xl border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+                Student filter is available for admins, teachers, and parents.
+              </p>
             )}
           </div>
         </div>
@@ -286,11 +399,11 @@ export function AssignmentBoardPage() {
         />
       ) : null}
 
-      <section>
+      <section className="-mt-1">
         <AppSectionHeader
           title="Assignments"
           description="Open Check or Monitor for a student when an attempt exists."
-          className="mb-3 [&_h2]:text-base"
+          className="mb-2 [&_h2]:text-base"
         />
 
         {isLoading ? (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Pencil, UserCheck, Users, UserX } from "lucide-react";
+import { History, Pencil, UserCheck, Users, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
@@ -31,6 +31,7 @@ import {
 import { DirectoryPagination } from "@/features/directory/presentation/components/DirectoryPagination";
 import { StudentAssignedPeopleDialog } from "@/features/directory/presentation/components/StudentAssignedPeopleDialog";
 import { StudentFormDialog } from "@/features/directory/presentation/components/StudentFormDialog";
+import { StudentQuizHistoryDialog } from "@/features/directory/presentation/components/StudentQuizHistoryDialog";
 import {
   useActivateStudentMutation,
   useBulkDeactivateStudentsMutation,
@@ -71,6 +72,8 @@ export function DirectoryStudentsPage() {
     "create" | DirectoryStudent | null
   >(null);
   const [assignedPeopleTarget, setAssignedPeopleTarget] =
+    useState<DirectoryStudent | null>(null);
+  const [quizHistoryTarget, setQuizHistoryTarget] =
     useState<DirectoryStudent | null>(null);
   const [deactivateTarget, setDeactivateTarget] =
     useState<DirectoryStudent | null>(null);
@@ -248,6 +251,15 @@ export function DirectoryStudentsPage() {
     }
     return (
       <>
+        <DirectoryIconAction
+          icon={History}
+          label={`View quiz history for ${student.fullName}`}
+          disabled={busy}
+          onClick={() => {
+            clearMessages();
+            setQuizHistoryTarget(student);
+          }}
+        />
         <DirectoryIconAction
           icon={Users}
           label={`View assigned people for ${student.fullName}`}
@@ -544,6 +556,14 @@ export function DirectoryStudentsPage() {
           coordinators={assignedPeopleTarget.coordinatorNames ?? []}
           teachers={assignedPeopleTarget.teacherNames ?? []}
           onClose={() => setAssignedPeopleTarget(null)}
+        />
+      ) : null}
+
+      {quizHistoryTarget ? (
+        <StudentQuizHistoryDialog
+          studentId={quizHistoryTarget.studentId}
+          studentName={quizHistoryTarget.fullName}
+          onClose={() => setQuizHistoryTarget(null)}
         />
       ) : null}
 

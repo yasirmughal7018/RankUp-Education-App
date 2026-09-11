@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronDown, Link2, MinusCircle, Plus, Users } from "lucide-react";
+import {
+  ChevronDown,
+  History,
+  Link2,
+  MinusCircle,
+  Plus,
+  Users,
+} from "lucide-react";
 import { AppPageHeader } from "@/components/ui/app-page-header";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -33,6 +40,7 @@ import { LinkStudentDialog } from "@/features/directory/presentation/components/
 import { ManageLinkedStudentsDialog } from "@/features/directory/presentation/components/ManageLinkedStudentsDialog";
 import { ManageTeacherClassSectionsDialog } from "@/features/directory/presentation/components/ManageTeacherClassSectionsDialog";
 import { StudentAssignedPeopleDialog } from "@/features/directory/presentation/components/StudentAssignedPeopleDialog";
+import { StudentQuizHistoryDialog } from "@/features/directory/presentation/components/StudentQuizHistoryDialog";
 import { formatDirectoryListDisplayRoles } from "@/features/directory/presentation/utils/directoryRoles";
 import {
   useDirectoryCampusAdminsQuery,
@@ -561,6 +569,8 @@ export function DirectoryOverviewPage() {
   const [manageChildrenTarget, setManageChildrenTarget] =
     useState<DirectoryParent | null>(null);
   const [assignedPeopleTarget, setAssignedPeopleTarget] =
+    useState<PreviewItem | null>(null);
+  const [quizHistoryTarget, setQuizHistoryTarget] =
     useState<PreviewItem | null>(null);
   const [parentActionMessage, setParentActionMessage] = useState<string | null>(
     null,
@@ -1316,6 +1326,14 @@ export function DirectoryOverviewPage() {
                                 }
                               : undefined
                           }
+                          onViewStudentQuizHistory={
+                            item.studentId != null && canViewStudentAssignments
+                              ? () => {
+                                  setSelectedItem(null);
+                                  setQuizHistoryTarget(item);
+                                }
+                              : undefined
+                          }
                           onViewParentChildren={
                             item.parentId != null
                               ? () => openManageChildren(item)
@@ -1396,6 +1414,14 @@ export function DirectoryOverviewPage() {
           coordinators={assignedPeopleTarget.coordinatorNames ?? []}
           teachers={assignedPeopleTarget.teacherNames ?? []}
           onClose={() => setAssignedPeopleTarget(null)}
+        />
+      ) : null}
+
+      {quizHistoryTarget?.studentId != null ? (
+        <StudentQuizHistoryDialog
+          studentId={quizHistoryTarget.studentId}
+          studentName={quizHistoryTarget.title}
+          onClose={() => setQuizHistoryTarget(null)}
         />
       ) : null}
 
@@ -1727,6 +1753,7 @@ function DirectoryPreviewTile({
   canManageCoordinators = false,
   canViewStudentAssignments = false,
   onViewStudentAssignments,
+  onViewStudentQuizHistory,
   onViewParentChildren,
   onLinkStudent,
   onManageChildren,
@@ -1744,6 +1771,7 @@ function DirectoryPreviewTile({
   canManageCoordinators?: boolean;
   canViewStudentAssignments?: boolean;
   onViewStudentAssignments?: () => void;
+  onViewStudentQuizHistory?: () => void;
   onViewParentChildren?: () => void;
   onLinkStudent?: () => void;
   onManageChildren?: () => void;
@@ -1760,6 +1788,10 @@ function DirectoryPreviewTile({
     canViewStudentAssignments &&
     item.studentId != null &&
     onViewStudentAssignments != null;
+  const showStudentQuizHistory =
+    canViewStudentAssignments &&
+    item.studentId != null &&
+    onViewStudentQuizHistory != null;
   const showParentActions =
     canManageParents &&
     item.parentId != null &&
@@ -1863,17 +1895,30 @@ function DirectoryPreviewTile({
       </div>
 
       <div className="relative z-10 flex shrink-0 flex-col items-end gap-2">
-        {showStudentAssignmentActions ? (
+        {showStudentAssignmentActions || showStudentQuizHistory ? (
           <div className="flex items-center gap-1.5">
-            <DirectoryIconAction
-              icon={Users}
-              label={`View assigned people for ${item.title}`}
-              className="h-8 w-8"
-              onClick={(event) => {
-                event.stopPropagation();
-                onViewStudentAssignments();
-              }}
-            />
+            {showStudentQuizHistory ? (
+              <DirectoryIconAction
+                icon={History}
+                label={`View quiz history for ${item.title}`}
+                className="h-8 w-8"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onViewStudentQuizHistory();
+                }}
+              />
+            ) : null}
+            {showStudentAssignmentActions ? (
+              <DirectoryIconAction
+                icon={Users}
+                label={`View assigned people for ${item.title}`}
+                className="h-8 w-8"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onViewStudentAssignments();
+                }}
+              />
+            ) : null}
           </div>
         ) : null}
         {showViewParentChildren ? (

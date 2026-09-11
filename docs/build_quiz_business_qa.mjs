@@ -511,7 +511,7 @@ const apiMap = [
   ["POST .../attempts/{id}/submit", "Student submit + auto-score; IsAutoSubmit → AutoSubmitted; auto-graded announcement when the due date ends + per-question ResultPending until then. Full Completed waits for the owner."],
   ["POST .../attempts/{id}/sync", "Offline queue replay (ClientSyncId idempotency)."],
   ["GET .../attempts/{id}/result", "Student own; Parent linked child; Teacher/Coordinator roster student; CampusAdmin campus; SchoolAdmin school; PortalAdmin any. Same announcement rule as submit (resultAnnouncedPercent, resultsAnnounceAt, ResultPending)."],
-  ["GET /api/quizzes/assignments", "Assignment board scoped to the caller’s students/children: Parent linked children; Teacher/Coordinator roster; CampusAdmin campus; SchoolAdmin school; PortalAdmin all. Optional studentId must be in that scope."],
+  ["GET /api/quizzes/assignments", "Assignment board scoped to the caller’s students/children: Parent linked children; Teacher/Coordinator roster; CampusAdmin campus; SchoolAdmin school; PortalAdmin all. Optional studentId must be in that scope. Admin UI resolves the filter via directory username search (not raw ID entry)."],
   ["GET .../monitoring", "Progress board for in-scope students on a viewable quiz (catalog or owned). Does not list other teachers’ students."],
   ["GET/PUT .../review|answers + finalize-review", "Subjective marking and release for in-scope students on a viewable quiz. PUT answers is rejected after Completed."],
   ["GET /api/quizzes/pending-approval", "API queue still exists for clients. Web UI does not use a separate approvals page — SchoolAdmin/CampusAdmin/PortalAdmin open submitted drafts from the /quizzes Draft tile. Pending rows require Submit for approval. SchoolAdmin queue: Teacher/Coordinator/CampusAdmin created. CampusAdmin queue: Teacher/Coordinator created only. PortalAdmin also includes SchoolApproved and SchoolAdmin/school-type Pending."],
@@ -1033,12 +1033,12 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
   <h2>15. UI routes</h2>
   ${htmlList([
     "/quizzes — manage catalog; New, Assignments, Pending reviews. Portal/School/Campus Admin: Edit requests tile filters the queued grant requests. Parent create school-type.",
-    "/quizzes/new — create form (school/campus not collected; token sets context).",
+    "/quizzes/new — create form (school/campus not collected; token sets context). No Context Student ID field; Parent school/campus is resolved from a linked child on the server.",
     "/quizzes/:id/edit — owner (Draft + Pending/Rejected, or unused edit grant) or PortalAdmin.",
     "/quizzes/:id — manage: add Q / publish / delete (Draft); Request edit after approval/publish; assign / duplicate / cancel / monitor (Published/Assigned). Archive and unarchive of Published or Assigned: PortalAdmin only.",
     "/quizzes/:id/assigned — assigned students/children: Student, Window, Result, Actions. No Attempts column (one attempt per student).",
     "/quizzes/:id/monitoring — progress board for in-scope students.",
-    "/quizzes/assignments — cross-quiz assignment board: header + right panel (Filter by student + colored icon summary list) and themed table. No Attempts column / no stat tiles.",
+    "/quizzes/assignments — cross-quiz assignment board: header + right panel (Filter by student + colored icon summary list) and themed table. PortalAdmin / SchoolAdmin / CampusAdmin filter by username search (not student ID); Teacher/Coordinator roster select; Parent linked-children select. No Attempts column / no stat tiles.",
     "/quizzes/reviews/pending and review workspace — mark + finalize.",
     "/quizzes/:id — manage detail: authors edit/submit/assign; approvers (SchoolAdmin/CampusAdmin/PortalAdmin) open Draft / Approval Pending quizzes here for Approve or Reject with reason (review mode — other actions hidden).",
     "/student/quizzes* — detail, attempt (timer auto-submit), result.",
