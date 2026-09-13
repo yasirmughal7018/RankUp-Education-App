@@ -193,29 +193,13 @@ function resolveQuizScopeRows(
   campusName?: string | null,
 ): Array<{ label: string; value: string }> {
   const creatorRole = resolveQuizCreatorRole(quiz);
-  const schoolName = quiz.schoolName?.trim() ?? "";
   const campus = campusName?.trim() ?? "";
 
   switch (creatorRole) {
     case "PortalAdmin":
       return [{ label: "Created as", value: "Portal Admin" }];
-    case "SchoolAdmin":
-      return schoolName ? [{ label: "School", value: schoolName }] : [];
-    case "CampusAdmin": {
-      if (schoolName && campus) {
-        return [{ label: "School", value: `${schoolName} - ${campus}` }];
-      }
-      if (schoolName) {
-        return [{ label: "School", value: schoolName }];
-      }
-      if (campus) {
-        return [{ label: "Campus", value: campus }];
-      }
-      return [];
-    }
-    case "Teacher":
-    case "Coordinator":
-      return schoolName ? [{ label: "School", value: schoolName }] : [];
+    case "CampusAdmin":
+      return campus ? [{ label: "Campus", value: campus }] : [];
     case "Parent":
       return [{ label: "Created as", value: "Parent" }];
     default:

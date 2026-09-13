@@ -19,5 +19,6 @@ Each implementation / spec prompt is stored as its own file. Casual chat follow-
 | 2026-08-31 | [2026-08-31-assignment-board-filter-username.md](./2026-08-31-assignment-board-filter-username.md) | Assignment board admin filter by username |
 | 2026-08-31 | [2026-08-31-remove-quiz-context-student-id.md](./2026-08-31-remove-quiz-context-student-id.md) | Remove Context Student ID from create quiz |
 | 2026-09-13 | [2026-09-13-quiz-list-marks-obtained-total.md](./2026-09-13-quiz-list-marks-obtained-total.md) | Quizzes list Marks = obtained/total |
+| 2026-09-13 | [2026-09-13-remove-quiz-school-name.md](./2026-09-13-remove-quiz-school-name.md) | Remove school name from quiz list/detail |
 
 New spec prompts go here as `YYYY-MM-DD-short-kebab-slug.md`.

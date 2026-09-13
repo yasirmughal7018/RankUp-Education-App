@@ -406,7 +406,7 @@ export function QuizzesPage() {
       if (deferredSearch) {
         const statusName = displayQuizListStatusLabel(quiz.status);
         const haystack =
-          `${quiz.title} ${quiz.subject} ${quiz.grade} ${quiz.topic} ${quiz.difficulty} ${quiz.quizType} ${quiz.schoolName} ${statusName} ${quiz.createdBy}`.toLowerCase();
+          `${quiz.title} ${quiz.subject} ${quiz.grade} ${quiz.topic} ${quiz.difficulty} ${quiz.quizType} ${statusName} ${quiz.createdBy}`.toLowerCase();
         if (!haystack.includes(deferredSearch)) {
           return false;
         }
@@ -748,7 +748,7 @@ export function QuizzesPage() {
           </div>
         ) : (
           <div>
-            <div className="hidden border-b border-border bg-muted/40 px-4 py-2.5 sm:grid sm:grid-cols-8 sm:gap-3 sm:px-5">
+            <div className="hidden border-b border-border bg-muted/40 px-4 py-2.5 sm:grid sm:grid-cols-7 sm:gap-3 sm:px-5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Subject
               </p>
@@ -769,9 +769,6 @@ export function QuizzesPage() {
               </p>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Marks
-              </p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                School
               </p>
             </div>
 
@@ -795,7 +792,7 @@ export function QuizzesPage() {
                         {quiz.title}
                       </p>
 
-                      <div className="mt-2 grid grid-cols-2 items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-8">
+                      <div className="mt-2 grid grid-cols-2 items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-7">
                         <p className="min-w-0 truncate font-medium text-foreground">
                           {quiz.subject || "—"}
                         </p>
@@ -821,9 +818,6 @@ export function QuizzesPage() {
                         </p>
                         <p className="hidden min-w-0 truncate tabular-nums sm:block">
                           {formatQuizListMarks(quiz)}
-                        </p>
-                        <p className="hidden min-w-0 truncate sm:block">
-                          {quiz.schoolName || "—"}
                         </p>
                       </div>
                     </Link>

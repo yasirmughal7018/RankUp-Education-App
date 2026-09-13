@@ -155,7 +155,6 @@ export function QuizSettingsOverview({ quiz }: { quiz: ManageQuiz }) {
           label="Difficulty"
           value={displayOrDash(quiz.difficulty)}
         />
-        <SettingsTile label="School" value={displayOrDash(quiz.schoolName)} />
       </SettingsGroup>
 
       <SettingsGroup title="Attempt rules">
