@@ -1378,11 +1378,45 @@ public sealed class QuizService : IQuizService
         IReadOnlyList<QuizListItem> catalogItems,
         IReadOnlyList<QuizListItem> assignedItems)
     {
-        return catalogItems
+        var assignedByQuizId = assignedItems
+            .GroupBy(item => item.QuizId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(item => item.BestPercentage ?? -1)
+                    .ThenByDescending(item => item.ObtainedMarks ?? -1)
+                    .ThenByDescending(item => item.LastSubmittedAt ?? DateTimeOffset.MinValue)
+                    .First());
+
+        var merged = catalogItems
+            .Select(catalog =>
+            {
+                if (!assignedByQuizId.TryGetValue(catalog.QuizId, out var assigned))
+                {
+                    return catalog;
+                }
+
+                // Prefer assignment attempt score fields when the catalog row has none.
+                return catalog with
+                {
+                    AssignmentId = catalog.AssignmentId ?? assigned.AssignmentId,
+                    AttemptCount = Math.Max(catalog.AttemptCount, assigned.AttemptCount),
+                    BestPercentage = catalog.BestPercentage ?? assigned.BestPercentage,
+                    LastSubmittedAt = catalog.LastSubmittedAt ?? assigned.LastSubmittedAt,
+                    QuizResultStatusName = catalog.QuizResultStatusName ?? assigned.QuizResultStatusName,
+                    IsReviewDone = catalog.IsReviewDone || assigned.IsReviewDone,
+                    LastAttemptId = catalog.LastAttemptId ?? assigned.LastAttemptId,
+                    ObtainedMarks = catalog.ObtainedMarks ?? assigned.ObtainedMarks,
+                    StartDateTime = catalog.StartDateTime ?? assigned.StartDateTime,
+                    EndDateTime = catalog.EndDateTime ?? assigned.EndDateTime,
+                };
+            })
             .Concat(assignedItems.Where(assigned => catalogItems.All(item => item.QuizId != assigned.QuizId)))
             .OrderByDescending(item => item.StartDateTime ?? DateTimeOffset.MinValue)
             .ThenByDescending(item => item.QuizId)
             .ToArray();
+
+        return merged;
     }
 
     private static readonly TimeSpan OfflineSubmitGrace = TimeSpan.FromMinutes(30);

@@ -101,7 +101,8 @@ public sealed class QuizRepository : IQuizRepository
                 stats.BestPercentage,
                 stats.LastSubmittedAt,
                 lookupNames.GetValueOrDefault(quiz.LifecycleStatusId, "Published"),
-                LastAttemptId: stats.LastAttemptId);
+                LastAttemptId: stats.LastAttemptId,
+                ObtainedMarks: stats.BestObtainedMarks);
 
             if (!QuizQueryHelper.MatchesFilters(item, search, subject, grade))
             {

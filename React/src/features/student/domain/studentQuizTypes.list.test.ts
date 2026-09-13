@@ -248,7 +248,27 @@ describe("formatStudentQuizListResult", () => {
     ).toEqual({ label: "—", detail: null });
   });
 
-  it("shows the announced percentage after the due date", () => {
+  it("shows obtained/total marks after the due date when totals are known", () => {
+    expect(
+      formatStudentQuizListResult(
+        {
+          ...quiz({
+            resultStatus: "Completed",
+            startAt: "2026-08-01T08:00:00Z",
+            dueAt: "2026-08-14T18:00:00Z",
+            completedAt: "2026-08-14T10:00:00Z",
+            lastAttemptId: 9,
+          }),
+          resultPercent: 87,
+          totalMarks: 100,
+          obtainedMarks: 87,
+        },
+        now,
+      ),
+    ).toEqual({ label: "87/100", detail: null });
+  });
+
+  it("falls back to percentage when total marks are unknown", () => {
     expect(
       formatStudentQuizListResult(
         {

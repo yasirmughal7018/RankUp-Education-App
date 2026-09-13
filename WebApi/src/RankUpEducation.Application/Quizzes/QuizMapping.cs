@@ -70,7 +70,10 @@ internal static class QuizMapping
             item.CreatedByName,
             item.SchoolName,
             announcedPercent,
-            item.LastAttemptId);
+            item.LastAttemptId,
+            item.IsReviewDone || announcedPercent is not null
+                ? item.ObtainedMarks
+                : null);
     }
 
     public static QuizDetailResponse ToDetailResponse(

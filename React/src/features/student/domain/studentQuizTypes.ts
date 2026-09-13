@@ -292,6 +292,8 @@ export interface StudentQuizListItemLike {
   attemptsUsed?: number | null;
   resultAnnouncedPercent?: number | null;
   resultPercent?: number | null;
+  totalMarks?: number | null;
+  obtainedMarks?: number | null;
 }
 
 function normalizeStudentQuizStatus(value: string): string {
@@ -480,8 +482,18 @@ export function formatStudentQuizListResult(
 
   if (typeof quiz.resultPercent === "number") {
     const noisy = /^(completed|attempted|submitted)$/i.test(status);
+    const total = Math.max(0, quiz.totalMarks ?? 0);
+    const obtained =
+      typeof quiz.obtainedMarks === "number"
+        ? quiz.obtainedMarks
+        : total > 0
+          ? Math.round((quiz.resultPercent * total) / 100)
+          : null;
     return {
-      label: `${Math.round(quiz.resultPercent)}%`,
+      label:
+        obtained != null && total > 0
+          ? `${obtained}/${total}`
+          : `${Math.round(quiz.resultPercent)}%`,
       detail: noisy || status.length === 0 ? null : status,
     };
   }

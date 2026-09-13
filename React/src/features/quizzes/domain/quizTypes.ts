@@ -34,6 +34,8 @@ export interface QuizSummary {
   createdBy: string;
   schoolName: string;
   lastAttemptId?: number | null;
+  /** Awarded marks when a result is visible; UI shows obtainedMarks/totalMarks. */
+  obtainedMarks?: number | null;
 }
 
 export interface QuizQuestionOption {

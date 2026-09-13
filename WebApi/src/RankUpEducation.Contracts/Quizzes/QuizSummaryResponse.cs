@@ -26,6 +26,7 @@ public sealed record QuizSummaryResponse(
     string CreatedBy,
     string SchoolName,
     short? ResultAnnouncedPercent = null,
-    long? LastAttemptId = null);
+    long? LastAttemptId = null,
+    short? ObtainedMarks = null);
 
 public sealed record QuizListResponse(IReadOnlyList<QuizSummaryResponse> Items);

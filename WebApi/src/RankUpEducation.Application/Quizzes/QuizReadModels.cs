@@ -33,7 +33,8 @@ public sealed record QuizListItem(
     bool HasSubmittedForReview = false,
     bool IsReviewDone = false,
     short? AutoGradedMarks = null,
-    long? LastAttemptId = null);
+    long? LastAttemptId = null,
+    short? ObtainedMarks = null);
 
 /// <summary>Quiz awaiting school-admin approval (Pending or Rejected).</summary>
 public sealed record PendingQuizApprovalItem(

@@ -1032,7 +1032,7 @@ Pending Approval ── not assignable; owner may edit until school/portal appro
 
   <h2>15. UI routes</h2>
   ${htmlList([
-    "/quizzes — manage catalog; New, Assignments, Pending reviews. Portal/School/Campus Admin: Edit requests tile filters the queued grant requests. Parent create school-type.",
+    "/quizzes — manage catalog; New, Assignments, Pending reviews. Portal/School/Campus Admin: Edit requests tile filters the queued grant requests. Parent create school-type. Marks column shows obtained/total when a result score is available, otherwise total marks.",
     "/quizzes/new — create form (school/campus not collected; token sets context). No Context Student ID field; Parent school/campus is resolved from a linked child on the server.",
     "/quizzes/:id/edit — owner (Draft + Pending/Rejected, or unused edit grant) or PortalAdmin.",
     "/quizzes/:id — manage: add Q / publish / delete (Draft); Request edit after approval/publish; assign / duplicate / cancel / monitor (Published/Assigned). Archive and unarchive of Published or Assigned: PortalAdmin only.",

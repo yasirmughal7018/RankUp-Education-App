@@ -60,6 +60,21 @@ function normalizeStatus(status: string): string {
   return status.trim().toLowerCase();
 }
 
+/** Marks column: obtained/total when a score is available, otherwise total only. */
+function formatQuizListMarks(quiz: QuizSummary): string {
+  const total = Math.max(0, quiz.totalMarks);
+  if (typeof quiz.obtainedMarks === "number") {
+    return `${quiz.obtainedMarks}/${total}`;
+  }
+  if (typeof quiz.resultPercent === "number" && total > 0) {
+    return `${Math.round((quiz.resultPercent * total) / 100)}/${total}`;
+  }
+  if (typeof quiz.resultAnnouncedPercent === "number" && total > 0) {
+    return `${Math.round((quiz.resultAnnouncedPercent * total) / 100)}/${total}`;
+  }
+  return String(total);
+}
+
 function isPublishedLikeStatus(status: string): boolean {
   const s = normalizeStatus(status);
   return s === "published" || s === "assigned";
@@ -798,14 +813,14 @@ export function QuizzesPage() {
                           />
                         </div>
                         <p className="min-w-0 truncate tabular-nums sm:hidden">
-                          {quiz.questionCount} Q · {quiz.totalMarks} marks ·{" "}
+                          {quiz.questionCount} Q · {formatQuizListMarks(quiz)} ·{" "}
                           {timeLabel}
                         </p>
                         <p className="hidden min-w-0 truncate tabular-nums sm:block">
                           {quiz.questionCount}
                         </p>
                         <p className="hidden min-w-0 truncate tabular-nums sm:block">
-                          {quiz.totalMarks}
+                          {formatQuizListMarks(quiz)}
                         </p>
                         <p className="hidden min-w-0 truncate sm:block">
                           {quiz.schoolName || "—"}
