@@ -257,11 +257,12 @@ public sealed class DirectoryRepository : IDirectoryRepository
 
         if (search.HasTrimmedText())
         {
-            var term = search.AsTrimmedString();
+            var term = search.AsTrimmedString().ToLowerInvariant();
             query = query.Where(row =>
-                row.user.FullName.Contains(term)
-                || row.user.Username.Contains(term)
-                || (row.user.RollNumberTeacherCode != null && row.user.RollNumberTeacherCode.Contains(term)));
+                row.user.FullName.ToLower().Contains(term)
+                || row.user.Username.ToLower().Contains(term)
+                || (row.user.RollNumberTeacherCode != null
+                    && row.user.RollNumberTeacherCode.ToLower().Contains(term)));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

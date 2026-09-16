@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "@/core/api/types";
 import { FieldLabel } from "@/core/components/FieldLabel";
+import { useLookups } from "@/core/hooks/useLookups";
+import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import type {
   CreateDirectoryStudentInput,
   DirectorySchool,
@@ -17,6 +19,10 @@ type StudentFormSubmit =
 interface StudentFormDialogProps {
   student?: DirectoryStudent | null;
   schools: DirectorySchool[];
+  /** When set, school is fixed (SchoolAdmin / CampusAdmin). */
+  lockSchoolId?: number | null;
+  /** When set, campus is fixed (CampusAdmin). */
+  lockCampusId?: number | null;
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (payload: StudentFormSubmit) => Promise<void>;
@@ -28,18 +34,31 @@ const inputClassName = FORM_FIELD_CLASS;
 export function StudentFormDialog({
   student,
   schools,
+  lockSchoolId = null,
+  lockCampusId = null,
   isSubmitting,
   onClose,
   onSubmit,
 }: StudentFormDialogProps) {
   const isEdit = student != null;
+  const schoolLocked = lockSchoolId != null && lockSchoolId > 0;
+  const campusLocked = lockCampusId != null && lockCampusId > 0;
+
   const [fullName, setFullName] = useState(student?.fullName ?? "");
   const [username, setUsername] = useState(student?.username ?? "");
   const [schoolId, setSchoolId] = useState(
-    student?.schoolId ? String(student.schoolId) : "",
+    schoolLocked
+      ? String(lockSchoolId)
+      : student?.schoolId
+        ? String(student.schoolId)
+        : "",
   );
   const [campusId, setCampusId] = useState(
-    student?.campusId ? String(student.campusId) : "",
+    campusLocked
+      ? String(lockCampusId)
+      : student?.campusId
+        ? String(student.campusId)
+        : "",
   );
   const [rollNumber, setRollNumber] = useState(student?.rollNumber ?? "");
   const [grade, setGrade] = useState(student?.grade ? String(student.grade) : "");
@@ -49,7 +68,11 @@ export function StudentFormDialog({
 
   const selectedSchoolId = Number(schoolId) || 0;
   const { data: campuses = [], isLoading: campusesLoading } =
-    useDirectoryCampusesQuery(selectedSchoolId, selectedSchoolId > 0);
+    useDirectoryCampusesQuery(
+      selectedSchoolId,
+      selectedSchoolId > 0 && !campusLocked,
+    );
+  const { data: gradeOptions = [] } = useLookups(LOOKUP_TYPES.CLASS);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -69,8 +92,8 @@ export function StudentFormDialog({
     const trimmedName = fullName.trim();
     const trimmedRoll = rollNumber.trim();
     const trimmedSection = section.trim();
-    const parsedSchoolId = Number(schoolId);
-    const parsedCampusId = Number(campusId);
+    const parsedSchoolId = schoolLocked ? lockSchoolId! : Number(schoolId);
+    const parsedCampusId = campusLocked ? lockCampusId! : Number(campusId);
     const parsedGrade = Number(grade);
 
     if (!trimmedName || !trimmedRoll || !trimmedSection) {
@@ -78,15 +101,15 @@ export function StudentFormDialog({
       return;
     }
     if (!parsedSchoolId || parsedSchoolId < 1) {
-      setError("Select a school.");
+      setError(schoolLocked ? "School context was not found." : "Select a school.");
       return;
     }
     if (!parsedCampusId || parsedCampusId < 1) {
-      setError("Select a campus.");
+      setError(campusLocked ? "Campus context was not found." : "Select a campus.");
       return;
     }
     if (!parsedGrade || parsedGrade < 1) {
-      setError("Enter a valid grade.");
+      setError("Select a valid grade.");
       return;
     }
 
@@ -151,7 +174,9 @@ export function StudentFormDialog({
           <p className="mt-2 text-sm text-slate-600">
             {isEdit
               ? `Update details for ${student.fullName}.`
-              : "Add a new student to the directory. User must set password on first login."}
+              : campusLocked
+                ? "Add a new student to your campus. User must set password on first login."
+                : "Add a new student to the directory. User must set password on first login."}
           </p>
         </div>
 
@@ -197,52 +222,56 @@ export function StudentFormDialog({
             <p className="text-sm text-slate-500">Username {student.username}</p>
           )}
 
-          <div>
-            <FieldLabel htmlFor="student-school" required>
-              School
-            </FieldLabel>
-            <select
-              id="student-school"
-              value={schoolId}
-              onChange={(event) => {
-                setSchoolId(event.target.value);
-                setCampusId("");
-              }}
-              className={inputClassName}
-              required
-              disabled={isSubmitting}
-            >
-              <option value="">Select school</option>
-              {schools.map((school) => (
-                <option key={school.id} value={school.id}>
-                  {school.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!schoolLocked ? (
+            <div>
+              <FieldLabel htmlFor="student-school" required>
+                School
+              </FieldLabel>
+              <select
+                id="student-school"
+                value={schoolId}
+                onChange={(event) => {
+                  setSchoolId(event.target.value);
+                  setCampusId("");
+                }}
+                className={inputClassName}
+                required
+                disabled={isSubmitting}
+              >
+                <option value="">Select school</option>
+                {schools.map((school) => (
+                  <option key={school.id} value={school.id}>
+                    {school.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
-          <div>
-            <FieldLabel htmlFor="student-campus" required>
-              Campus
-            </FieldLabel>
-            <select
-              id="student-campus"
-              value={campusId}
-              onChange={(event) => setCampusId(event.target.value)}
-              className={inputClassName}
-              required
-              disabled={isSubmitting || !selectedSchoolId || campusesLoading}
-            >
-              <option value="">
-                {campusesLoading ? "Loading campuses..." : "Select campus"}
-              </option>
-              {campuses.map((campus) => (
-                <option key={campus.id} value={campus.id}>
-                  {campus.name}
+          {!campusLocked ? (
+            <div>
+              <FieldLabel htmlFor="student-campus" required>
+                Campus
+              </FieldLabel>
+              <select
+                id="student-campus"
+                value={campusId}
+                onChange={(event) => setCampusId(event.target.value)}
+                className={inputClassName}
+                required
+                disabled={isSubmitting || !selectedSchoolId || campusesLoading}
+              >
+                <option value="">
+                  {campusesLoading ? "Loading campuses..." : "Select campus"}
                 </option>
-              ))}
-            </select>
-          </div>
+                {campuses.map((campus) => (
+                  <option key={campus.id} value={campus.id}>
+                    {campus.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
@@ -263,16 +292,21 @@ export function StudentFormDialog({
               <FieldLabel htmlFor="student-grade" required>
                 Grade
               </FieldLabel>
-              <input
+              <select
                 id="student-grade"
-                type="number"
-                min={1}
                 value={grade}
                 onChange={(event) => setGrade(event.target.value)}
                 className={inputClassName}
                 required
                 disabled={isSubmitting}
-              />
+              >
+                <option value="">Select grade</option>
+                {gradeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <FieldLabel htmlFor="student-section" required>

@@ -39,6 +39,7 @@ public sealed class AuthService : IAuthService
     private readonly IPasswordResetRequestRepository _passwordResets;
     private readonly IDirectoryRepository _directory;
     private readonly IStudentScopeRepository _studentScope;
+    private readonly IStudentClassHistoryRepository _classHistory;
     private readonly ILookupRepository _lookups;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
@@ -57,6 +58,7 @@ public sealed class AuthService : IAuthService
         IPasswordResetRequestRepository passwordResets,
         IDirectoryRepository directory,
         IStudentScopeRepository studentScope,
+        IStudentClassHistoryRepository classHistory,
         ILookupRepository lookups,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
@@ -74,6 +76,7 @@ public sealed class AuthService : IAuthService
         _passwordResets = passwordResets;
         _directory = directory;
         _studentScope = studentScope;
+        _classHistory = classHistory;
         _lookups = lookups;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
@@ -1854,6 +1857,16 @@ public sealed class AuthService : IAuthService
                         mobileNumber),
                     cancellationToken);
                 user.AttachProfileContext(user.Id, user.SchoolId, user.CampusId);
+                await _classHistory.RecordInitialAsync(
+                    user.Id,
+                    user.RegistrationGrade.Value,
+                    user.RegistrationSection!,
+                    user.SchoolId,
+                    user.CampusId,
+                    _currentUser.UserId,
+                    StudentClassHistorySources.RegistrationActivate,
+                    _dateTimeProvider.UtcNow,
+                    cancellationToken);
                 break;
 
             case UserRole.Teacher:

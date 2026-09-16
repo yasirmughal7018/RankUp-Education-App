@@ -16,11 +16,34 @@ export interface StudentMeOverview {
   teachers: StudentMePerson[];
 }
 
+export interface StudentClassHistoryItem {
+  id: number;
+  grade: number;
+  gradeLabel: string;
+  section: string;
+  schoolName: string | null;
+  campusName: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  isCurrent: boolean;
+  source: string;
+}
+
+export interface StudentClassHistory {
+  items: StudentClassHistoryItem[];
+}
+
 export function formatStudentClassLabel(overview: StudentMeOverview): string {
   const section = overview.section?.trim();
   return section
     ? `Grade ${overview.grade} · ${section}`
     : `Grade ${overview.grade}`;
+}
+
+export function formatClassHistoryPlacement(item: StudentClassHistoryItem): string {
+  const grade = item.gradeLabel?.trim() || `Grade ${item.grade}`;
+  const section = item.section?.trim();
+  return section ? `${grade} · Section ${section}` : grade;
 }
 
 export function personInitials(name: string): string {

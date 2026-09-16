@@ -26,4 +26,13 @@ public sealed class StudentsController : ControllerBase
         var response = await _studentService.GetMyOverviewAsync(cancellationToken);
         return Ok(ApiResponse<StudentMeOverviewResponse>.Ok(response));
     }
+
+    /// <summary>Class/section history for the signed-in student (newest first).</summary>
+    [HttpGet("me/class-history")]
+    public async Task<ActionResult<ApiResponse<StudentClassHistoryResponse>>> GetMyClassHistoryAsync(
+        CancellationToken cancellationToken)
+    {
+        var response = await _studentService.GetMyClassHistoryAsync(cancellationToken);
+        return Ok(ApiResponse<StudentClassHistoryResponse>.Ok(response));
+    }
 }

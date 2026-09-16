@@ -48,6 +48,7 @@ public sealed class RankUpDbContext : DbContext, IUnitOfWork
     public DbSet<School> Schools => Set<School>();
     public DbSet<Campus> Campuses => Set<Campus>();
     public DbSet<Student> Students => Set<Student>();
+    public DbSet<StudentClassHistory> StudentClassHistories => Set<StudentClassHistory>();
     public DbSet<Parent> Parents => Set<Parent>();
     public DbSet<ParentStudentRelation> ParentStudentRelations => Set<ParentStudentRelation>();
     public DbSet<Teacher> Teachers => Set<Teacher>();

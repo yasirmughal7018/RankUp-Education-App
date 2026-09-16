@@ -11,15 +11,18 @@ public sealed class StudentService : IStudentService
     private readonly ICurrentUserService _currentUser;
     private readonly IStudentScopeRepository _studentScope;
     private readonly IDirectoryRepository _directory;
+    private readonly IStudentClassHistoryRepository _classHistory;
 
     public StudentService(
         ICurrentUserService currentUser,
         IStudentScopeRepository studentScope,
-        IDirectoryRepository directory)
+        IDirectoryRepository directory,
+        IStudentClassHistoryRepository classHistory)
     {
         _currentUser = currentUser;
         _studentScope = studentScope;
         _directory = directory;
+        _classHistory = classHistory;
     }
 
     public async Task<StudentMeOverviewResponse> GetMyOverviewAsync(CancellationToken cancellationToken)
@@ -47,6 +50,33 @@ public sealed class StudentService : IStudentService
             MapPeople(people.Parents),
             MapPeople(people.Coordinators),
             MapPeople(people.Teachers));
+    }
+
+    public async Task<StudentClassHistoryResponse> GetMyClassHistoryAsync(CancellationToken cancellationToken)
+    {
+        var studentId = EnsureStudentId();
+
+        if (!await _directory.StudentExistsAsync(studentId, cancellationToken))
+        {
+            throw new NotFoundAppException("Student profile was not found.");
+        }
+
+        var rows = await _classHistory.ListForStudentAsync(studentId, cancellationToken);
+        var items = rows
+            .Select(row => new StudentClassHistoryItemResponse(
+                row.Id,
+                row.Grade,
+                row.GradeLabel,
+                row.Section,
+                row.SchoolName,
+                row.CampusName,
+                row.StartedAt,
+                row.EndedAt,
+                row.IsCurrent,
+                row.Source))
+            .ToArray();
+
+        return new StudentClassHistoryResponse(items);
     }
 
     private static IReadOnlyList<StudentMePersonResponse> MapPeople(

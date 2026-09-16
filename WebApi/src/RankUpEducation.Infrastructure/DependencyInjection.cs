@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<ITeacherRepository, TeacherRepository>();
         services.AddScoped<ICoordinatorRepository, CoordinatorRepository>();
         services.AddScoped<IDirectoryRepository, DirectoryRepository>();
+        services.AddScoped<IStudentClassHistoryRepository, StudentClassHistoryRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<RankUpDbContext>());
         services.AddScoped<IApiSupportSchemaInitializer, ApiSupportSchemaInitializer>();

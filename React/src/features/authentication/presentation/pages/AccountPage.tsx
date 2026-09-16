@@ -12,8 +12,24 @@ import { resolvePublicUrl } from "@/features/authentication/domain/avatarUrl";
 import { AvatarUploadDialog } from "@/features/authentication/presentation/components/AvatarUploadDialog";
 import { useAuth } from "@/features/authentication/presentation/context/AuthProvider";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import * as studentMeApi from "@/features/student/data/studentMeApi";
+import {
+  formatClassHistoryPlacement,
+  type StudentClassHistoryItem,
+} from "@/features/student/domain/studentMeTypes";
 
 const fieldClass = FORM_FIELD_CLASS;
+
+function formatHistoryDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 const SCHOOL_CHANGE_ROLES: UserRole[] = [
   "Teacher",
@@ -203,6 +219,14 @@ export function AccountPage() {
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
+  const [classHistory, setClassHistory] = useState<StudentClassHistoryItem[]>(
+    [],
+  );
+  const [isLoadingClassHistory, setIsLoadingClassHistory] = useState(false);
+  const [classHistoryError, setClassHistoryError] = useState<string | null>(
+    null,
+  );
+
   const canRequestSchoolChange =
     !!profile && SCHOOL_CHANGE_ROLES.includes(profile.role);
   const isCampusAdminOnly = profile?.role === "CampusAdmin";
@@ -268,6 +292,37 @@ export function AccountPage() {
       cancelled = true;
     };
   }, [updateUser]);
+
+  useEffect(() => {
+    if (!isStudentRole) {
+      setClassHistory([]);
+      setClassHistoryError(null);
+      setIsLoadingClassHistory(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingClassHistory(true);
+    setClassHistoryError(null);
+    void studentMeApi
+      .getStudentMeClassHistory()
+      .then((response) => {
+        if (!cancelled) setClassHistory(response.items ?? []);
+      })
+      .catch((caught: ApiError) => {
+        if (!cancelled) {
+          setClassHistoryError(
+            caught.message || "Unable to load class history.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingClassHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isStudentRole]);
 
   useEffect(() => {
     if (!canRequestSchoolChange && !needsSchoolsForRoleRequest) return;
@@ -847,6 +902,63 @@ export function AccountPage() {
               </div>
             </form>
           </SectionCard>
+
+          {isStudentRole ? (
+            <SectionCard
+              id="class-history"
+              title="Class history"
+              description="Grades and sections you have been placed in, newest first."
+            >
+              {classHistoryError ? (
+                <Notice tone="error">{classHistoryError}</Notice>
+              ) : null}
+              {isLoadingClassHistory ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : null}
+              {!isLoadingClassHistory &&
+              !classHistoryError &&
+              classHistory.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No class history recorded yet.
+                </p>
+              ) : null}
+              {!isLoadingClassHistory && classHistory.length > 0 ? (
+                <ol className="space-y-3">
+                  {classHistory.map((item) => (
+                    <li
+                      key={item.id}
+                      className="rounded-lg border border-border bg-muted/30 px-3 py-2.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground">
+                          {formatClassHistoryPlacement(item)}
+                        </p>
+                        {item.isCurrent ? (
+                          <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-primary/20">
+                            Current
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatHistoryDate(item.startedAt)}
+                        {" → "}
+                        {item.isCurrent
+                          ? "Present"
+                          : formatHistoryDate(item.endedAt)}
+                      </p>
+                      {item.schoolName || item.campusName ? (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {[item.schoolName, item.campusName]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </SectionCard>
+          ) : null}
 
           {!hideRolesSection ? (
           <SectionCard

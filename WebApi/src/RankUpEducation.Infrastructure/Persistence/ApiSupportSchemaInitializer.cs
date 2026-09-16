@@ -67,8 +67,62 @@ public sealed class ApiSupportSchemaInitializer : IApiSupportSchemaInitializer
         await _dbContext.Database.ExecuteSqlRawAsync(QuestionEditRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizEditRequestSupportSql, cancellationToken);
         await _dbContext.Database.ExecuteSqlRawAsync(QuizSingleAttemptQuotaSupportSql, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(StudentClassHistorySupportSql, cancellationToken);
         _logger.LogInformation("Registration support schema is ready.");
     }
+
+    private const string StudentClassHistorySupportSql = """
+        CREATE TABLE IF NOT EXISTS public.app_user_student_class_history (
+            id BIGSERIAL PRIMARY KEY,
+            student_id BIGINT NOT NULL
+                REFERENCES public.app_user_students (student_id) ON DELETE CASCADE,
+            grade SMALLINT NOT NULL,
+            section VARCHAR(40) NOT NULL,
+            school_id INTEGER NULL,
+            campus_id INTEGER NULL,
+            started_at TIMESTAMPTZ NOT NULL,
+            ended_at TIMESTAMPTZ NULL,
+            changed_by_user_id BIGINT NULL
+                REFERENCES public.app_users (id) ON DELETE SET NULL,
+            source VARCHAR(40) NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_app_user_student_class_history_student_started
+            ON public.app_user_student_class_history (student_id, started_at);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_app_user_student_class_history_student_open
+            ON public.app_user_student_class_history (student_id)
+            WHERE ended_at IS NULL;
+
+        -- Seed current placement for students who have no history yet.
+        INSERT INTO public.app_user_student_class_history (
+            student_id,
+            grade,
+            section,
+            school_id,
+            campus_id,
+            started_at,
+            ended_at,
+            changed_by_user_id,
+            source)
+        SELECT
+            s.student_id,
+            s.grade,
+            COALESCE(NULLIF(BTRIM(s.section), ''), 'A'),
+            u.school_id,
+            u.campus_id,
+            COALESCE(u.created_date::timestamptz, NOW()),
+            NULL,
+            NULL,
+            'Initial'
+        FROM public.app_user_students s
+        INNER JOIN public.app_users u ON u.id = s.student_id
+        WHERE s.grade > 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.app_user_student_class_history h
+              WHERE h.student_id = s.student_id);
+        """;
 
     private const string TeacherClassSectionSupportSql = """
         CREATE TABLE IF NOT EXISTS public.teacher_class_sections (

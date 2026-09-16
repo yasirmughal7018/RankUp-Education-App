@@ -22,6 +22,7 @@ public sealed class DirectoryService : IDirectoryService
     private readonly ITeacherRepository _teacherRepository;
     private readonly ICoordinatorRepository _coordinatorRepository;
     private readonly IUserRepository _users;
+    private readonly IStudentClassHistoryRepository _classHistory;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUnitOfWork _unitOfWork;
@@ -31,6 +32,7 @@ public sealed class DirectoryService : IDirectoryService
         ITeacherRepository teacherRepository,
         ICoordinatorRepository coordinatorRepository,
         IUserRepository users,
+        IStudentClassHistoryRepository classHistory,
         ICurrentUserService currentUser,
         IDateTimeProvider dateTimeProvider,
         IUnitOfWork unitOfWork)
@@ -39,6 +41,7 @@ public sealed class DirectoryService : IDirectoryService
         _teacherRepository = teacherRepository;
         _coordinatorRepository = coordinatorRepository;
         _users = users;
+        _classHistory = classHistory;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _unitOfWork = unitOfWork;
@@ -384,6 +387,16 @@ public sealed class DirectoryService : IDirectoryService
             new Student(user.Id, request.Grade, section, mobileNumber),
             cancellationToken);
         user.AttachProfileContext(user.Id, schoolId, campusId);
+        await _classHistory.RecordInitialAsync(
+            user.Id,
+            request.Grade,
+            section,
+            schoolId,
+            campusId,
+            _currentUser.UserId,
+            StudentClassHistorySources.DirectoryCreate,
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new DirectoryStudentResponse(
@@ -439,8 +452,22 @@ public sealed class DirectoryService : IDirectoryService
         user.UpdateProfile(request.FullName);
         user.AssignSchoolCampus(schoolId, request.CampusId);
         user.SetRollNumberTeacherCode(request.RollNumber);
+        var previousGrade = student.Grade;
+        var previousSection = student.Section;
         student.Update(request.Grade, request.Section, request.MobileNumber);
         user.AttachProfileContext(user.Id, schoolId, request.CampusId);
+        await _classHistory.RecordChangeAsync(
+            student.Id,
+            previousGrade,
+            previousSection,
+            request.Grade,
+            request.Section,
+            schoolId,
+            request.CampusId,
+            _currentUser.UserId,
+            StudentClassHistorySources.DirectoryUpdate,
+            _dateTimeProvider.UtcNow,
+            cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var school = await _directory.GetSchoolAsync(schoolId, cancellationToken);

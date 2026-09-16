@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { X } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
+import { AppSearchInput } from "@/components/ui/app-search-input";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
@@ -39,6 +41,29 @@ interface AssignQuizDialogProps {
   existingAssignments?: QuizAssignment[];
   onClose: () => void;
   onSubmit: (input: AssignQuizInput) => Promise<void>;
+}
+
+type PickerStudent = {
+  studentId: number;
+  fullName: string;
+  username: string;
+  rollNumber: string;
+  grade: number;
+  section: string;
+  schoolName?: string;
+  campusName?: string;
+};
+
+function formatPickerStudentMeta(student: PickerStudent): string {
+  const gradeLabel = `Grade ${student.grade}${student.section ? `-${student.section}` : ""}`;
+  const rollOrUser = student.rollNumber || student.username;
+  const parts = [
+    `@${student.username}`,
+    rollOrUser !== student.username ? `Roll ${student.rollNumber}` : null,
+    gradeLabel,
+    student.campusName || student.schoolName || null,
+  ].filter(Boolean);
+  return parts.join(" · ");
 }
 
 const inputClassName = FORM_FIELD_CLASS;
@@ -111,24 +136,31 @@ export function AssignQuizDialog({
   const lockedSchoolId =
     user?.role === "PortalAdmin"
       ? null
-      : (user?.schoolId ?? quizSchoolId ?? null);
+      : user?.schoolId != null && user.schoolId > 0
+        ? user.schoolId
+        : null;
   const lockedCampusId =
     user?.role === "Teacher" ||
       user?.role === "Coordinator" ||
       user?.role === "CampusAdmin"
-      ? (user?.campusId ?? quizCampusId ?? null)
+      ? user?.campusId != null && user.campusId > 0
+        ? user.campusId
+        : null
       : null;
 
   const [schoolId, setSchoolId] = useState<number | "">(
-    () => quizSchoolId ?? lockedSchoolId ?? "",
+    () => lockedSchoolId ?? quizSchoolId ?? "",
   );
   const [campusId, setCampusId] = useState<number | "">(
-    () => quizCampusId ?? lockedCampusId ?? "",
+    () => lockedCampusId ?? quizCampusId ?? "",
   );
-  const [gradeId, setGradeId] = useState<number | "">(
-    () => (quizClassId && quizClassId > 0 ? quizClassId : ""),
-  );
+  // Student picker defaults to all grades so username search is campus/school-wide.
+  // Grade is only required for all-in-grade / all-in-section modes.
+  const [gradeId, setGradeId] = useState<number | "">("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [selectedStudentDetails, setSelectedStudentDetails] = useState<
+    Record<number, PickerStudent>
+  >({});
   const [studentSearch, setStudentSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -148,6 +180,13 @@ export function AssignQuizDialog({
   const canPickSchool = isPortalAdmin;
   const canPickCampus =
     isPortalAdmin || isSchoolAdmin || (isTeacher && lockedCampusId == null);
+  /** CampusAdmin (and other locked roles) omit School/Campus — scope comes from the session. */
+  const showSchoolInAudience = showAudienceScope && canPickSchool;
+  const showCampusInAudience = showAudienceScope && canPickCampus;
+  const showGradeInAudience =
+    showAudienceScope && mode !== "allingrade" && mode !== "allinsection";
+  const showAudienceFilters =
+    showSchoolInAudience || showCampusInAudience || showGradeInAudience;
 
   const selectedSchoolId =
     typeof schoolId === "number" && schoolId > 0
@@ -164,12 +203,18 @@ export function AssignQuizDialog({
   const selectedGradeId =
     typeof gradeId === "number" && gradeId > 0 ? gradeId : null;
 
-  const { data: schools = [] } = useDirectorySchoolsQuery(
-    showAudienceScope && (canPickSchool || isSchoolAdmin),
-  );
+  /** Org admins are scoped by token; do not block the picker on a missing school select. */
+  const canLoadDirectoryStudents =
+    isCampusAdmin ||
+    isSchoolAdmin ||
+    selectedSchoolId != null ||
+    isTeacher ||
+    isLinkedAssigner;
+
+  const { data: schools = [] } = useDirectorySchoolsQuery(showSchoolInAudience);
   const { data: campuses = [] } = useDirectoryCampusesQuery(
     selectedSchoolId ?? 0,
-    showAudienceScope && selectedSchoolId != null,
+    showCampusInAudience && selectedSchoolId != null,
   );
 
   useEffect(() => {
@@ -180,12 +225,17 @@ export function AssignQuizDialog({
     return () => window.clearTimeout(timer);
   }, [studentSearch]);
 
-  // Keep school/campus/grade aligned when quiz props or role locks change.
+  // Prefill grade from the quiz only for grade/section audience modes.
+  // Clear it when leaving those modes so One/Selected search is campus-wide again.
   useEffect(() => {
-    if (quizClassId && quizClassId > 0) {
-      setGradeId(quizClassId);
+    if (mode === "allingrade" || mode === "allinsection") {
+      if (quizClassId && quizClassId > 0) {
+        setGradeId(quizClassId);
+      }
+      return;
     }
-  }, [quizClassId]);
+    setGradeId("");
+  }, [mode, quizClassId]);
 
   useEffect(() => {
     if (lockedSchoolId && lockedSchoolId > 0) {
@@ -208,11 +258,12 @@ export function AssignQuizDialog({
       search: debouncedSearch || undefined,
       schoolId: selectedSchoolId,
       campusId: selectedCampusId,
+      // Only apply grade when the admin chose one (or grade/section modes set it).
       grade: selectedGradeId,
       pageNumber: 1,
       pageSize: 50,
     },
-    showStudentPicker && !isTeacher && !isLinkedAssigner,
+    showStudentPicker && !isTeacher && !isLinkedAssigner && canLoadDirectoryStudents,
   );
   const rosterQuery = useTeacherRosterQuery(
     (showStudentPicker || mode === "allattached") && isTeacher,
@@ -225,7 +276,7 @@ export function AssignQuizDialog({
     showStudentPicker && user?.role === "Parent",
   );
 
-  const students = isTeacher
+  const students: PickerStudent[] = isTeacher
     ? (rosterQuery.data?.students ?? [])
         .filter((student) => {
           if (selectedGradeId && student.grade !== selectedGradeId) {
@@ -270,13 +321,25 @@ export function AssignQuizDialog({
             grade: student.grade,
             section: student.section,
           }))
-      : (studentsQuery.data?.items ?? []);
+      : (studentsQuery.data?.items ?? []).map((student) => ({
+          studentId: student.studentId,
+          fullName: student.fullName,
+          username: student.username,
+          rollNumber: student.rollNumber,
+          grade: student.grade,
+          section: student.section,
+          schoolName: student.schoolName,
+          campusName: student.campusName,
+        }));
 
   const studentsLoading = isTeacher
     ? rosterQuery.isLoading
     : isLinkedAssigner
       ? parentLinkedQuery.isLoading
-      : studentsQuery.isLoading;
+      : studentsQuery.isLoading ||
+        (showStudentPicker &&
+          studentsQuery.isFetching &&
+          (studentsQuery.data?.items?.length ?? 0) === 0);
   const studentsError = isTeacher
     ? rosterQuery.error
     : isLinkedAssigner
@@ -286,6 +349,14 @@ export function AssignQuizDialog({
   const selectedSet = useMemo(
     () => new Set(selectedStudentIds),
     [selectedStudentIds],
+  );
+
+  const selectedStudents = useMemo(
+    () =>
+      selectedStudentIds
+        .map((id) => selectedStudentDetails[id])
+        .filter((student): student is PickerStudent => student != null),
+    [selectedStudentIds, selectedStudentDetails],
   );
 
   const assignmentByStudentId = useMemo(() => {
@@ -310,6 +381,17 @@ export function AssignQuizDialog({
     setSelectedStudentIds((current) =>
       current.filter((studentId) => !blockedStudentIds.has(studentId)),
     );
+    setSelectedStudentDetails((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const studentId of Object.keys(next).map(Number)) {
+        if (blockedStudentIds.has(studentId)) {
+          delete next[studentId];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
   }, [blockedStudentIds]);
 
   useEffect(() => {
@@ -323,21 +405,47 @@ export function AssignQuizDialog({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isSubmitting, onClose]);
 
-  function toggleStudent(studentId: number) {
-    if (blockedStudentIds.has(studentId)) {
+  function rememberStudent(student: PickerStudent) {
+    setSelectedStudentDetails((current) => ({
+      ...current,
+      [student.studentId]: student,
+    }));
+  }
+
+  function toggleStudent(student: PickerStudent) {
+    if (blockedStudentIds.has(student.studentId)) {
       return;
     }
 
     if (mode === "one") {
-      setSelectedStudentIds([studentId]);
+      setSelectedStudentIds([student.studentId]);
+      setSelectedStudentDetails({ [student.studentId]: student });
       return;
     }
 
+    setSelectedStudentIds((current) => {
+      if (current.includes(student.studentId)) {
+        setSelectedStudentDetails((details) => {
+          const next = { ...details };
+          delete next[student.studentId];
+          return next;
+        });
+        return current.filter((id) => id !== student.studentId);
+      }
+      rememberStudent(student);
+      return [...current, student.studentId];
+    });
+  }
+
+  function removeSelectedStudent(studentId: number) {
     setSelectedStudentIds((current) =>
-      current.includes(studentId)
-        ? current.filter((id) => id !== studentId)
-        : [...current, studentId],
+      current.filter((id) => id !== studentId),
     );
+    setSelectedStudentDetails((current) => {
+      const next = { ...current };
+      delete next[studentId];
+      return next;
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -490,8 +598,21 @@ export function AssignQuizDialog({
               value={mode}
               disabled={isSubmitting}
               onChange={(event) => {
-                setMode(event.target.value);
+                const nextMode = event.target.value;
+                setMode(nextMode);
                 setSelectedStudentIds([]);
+                setSelectedStudentDetails({});
+                setStudentSearch("");
+                setDebouncedSearch("");
+                setGroupId("");
+                setSection("");
+                if (nextMode === "allingrade" || nextMode === "allinsection") {
+                  if (quizClassId && quizClassId > 0) {
+                    setGradeId(quizClassId);
+                  }
+                } else {
+                  setGradeId("");
+                }
               }}
               className={inputClassName}
             >
@@ -507,17 +628,27 @@ export function AssignQuizDialog({
             </select>
           </div>
 
-          {showAudienceScope ? (
+          {showAudienceFilters ? (
             <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Audience filters
               </p>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div>
-                  <FieldLabel htmlFor="assignSchool" required>
-                    School
-                  </FieldLabel>
-                  {canPickSchool ? (
+              <div
+                className={`grid gap-3 ${
+                  [
+                    showSchoolInAudience,
+                    showCampusInAudience,
+                    showGradeInAudience,
+                  ].filter(Boolean).length > 1
+                    ? "md:grid-cols-3"
+                    : "md:grid-cols-1"
+                }`}
+              >
+                {showSchoolInAudience ? (
+                  <div>
+                    <FieldLabel htmlFor="assignSchool" required>
+                      School
+                    </FieldLabel>
                     <select
                       id="assignSchool"
                       value={schoolId === "" ? "" : String(schoolId)}
@@ -540,30 +671,17 @@ export function AssignQuizDialog({
                         </option>
                       ))}
                     </select>
-                  ) : (
-                    <input
-                      id="assignSchool"
-                      value={
-                        schools.find((s) => s.id === selectedSchoolId)?.name ??
-                        (selectedSchoolId
-                          ? `School #${selectedSchoolId}`
-                          : "Your school")
-                      }
-                      disabled
-                      className={inputClassName}
-                      readOnly
-                    />
-                  )}
-                </div>
+                  </div>
+                ) : null}
 
-                <div>
-                  <FieldLabel
-                    htmlFor="assignCampus"
-                    required={mode === "allincampus"}
-                  >
-                    Campus
-                  </FieldLabel>
-                  {canPickCampus ? (
+                {showCampusInAudience ? (
+                  <div>
+                    <FieldLabel
+                      htmlFor="assignCampus"
+                      required={mode === "allincampus"}
+                    >
+                      Campus
+                    </FieldLabel>
                     <select
                       id="assignCampus"
                       value={campusId === "" ? "" : String(campusId)}
@@ -585,35 +703,24 @@ export function AssignQuizDialog({
                         </option>
                       ))}
                     </select>
-                  ) : (
-                    <input
-                      id="assignCampus"
-                      value={
-                        campuses.find((c) => c.id === selectedCampusId)?.name ??
-                        (selectedCampusId
-                          ? `Campus #${selectedCampusId}`
-                          : "Your campus")
-                      }
-                      disabled
-                      className={inputClassName}
-                      readOnly
-                    />
-                  )}
-                </div>
+                  </div>
+                ) : null}
 
-                <LookupSelect
-                  label="Grade"
-                  value={gradeId}
-                  onChange={(next) => {
-                    setGradeId(next);
-                    setSelectedStudentIds([]);
-                  }}
-                  type={LOOKUP_TYPES.CLASS}
-                  disabled={isSubmitting}
-                  allowEmpty
-                  emptyLabel="All grades"
-                  placeholder="From quiz..."
-                />
+                {showGradeInAudience ? (
+                  <LookupSelect
+                    label="Grade"
+                    value={gradeId}
+                    onChange={(next) => {
+                      setGradeId(next);
+                      setSelectedStudentIds([]);
+                    }}
+                    type={LOOKUP_TYPES.CLASS}
+                    disabled={isSubmitting}
+                    allowEmpty
+                    emptyLabel="All grades"
+                    placeholder="From quiz..."
+                  />
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -621,34 +728,61 @@ export function AssignQuizDialog({
           {showStudentPicker ? (
             <div className="space-y-3">
               <div>
-                <label
-                  htmlFor="studentSearch"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Search students
-                </label>
-                <input
+                <FieldLabel htmlFor="studentSearch">Search students</FieldLabel>
+                <AppSearchInput
                   id="studentSearch"
                   value={studentSearch}
                   disabled={isSubmitting}
                   onChange={(event) => setStudentSearch(event.target.value)}
-                  className={inputClassName}
                   placeholder="Name, username, or roll #"
+                  aria-label="Search students by name, username, or roll"
+                  className="h-10"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Results use School, Campus, and Grade filters above.
+                  Type to find students, then select from the list. Selected
+                  students stay visible below.
                 </p>
               </div>
 
-              {selectedStudentIds.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {selectedStudentIds.length} student
-                  {selectedStudentIds.length === 1 ? "" : "s"} selected
-                </p>
+              {selectedStudents.length > 0 ? (
+                <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {mode === "one" ? "Selected student" : "Selected students"}{" "}
+                    ({selectedStudents.length})
+                  </p>
+                  <ul className="space-y-2">
+                    {selectedStudents.map((student) => (
+                      <li
+                        key={student.studentId}
+                        className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {student.fullName}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {formatPickerStudentMeta(student)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() =>
+                            removeSelectedStudent(student.studentId)
+                          }
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-60"
+                          aria-label={`Remove ${student.fullName}`}
+                        >
+                          <X className="h-4 w-4" aria-hidden />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
 
               <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
-                {!selectedSchoolId && !isTeacher && !isLinkedAssigner ? (
+                {!canLoadDirectoryStudents ? (
                   <p className="px-3 py-4 text-sm text-muted-foreground">
                     Select a school to load students.
                   </p>
@@ -662,7 +796,9 @@ export function AssignQuizDialog({
                   </p>
                 ) : students.length === 0 ? (
                   <p className="px-3 py-4 text-sm text-muted-foreground">
-                    No students found for the current filters.
+                    {debouncedSearch
+                      ? "No students match that search."
+                      : "No students found for the current filters."}
                   </p>
                 ) : (
                   <ul className="divide-y divide-border">
@@ -676,17 +812,22 @@ export function AssignQuizDialog({
                       return (
                         <li key={student.studentId}>
                           <label
-                            className={`flex items-start gap-3 px-3 py-2 ${
+                            className={`flex items-start gap-3 px-3 py-2.5 ${
                               alreadyAssigned
                                 ? "cursor-not-allowed bg-muted/40 opacity-70"
                                 : "cursor-pointer hover:bg-muted/50"
                             }`}
                           >
                             <input
-                              type="checkbox"
+                              type={mode === "one" ? "radio" : "checkbox"}
+                              name={
+                                mode === "one"
+                                  ? "assign-one-student"
+                                  : undefined
+                              }
                               checked={checked}
                               disabled={isSubmitting || alreadyAssigned}
-                              onChange={() => toggleStudent(student.studentId)}
+                              onChange={() => toggleStudent(student)}
                               className="mt-1"
                             />
                             <span className="min-w-0 flex-1">
@@ -700,10 +841,8 @@ export function AssignQuizDialog({
                                   </span>
                                 ) : null}
                               </span>
-                              <span className="block text-xs text-muted-foreground">
-                                Grade {student.grade}
-                                {student.section ? `-${student.section}` : ""} ·{" "}
-                                {student.rollNumber || student.username}
+                              <span className="mt-0.5 block text-xs text-muted-foreground">
+                                {formatPickerStudentMeta(student)}
                               </span>
                             </span>
                           </label>

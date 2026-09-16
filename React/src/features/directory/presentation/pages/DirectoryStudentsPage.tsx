@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { History, Pencil, UserCheck, Users, UserX } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { isAdminRole } from "@/core/api/types";
+import { useLookups } from "@/core/hooks/useLookups";
+import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
 import { AppConfirmDialog } from "@/components/ui/app-confirm-dialog";
 import { AppSearchInput } from "@/components/ui/app-search-input";
 import { Button } from "@/components/ui/button";
@@ -47,7 +49,6 @@ import {
   matchesDirectoryAccountStatusFilter,
   type DirectoryAccountStatusFilter,
 } from "@/features/directory/presentation/utils/accountStatus";
-import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -56,13 +57,29 @@ const PAGE_SIZE = 50;
 export function DirectoryStudentsPage() {
   const { user } = useAuth();
   const canManage = user != null && isAdminRole(user.role);
+  const isPortalAdmin = user?.role === "PortalAdmin";
+  const isSchoolAdmin = user?.role === "SchoolAdmin";
+  const isCampusAdmin = user?.role === "CampusAdmin";
+  const lockedSchoolId =
+    (isSchoolAdmin || isCampusAdmin) && user?.schoolId != null
+      ? user.schoolId
+      : null;
+  const lockedCampusId =
+    isCampusAdmin && user?.campusId != null ? user.campusId : null;
+  /** PortalAdmin picks school; SchoolAdmin picks campus; CampusAdmin is locked to own campus. */
+  const showSchoolFilter = isPortalAdmin;
+  const showCampusFilter = isPortalAdmin || isSchoolAdmin;
   const [searchParams] = useSearchParams();
   const initialSearch = searchParams.get("search") ?? "";
 
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
-  const [schoolId, setSchoolId] = useState("");
-  const [campusId, setCampusId] = useState("");
+  const [schoolId, setSchoolId] = useState(
+    lockedSchoolId != null ? String(lockedSchoolId) : "",
+  );
+  const [campusId, setCampusId] = useState(
+    lockedCampusId != null ? String(lockedCampusId) : "",
+  );
   const [grade, setGrade] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<DirectoryAccountStatusFilter>("all");
@@ -81,15 +98,16 @@ export function DirectoryStudentsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const selectedSchoolId = Number(schoolId) || null;
-  const selectedCampusId = Number(campusId) || null;
+  const selectedSchoolId = lockedSchoolId ?? (Number(schoolId) || null);
+  const selectedCampusId = lockedCampusId ?? (Number(campusId) || null);
   const selectedGrade = Number(grade) || null;
 
   const { data: schools = [] } = useDirectorySchoolsQuery(canManage);
   const { data: campuses = [] } = useDirectoryCampusesQuery(
     selectedSchoolId ?? 0,
-    selectedSchoolId != null,
+    canManage && showCampusFilter && selectedSchoolId != null,
   );
+  const { data: gradeOptions = [] } = useLookups(LOOKUP_TYPES.CLASS);
 
   const filters = useMemo(
     () => ({
@@ -130,9 +148,10 @@ export function DirectoryStudentsPage() {
   }, [pageNumber, search, schoolId, campusId, grade, activeFilter]);
 
   useEffect(() => {
+    if (lockedCampusId != null) return;
     setCampusId("");
     setPageNumber(1);
-  }, [schoolId]);
+  }, [schoolId, lockedCampusId]);
 
   const busy =
     createMutation.isPending ||
@@ -324,48 +343,56 @@ export function DirectoryStudentsPage() {
             placeholder="Search students..."
             containerClassName="min-w-0 flex-1 lg:min-w-[200px]"
           />
+          {showSchoolFilter ? (
+            <select
+              value={schoolId}
+              onChange={(event) => setSchoolId(event.target.value)}
+              className={cn(directorySelectClassName, "lg:w-44")}
+              aria-label="Filter by school"
+            >
+              <option value="">All schools</option>
+              {schools.map((school) => (
+                <option key={school.id} value={school.id}>
+                  {school.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {showCampusFilter ? (
+            <select
+              value={campusId}
+              onChange={(event) => {
+                setCampusId(event.target.value);
+                setPageNumber(1);
+              }}
+              disabled={selectedSchoolId == null}
+              className={cn(directorySelectClassName, "lg:w-44")}
+              aria-label="Filter by campus"
+            >
+              <option value="">All campuses</option>
+              {campuses.map((campus) => (
+                <option key={campus.id} value={campus.id}>
+                  {campus.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <select
-            value={schoolId}
-            onChange={(event) => setSchoolId(event.target.value)}
-            className={cn(directorySelectClassName, "lg:w-44")}
-            aria-label="Filter by school"
-          >
-            <option value="">All schools</option>
-            {schools.map((school) => (
-              <option key={school.id} value={school.id}>
-                {school.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={campusId}
-            onChange={(event) => {
-              setCampusId(event.target.value);
-              setPageNumber(1);
-            }}
-            disabled={!selectedSchoolId}
-            className={cn(directorySelectClassName, "lg:w-44")}
-            aria-label="Filter by campus"
-          >
-            <option value="">All campuses</option>
-            {campuses.map((campus) => (
-              <option key={campus.id} value={campus.id}>
-                {campus.name}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            min={1}
             value={grade}
             onChange={(event) => {
               setGrade(event.target.value);
               setPageNumber(1);
             }}
-            placeholder="Grade"
-            className={cn(FORM_FIELD_CLASS, "h-11 lg:w-24")}
+            className={cn(directorySelectClassName, "lg:w-40")}
             aria-label="Filter by grade"
-          />
+          >
+            <option value="">All grades</option>
+            {gradeOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
           <select
             value={activeFilter}
             onChange={(event) =>
@@ -543,6 +570,8 @@ export function DirectoryStudentsPage() {
         <StudentFormDialog
           student={studentDialog === "create" ? null : studentDialog}
           schools={schools}
+          lockSchoolId={lockedSchoolId}
+          lockCampusId={lockedCampusId}
           isSubmitting={createMutation.isPending || updateMutation.isPending}
           onClose={() => setStudentDialog(null)}
           onSubmit={handleFormSubmit}
