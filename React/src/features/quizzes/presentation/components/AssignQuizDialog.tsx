@@ -1,7 +1,16 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { X } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { CalendarRange, Users, X } from "lucide-react";
 import type { ApiError } from "@/core/api/types";
 import { AppSearchInput } from "@/components/ui/app-search-input";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FieldLabel } from "@/core/components/FieldLabel";
 import { LookupSelect } from "@/core/components/LookupSelect";
 import { LOOKUP_TYPES } from "@/core/lookups/lookupTypes";
@@ -26,6 +35,7 @@ import {
   isActiveQuizAssignment,
 } from "@/features/quizzes/domain/quizTypes";
 import { FORM_FIELD_CLASS } from "@/lib/constants/form-field";
+import { cn } from "@/lib/utils";
 
 interface AssignQuizDialogProps {
   isSubmitting: boolean;
@@ -63,10 +73,61 @@ function formatPickerStudentMeta(student: PickerStudent): string {
     gradeLabel,
     student.campusName || student.schoolName || null,
   ].filter(Boolean);
-  return parts.join(" · ");
+  return parts.join(" Â· ");
 }
 
 const inputClassName = FORM_FIELD_CLASS;
+const fieldLabelClassName = "mb-1.5 block text-sm font-medium text-foreground";
+
+function AssignSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold tracking-tight text-foreground">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function AssignCallout({
+  tone = "muted",
+  children,
+}: {
+  tone?: "muted" | "warn" | "primary";
+  children: ReactNode;
+}) {
+  return (
+    <p
+      className={cn(
+        "rounded-xl border px-3.5 py-2.5 text-sm leading-6",
+        tone === "warn" &&
+          "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100",
+        tone === "primary" &&
+          "border-primary/25 bg-primary/5 text-primary",
+        tone === "muted" &&
+          "border-border/80 bg-muted/40 text-foreground",
+      )}
+    >
+      {children}
+    </p>
+  );
+}
 
 const SCOPED_AUDIENCE_MODES = new Set([
   "one",
@@ -394,17 +455,6 @@ export function AssignQuizDialog({
     });
   }, [blockedStudentIds]);
 
-  useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isSubmitting) {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [isSubmitting, onClose]);
-
   function rememberStudent(student: PickerStudent) {
     setSelectedStudentDetails((current) => ({
       ...current,
@@ -566,494 +616,564 @@ export function AssignQuizDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-8">
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl">
-        <h2 className="text-xl font-semibold text-foreground">Assign quiz</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {isAdminAssigner
-            ? "Choose an audience and set the window. Grade and attempts default from the quiz."
-            : "Choose students and set the assignment window. Grade and attempts default from the quiz."}
-        </p>
-        {surprise ? (
-          <p className="mt-3 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-sm text-[var(--status-pending-text)]">
-            Surprise quizzes stay hidden from students until Start. Keep the
-            window ≤24h and schedule Start no more than 24h ahead. Students are
-            notified when it opens.
-          </p>
-        ) : null}
-
-        {error ? (
-          <div className="mt-4 rounded-lg border border-[var(--status-rejected-border)] bg-[var(--status-rejected-bg)] px-4 py-3 text-sm text-[var(--status-rejected-text)]">
-            {error}
-          </div>
-        ) : null}
-
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-          <div>
-            <FieldLabel htmlFor="mode" required>
-              Assignment mode
-            </FieldLabel>
-            <select
-              id="mode"
-              value={mode}
-              disabled={isSubmitting}
-              onChange={(event) => {
-                const nextMode = event.target.value;
-                setMode(nextMode);
-                setSelectedStudentIds([]);
-                setSelectedStudentDetails({});
-                setStudentSearch("");
-                setDebouncedSearch("");
-                setGroupId("");
-                setSection("");
-                if (nextMode === "allingrade" || nextMode === "allinsection") {
-                  if (quizClassId && quizClassId > 0) {
-                    setGradeId(quizClassId);
-                  }
-                } else {
-                  setGradeId("");
-                }
-              }}
-              className={inputClassName}
-            >
-              {modeGroups.map(([group, options]) => (
-                <optgroup key={group} label={group}>
-                  {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-
-          {showAudienceFilters ? (
-            <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Audience filters
-              </p>
-              <div
-                className={`grid gap-3 ${
-                  [
-                    showSchoolInAudience,
-                    showCampusInAudience,
-                    showGradeInAudience,
-                  ].filter(Boolean).length > 1
-                    ? "md:grid-cols-3"
-                    : "md:grid-cols-1"
-                }`}
-              >
-                {showSchoolInAudience ? (
-                  <div>
-                    <FieldLabel htmlFor="assignSchool" required>
-                      School
-                    </FieldLabel>
-                    <select
-                      id="assignSchool"
-                      value={schoolId === "" ? "" : String(schoolId)}
-                      disabled={isSubmitting}
-                      onChange={(event) => {
-                        const next = event.target.value
-                          ? Number(event.target.value)
-                          : "";
-                        setSchoolId(next);
-                        setCampusId("");
-                        setSelectedStudentIds([]);
-                      }}
-                      className={inputClassName}
-                      required
-                    >
-                      <option value="">Select school...</option>
-                      {schools.map((school) => (
-                        <option key={school.id} value={school.id}>
-                          {school.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {showCampusInAudience ? (
-                  <div>
-                    <FieldLabel
-                      htmlFor="assignCampus"
-                      required={mode === "allincampus"}
-                    >
-                      Campus
-                    </FieldLabel>
-                    <select
-                      id="assignCampus"
-                      value={campusId === "" ? "" : String(campusId)}
-                      disabled={isSubmitting || !selectedSchoolId}
-                      onChange={(event) => {
-                        setCampusId(
-                          event.target.value
-                            ? Number(event.target.value)
-                            : "",
-                        );
-                        setSelectedStudentIds([]);
-                      }}
-                      className={inputClassName}
-                    >
-                      <option value="">All campuses</option>
-                      {campuses.map((campus) => (
-                        <option key={campus.id} value={campus.id}>
-                          {campus.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {showGradeInAudience ? (
-                  <LookupSelect
-                    label="Grade"
-                    value={gradeId}
-                    onChange={(next) => {
-                      setGradeId(next);
-                      setSelectedStudentIds([]);
-                    }}
-                    type={LOOKUP_TYPES.CLASS}
-                    disabled={isSubmitting}
-                    allowEmpty
-                    emptyLabel="All grades"
-                    placeholder="From quiz..."
-                  />
-                ) : null}
-              </div>
+    <Dialog
+      open
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isSubmitting) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="flex max-h-[90vh] w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden rounded-2xl border-border/80 bg-card p-0 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_rgba(15,23,42,0.12)] sm:max-w-2xl">
+        <DialogHeader className="space-y-0 border-b border-border/80 bg-muted/40 px-6 py-5 pr-12 text-left">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Users className="h-5 w-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-xl font-semibold tracking-tight text-foreground">
+                Assign quiz
+              </DialogTitle>
+              <DialogDescription className="mt-1.5 text-sm leading-6 text-muted-foreground">
+                {isAdminAssigner
+                  ? "Choose who should take this quiz and when the window opens and closes."
+                  : "Pick students or a group, then set the assignment window."}
+              </DialogDescription>
             </div>
-          ) : null}
+          </div>
+        </DialogHeader>
 
-          {showStudentPicker ? (
-            <div className="space-y-3">
+        <form
+          className="flex min-h-0 flex-1 flex-col"
+          onSubmit={(event) => void handleSubmit(event)}
+        >
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
+            {error ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
+                {error}
+              </div>
+            ) : null}
+
+            {surprise ? (
+              <AssignCallout tone="warn">
+                Surprise quizzes stay hidden until Start. Keep the window ≤24h
+                and schedule Start no more than 24h ahead. Students are notified
+                when it opens.
+              </AssignCallout>
+            ) : null}
+
+            <AssignSection
+              title="Audience"
+              description="How this quiz reaches students."
+            >
               <div>
-                <FieldLabel htmlFor="studentSearch">Search students</FieldLabel>
-                <AppSearchInput
-                  id="studentSearch"
-                  value={studentSearch}
+                <FieldLabel
+                  htmlFor="mode"
+                  required
+                  className={fieldLabelClassName}
+                >
+                  Assignment mode
+                </FieldLabel>
+                <select
+                  id="mode"
+                  value={mode}
                   disabled={isSubmitting}
-                  onChange={(event) => setStudentSearch(event.target.value)}
-                  placeholder="Name, username, or roll #"
-                  aria-label="Search students by name, username, or roll"
-                  className="h-10"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Type to find students, then select from the list. Selected
-                  students stay visible below.
-                </p>
+                  onChange={(event) => {
+                    const nextMode = event.target.value;
+                    setMode(nextMode);
+                    setSelectedStudentIds([]);
+                    setSelectedStudentDetails({});
+                    setStudentSearch("");
+                    setDebouncedSearch("");
+                    setGroupId("");
+                    setSection("");
+                    if (
+                      nextMode === "allingrade" ||
+                      nextMode === "allinsection"
+                    ) {
+                      if (quizClassId && quizClassId > 0) {
+                        setGradeId(quizClassId);
+                      }
+                    } else {
+                      setGradeId("");
+                    }
+                  }}
+                  className={inputClassName}
+                >
+                  {modeGroups.map(([group, options]) => (
+                    <optgroup key={group} label={group}>
+                      {options.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
 
-              {selectedStudents.length > 0 ? (
-                <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {mode === "one" ? "Selected student" : "Selected students"}{" "}
-                    ({selectedStudents.length})
-                  </p>
-                  <ul className="space-y-2">
-                    {selectedStudents.map((student) => (
-                      <li
-                        key={student.studentId}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2"
+              {showAudienceFilters ? (
+                <div
+                  className={cn(
+                    "grid gap-3",
+                    [
+                      showSchoolInAudience,
+                      showCampusInAudience,
+                      showGradeInAudience,
+                    ].filter(Boolean).length > 1
+                      ? "sm:grid-cols-2 lg:grid-cols-3"
+                      : "grid-cols-1",
+                  )}
+                >
+                  {showSchoolInAudience ? (
+                    <div>
+                      <FieldLabel
+                        htmlFor="assignSchool"
+                        required
+                        className={fieldLabelClassName}
                       >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {student.fullName}
-                          </p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {formatPickerStudentMeta(student)}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() =>
-                            removeSelectedStudent(student.studentId)
-                          }
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-60"
-                          aria-label={`Remove ${student.fullName}`}
-                        >
-                          <X className="h-4 w-4" aria-hidden />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                        School
+                      </FieldLabel>
+                      <select
+                        id="assignSchool"
+                        value={schoolId === "" ? "" : String(schoolId)}
+                        disabled={isSubmitting}
+                        onChange={(event) => {
+                          const next = event.target.value
+                            ? Number(event.target.value)
+                            : "";
+                          setSchoolId(next);
+                          setCampusId("");
+                          setSelectedStudentIds([]);
+                        }}
+                        className={inputClassName}
+                        required
+                      >
+                        <option value="">Select school...</option>
+                        {schools.map((school) => (
+                          <option key={school.id} value={school.id}>
+                            {school.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  {showCampusInAudience ? (
+                    <div>
+                      <FieldLabel
+                        htmlFor="assignCampus"
+                        required={mode === "allincampus"}
+                        className={fieldLabelClassName}
+                      >
+                        Campus
+                      </FieldLabel>
+                      <select
+                        id="assignCampus"
+                        value={campusId === "" ? "" : String(campusId)}
+                        disabled={isSubmitting || !selectedSchoolId}
+                        onChange={(event) => {
+                          setCampusId(
+                            event.target.value
+                              ? Number(event.target.value)
+                              : "",
+                          );
+                          setSelectedStudentIds([]);
+                        }}
+                        className={inputClassName}
+                      >
+                        <option value="">All campuses</option>
+                        {campuses.map((campus) => (
+                          <option key={campus.id} value={campus.id}>
+                            {campus.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  {showGradeInAudience ? (
+                    <LookupSelect
+                      label="Grade"
+                      value={gradeId}
+                      onChange={(next) => {
+                        setGradeId(next);
+                        setSelectedStudentIds([]);
+                      }}
+                      type={LOOKUP_TYPES.CLASS}
+                      disabled={isSubmitting}
+                      allowEmpty
+                      emptyLabel="All grades"
+                      placeholder="From quiz..."
+                    />
+                  ) : null}
                 </div>
               ) : null}
 
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
-                {!canLoadDirectoryStudents ? (
-                  <p className="px-3 py-4 text-sm text-muted-foreground">
-                    Select a school to load students.
-                  </p>
-                ) : studentsLoading ? (
-                  <p className="px-3 py-4 text-sm text-muted-foreground">
-                    Loading students...
-                  </p>
-                ) : studentsError ? (
-                  <p className="px-3 py-4 text-sm text-[var(--status-rejected-text)]">
-                    {studentsError.message}
-                  </p>
-                ) : students.length === 0 ? (
-                  <p className="px-3 py-4 text-sm text-muted-foreground">
-                    {debouncedSearch
-                      ? "No students match that search."
-                      : "No students found for the current filters."}
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {students.map((student) => {
-                      const checked = selectedSet.has(student.studentId);
-                      const existing = assignmentByStudentId.get(
-                        student.studentId,
-                      );
-                      const alreadyAssigned =
-                        existing != null && isActiveQuizAssignment(existing);
-                      return (
-                        <li key={student.studentId}>
-                          <label
-                            className={`flex items-start gap-3 px-3 py-2.5 ${
-                              alreadyAssigned
-                                ? "cursor-not-allowed bg-muted/40 opacity-70"
-                                : "cursor-pointer hover:bg-muted/50"
-                            }`}
+              {showStudentPicker ? (
+                <div className="space-y-3">
+                  <div>
+                    <FieldLabel
+                      htmlFor="studentSearch"
+                      className={fieldLabelClassName}
+                    >
+                      Search students
+                    </FieldLabel>
+                    <AppSearchInput
+                      id="studentSearch"
+                      value={studentSearch}
+                      disabled={isSubmitting}
+                      onChange={(event) => setStudentSearch(event.target.value)}
+                      placeholder="Name, username, or roll #"
+                      aria-label="Search students by name, username, or roll"
+                      className="h-10"
+                    />
+                  </div>
+
+                  {selectedStudents.length > 0 ? (
+                    <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {mode === "one"
+                          ? "Selected student"
+                          : "Selected students"}{" "}
+                        · {selectedStudents.length}
+                      </p>
+                      <ul className="space-y-2">
+                        {selectedStudents.map((student) => (
+                          <li
+                            key={student.studentId}
+                            className="flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2"
                           >
-                            <input
-                              type={mode === "one" ? "radio" : "checkbox"}
-                              name={
-                                mode === "one"
-                                  ? "assign-one-student"
-                                  : undefined
-                              }
-                              checked={checked}
-                              disabled={isSubmitting || alreadyAssigned}
-                              onChange={() => toggleStudent(student)}
-                              className="mt-1"
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center justify-between gap-3">
-                                <span className="min-w-0 truncate text-sm font-medium text-foreground">
-                                  {student.fullName}
-                                </span>
-                                {alreadyAssigned ? (
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    Already assigned
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="mt-0.5 block text-xs text-muted-foreground">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {student.fullName}
+                              </p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
                                 {formatPickerStudentMeta(student)}
-                              </span>
-                            </span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
-          ) : null}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() =>
+                                removeSelectedStudent(student.studentId)
+                              }
+                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-60"
+                              aria-label={`Remove ${student.fullName}`}
+                            >
+                              <X className="h-4 w-4" aria-hidden />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
 
-          {mode === "group" ? (
-            <div>
-              <FieldLabel htmlFor="groupId" required>
-                Student group
-              </FieldLabel>
-              {isTeacher || isLinkedAssigner ? (
-                <select
-                  id="groupId"
-                  value={groupId}
-                  disabled={
-                    isSubmitting ||
-                    (isTeacher
-                      ? groupsQuery.isLoading
-                      : parentGroupsQuery.isLoading)
-                  }
-                  onChange={(event) => setGroupId(event.target.value)}
-                  className={inputClassName}
-                  required
-                >
-                  <option value="">
-                    {(isTeacher
-                      ? groupsQuery.isLoading
-                      : parentGroupsQuery.isLoading)
-                      ? "Loading groups..."
-                      : "Select a group..."}
-                  </option>
-                  {(isTeacher
-                    ? (groupsQuery.data ?? [])
-                    : (parentGroupsQuery.data ?? [])
-                  ).map((group) => (
-                    <option key={group.groupId} value={group.groupId}>
-                      {group.groupName} ({group.memberCount})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id="groupId"
-                  type="number"
-                  value={groupId}
+                  <div className="overflow-hidden rounded-xl border border-border/80">
+                    <div className="max-h-52 overflow-y-auto">
+                      {!canLoadDirectoryStudents ? (
+                        <p className="px-3 py-4 text-sm text-muted-foreground">
+                          Select a school to load students.
+                        </p>
+                      ) : studentsLoading ? (
+                        <p className="px-3 py-4 text-sm text-muted-foreground">
+                          Loading students…
+                        </p>
+                      ) : studentsError ? (
+                        <p className="px-3 py-4 text-sm text-destructive">
+                          {studentsError.message}
+                        </p>
+                      ) : students.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-muted-foreground">
+                          {debouncedSearch
+                            ? "No students match that search."
+                            : "No students found for the current filters."}
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-border/80">
+                          {students.map((student) => {
+                            const checked = selectedSet.has(student.studentId);
+                            const existing = assignmentByStudentId.get(
+                              student.studentId,
+                            );
+                            const alreadyAssigned =
+                              existing != null &&
+                              isActiveQuizAssignment(existing);
+                            return (
+                              <li key={student.studentId}>
+                                <label
+                                  className={cn(
+                                    "flex items-start gap-3 px-3 py-2.5",
+                                    alreadyAssigned
+                                      ? "cursor-not-allowed bg-muted/40 opacity-70"
+                                      : "cursor-pointer hover:bg-muted/40",
+                                  )}
+                                >
+                                  <input
+                                    type={mode === "one" ? "radio" : "checkbox"}
+                                    name={
+                                      mode === "one"
+                                        ? "assign-one-student"
+                                        : undefined
+                                    }
+                                    checked={checked}
+                                    disabled={isSubmitting || alreadyAssigned}
+                                    onChange={() => toggleStudent(student)}
+                                    className="mt-1"
+                                  />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="flex items-center justify-between gap-3">
+                                      <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                        {student.fullName}
+                                      </span>
+                                      {alreadyAssigned ? (
+                                        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                          Already assigned
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                      {formatPickerStudentMeta(student)}
+                                    </span>
+                                  </span>
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {mode === "group" ? (
+                <div>
+                  <FieldLabel
+                    htmlFor="groupId"
+                    required
+                    className={fieldLabelClassName}
+                  >
+                    Student group
+                  </FieldLabel>
+                  {isTeacher || isLinkedAssigner ? (
+                    <select
+                      id="groupId"
+                      value={groupId}
+                      disabled={
+                        isSubmitting ||
+                        (isTeacher
+                          ? groupsQuery.isLoading
+                          : parentGroupsQuery.isLoading)
+                      }
+                      onChange={(event) => setGroupId(event.target.value)}
+                      className={inputClassName}
+                      required
+                    >
+                      <option value="">
+                        {(isTeacher
+                          ? groupsQuery.isLoading
+                          : parentGroupsQuery.isLoading)
+                          ? "Loading groups..."
+                          : "Select a group..."}
+                      </option>
+                      {(isTeacher
+                        ? (groupsQuery.data ?? [])
+                        : (parentGroupsQuery.data ?? [])
+                      ).map((group) => (
+                        <option key={group.groupId} value={group.groupId}>
+                          {group.groupName} ({group.memberCount})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id="groupId"
+                      type="number"
+                      value={groupId}
+                      disabled={isSubmitting}
+                      onChange={(event) => setGroupId(event.target.value)}
+                      className={inputClassName}
+                      min={1}
+                      required
+                    />
+                  )}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {isTeacher
+                      ? "Groups from My students. Only members in your classes are assigned."
+                      : isLinkedAssigner
+                        ? "Groups from My children. Only linked children in the group are assigned."
+                        : "Enter a student group ID. Only members in your scope are assigned."}
+                  </p>
+                </div>
+              ) : null}
+
+              {mode === "allingrade" ? (
+                <LookupSelect
+                  label="Grade"
+                  value={gradeId}
+                  onChange={setGradeId}
+                  type={LOOKUP_TYPES.CLASS}
                   disabled={isSubmitting}
-                  onChange={(event) => setGroupId(event.target.value)}
-                  className={inputClassName}
-                  min={1}
                   required
+                  placeholder="Select grade..."
                 />
-              )}
-              <p className="mt-1 text-xs text-muted-foreground">
-                {isTeacher
-                  ? "Groups from My students. Only members in your classes are assigned."
-                  : isLinkedAssigner
-                    ? "Groups from My children. Only linked children in the group are assigned."
-                    : "Enter a student group ID. Only members in your scope are assigned."}
-              </p>
-            </div>
-          ) : null}
+              ) : null}
 
-          {mode === "allingrade" ? (
-            <LookupSelect
-              label="Grade"
-              value={gradeId}
-              onChange={setGradeId}
-              type={LOOKUP_TYPES.CLASS}
-              disabled={isSubmitting}
-              required
-              placeholder="Select grade..."
-            />
-          ) : null}
+              {mode === "allinsection" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <LookupSelect
+                    label="Grade"
+                    value={gradeId}
+                    onChange={setGradeId}
+                    type={LOOKUP_TYPES.CLASS}
+                    disabled={isSubmitting}
+                    required
+                    placeholder="Select grade..."
+                  />
+                  <div>
+                    <FieldLabel
+                      htmlFor="section"
+                      required
+                      className={fieldLabelClassName}
+                    >
+                      Section
+                    </FieldLabel>
+                    <input
+                      id="section"
+                      value={section}
+                      disabled={isSubmitting}
+                      onChange={(event) => setSection(event.target.value)}
+                      className={inputClassName}
+                      placeholder="e.g. A"
+                      required
+                    />
+                  </div>
+                </div>
+              ) : null}
 
-          {mode === "allinsection" ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <LookupSelect
-                label="Grade"
-                value={gradeId}
-                onChange={setGradeId}
-                type={LOOKUP_TYPES.CLASS}
-                disabled={isSubmitting}
-                required
-                placeholder="Select grade..."
-              />
-              <div>
-                <FieldLabel htmlFor="section" required>
-                  Section
-                </FieldLabel>
-                <input
-                  id="section"
-                  value={section}
-                  disabled={isSubmitting}
-                  onChange={(event) => setSection(event.target.value)}
-                  className={inputClassName}
-                  placeholder="e.g. A"
-                  required
-                />
+              {mode === "allattached" ? (
+                <AssignCallout>
+                  {user?.role === "Coordinator"
+                    ? "Assigns to every student in your attached classes."
+                    : "Assigns to every student in your assigned classes and sections."}
+                  {(rosterQuery.data?.students.length ?? 0) > 0
+                    ? ` ${rosterQuery.data?.students.length} student${
+                        rosterQuery.data?.students.length === 1 ? "" : "s"
+                      } on your roster.`
+                    : ""}
+                </AssignCallout>
+              ) : null}
+
+              {mode === "allincampus" ? (
+                <AssignCallout>
+                  Assigns to all active students in
+                  {selectedCampusId ? " the selected campus" : " your campus"}.
+                </AssignCallout>
+              ) : null}
+
+              {mode === "allinschool" ? (
+                <AssignCallout>
+                  Assigns to all active students matching School
+                  {selectedCampusId ? ", Campus" : ""}
+                  {selectedGradeId ? ", and Grade" : ""} above.
+                </AssignCallout>
+              ) : null}
+
+              {mode === "multischool" ? (
+                <div>
+                  <FieldLabel
+                    htmlFor="schoolIds"
+                    required
+                    className={fieldLabelClassName}
+                  >
+                    School IDs
+                  </FieldLabel>
+                  <input
+                    id="schoolIds"
+                    value={schoolIdsText}
+                    disabled={isSubmitting}
+                    onChange={(event) => setSchoolIdsText(event.target.value)}
+                    className={inputClassName}
+                    placeholder="Comma-separated school ids"
+                  />
+                </div>
+              ) : null}
+
+              {mode === "public" ? (
+                <AssignCallout tone="primary">
+                  Public quizzes appear in the student catalog. Assignments are
+                  created lazily when a student starts the quiz.
+                </AssignCallout>
+              ) : null}
+            </AssignSection>
+
+            <AssignSection
+              title="Schedule"
+              description="Students can open the quiz between these times."
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <FieldLabel
+                    htmlFor="startAt"
+                    required
+                    className={fieldLabelClassName}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <CalendarRange
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        aria-hidden
+                      />
+                      Start
+                    </span>
+                  </FieldLabel>
+                  <input
+                    id="startAt"
+                    type="datetime-local"
+                    value={startAt}
+                    disabled={isSubmitting}
+                    onChange={(event) => setStartAt(event.target.value)}
+                    className={inputClassName}
+                    required
+                  />
+                </div>
+                <div>
+                  <FieldLabel
+                    htmlFor="endAt"
+                    required
+                    className={fieldLabelClassName}
+                  >
+                    End
+                  </FieldLabel>
+                  <input
+                    id="endAt"
+                    type="datetime-local"
+                    value={endAt}
+                    disabled={isSubmitting}
+                    onChange={(event) => setEndAt(event.target.value)}
+                    className={inputClassName}
+                    required
+                  />
+                </div>
               </div>
-            </div>
-          ) : null}
-
-          {mode === "allattached" ? (
-            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
-              {user?.role === "Coordinator"
-                ? "Assigns to every student in your attached classes."
-                : "Assigns to every student in your assigned classes and sections."}
-              {(rosterQuery.data?.students.length ?? 0) > 0
-                ? ` ${rosterQuery.data?.students.length} student${
-                    rosterQuery.data?.students.length === 1 ? "" : "s"
-                  } on your roster.`
-                : ""}
-            </p>
-          ) : null}
-
-          {mode === "allincampus" ? (
-            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
-              Assigns to all active students in
-              {selectedCampusId ? " the selected campus" : " your campus"}.
-            </p>
-          ) : null}
-
-          {mode === "allinschool" ? (
-            <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
-              Assigns to all active students matching School
-              {selectedCampusId ? ", Campus" : ""}
-              {selectedGradeId ? ", and Grade" : ""} above.
-            </p>
-          ) : null}
-
-          {mode === "multischool" ? (
-            <div>
-              <FieldLabel htmlFor="schoolIds" required>
-                School IDs
-              </FieldLabel>
-              <input
-                id="schoolIds"
-                value={schoolIdsText}
-                disabled={isSubmitting}
-                onChange={(event) => setSchoolIdsText(event.target.value)}
-                className={inputClassName}
-                placeholder="Comma-separated school ids"
-              />
-            </div>
-          ) : null}
-
-          {mode === "public" ? (
-            <p className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-primary">
-              Public quizzes appear in the student catalog. Assignments are
-              created lazily when a student starts the quiz.
-            </p>
-          ) : null}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <FieldLabel htmlFor="startAt" required>
-                Start
-              </FieldLabel>
-              <input
-                id="startAt"
-                type="datetime-local"
-                value={startAt}
-                disabled={isSubmitting}
-                onChange={(event) => setStartAt(event.target.value)}
-                className={inputClassName}
-                required
-              />
-            </div>
-
-            <div>
-              <FieldLabel htmlFor="endAt" required>
-                End
-              </FieldLabel>
-              <input
-                id="endAt"
-                type="datetime-local"
-                value={endAt}
-                disabled={isSubmitting}
-                onChange={(event) => setEndAt(event.target.value)}
-                className={inputClassName}
-                required
-              />
-            </div>
+            </AssignSection>
           </div>
 
-          <div className="flex justify-end gap-3">
-            <button
+          <DialogFooter className="border-t border-border/80 bg-muted/30 px-6 py-4 sm:justify-end">
+            <Button
               type="button"
+              variant="outline"
               disabled={isSubmitting}
               onClick={onClose}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-70"
             >
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-70"
-            >
-              {isSubmitting ? "Assigning..." : "Assign quiz"}
-            </button>
-          </div>
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Assigning…" : "Assign quiz"}
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

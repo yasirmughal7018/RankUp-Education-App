@@ -25,5 +25,6 @@ Each implementation / spec prompt is stored as its own file. Casual chat follow-
 | 2026-09-13 | [2026-09-13-student-class-history-account.md](./2026-09-13-student-class-history-account.md) | Student Account: class/section placement history |
 | 2026-09-16 | [2026-09-16-campus-admin-students-filters.md](./2026-09-16-campus-admin-students-filters.md) | CampusAdmin students list: hide school/campus; grade dropdown |
 | 2026-09-16 | [2026-09-16-assign-quiz-single-grade-dropdown.md](./2026-09-16-assign-quiz-single-grade-dropdown.md) | Assign quiz: one Grade for all-in-grade/section |
+| 2026-09-16 | [2026-09-16-assign-quiz-dialog-redesign.md](./2026-09-16-assign-quiz-dialog-redesign.md) | Assign quiz dialog restyled to app Dialog theme |
 
 New spec prompts go here as `YYYY-MM-DD-short-kebab-slug.md`.
